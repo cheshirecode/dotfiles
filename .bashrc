@@ -1,4 +1,4 @@
-# .bashrc
+#!/usr/bin/env bash
 # https://www.howtogeek.com/307701/how-to-customize-and-colorize-your-bash-prompt/
 # https://www.quora.com/What-are-some-useful-bash_profile-and-bashrc-tips/answer/Shubham-Chaudhary-3
 # https://natelandau.com/my-mac-osx-bash_profile/
@@ -15,7 +15,7 @@ fi
 # don't put duplicate lines in the history or force ignoredups and ignorespace
 HISTCONTROL=ignoredups:ignorespace
 # append to the history file, don't overwrite i
-tuslhopt -s histappend
+shopt -s histappend
 # for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
 HISTSIZE=100000
 HISTFILESIZE=200000
@@ -133,16 +133,15 @@ welcome() {
     echo -ne "Today is "; date #date +"Today is %A %D, and it is now %R"
     echo -e ""
     echo -ne "Up time:";uptime | awk /'up/'
-    echo -en "Local IP Address :"; /sbin/ifconfig wlan0 | awk /'inet addr/ {print $2}' | sed -e s/addr:/' '/
+    echo -en "Local IP Address :"; /sbin/ifconfig wlp2s0 | awk /'inet / {print $2}' | sed -e s/addr:/' '/
     echo "";
 }
 welcome;
 # get IP adresses
 #function my_ip() # get IP adresses
 my_ip () {
-        MY_IP=$(/sbin/ifconfig wlan0 | awk "/inet/ { print $2 } " | sed -e s/addr://)
-                #/sbin/ifconfig | awk /'inet addr/ {print $2}'
-        MY_ISP=$(/sbin/ifconfig wlan0 | awk "/P-t-P/ { print $3 } " | sed -e s/P-t-P://)
+        MY_IP=$(/sbin/ifconfig wlp2s0 | awk /'inet addr/ {print $2}')
+        MY_ISP=$(/sbin/ifconfig wlp2s0 | awk "/P-t-P/ { print $3 } " | sed -e s/P-t-P://)
 }
 # get current host related info
 ii () {
@@ -152,13 +151,7 @@ ii () {
     echo -e "\n${red}Current date :$NC " ; date
     echo -e "\n${red}Machine stats :$NC " ; uptime
     echo -e "\n${red}Memory stats :$NC " ; free
-    echo -en "\n${red}Local IP Address :$NC" ; /sbin/ifconfig wlan0 | awk /'inet addr/ {print $2}' | sed -e s/addr:/' '/
-    #my_ip 2>&. ;
-    #my_ip 2>&1 ;
-    #echo -e "\n${RED}Local IP Address :$NC" ; echo ${MY_IP:."Not connected"}
-    #echo -e "\n${RED}ISP Address :$NC" ; echo ${MY_ISP:."Not connected"}
-    #echo -e "\n${RED}Local IP Address :$NC" ; echo ${MY_IP} #:."Not connected"}
-    #echo -e "\n${RED}ISP Address :$NC" ; echo ${MY_ISP} #:."Not connected"}
+    echo -en "\n${red}Local IP Address :$NC" ; /sbin/ifconfig wlp2s0 | awk /'inet addr/ {print $2}' | sed -e s/addr:/' '/
     echo
 }
 # Easy extract
@@ -198,17 +191,49 @@ alias wget='wget -c'
 alias trash='mv -t ~/.local/share/Trash/files'
 #show most popular commands
 alias top-commands='history | awk "{print $2}" | awk "{print $1}" |sort|uniq -c | sort -rn | head -10'
-#alias top-commands='history | awk "{print $2}" | awk "BEGIN {FS="|"} {print $1}" |sort|uniq -c | sort -rn | head -10'
+alias ps-aux='ps axo user:20,pid,pcpu,pmem,vsz,rss,tty,stat,start,time,comm'
 
-#ssh-agent handling
-if [ ! -S ~/.ssh/ssh_auth_sock ]; then
-  eval `ssh-agent`
-  ln -sf "$SSH_AUTH_SOCK" ~/.ssh/ssh_auth_sock
+# kill all by name https://stackoverflow.com/a/30515012
+killAllByName () {
+    ps -ef | grep "$1" | grep -v grep | awk '{print $2}' | xargs -r kill -9
+}
+
+#ssh-agent handling 
+# https://gist.github.com/martijnvermaat/8070533
+# https://askubuntu.com/questions/523673/ps-auxna-for-long-charactered-usernames-shows-a-plus-sign
+## Launch SSH agent if not running
+# if ! ps-aux | grep $(whoami) | grep ssh[-]agent >/dev/null; then ssh-agent ; fi
+
+# ensure ssh-agent is running
+ssh-add -l > /dev/null
+# no agents nor connections
+if [ "$?" == 2 ]; then    
+    ssh-agent -k
+    # Load stored agent connection info.
+    [[ -f "$HOME/.ssh-agent" ]] && eval "$(<~/.ssh-agent)" >/dev/null
+
+    ssh-add -l &>/dev/null
+    if [ "$?" == 2 ]; then
+        # Start agent and store agent connection info.
+        (umask 066; ssh-agent > ~/.ssh-agent)
+        eval "$(<~/.ssh-agent)" >/dev/null
+    fi
 fi
+
+# Link the latest ssh-agent socket
+ln -sf $(find /tmp/ -maxdepth 2 -type s -path "*/ssh-*/agent*" -user "$USER" -printf '%T@ %p\n' 2>&1\
+ | grep -v "Permission denied"\
+ | sort -n | tail -1 | cut -d' ' -f2)\
+  ~/.ssh/ssh_auth_sock
 export SSH_AUTH_SOCK=~/.ssh/ssh_auth_sock
 ssh-add -l > /dev/null || ssh-add ~/.ssh/*rsa
 
 
-# Docker helper methods
+# Docker helper methods\
 alias docker-cleanup='docker container prune -f; docker image prune -f; docker rmi $(docker images --quiet --filter "dangling=true"); docker volume prune -f ; docker system prune -f;'
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
+# de-dupe PATH
+PATH="$(perl -e 'print join(":", grep { not $seen{$_}++ } split(/:/, $ENV{PATH}))')"
