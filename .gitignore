@@ -1,0 +1,13 @@
+# Ignore everything
+*
+# But not these files.
+.bashrc
+.bash_profile
+.eslintrc
+.gitconfig
+.prettierrc
+.prettierrc.js
+.stylelintrc
+LICENSE
+README.md
+.gitignore
