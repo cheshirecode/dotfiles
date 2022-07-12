@@ -118,6 +118,7 @@ lightpurple='\e[1;35m'
 yellow='\e[1;33m'
 white='\e[1;37m'
 nc='\e[0m'
+IP_DEVICE='eth0'
 #------------------------------------------////
 ## FUNCTIONS
 welcome() {
@@ -133,15 +134,15 @@ welcome() {
     echo -ne "Today is "; date #date +"Today is %A %D, and it is now %R"
     echo -e ""
     echo -ne "Up time:";uptime | awk /'up/'
-    echo -en "Local IP Address :"; /sbin/ifconfig wlp2s0 | awk /'inet / {print $2}' | sed -e s/addr:/' '/
+    echo -en "Local IP Address :"; /sbin/ifconfig ${IP_DEVICE} | awk /'inet / {print $2}' | sed -e s/addr:/' '/
     echo "";
 }
 welcome;
 # get IP adresses
 #function my_ip() # get IP adresses
 my_ip () {
-        MY_IP=$(/sbin/ifconfig wlp2s0 | awk /'inet addr/ {print $2}')
-        MY_ISP=$(/sbin/ifconfig wlp2s0 | awk "/P-t-P/ { print $3 } " | sed -e s/P-t-P://)
+        MY_IP=$(/sbin/ifconfig ${IP_DEVICE} | awk /'inet addr/ {print $2}')
+        MY_ISP=$(/sbin/ifconfig ${IP_DEVICE} | awk "/P-t-P/ { print $3 } " | sed -e s/P-t-P://)
 }
 # get current host related info
 ii () {
@@ -151,7 +152,7 @@ ii () {
     echo -e "\n${red}Current date :$NC " ; date
     echo -e "\n${red}Machine stats :$NC " ; uptime
     echo -e "\n${red}Memory stats :$NC " ; free
-    echo -en "\n${red}Local IP Address :$NC" ; /sbin/ifconfig wlp2s0 | awk /'inet addr/ {print $2}' | sed -e s/addr:/' '/
+    echo -en "\n${red}Local IP Address :$NC" ; /sbin/ifconfig ${IP_DEVICE} | awk /'inet / {print $2}' | sed -e s/addr:/' '/
     echo
 }
 # Easy extract
@@ -226,14 +227,13 @@ ln -sf $(find /tmp/ -maxdepth 2 -type s -path "*/ssh-*/agent*" -user "$USER" -pr
  | sort -n | tail -1 | cut -d' ' -f2)\
   ~/.ssh/ssh_auth_sock
 export SSH_AUTH_SOCK=~/.ssh/ssh_auth_sock
-ssh-add -l > /dev/null || ssh-add ~/.ssh/*rsa
+ssh-add -l > /dev/null || (ssh-add ~/.ssh/*rsa && ssh-add ~/.ssh/*ed25519)
 
 
 # Docker helper methods\
 alias docker-cleanup='docker container prune -f; docker image prune -f; docker rmi $(docker images --quiet --filter "dangling=true"); docker volume prune -f ; docker system prune -f;'
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 # de-dupe PATH
 PATH="$(perl -e 'print join(":", grep { not $seen{$_}++ } split(/:/, $ENV{PATH}))')"
