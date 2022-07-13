@@ -5,9 +5,8 @@
 #
 # Source global definitions
 if [ -f /etc/bashrc ]; then
-	. /etc/bashrc
+    . /etc/bashrc
 fi
-
 
 # ~/.bashrc: executed by bash(1) for non-login shells.
 # If not running interactively, don't do anything
@@ -30,7 +29,7 @@ if [ -z "$debian_chroot" ] && [ -r /etc/debian_chroot ]; then
 fi
 # set a fancy prompt (non-color, unless we know we "want" color)
 case "$TERM" in
-    xterm-color) color_prompt=yes;;
+xterm-color) color_prompt=yes ;;
 esac
 # uncomment for a colored prompt, if the terminal has the capability; turned
 # off by default to not distract the user: the focus in a terminal window
@@ -54,16 +53,15 @@ fi
 unset color_prompt force_color_prompt
 # If this is an xterm set the title to user@host:dir
 case "$TERM" in
-xterm*|rxvt*)
+xterm* | rxvt*)
     PS1="\[\e]0;${debian_chroot:+($debian_chroot)}\u@\h: \w\a\]$PS1"
     ;;
-*)
-    ;;
+*) ;;
+
 esac
 
 # nicer prompt
 PS1="\n\[\e[30;1m\](\[\e[34;1m\]\u@\h:\w\[\e[30;1m\]) (\[\e[32;1m\]\$(/bin/ls -1 | /usr/bin/wc -l | /bin/sed 's: ::g') files, \$(/bin/ls -lah | /bin/grep -m 1 total | /bin/sed 's/total //')b\[\e[30;1m\])\n--> \[\e[0m\]"
-
 
 # enable color support of ls and also add handy aliases
 if [ -x /usr/bin/dircolors ]; then
@@ -128,60 +126,71 @@ welcome() {
     # this will display the username, date, time, a calendar, the amount of users, and the up time.
     #clear
     # Gotta love ASCII art with figlet
-    figlet "Welcome, " $USER;
+    figlet "Welcome, " $USER
     #toilet "Welcome, " $USER;
-    echo -e ""; cal ;
-    echo -ne "Today is "; date #date +"Today is %A %D, and it is now %R"
     echo -e ""
-    echo -ne "Up time:";uptime | awk /'up/'
-    echo -en "Local IP Address :"; /sbin/ifconfig ${IP_DEVICE} | awk /'inet / {print $2}' | sed -e s/addr:/' '/
-    echo "";
+    cal
+    echo -ne "Today is "
+    date #date +"Today is %A %D, and it is now %R"
+    echo -e ""
+    echo -ne "Up time:"
+    uptime | awk /'up/'
+    echo -en "Local IP Address :"
+    /sbin/ifconfig ${IP_DEVICE} | awk /'inet / {print $2}' | sed -e s/addr:/' '/
+    echo ""
 }
-welcome;
+welcome
 # get IP adresses
 #function my_ip() # get IP adresses
-my_ip () {
-        MY_IP=$(/sbin/ifconfig ${IP_DEVICE} | awk /'inet addr/ {print $2}')
-        MY_ISP=$(/sbin/ifconfig ${IP_DEVICE} | awk "/P-t-P/ { print $3 } " | sed -e s/P-t-P://)
+my_ip() {
+    MY_IP=$(/sbin/ifconfig ${IP_DEVICE} | awk /'inet addr/ {print $2}')
+    MY_ISP=$(/sbin/ifconfig ${IP_DEVICE} | awk "/P-t-P/ { print $3 } " | sed -e s/P-t-P://)
 }
 # get current host related info
-ii () {
+ii() {
     echo -e "\nYou are logged on ${red}$HOST"
-    echo -e "\nAdditionnal information:$NC " ; uname -a
-    echo -e "\n${red}Users logged on:$NC " ; w -h
-    echo -e "\n${red}Current date :$NC " ; date
-    echo -e "\n${red}Machine stats :$NC " ; uptime
-    echo -e "\n${red}Memory stats :$NC " ; free
-    echo -en "\n${red}Local IP Address :$NC" ; /sbin/ifconfig ${IP_DEVICE} | awk /'inet / {print $2}' | sed -e s/addr:/' '/
+    echo -e "\nAdditionnal information:$NC "
+    uname -a
+    echo -e "\n${red}Users logged on:$NC "
+    w -h
+    echo -e "\n${red}Current date :$NC "
+    date
+    echo -e "\n${red}Machine stats :$NC "
+    uptime
+    echo -e "\n${red}Memory stats :$NC "
+    free
+    echo -en "\n${red}Local IP Address :$NC"
+    /sbin/ifconfig ${IP_DEVICE} | awk /'inet / {print $2}' | sed -e s/addr:/' '/
     echo
 }
 # Easy extract
-extract () {
-  if [ -f $1 ] ; then
-      case $1 in
-          *.tar.bz2)   tar xvjf $1    ;;
-          *.tar.gz)    tar xvzf $1    ;;
-          *.bz2)       bunzip2 $1     ;;
-          *.rar)       rar x $1       ;;
-          *.gz)        gunzip $1      ;;
-          *.tar)       tar xvf $1     ;;
-          *.tbz2)      tar xvjf $1    ;;
-          *.tgz)       tar xvzf $1    ;;
-          *.zip)       unzip $1       ;;
-          *.Z)         uncompress $1  ;;
-          *.7z)        7z x $1        ;;
-          *)           echo "don't know how to extract '$1'..." ;;
-      esac
-  else
-      echo "'$1' is not a valid file!"
-  fi
+extract() {
+    if [ -f $1 ]; then
+        case $1 in
+        *.tar.bz2) tar xvjf $1 ;;
+        *.tar.gz) tar xvzf $1 ;;
+        *.bz2) bunzip2 $1 ;;
+        *.rar) rar x $1 ;;
+        *.gz) gunzip $1 ;;
+        *.tar) tar xvf $1 ;;
+        *.tbz2) tar xvjf $1 ;;
+        *.tgz) tar xvzf $1 ;;
+        *.zip) unzip $1 ;;
+        *.Z) uncompress $1 ;;
+        *.7z) 7z x $1 ;;
+        *) echo "don't know how to extract '$1'..." ;;
+        esac
+    else
+        echo "'$1' is not a valid file!"
+    fi
 }
-upinfo () {
-echo -ne "${green}$HOSTNAME ${red}uptime is ${cyan} \t ";uptime | awk /'up/ {print $3,$4,$5,$6,$7,$8,$9,$10}'
+upinfo() {
+    echo -ne "${green}$HOSTNAME ${red}uptime is ${cyan} \t "
+    uptime | awk /'up/ {print $3,$4,$5,$6,$7,$8,$9,$10}'
 }
 # Makes directory then moves into it
 #function mkcdr {
-mkcdr () {
+mkcdr() {
     mkdir -p -v $1
     cd $1
 }
@@ -195,45 +204,17 @@ alias top-commands='history | awk "{print $2}" | awk "{print $1}" |sort|uniq -c 
 alias ps-aux='ps axo user:20,pid,pcpu,pmem,vsz,rss,tty,stat,start,time,comm'
 
 # kill all by name https://stackoverflow.com/a/30515012
-killAllByName () {
+killAllByName() {
     ps -ef | grep "$1" | grep -v grep | awk '{print $2}' | xargs -r kill -9
 }
 
-#ssh-agent handling 
-# https://gist.github.com/martijnvermaat/8070533
-# https://askubuntu.com/questions/523673/ps-auxna-for-long-charactered-usernames-shows-a-plus-sign
-## Launch SSH agent if not running
-# if ! ps-aux | grep $(whoami) | grep ssh[-]agent >/dev/null; then ssh-agent ; fi
-
-# ensure ssh-agent is running
-ssh-add -l > /dev/null
-# no agents nor connections
-if [ "$?" == 2 ]; then    
-    ssh-agent -k
-    # Load stored agent connection info.
-    [[ -f "$HOME/.ssh-agent" ]] && eval "$(<~/.ssh-agent)" >/dev/null
-
-    ssh-add -l &>/dev/null
-    if [ "$?" == 2 ]; then
-        # Start agent and store agent connection info.
-        (umask 066; ssh-agent > ~/.ssh-agent)
-        eval "$(<~/.ssh-agent)" >/dev/null
-    fi
-fi
-
-# Link the latest ssh-agent socket
-ln -sf $(find /tmp/ -maxdepth 2 -type s -path "*/ssh-*/agent*" -user "$USER" -printf '%T@ %p\n' 2>&1\
- | grep -v "Permission denied"\
- | sort -n | tail -1 | cut -d' ' -f2)\
-  ~/.ssh/ssh_auth_sock
-export SSH_AUTH_SOCK=~/.ssh/ssh_auth_sock
-ssh-add -l > /dev/null || (ssh-add ~/.ssh/*rsa && ssh-add ~/.ssh/*ed25519)
-
+# SSH
+./.ssh-agent.sh
 
 # Docker helper methods\
 alias docker-cleanup='docker container prune -f; docker image prune -f; docker rmi $(docker images --quiet --filter "dangling=true"); docker volume prune -f ; docker system prune -f;'
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"                   # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
 # de-dupe PATH
 PATH="$(perl -e 'print join(":", grep { not $seen{$_}++ } split(/:/, $ENV{PATH}))')"
