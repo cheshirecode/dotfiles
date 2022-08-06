@@ -126,7 +126,7 @@ welcome() {
     # this will display the username, date, time, a calendar, the amount of users, and the up time.
     #clear
     # Gotta love ASCII art with figlet
-    figlet "Welcome, " $USER
+    figlet "Welcome, " "$USER"
     #toilet "Welcome, " $USER;
     echo -e ""
     cal
@@ -165,19 +165,19 @@ ii() {
 }
 # Easy extract
 extract() {
-    if [ -f $1 ]; then
+    if [ -f "$1" ]; then
         case $1 in
-        *.tar.bz2) tar xvjf $1 ;;
-        *.tar.gz) tar xvzf $1 ;;
-        *.bz2) bunzip2 $1 ;;
-        *.rar) rar x $1 ;;
-        *.gz) gunzip $1 ;;
-        *.tar) tar xvf $1 ;;
-        *.tbz2) tar xvjf $1 ;;
-        *.tgz) tar xvzf $1 ;;
-        *.zip) unzip $1 ;;
-        *.Z) uncompress $1 ;;
-        *.7z) 7z x $1 ;;
+        *.tar.bz2) tar xvjf "$1" ;;
+        *.tar.gz) tar xvzf "$1" ;;
+        *.bz2) bunzip2 "$1" ;;
+        *.rar) rar x "$1" ;;
+        *.gz) gunzip "$1" ;;
+        *.tar) tar xvf "$1" ;;
+        *.tbz2) tar xvjf "$1" ;;
+        *.tgz) tar xvzf "$1" ;;
+        *.zip) unzip "$1" ;;
+        *.Z) uncompress "$1" ;;
+        *.7z) 7z x "$1" ;;
         *) echo "don't know how to extract '$1'..." ;;
         esac
     else
@@ -191,8 +191,8 @@ upinfo() {
 # Makes directory then moves into it
 #function mkcdr {
 mkcdr() {
-    mkdir -p -v $1
-    cd $1
+    mkdir -p -v "$1"
+    cd $1 || exit
 }
 alias reload='source ~/.bashrc'
 alias biggest='BLOCKSIZE=1048576; du -x | sort -nr | head -10'
@@ -209,7 +209,7 @@ killAllByName() {
 }
 
 # SSH
-./.ssh-agent.sh
+"$HOME"/.ssh-agent.sh
 
 # Docker helper methods\
 alias docker-cleanup='docker container prune -f; docker image prune -f; docker rmi $(docker images --quiet --filter "dangling=true"); docker volume prune -f ; docker system prune -f;'
