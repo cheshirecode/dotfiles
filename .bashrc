@@ -192,7 +192,7 @@ upinfo() {
 #function mkcdr {
 mkcdr() {
     mkdir -p -v "$1"
-    cd $1 || exit
+    cd "$1" || exit
 }
 alias reload='source ~/.bashrc'
 alias biggest='BLOCKSIZE=1048576; du -x | sort -nr | head -10'
@@ -209,7 +209,7 @@ killAllByName() {
 }
 
 # SSH
-"$HOME"/.ssh-agent.sh
+. "$HOME"/.ssh-agent.sh
 
 # Docker helper methods\
 alias docker-cleanup='docker container prune -f; docker image prune -f; docker rmi $(docker images --quiet --filter "dangling=true"); docker volume prune -f ; docker system prune -f;'
