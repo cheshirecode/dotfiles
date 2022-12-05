@@ -61,7 +61,7 @@ xterm* | rxvt*)
 esac
 
 function parse_git_branch {
-    if we_are_in_git_work_tree; then
+    if which git &>/dev/nul && git rev-parse --is-inside-work-tree &>/dev/null; then
         local BR=$(git rev-parse --symbolic-full-name --abbrev-ref HEAD 2>/dev/null)
         if [ "$BR" == HEAD ]; then
             local NM=$(git name-rev --name-only HEAD 2>/dev/null)
@@ -73,6 +73,8 @@ function parse_git_branch {
         else
             echo -n "$BR"
         fi
+    else
+        echo ∅
     fi
 }
 # nicer prompt
