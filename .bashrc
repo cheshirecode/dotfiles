@@ -5,6 +5,7 @@
 #
 # Source global definitions
 if [ -f /etc/bashrc ]; then
+    # shellcheck source=/dev/null
     . /etc/bashrc
 fi
 
@@ -100,17 +101,20 @@ alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo
 # Alias definitions.
 # You may want to put all your additions into a separate file like
 # ~/.bash_aliases, instead of adding them here directly.
-if [ -f ~/.bash_aliases ]; then
-    . ~/.bash_aliases
+if [ -f "$HOME"/.bash_aliases ]; then
+    # shellcheck source=/dev/null
+    . "$HOME"/.bash_aliases
 fi
 # enable programmable completion features (you don't need to enable
 # this, if it's already enabled in /etc/bash.bashrc and /etc/profile
 # sources /etc/bash.bashrc).
 if [ -f /etc/bash_completion ] && ! shopt -oq posix; then
+    # shellcheck source=/dev/null
     . /etc/bash_completion
 fi
 export http_proxy= #"Page on 168"
 if [ -f ~/.kde-bashrc ]; then
+    # shellcheck source=/dev/null
     . ~/.kde-bashrc
 fi
 #------------------------------------------////
