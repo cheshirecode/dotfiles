@@ -1,0 +1,74 @@
+{
+  "mcpServers": {
+    "sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@latest"
+      ]
+    },
+    "browsertools": {
+      "command": "npx",
+      "args": [
+        "@agentdeskai/browser-tools-mcp"
+      ]
+    },
+    "gitmcp": {
+      "url": "REPO URL"
+    },
+    "github": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "GITHUB_PERSONAL_ACCESS_TOKEN"
+      }
+    },
+    "Framelink Figma MCP": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "figma-developer-mcp",
+        "--figma-api-key=figma_api_key",
+        "--stdio"
+      ]
+    },
+    "vercel": {
+      "url": "https://mcp.vercel.com"
+    },
+    "web-search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-web-search"
+      ]
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem"
+      ]
+    },
+    "magic-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@21st-dev/magic-mcp"
+      ]
+    }
+  }
+}

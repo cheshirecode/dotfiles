@@ -1,0 +1,85 @@
+# system
+
+# Automate development boot flow
+
+First output "!!! Enter the automated development process!!!"
+
+Check if MCP sequence thinking can work normally. If it can, please output "Thinking Now". If not, stop.
+
+Force the use of MCP sequence thinking service for the following thinking work. If the service cannot be found, please stop working
+
+Git uses non-interactive commands to avoid submission jams.
+
+## Deployment & Infrastructure Guidelines
+
+**Vercel Integration:**
+- Use Vercel MCP for deployment operations when available
+- Use Vercel CLI (`vercel`) for environment variable management and deployments
+- Prefer `vercel env add/ls/rm` over manual dashboard configuration
+- Use `vercel --prod` for production deployments
+- Use `vercel env pull` to sync environment variables locally
+
+**Small Commit Strategy:**
+- Keep commits small and single-purpose (one logical change per commit)
+- Use descriptive commit messages following conventional commits format
+- Stage and commit incrementally to show working progress
+- Each commit should be functional and not break the build
+- Prefer multiple small commits over large monolithic commits
+
+Decision-making and execution framework
+
+[Development cycle starting point]
+
+0.5 [Current branch check]
+   Get the current branch name: 'git branch --show-current'
+   If currently on a feature branch (not main):
+      → Analyze the current working status: 'git status && git log -n 5 --oneline'
+      Output "Continue developing the function of branch [branch name]"
+      → Jump to the "Execute Development" step
+
+1. [Branch selection decision]
+   Check current branch: 'git branch --show-current'
+   If not on main branch:
+      → Switch to main: 'git checkout main'
+      → Pull latest changes: 'git pull origin main --no-edit'
+   If on main branch:
+      → Create feature branch: 'git checkout -b feature/auto-dev-task-${fitting task name}'
+
+2. [Execute development - Small Incremental Commits]
+   A. Write interface definitions
+      → Commit: 'git add -A && git commit -m "feat: add interface definitions for [feature]"'
+   B. Implement core functions
+      → Commit: 'git add -A && git commit -m "feat: implement core [function name]"'
+   C. Writing unit tests
+      → Commit: 'git add -A && git commit -m "test: add unit tests for [feature]"'
+
+3. [Test verification] Run the test until it passes
+   → If fixes needed: 'git add -A && git commit -m "fix: resolve test failures in [component]"'
+
+4. [Quality Assessment] Run all tests and coverage of the project
+   → If improvements needed: 'git add -A && git commit -m "refactor: improve test coverage for [area]"'
+
+5. [Code Integration]
+   A. Push all commits to remote: 'git push origin feature/auto-dev-task-${fitting task name}'
+   B. Verify deployment works with Vercel: 'vercel --prod' (if applicable)
+
+6. Output "continue automated development", return to [development cycle starting point]
+
+[⚠️ Command Anti-jamming Strategy]
+Set timeout for all commands: add 'timeout 30s' before the command (such as 'timeout 30s git pull').
+Avoid pagination: add '| cat' to all commands that may cause pagination (such as: 'git log | cat').
+
+- Avoid editors: use 'EDITOR=cat' environment variables (e.g.: 'EDITOR=cat git commit')
+- git operation add environment variables: 'GIT_EDITOR=cat GIT_PAGER=cat git <command>'
+If the command gets stuck for 20 seconds without response, open a new end point and execute 'pkill -f git'.
+All long-running commands run in the background: add '&' and record PID (eg: 'python long_task.py &')
+- Detect stuck command: 'ps aux | grep <command>'
+
+[⚠️ Git Interaction Prevention Checklist]
+All git operations are forced to be non-interactive: 'GIT_EDITOR=cat GIT_PAGER=cat git <command>'
+Use git pull: 'GIT_TERMINAL_PROMPT=0 git pull origin <branch> --no-edit'
+Use git merge: 'git merge <branch> --no-edit --no-verify'
+Use git commit: 'git commit -a -m "message" --no-verify'
+Git log usage: 'git --no-pager log -n 10'
+Use git status: 'git -c color.status=false status'
+Force rejection of all interactions: 'export GIT_ASKPASS=echo'

@@ -1,0 +1,115 @@
+# TypeScript & React Web Guidelines
+
+## TypeScript Best Practices
+
+- Enable strict mode and related flags: "strict": true, noImplicitAny, noUncheckedIndexedAccess, exactOptionalPropertyTypes
+- Prefer interfaces for public shapes; prefer `type` for unions, mapped and utility types
+- Model domain types first; avoid `any`. Use `unknown` with type guards when needed
+- Use discriminated unions for state machines and API variants; narrow with `in`/`switch`
+- Type asynchronous code precisely: `Promise<Result>` and `async`/`await` with `try { } finally { }` for cleanup
+- Keep function signatures explicit; infer local variables; avoid over-broad generics
+
+## React (Web) Specific
+
+- Use function components; avoid `React.FC`. Define explicit `Props` and return `JSX.Element`
+- Type children explicitly when needed: `children?: React.ReactNode`
+- Use proper React event types (e.g. `React.ChangeEvent<HTMLInputElement>`)
+- Create focused, reusable components. Lift state only when necessary; avoid prop drilling via Context sparingly
+- Prefer controlled inputs for forms; derive minimal state from props; avoid duplicating source of truth
+- Use `useMemo`/`useCallback` only for measurable wins; default to clarity over premature optimization
+
+## UI & Styling
+
+- Use plain CSS or CSS Modules as per challenge; do not use UI/CSS frameworks
+- Follow BEM-like naming or CSS Modules scoping to prevent leakage; avoid global styles except reset/tokens
+- Build responsive, mobile-first layouts; use CSS variables for color/spacing/typography
+- Respect accessibility: visible focus states, sufficient contrast, reduced motion (`prefers-reduced-motion`)
+
+## Routing
+
+- Use React Router (v6+). Organize routes by feature; colocate route components with child components
+- Prefer lazy-loaded routes with `React.lazy` and `Suspense` for code-splitting
+
+## Data Fetching
+
+- Centralize an API client (fetch or axios). Define baseURL and default headers (Accept, Content-Type, x-nesto-candidat)
+- Define request/response types; validate and narrow server data before use
+- Handle timeouts/aborts (AbortController) and map errors to typed results
+
+Example typed fetch helper:
+
+```ts
+export type ApiError = { status: number; message: string };
+
+export async function getJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25000);
+  try {
+    const res = await fetch(input, { ...init, signal: controller.signal, headers: { Accept: "application/json", "Content-Type": "application/json", ...(init?.headers || {}) } });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw { status: res.status, message: text || res.statusText } as ApiError;
+    }
+    return (await res.json()) as T;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+```
+
+## Forms
+
+- Use controlled inputs with minimal re-renders; validate on blur/submit
+- Provide visible save/update indicators; disable buttons while saving
+- Sanitize and normalize inputs (email/phone) before submission
+
+## State Management
+
+- Prefer local component state; use Context for cross-cutting concerns (auth, theme)
+- Avoid global state libraries unless necessary; keep derived state computed
+
+## Error Handling & UX
+
+- Use error boundaries for unexpected component errors
+- Surface actionable error messages; avoid exposing raw server text to users
+- Log unexpected errors in development; fail gracefully in production paths
+
+## Performance
+
+- Ensure list items have stable keys; avoid re-creating objects/arrays unnecessarily
+- Defer heavy work off the main thread where feasible; debounce input-bound API calls
+- Use image optimization and code-splitting where it materially impacts UX
+
+## Testing
+
+- Write unit/component tests with Jest/Vitest + React Testing Library
+- Prefer accessible queries (`getByRole`, `getByLabelText`); avoid testing implementation details
+- Mock network with MSW; test critical flows (create, update, list, details)
+
+## Project Structure
+
+- Group by feature where possible: `src/{features,components,routes,api,types,hooks,styles,utils}`
+- Keep modules small, single-purpose. Add barrel files judiciously; avoid deep index re-exports
+- Use path aliases (e.g. `@/components`) configured in `tsconfig.json`
+
+## Linting & Formatting
+
+- Use ESLint with `@typescript-eslint`, `eslint-plugin-react`, `eslint-plugin-react-hooks`
+- Enforce import order, no unused vars, exhaustive deps for hooks
+- Use Prettier for formatting; keep configs minimal and consistent
+
+## Environment & Secrets
+
+- Use `.env.local` for local secrets; never commit secrets. Read via `import.meta.env`/`process.env` depending on build tool
+
+## Git & CI
+
+- Use conventional commits; small, single-purpose edits
+- Run typecheck, lint, build, and tests in CI before deploy
+
+## Guidance for Cursor/Claude
+
+- Prefer clarity over cleverness; do not introduce `any`
+- Maintain existing public APIs; avoid breaking changes unless requested
+- Propose minimal, focused edits with strong type safety and tests when adding features
+- Adhere to the README constraints: React JS, no UI/CSS frameworks, strong UX, responsiveness, error handling

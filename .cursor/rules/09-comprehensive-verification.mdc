@@ -1,0 +1,25 @@
+# Comprehensive Verification Guidelines
+
+## Verification Checklist
+- Test all code changes across multiple environments
+- Verify API endpoints and data flows end-to-end
+- Check integration points and dependencies
+- Validate error handling and edge cases
+
+## Environment Testing
+- Local development environment verification
+- Staging/preview environment testing
+- Production environment validation
+- Cross-browser and device compatibility
+
+## Quality Assurance
+- Run full test suite before deployment
+- Perform manual testing of critical paths
+- Verify performance and security aspects
+- Check accessibility and user experience
+
+## Documentation and Communication
+- Update documentation for any changes
+- Communicate breaking changes clearly
+- Provide migration guides when necessary
+- Ensure team alignment on verification processes
