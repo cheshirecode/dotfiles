@@ -27,8 +27,11 @@
 
 ## Routing
 
-- Use React Router (v6+). Organize routes by feature; colocate route components with child components
-- Prefer lazy-loaded routes with `React.lazy` and `Suspense` for code-splitting
+- Use wouter (1.2KB, 8x lighter than react-router-dom)
+- Three routes: `/` (products), `/applications` (list), `/applications/:id` (details)
+- Navigation: `const [, setLocation] = useLocation(); setLocation('/path')`
+- Params: `const [match, params] = useRoute('/applications/:id')`
+- Lazy-load routes with `React.lazy` and `Suspense` only if needed (3 routes = minimal benefit)
 
 ## Data Fetching
 
@@ -65,8 +68,10 @@ export async function getJson<T>(input: RequestInfo, init?: RequestInit): Promis
 
 ## State Management
 
-- Prefer local component state; use Context for cross-cutting concerns (auth, theme)
-- Avoid global state libraries unless necessary; keep derived state computed
+- **Server state**: SWR (products, applications) - handles caching, revalidation, mutations
+- **Global client state**: Jotai atoms (toasts, theme with localStorage)
+- **Local state**: useState for forms and UI flags
+- Avoid Context except for rare cases (Jotai atoms preferred for global state)
 
 ## Error Handling & UX
 
