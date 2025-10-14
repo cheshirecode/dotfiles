@@ -1,0 +1,19 @@
+# Git Analysis Guidelines
+
+## Repository Analysis
+- Always examine commit history to understand project evolution
+- Check branch structure and merge patterns
+- Analyze file change patterns to understand codebase architecture
+- Review recent commits for context on current development state
+
+## Git Best Practices
+- Use conventional commit messages
+- Create focused, atomic commits
+- Maintain clean branch history
+- Use meaningful branch names that describe the feature/fix
+
+## Code Investigation
+- Use git blame to understand code authorship and timing
+- Check git log for files to understand their evolution
+- Examine diffs to understand changes between versions
+- Use git tools to track down bug introductions

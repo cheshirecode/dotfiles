@@ -1,14 +1,31 @@
-# Ignore everything
-*
-# But not these files.
-.bashrc
-.bash_profile
-.eslintrc
-.gitconfig
-.prettierrc
-.prettierrc.js
-.stylelintrc
-LICENSE
-README.md
-.gitignore
-.ssh-agent-persist.sh
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Node
+node_modules/
+
+# Build outputs
+dist/
+build/
+coverage/
+
+# Temp and backup files
+*.tmp
+*.temp
+*.bak
+*.orig
+*.swp
+*.swo
+*~
+
+# Local environment files (keep example tracked)
+.env
+.env.*
+!.env.example

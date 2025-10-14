@@ -1,0 +1,90 @@
+---
+description: Guidelines for Vercel deployment, MCP integration, and infrastructure management
+---
+
+# 08-vercel-deployment.mdc
+
+## Vercel CLI Best Practices
+
+### Environment Variable Management
+
+- **Always use Vercel CLI** for environment variable operations:
+  - `vercel env ls` - List all environment variables
+  - `vercel env add <NAME> <environment>` - Add new environment variable
+  - `vercel env rm <NAME> <environment>` - Remove environment variable
+  - `vercel env pull` - Sync environment variables to local `.env` files
+
+### Deployment Operations
+
+- **Production deployments**: Use `vercel --prod` for production releases
+- **Preview deployments**: Use `vercel` for preview/staging deployments
+- **Deployment verification**: Always verify deployment success and functionality
+- **Environment consistency**: Ensure environment variables are set for all environments (production, preview, development)
+
+### MCP Integration Guidelines
+
+### Git User Configuration for MCP
+
+- **Always configure git user environment variables** for MCP operations:
+  - `GIT_USER_NAME` - Name for commit authorship in generated projects
+  - `GIT_USER_EMAIL` - Email for commit authorship in generated projects
+- **Environment setup pattern**:
+
+  ```bash
+  echo "Project Scaffolder" | vercel env add GIT_USER_NAME production
+  echo "scaffolder@cheshirecode.dev" | vercel env add GIT_USER_EMAIL production
+  ```
+
+### MCP Server Operations
+
+- **Use MCP tools** for project scaffolding and git operations
+- **Verify MCP functionality** before relying on automated operations
+- **Handle MCP failures gracefully** with appropriate fallbacks
+- **Document MCP tool usage** in project documentation
+
+## Deployment Workflow
+
+### Standard Deployment Process
+1. **Verify local functionality**: Ensure application works locally
+2. **Check environment variables**: Verify all required env vars are set
+3. **Deploy to preview**: Test with `vercel` (preview deployment)
+4. **Validate preview**: Test functionality on preview URL
+5. **Deploy to production**: Use `vercel --prod` for production release
+6. **Post-deployment verification**: Confirm production functionality
+
+### Environment Variable Checklist
+- ✅ `OPENAI_API_KEY` - Required for AI functionality
+- ✅ `GIT_USER_NAME` - Required for MCP git operations
+- ✅ `GIT_USER_EMAIL` - Required for MCP git operations
+- ✅ `NODE_ENV` - Optional, defaults to production in Vercel
+
+## Troubleshooting
+
+### Common Issues
+1. **Environment variables not available**:
+   - Solution: Use `vercel env ls` to verify, redeploy if needed
+2. **Git operations fail in production**:
+   - Solution: Ensure `GIT_USER_NAME` and `GIT_USER_EMAIL` are set
+3. **MCP tools not working**:
+   - Solution: Verify MCP server configuration and environment variables
+
+### Debugging Commands
+- `vercel logs <deployment-url>` - View deployment logs
+- `vercel inspect <deployment-url>` - Get deployment details
+- `vercel env ls` - List current environment variables
+- `vercel --debug` - Enable debug mode for deployments
+
+## Integration with Development Workflow
+
+### Commit Strategy for Deployments
+- **Small commits**: Each deployment should represent incremental, tested changes
+- **Conventional commits**: Use standard commit message format
+- **Deployment commits**: Tag deployment-related commits clearly
+- **Environment changes**: Commit environment variable changes separately
+
+### Continuous Deployment
+
+- **Automatic deployments**: Leverage Vercel's GitHub integration
+- **Branch-based deployments**: Use preview deployments for feature branches
+- **Production protection**: Only deploy to production from main branch
+- **Rollback strategy**: Keep deployment history for quick rollbacks

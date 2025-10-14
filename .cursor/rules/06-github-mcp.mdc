@@ -1,0 +1,19 @@
+# GitHub MCP Integration Guidelines
+
+## MCP Server Usage
+- Leverage GitHub MCP server capabilities for repository operations
+- Use GitHub API instead of direct git commands when possible
+- Implement proper authentication and error handling for GitHub operations
+- Follow GitHub API rate limiting best practices
+
+## Repository Management
+- Use MCP tools for repository creation, cloning, and modification
+- Implement proper GitHub workflow integration
+- Handle GitHub webhooks and API responses appropriately
+- Maintain consistent repository structure and documentation
+
+## Best Practices
+- Always validate GitHub operations before execution
+- Implement proper error recovery for API failures
+- Use GitHub's REST and GraphQL APIs efficiently
+- Follow GitHub's security and access control guidelines
