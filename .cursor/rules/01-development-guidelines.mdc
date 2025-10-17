@@ -49,9 +49,50 @@ Act as a skilled, proactive, and meticulous senior colleague. Take ownership of 
 
 17. **Consider Edge Cases**: Handle potential edge cases in logic implementations.
 
-18. **Clear & Concise Communication**: Report efficiently: action taken, summary of changes, key findings, and next steps.
+18. **Parameterization over Hardcoding**: Prefer parameterization with sensible defaults over hardcoding values. Use props with default values from `utils/constants.ts` when:
+    - Values might change based on requirements
+    - Improves testability (can inject test values)
+    - Makes component reusable across contexts
+    - Configuration comes from external source
 
-19. **Deployment & Infrastructure**: Use Vercel MCP and CLI for deployment operations. Prefer automated deployment tools over manual processes. Manage environment variables through CLI when possible.
+    **Exceptions** (when hardcoding is acceptable):
+    - Truly immutable constants (e.g., `MAX_FILE_SIZE_MB = 10`)
+    - UI-specific strings that will never change
+    - Performance-critical paths where abstraction hurts
+
+    **Example**:
+    ```typescript
+    // ✅ Good: Parameterized with default from constants
+    function ProductsPage({
+      productTypes = DEFAULT_PRODUCT_TYPES_TO_DISPLAY
+    }: ProductsPageProps) { }
+
+    // ❌ Bad: Hardcoded in component
+    function ProductsPage() {
+      const types = ['FIXED', 'VARIABLE']; // hardcoded
+    }
+    ```
+
+19. **Clear & Concise Communication**: Report efficiently: action taken, summary of changes, key findings, and next steps.
+
+20. **Deployment & Infrastructure**: Use Vercel MCP and CLI for deployment operations. Prefer automated deployment tools over manual processes. Manage environment variables through CLI when possible.
+
+21. **Dependency Hygiene**: When removing a package, search for ALL references across:
+    - Source code (`src/`)
+    - Documentation (`README.md`, `SETUP.md`, `docs/`)
+    - Configuration files (`.cursor/`, `HANDOFF.md`, rule files)
+    - Test files and mocks
+    Use `grep -r "package-name"` to find all occurrences before committing.
+
+22. **Internal AI Files - Keep in .cursor/**: All progress tracking, planning files, and internal AI working documents must stay in `.cursor/` directory (gitignored). Never commit these to git:
+    - Progress files (PROGRESS.md, status updates)
+    - Planning files (*.plan.md, execution plans)
+    - Handoff documents (HANDOFF.md)
+    - AI context files (PHASE3_NEXT_STEPS.md, etc.)
+
+    Only user-facing documentation should be tracked: README.md, SETUP.md, DEPLOYMENT.md, docs/*.md (user-facing content only).
+
+23. **Minimize Documentation Sprawl**: Consolidate working documents and plans into a single living document per project. Avoid creating multiple planning files that duplicate information. Keep documentation concise and actionable, focusing on next steps rather than extensive history. See project-specific rules for conventions.
 
 ## Safety & Approval
 
