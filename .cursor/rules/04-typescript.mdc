@@ -1,120 +1,702 @@
-# TypeScript & React Web Guidelines
+---
+description: React TypeScript development guide - strict typing, atomic commits, architecture, testing, and project-specific tech decisions
+---
+
+---
+title: React TypeScript Development Guide
+category: development
+tags: [react, typescript, vite, testing, performance]
+last_updated: 2025-10-17
+---
+
+# React TypeScript Development Guide
+
+> Comprehensive guide for React + TypeScript development with Vite, including strict typing, performance optimization, safe vendor chunking, and project-specific tech decisions.
+
+## Table of Contents
+
+1. [TypeScript Best Practices](#typescript-best-practices)
+2. [React Best Practices](#react-best-practices)
+3. [Project-Specific Tech Stack](#project-specific-tech-stack)
+4. [Forms & Validation](#forms--validation)
+5. [Error Handling & UX](#error-handling--ux)
+6. [Project Structure](#project-structure)
+7. [Git & Commits](#atomic-commits--git)
+8. [Pre-commit Automation](#pre-commit-automation)
+9. [Performance & Bundle Size](#performance--bundle-size)
+10. [Accessibility](#accessibility)
+11. [Environment Variables](#environment-variables)
+12. [Deployment](#deployment)
+13. [Documentation](#documentation)
+14. [Quality Checklist](#quality-checklist)
+15. [Anti-Patterns](#anti-patterns)
+16. [Quick Reference](#quick-reference)
+
+---
 
 ## TypeScript Best Practices
 
-- Enable strict mode and related flags: "strict": true, noImplicitAny, noUncheckedIndexedAccess, exactOptionalPropertyTypes
-- Prefer interfaces for public shapes; prefer `type` for unions, mapped and utility types
-- Model domain types first; avoid `any`. Use `unknown` with type guards when needed
-- Use discriminated unions for state machines and API variants; narrow with `in`/`switch`
-- Type asynchronous code precisely: `Promise<Result>` and `async`/`await` with `try { } finally { }` for cleanup
-- Keep function signatures explicit; infer local variables; avoid over-broad generics
-
-## React (Web) Specific
-
-- Use function components; avoid `React.FC`. Define explicit `Props` and return `JSX.Element`
-- Type children explicitly when needed: `children?: React.ReactNode`
-- Use proper React event types (e.g. `React.ChangeEvent<HTMLInputElement>`)
-- Create focused, reusable components. Lift state only when necessary; avoid prop drilling via Context sparingly
-- Prefer controlled inputs for forms; derive minimal state from props; avoid duplicating source of truth
-- Use `useMemo`/`useCallback` only for measurable wins; default to clarity over premature optimization
-
-## UI & Styling
-
-- Use plain CSS or CSS Modules as per challenge; do not use UI/CSS frameworks
-- Follow BEM-like naming or CSS Modules scoping to prevent leakage; avoid global styles except reset/tokens
-- Build responsive, mobile-first layouts; use CSS variables for color/spacing/typography
-- Respect accessibility: visible focus states, sufficient contrast, reduced motion (`prefers-reduced-motion`)
-
-## Routing
-
-- Use wouter (1.2KB, 8x lighter than react-router-dom)
-- Three routes: `/` (products), `/applications` (list), `/applications/:id` (details)
-- Navigation: `const [, setLocation] = useLocation(); setLocation('/path')`
-- Params: `const [match, params] = useRoute('/applications/:id')`
-- Lazy-load routes with `React.lazy` and `Suspense` only if needed (3 routes = minimal benefit)
-
-## Data Fetching
-
-- Centralize an API client (fetch or axios). Define baseURL and default headers (Accept, Content-Type, x-nesto-candidat)
-- Define request/response types; validate and narrow server data before use
-- Handle timeouts/aborts (AbortController) and map errors to typed results
-
-Example typed fetch helper:
-
-```ts
-export type ApiError = { status: number; message: string };
-
-export async function getJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25000);
-  try {
-    const res = await fetch(input, { ...init, signal: controller.signal, headers: { Accept: "application/json", "Content-Type": "application/json", ...(init?.headers || {}) } });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw { status: res.status, message: text || res.statusText } as ApiError;
-    }
-    return (await res.json()) as T;
-  } finally {
-    clearTimeout(timeout);
+### Strict Mode Configuration
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true
   }
 }
 ```
 
-## Forms
+### Type Preferences
+- **Interfaces** for public shapes (objects, component props)
+- **Types** for unions, mapped types, utilities
+- **Never use `any`** - use `unknown` with type guards
+- **Discriminated unions** for state machines and API variants
 
-- Use controlled inputs with minimal re-renders; validate on blur/submit
-- Provide visible save/update indicators; disable buttons while saving
-- Sanitize and normalize inputs (email/phone) before submission
+### Component Patterns
+```typescript
+// ✅ GOOD: No React.FC, explicit return type, explicit props
+interface ButtonProps {
+  children: React.ReactNode;
+  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  disabled?: boolean;
+  variant?: 'primary' | 'secondary' | 'ghost';
+}
 
-## State Management
+export function Button({
+  children,
+  onClick,
+  disabled = false,
+  variant = 'primary'
+}: ButtonProps): JSX.Element {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={variant}
+    >
+      {children}
+    </button>
+  );
+}
 
-- **Server state**: SWR (products, applications) - handles caching, revalidation, mutations
-- **Global client state**: Jotai atoms (toasts, theme with localStorage)
-- **Local state**: useState for forms and UI flags
-- Avoid Context except for rare cases (Jotai atoms preferred for global state)
+// ❌ BAD: React.FC, implicit types
+export const Button: React.FC<any> = ({ children, onClick }) => {
+  return <button onClick={onClick}>{children}</button>;
+};
+```
+
+### Async Operations
+```typescript
+// ✅ GOOD: Explicit Promise type, proper error handling
+export async function fetchData(id: string): Promise<Data> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25000);
+
+  try {
+    const res = await fetch(`/api/data/${id}`, {
+      signal: controller.signal,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!res.ok) {
+      throw new ApiError(res.status, res.statusText);
+    }
+
+    return res.json() as Promise<Data>;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Custom error class with type guard
+class ApiError extends Error {
+  constructor(public status: number, public statusText: string) {
+    super(`API Error: ${status} ${statusText}`);
+    this.name = 'ApiError';
+  }
+}
+
+function isApiError(error: unknown): error is ApiError {
+  return error instanceof ApiError;
+}
+```
+
+## React Best Practices
+
+### Component Guidelines
+- **Function components only** (no class components)
+- **Focused, single-purpose** (<200 lines)
+- **Lift state only when necessary** (start local)
+- **Controlled inputs** for forms
+- **Proper event types** (`React.ChangeEvent<HTMLInputElement>`, etc.)
+
+### Performance Optimization
+**Only optimize when needed**:
+```typescript
+// Use useMemo for expensive computations
+const filteredProducts = useMemo(
+  () => products.filter(p => p.rate > minRate),
+  [products, minRate]
+);
+
+// Use useCallback for callbacks passed to memoized children
+const handleClick = useCallback((id: string) => {
+  setSelected(id);
+}, []);
+```
+
+**When to optimize**:
+- List rendering >100 items (consider virtualization)
+- Heavy computations
+- Callbacks passed to `React.memo` components
+
+### State Management Philosophy
+
+**Decision Tree**:
+1. **Server state?** → SWR or React Query
+2. **Local UI state?** → `useState`
+3. **Global UI state?** → Minimal Jotai/Zustand
+4. **Prop drilling (>3 levels)?** → Context or state lib
+
+**Example**:
+```typescript
+// Server state (SWR)
+const { data: products, error } = useSWR('/products', fetcher);
+
+// Local state
+const [isOpen, setIsOpen] = useState(false);
+
+// Global state (Jotai) - minimal use only
+const [toasts, setToasts] = useAtom(toastsAtom);
+const [theme, setTheme] = useAtom(themeAtom);
+```
+
+## Project-Specific Tech Stack
+
+### Router: wouter (NOT react-router-dom)
+**Why**: 8x smaller (1.2KB vs 10KB gzipped)
+
+```typescript
+import { Route, Link, useLocation, useRoute } from 'wouter';
+
+// Define routes
+<Route path="/" component={HomePage} />
+<Route path="/applications/:id" component={Details} />
+
+// Navigation
+const [, setLocation] = useLocation();
+setLocation('/applications/123');
+
+// Get params
+const [match, params] = useRoute('/applications/:id');
+if (match) console.log(params.id);
+
+// Links (use href, not to)
+<Link href="/applications">Applications</Link>
+```
+
+### Data Fetching: SWR (NOT React Query)
+**Why**: Lighter, sufficient for CRUD
+
+```typescript
+import useSWR from 'swr';
+import useSWRMutation from 'swr/mutation';
+
+// GET requests
+const { data, error, isLoading } = useSWR('/products', fetcher);
+
+// POST/PUT requests
+const { trigger, isMutating } = useSWRMutation(
+  '/applications',
+  async (url, { arg }: { arg: CreateApplication }) => {
+    return fetcher(url, {
+      method: 'POST',
+      body: JSON.stringify(arg),
+    });
+  }
+);
+```
+
+### State: Jotai (Minimal)
+**Only use for**:
+- Toast notifications
+- Theme preference (persisted to localStorage)
+
+```typescript
+// atoms/toastsAtom.ts
+export const toastsAtom = atom<Toast[]>([]);
+
+// atoms/themeAtom.ts
+export const themeAtom = atomWithStorage<Theme>('theme', 'system');
+
+// Usage
+const [theme, setTheme] = useAtom(themeAtom);
+```
+
+### Styling: CSS Modules + Design Tokens
+**No Tailwind, No Material-UI, No component frameworks**
+
+```typescript
+// Component
+import styles from './Button.module.css';
+
+export function Button({ variant }: Props): JSX.Element {
+  return <button className={styles[variant]}>{children}</button>;
+}
+```
+
+```css
+/* Design tokens */
+:root {
+  --color-primary: #2563eb;
+  --spacing-md: 1rem;
+  --font-size-lg: 1.125rem;
+}
+
+/* Light-dark theming */
+:root {
+  color-scheme: light dark;
+  --color-bg: light-dark(#ffffff, #1a1a1a);
+  --color-text: light-dark(#1a1a1a, #e5e5e5);
+}
+```
+
+### Testing: Vitest + happy-dom
+```typescript
+import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+
+describe('Component', () => {
+  it('handles user interaction', async () => {
+    const handleClick = vi.fn();
+    const user = userEvent.setup();
+
+    render(<Component onClick={handleClick} />);
+
+    await user.click(screen.getByRole('button'));
+    expect(handleClick).toHaveBeenCalledTimes(1);
+  });
+});
+```
+
+**Test Environment**:
+- Default: `happy-dom` (2-3x faster than jsdom)
+- Available: `jsdom@25.0.1` (via `@vitest-environment jsdom` pragma)
+
+## Forms & Validation
+
+### Custom Hook Pattern
+```typescript
+// Hook
+const { values, errors, touched, handleChange, handleBlur, handleSubmit } =
+  useForm({
+    initialValues: { email: '', phone: '' },
+    validators: {
+      email: validateEmail,
+      phone: composeValidators(validateRequired, validatePhone),
+    },
+    onSubmit: async (values) => {
+      await createApplication(values);
+    },
+  });
+
+// Component
+<Input
+  label="Email"
+  value={values.email}
+  onChange={handleChange('email')}
+  onBlur={handleBlur('email')}
+  error={touched.email ? errors.email : undefined}
+/>
+```
+
+### Validators (Pure Functions)
+```typescript
+export function validateEmail(value: string): string | undefined {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+    return 'Invalid email address';
+  }
+}
+
+export function composeValidators(
+  ...validators: Array<(value: string) => string | undefined>
+): (value: string) => string | undefined {
+  return (value) => {
+    for (const validator of validators) {
+      const error = validator(value);
+      if (error) return error;
+    }
+  };
+}
+```
 
 ## Error Handling & UX
 
-- Use error boundaries for unexpected component errors
-- Surface actionable error messages; avoid exposing raw server text to users
-- Log unexpected errors in development; fail gracefully in production paths
+### Error Boundaries
+```typescript
+<ErrorBoundary fallback={(error) => <ErrorFallback error={error} />}>
+  <App />
+</ErrorBoundary>
+```
 
-## Performance
+### API Error Handling
+```typescript
+try {
+  await createApplication(data);
+  addToast({ type: 'success', message: 'Application created!' });
+} catch (error) {
+  if (isApiError(error)) {
+    addToast({
+      type: 'error',
+      message: `Failed: ${error.statusText}`
+    });
+  } else {
+    addToast({
+      type: 'error',
+      message: 'An unexpected error occurred'
+    });
+  }
+}
+```
 
-- Ensure list items have stable keys; avoid re-creating objects/arrays unnecessarily
-- Defer heavy work off the main thread where feasible; debounce input-bound API calls
-- Use image optimization and code-splitting where it materially impacts UX
-
-## Testing
-
-- Write unit/component tests with Jest/Vitest + React Testing Library
-- Prefer accessible queries (`getByRole`, `getByLabelText`); avoid testing implementation details
-- Mock network with MSW; test critical flows (create, update, list, details)
+### User Feedback Requirements
+- ✅ Toast notifications for actions
+- ✅ Loading states for async operations
+- ✅ Disabled buttons during submission
+- ✅ Actionable error messages
+- ✅ Visual save indicators (required by challenge)
 
 ## Project Structure
 
-- Group by feature where possible: `src/{features,components,routes,api,types,hooks,styles,utils}`
-- Keep modules small, single-purpose. Add barrel files judiciously; avoid deep index re-exports
-- Use path aliases (e.g. `@/components`) configured in `tsconfig.json`
+```
+src/
+  components/      # Shared UI, no business logic
+  features/        # Domain-specific with business logic
+  hooks/           # Custom React hooks
+  utils/           # Pure functions (no side effects)
+  services/        # API clients, i18n (side effects)
+    i18n/          # Localization files
+  atoms/           # Jotai state
+  types/           # TypeScript interfaces/types
+  styles/          # Global CSS (tokens, reset, base)
+```
 
-## Linting & Formatting
+**Path Aliases**: Use `@/` for cleaner imports
+```json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
+}
+```
 
-- Use ESLint with `@typescript-eslint`, `eslint-plugin-react`, `eslint-plugin-react-hooks`
-- Enforce import order, no unused vars, exhaustive deps for hooks
-- Use Prettier for formatting; keep configs minimal and consistent
+## Atomic Commits & Git
 
-## Environment & Secrets
+### Conventional Commits Format
+```
+type(scope): description
 
-- Use `.env.local` for local secrets; never commit secrets. Read via `import.meta.env`/`process.env` depending on build tool
+feat: add product filtering
+fix: resolve race condition in form submission
+refactor: extract validation logic to utils
+test: add coverage for product filters
+chore: update dependencies
+docs: add API documentation
+style: format code with prettier
+perf: optimize product list rendering
+a11y: improve keyboard navigation
+```
 
-## Git & CI
+### Commit Strategy
+- **One logical change per commit** (single file ideal)
+- **Grouped only when inseparable** (component + CSS + test)
+- **Clear, descriptive messages**
+- **Small, focused commits** (easier to review, revert, cherry-pick)
 
-- Use conventional commits; small, single-purpose edits
-- Run typecheck, lint, build, and tests in CI before deploy
+## Pre-commit Automation
 
-## Guidance for Cursor/Claude
+### Lefthook (Faster than Husky)
+```yaml
+# lefthook.yml
+pre-commit:
+  commands:
+    format:
+      glob: "*.{ts,tsx,css}"
+      run: prettier --write {staged_files}
+    lint:
+      glob: "*.{ts,tsx}"
+      run: eslint {staged_files} --fix
+commit-msg:
+  commands:
+    commitlint:
+      run: commitlint --edit
+```
 
-- Prefer clarity over cleverness; do not introduce `any`
-- Maintain existing public APIs; avoid breaking changes unless requested
-- Propose minimal, focused edits with strong type safety and tests when adding features
-- Adhere to the README constraints: React JS, no UI/CSS frameworks, strong UX, responsiveness, error handling
+**Benefits**: Zero-thought commits, always formatted/linted, enforces standards
+
+## Performance & Bundle Size
+
+### Code Splitting
+```typescript
+// Route-based splitting
+const ProductPage = lazy(() => import('./features/products/ProductPage'));
+
+// Component-based (heavy components only)
+const Chart = lazy(() => import('./components/Chart'));
+
+// Usage
+<Suspense fallback={<Spinner />}>
+  <ProductPage />
+</Suspense>
+```
+
+### Safe Vendor Chunking Strategy
+
+**CRITICAL**: React + React-DOM must stay together to prevent duplication errors.
+
+```typescript
+// vite.config.ts
+export default defineConfig({
+  resolve: {
+    // REQUIRED: Ensure single React instance
+    dedupe: ['react', 'react-dom'],
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id: string): string | undefined {
+          if (!id.includes('node_modules')) return undefined;
+
+          // CRITICAL: Keep React + React-DOM together in ONE chunk
+          // They share internal state and MUST NOT be split
+          if (id.includes('/react/') || id.includes('/react-dom/')) {
+            return 'vendor-react';
+          }
+
+          // Safe to include: React hooks utilities
+          if (id.includes('use-sync-external-store')) {
+            return 'vendor-react';
+          }
+
+          // Independent libraries - safe to split by category
+          if (id.includes('/wouter/')) return 'vendor-routing';
+          if (id.includes('/swr/')) return 'vendor-data';
+          if (id.includes('/jotai/')) return 'vendor-state';
+          if (id.includes('/i18next/') || id.includes('/react-i18next/')) {
+            return 'vendor-i18n';
+          }
+
+          // Other utilities
+          return 'vendor-lib';
+        },
+      },
+    },
+  },
+});
+```
+
+**Why This Works**:
+- React + React-DOM in ONE chunk prevents: `"Cannot set properties of undefined (setting 'Children')"`
+- Other libraries are independent and safe to split
+- Enables 80%+ cache hit rate on deployments
+
+**Bundle Breakdown Example**:
+```
+vendor-react   137KB (45KB gz)  ← React + React-DOM (never split!)
+vendor-state     9KB  (4KB gz)  ← Jotai (independent)
+vendor-data      9KB  (4KB gz)  ← SWR (independent)
+vendor-routing   3KB  (2KB gz)  ← wouter (independent)
+vendor-i18n      4KB  (2KB gz)  ← i18next (independent)
+vendor-lib       5KB  (2KB gz)  ← Utilities
+index           11KB  (4KB gz)  ← App code
+──────────────────────────────────────
+TOTAL          177KB (67KB gz)
+```
+
+**Cache Benefits**:
+- App code update: Download only 11KB (6% of total)
+- React update: Download 148KB (81% of total, vendors cached)
+- Vendor update: Download only affected chunk
+
+**Target**: < 400KB gzipped for main bundle
+
+## Accessibility
+
+### Requirements
+- ✅ Semantic HTML (`<button>`, `<nav>`, `<main>`, etc.)
+- ✅ ARIA labels where needed
+- ✅ Keyboard navigation (`tabIndex`, focus management)
+- ✅ Focus-visible styles
+- ✅ Sufficient color contrast
+- ✅ `prefers-reduced-motion` support
+
+### Testing
+**Automated** (via Storybook):
+- Use `@storybook/addon-a11y` in Storybook
+- View "Accessibility" tab for each component
+- Tests keyboard nav, ARIA, color contrast
+
+**Manual**:
+- Browser DevTools (Lighthouse)
+- axe DevTools extension
+- Test keyboard-only navigation
+- Screen reader testing (VoiceOver, NVDA)
+
+## Deployment
+
+### Vercel Configuration
+```json
+{
+  "buildCommand": "./scripts/build.sh",
+  "framework": "vite",
+  "outputDirectory": "dist"
+}
+```
+
+**Environment Variables**: Set via `vercel env add` for production, preview, development
+
+**Auto-deploy**: Enabled on `git push origin master`
+
+## Documentation
+
+### JSDoc for Public APIs
+```typescript
+/**
+ * Fetches user data from the API
+ *
+ * @param userId - The user's unique identifier
+ * @returns Promise resolving to user data
+ * @throws {ApiError} If the request fails
+ *
+ * @example
+ * ```ts
+ * const user = await fetchUser('123');
+ * console.log(user.name);
+ * ```
+ */
+export async function fetchUser(userId: string): Promise<User> {
+  // ...
+}
+```
+
+### Storybook Stories
+```typescript
+import type { Meta, StoryObj } from '@storybook/react';
+
+const meta = {
+  title: 'Components/Button',
+  component: Button,
+  parameters: {
+    layout: 'centered',
+  },
+  tags: ['autodocs'],
+} satisfies Meta<typeof Button>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Primary: Story = {
+  args: {
+    variant: 'primary',
+    children: 'Click me',
+  },
+};
+```
+
+## Quality Checklist
+
+Before completing work:
+- [ ] All tests passing (`npm test`)
+- [ ] Build successful (`npm run build`)
+- [ ] No linting errors (`npm run lint`)
+- [ ] TypeScript strict mode satisfied
+- [ ] Accessibility tested (keyboard nav, ARIA)
+- [ ] Error states handled
+- [ ] Loading states present
+- [ ] Responsive design verified
+- [ ] Documentation updated (JSDoc, Storybook)
+- [ ] Atomic commits with clear messages
+
+## Anti-Patterns
+
+### ❌ Never Use
+
+| Anti-Pattern | Why | Alternative |
+|-------------|-----|-------------|
+| `any` type | Defeats TypeScript | `unknown` + type guards |
+| `React.FC` | Loses generic constraints | Explicit props + return type |
+| Inline styles | No scoping, hard to maintain | CSS Modules |
+| Tailwind/Material-UI | Against project requirements | CSS Modules + tokens |
+| react-router-dom | Too heavy (10KB) | wouter (1.2KB) |
+| React Query | Overkill for CRUD | SWR (5KB) |
+| Redux/MobX | Too complex | Minimal Jotai |
+| `\|\|` operator | Falsy values (0, "") treated as missing | `??` (nullish coalescing) |
+| Splitting React/React-DOM | Causes duplication errors | Keep together in ONE chunk |
+
+### ✅ Always Use
+
+| Best Practice | Reason |
+|--------------|--------|
+| Explicit types and return types | Self-documenting, type-safe |
+| CSS Modules with design tokens | Scoped, maintainable styles |
+| Atomic, conventional commits | Clear history, easy revert |
+| Error boundaries | Graceful error handling |
+| Loading and error states | Better UX |
+| ARIA + semantic HTML | Accessibility |
+| Testing for critical paths | Confidence in deploys |
+| JSDoc for public APIs | Documentation |
+| `dedupe: ['react', 'react-dom']` | Single React instance |
+
+## Quick Reference
+
+### Component Boilerplate
+```typescript
+interface Props {
+  value: string;
+  onChange: (value: string) => void;
+}
+
+export function Component({ value, onChange }: Props): JSX.Element {
+  return <div>{value}</div>;
+}
+```
+
+### Test Boilerplate
+```typescript
+describe('Component', () => {
+  it('renders correctly', () => {
+    render(<Component value="test" onChange={vi.fn()} />);
+    expect(screen.getByText('test')).toBeInTheDocument();
+  });
+});
+```
+
+### API Client
+```typescript
+export async function fetcher<T>(
+  url: string,
+  init?: RequestInit
+): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${url}`, {
+    ...DEFAULT_HEADERS,
+    ...init,
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, response.statusText);
+  }
+  return response.json() as Promise<T>;
+}
+```
+
+---
+
+**Philosophy**: Write code for humans first, computers second. Prioritize clarity, maintainability, and type safety over cleverness.
