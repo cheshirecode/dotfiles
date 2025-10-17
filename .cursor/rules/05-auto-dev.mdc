@@ -26,6 +26,13 @@ Git uses non-interactive commands to avoid submission jams.
 - Each commit should be functional and not break the build
 - Prefer multiple small commits over large monolithic commits
 
+**Development Approach Defaults:**
+- Commits: Logical groupings (types+component, tests, stories) - ~3 commits per feature
+- Testing: Component first, then tests (not TDD)
+- Documentation: Update .cursor/HANDOFF.md after each major milestone
+- Flow: Complete current feature, then auto-continue to next (per auto-dev cycle)
+- Atomic commits: Each commit should be functional and build successfully
+
 Decision-making and execution framework
 
 [Development cycle starting point]
