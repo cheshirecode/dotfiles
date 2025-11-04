@@ -14,6 +14,6 @@
     "args": ["@agentdeskai/browser-tools-mcp"]
   },
   "gitmcp": {
-    "url": "https://gitmcp.io/aevatarAI/custom-gpt-frontend"
+    "url": "https://github.com/cheshirecode/dotfiles"
   }
 }
