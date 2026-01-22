@@ -61,7 +61,7 @@ xterm* | rxvt*)
 
 esac
 
-function parse_git_branch {
+parse_git_branch() {
     if which git &>/dev/null && git rev-parse --is-inside-work-tree &>/dev/null; then
         local BR=$(git rev-parse --symbolic-full-name --abbrev-ref HEAD 2>/dev/null)
         if [ "$BR" == HEAD ]; then
@@ -97,7 +97,10 @@ alias la='ls -a'
 #alias l='ls -CF'
 # Add an "alert" alias for long running commands.  Use like so:
 #   sleep 10; alert
-alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
+# Alert alias - only enable if notify-send is available
+if command -v notify-send &>/dev/null; then
+    alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
+fi
 # Alias definitions.
 # You may want to put all your additions into a separate file like
 # ~/.bash_aliases, instead of adding them here directly.
@@ -147,25 +150,41 @@ welcome() {
     # this will display the username, date, time, a calendar, the amount of users, and the up time.
     #clear
     # Gotta love ASCII art with figlet
-    figlet "Welcome, " "$USER"
+    if command -v figlet &>/dev/null; then
+        figlet "Welcome, " "$USER"
+    else
+        echo "Welcome, $USER"
+    fi
     #toilet "Welcome, " $USER;
     echo -e ""
-    cal
+    if command -v cal &>/dev/null; then
+        cal
+    fi
     echo -ne "Today is "
     date #date +"Today is %A %D, and it is now %R"
     echo -e ""
     echo -ne "Up time:"
     uptime | awk /'up/'
     echo -en "Local IP Address :"
-    /sbin/ifconfig ${IP_DEVICE} | awk /'inet / {print $2}' | sed -e s/addr:/' '/
+    if command -v ip &>/dev/null; then
+        ip -4 addr show ${IP_DEVICE} 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1
+    elif command -v ifconfig &>/dev/null; then
+        ifconfig ${IP_DEVICE} 2>/dev/null | awk /'inet / {print $2}' | sed -e s/addr:/' '/
+    else
+        echo "N/A"
+    fi
     echo ""
 }
 welcome
 # get IP adresses
 #function my_ip() # get IP adresses
 my_ip() {
-    MY_IP=$(/sbin/ifconfig ${IP_DEVICE} | awk /'inet addr/ {print $2}')
-    MY_ISP=$(/sbin/ifconfig ${IP_DEVICE} | awk "/P-t-P/ { print $3 } " | sed -e s/P-t-P://)
+    if command -v ip &>/dev/null; then
+        MY_IP=$(ip -4 addr show ${IP_DEVICE} 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1)
+    elif command -v ifconfig &>/dev/null; then
+        MY_IP=$(ifconfig ${IP_DEVICE} 2>/dev/null | awk /'inet addr/ {print $2}')
+        MY_ISP=$(ifconfig ${IP_DEVICE} 2>/dev/null | awk "/P-t-P/ { print $3 } " | sed -e s/P-t-P://)
+    fi
 }
 # get current host related info
 ii() {
@@ -181,7 +200,13 @@ ii() {
     echo -e "\n${red}Memory stats :$NC "
     free
     echo -en "\n${red}Local IP Address :$NC"
-    /sbin/ifconfig ${IP_DEVICE} | awk /'inet / {print $2}' | sed -e s/addr:/' '/
+    if command -v ip &>/dev/null; then
+        ip -4 addr show ${IP_DEVICE} 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1
+    elif command -v ifconfig &>/dev/null; then
+        ifconfig ${IP_DEVICE} 2>/dev/null | awk /'inet / {print $2}' | sed -e s/addr:/' '/
+    else
+        echo "N/A"
+    fi
     echo
 }
 # Easy extract
@@ -190,15 +215,41 @@ extract() {
         case $1 in
         *.tar.bz2) tar xvjf "$1" ;;
         *.tar.gz) tar xvzf "$1" ;;
-        *.bz2) bunzip2 "$1" ;;
-        *.rar) rar x "$1" ;;
+        *.bz2)
+            if command -v bunzip2 &>/dev/null; then
+                bunzip2 "$1"
+            else
+                echo "bunzip2 not found. Install bzip2 package."
+            fi
+            ;;
+        *.rar)
+            if command -v unrar &>/dev/null; then
+                unrar x "$1"
+            elif command -v rar &>/dev/null; then
+                rar x "$1"
+            else
+                echo "unrar/rar not found. Install unrar package."
+            fi
+            ;;
         *.gz) gunzip "$1" ;;
         *.tar) tar xvf "$1" ;;
         *.tbz2) tar xvjf "$1" ;;
         *.tgz) tar xvzf "$1" ;;
-        *.zip) unzip "$1" ;;
+        *.zip)
+            if command -v unzip &>/dev/null; then
+                unzip "$1"
+            else
+                echo "unzip not found. Install unzip package."
+            fi
+            ;;
         *.Z) uncompress "$1" ;;
-        *.7z) 7z x "$1" ;;
+        *.7z)
+            if command -v 7z &>/dev/null; then
+                7z x "$1"
+            else
+                echo "7z not found. Install p7zip-full package."
+            fi
+            ;;
         *) echo "don't know how to extract '$1'..." ;;
         esac
     else
@@ -237,5 +288,16 @@ alias docker-cleanup='docker container prune -f; docker image prune -f; docker r
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"                   # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
+
+# Add local bin to PATH
+export PATH="$HOME/.local/bin:$PATH"
+
 # de-dupe PATH
 PATH="$(perl -e 'print join(":", grep { not $seen{$_}++ } split(/:/, $ENV{PATH}))')"
+
+# GitHub Token - SECURITY WARNING: Do not store tokens in plaintext!
+# Consider using a credential manager or environment-specific config
+# export GITHUB_TOKEN="your_token_here"
+if [ -f "$HOME/.github_token" ]; then
+    export GITHUB_TOKEN=$(cat "$HOME/.github_token")
+fi

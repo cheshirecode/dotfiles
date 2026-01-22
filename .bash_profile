@@ -293,4 +293,6 @@ export NVM_DIR="$HOME/.nvm"
 # Add Visual Studio Code (code)
 export PATH="$PATH:/Applications/Visual Studio Code.app/Contents/Resources/app/bin"
 # SSH
-./.ssh-agent.sh
+if [ -f "$HOME/.ssh-agent.sh" ]; then
+    . "$HOME/.ssh-agent.sh"
+fi
