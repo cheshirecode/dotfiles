@@ -1,250 +1,116 @@
 #!/usr/bin/env zsh
+# https://www.howtogeek.com/307701/how-to-customize-and-colorize-your-bash-prompt/
+# https://www.quora.com/What-are-some-useful-bash_profile-and-bashrc-tips/answer/Shubham-Chaudhary-3
+# https://natelandau.com/my-mac-osx-bash_profile/
+#
+# Source global definitions
+if [ -f /etc/zshrc ]; then
+    . /etc/zshrc
+fi
 
-test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
+# ~/.zshrc: executed by zsh for interactive shells.
+# History settings
+HISTFILE=~/.zsh_history
+HISTSIZE=100000
+SAVEHIST=200000
+setopt HIST_IGNORE_DUPS        # Don't record duplicate entries
+setopt HIST_IGNORE_SPACE       # Don't record entries starting with space
+setopt APPEND_HISTORY          # Append to history file
+setopt SHARE_HISTORY           # Share history between sessions
+setopt EXTENDED_HISTORY        # Save timestamp and duration
 
-#   Change Prompt (zsh version)
-#   ------------------------------------------------------------
-# Enable parameter expansion, command substitution and arithmetic expansion in prompts
+# Shell options
+setopt AUTO_CD                 # cd by just typing directory name
+setopt INTERACTIVE_COMMENTS    # Allow comments in interactive shells
+
+# Enable command completion
+autoload -Uz compinit
+compinit
+
+# Make less more friendly for non-text input files
+[ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
+
+# Set variable identifying the chroot you work in (used in the prompt below)
+if [ -z "$debian_chroot" ] && [ -r /etc/debian_chroot ]; then
+    debian_chroot=$(cat /etc/debian_chroot)
+fi
+
+parse_git_branch() {
+    if which git &>/dev/null && git rev-parse --is-inside-work-tree &>/dev/null; then
+        local BR=$(git rev-parse --symbolic-full-name --abbrev-ref HEAD 2>/dev/null)
+        if [ "$BR" = "HEAD" ]; then
+            local NM=$(git name-rev --name-only HEAD 2>/dev/null)
+            if [ "$NM" != "undefined" ]; then
+                echo -n "@$NM"
+            else
+                git rev-parse --short HEAD 2>/dev/null
+            fi
+        else
+            echo -n "$BR"
+        fi
+    else
+        echo "∅"
+    fi
+}
+
+# Enable prompt substitution for command substitution in PS1
 setopt PROMPT_SUBST
 
-# Custom prompt with file count and directory size
-PROMPT=$'\n%B%f(%F{cyan}%n@%m:%~%f) %f(%F{green}$(ls -1 | wc -l | sed "s: ::g") files, $(ls -lah | grep -m 1 total | sed "s/total //")b%f)%b\n%f--> %f'
+# Nicer prompt - adapted for zsh
+PS1=$'\n%{\e[30;1m%}(%{\e[34;1m%}%n@%m:%~%{\e[30;1m%}) (%{\e[32;1m%}$(/bin/ls -1 | /usr/bin/wc -l | /bin/sed "s: ::g") files, $(/bin/ls -lah | /bin/grep -m 1 total | /bin/sed "s/total //")b%{\e[30;1m%}) (%{\e[36m%}$(parse_git_branch)%{\e[0m%}%{\e[30;1m%})\n--> %{\e[0m%}'
 
-#   Set Paths
-#   ------------------------------------------------------------
-export PATH="$HOME/.local/bin:$PATH"
-export PATH="/usr/local/git/bin:/sw/bin/:/usr/local/bin:/usr/local/:/usr/local/sbin:/usr/local/mysql/bin:$PATH"
-export PATH="$PATH:/usr/local/bin/"
-export PATH="/opt/homebrew/opt/ruby/bin:$PATH"
-export PATH="$PATH:/Users/`whoami`/.local/bin"
-export PATH="/opt/homebrew/opt/python@3/libexec/bin:$PATH"
-export PATH="$PATH:/Applications/Visual Studio Code.app/Contents/Resources/app/bin"
+# Enable color support of ls and also add handy aliases
+if [ -x /usr/bin/dircolors ]; then
+    test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
+    alias ls='ls --color=auto'
+    alias grep='grep --color=auto'
+    alias fgrep='fgrep --color=auto'
+    alias egrep='egrep --color=auto'
+fi
 
-#   Environment Variables
-#   ------------------------------------------------------------
-export EDITOR=/usr/bin/vi
-export BLOCKSIZE=1k
-export REACT_EDITOR=code
-export JAVA_HOME=/Library/Java/JavaVirtualMachines/zulu-17.jdk/Contents/Home
-export NODE_TLS_REJECT_UNAUTHORIZED=0
+# Some more ls aliases
+alias ll='ls -alF'
+alias la='ls -a'
 
-#   Android SDK
-#   ------------------------------------------------------------
-export ANDROID_HOME=$HOME/Library/Android/sdk
-export PATH=$PATH:$ANDROID_HOME/emulator
-export PATH=$PATH:$ANDROID_HOME/build-tools
-export PATH=$PATH:$ANDROID_HOME/platform-tools
+# Alert alias - only enable if notify-send is available
+if command -v notify-send &>/dev/null; then
+    alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history | tail -n1 | sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
+fi
 
-#   NVM (Node Version Manager) - Homebrew installation
-#   ------------------------------------------------------------
-export NVM_DIR="$HOME/.nvm"
-# Load NVM from Homebrew
-[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
-# Load NVM bash completion
-[ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
+# Alias definitions.
+# You may want to put all your additions into a separate file like
+# ~/.zsh_aliases, instead of adding them here directly.
+if [ -f "$HOME/.zsh_aliases" ]; then
+    . "$HOME/.zsh_aliases"
+fi
 
-#   SSH Agent
-#   ------------------------------------------------------------
-[ -f "$HOME/.ssh-agent.sh" ] && source "$HOME/.ssh-agent.sh"
+# Also source bash aliases if they exist
+if [ -f "$HOME/.bash_aliases" ]; then
+    . "$HOME/.bash_aliases"
+fi
 
-# # pnpm
-# export PNPM_HOME="/Users/`whoami`/Library/pnpm"
-# case ":$PATH:" in
-#   *":$PNPM_HOME:"*) ;;
-#   *) export PATH="$PNPM_HOME:$PATH" ;;
-# esac
-# # pnpm end
+# Enable completion features
+if [ -f /usr/share/zsh/functions/Completion/Unix/_zsh_completion ]; then
+    . /usr/share/zsh/functions/Completion/Unix/_zsh_completion
+fi
 
-#   -----------------------------
-#   MAKE TERMINAL BETTER
-#   -----------------------------
+if [ -f ~/.kde-zshrc ]; then
+    . ~/.kde-zshrc
+fi
 
-alias reload="source ~/.zshrc"
-alias cp='cp -iv'
-alias mv='mv -iv'
-alias mkdir='mkdir -pv'
-alias ll='ls -FGlAhp'
-alias less='less -FSRXc'
-alias cd..='cd ../'
-alias ..='cd ../'
-alias ...='cd ../../'
-alias .3='cd ../../../'
-alias .4='cd ../../../../'
-alias .5='cd ../../../../../'
-alias .6='cd ../../../../../../'
-alias edit='code'  # Updated to use VS Code
-alias f='open -a Finder ./'
-alias ~="cd ~"
-alias c='clear'
-alias which='type -a'
-alias path='echo -e ${PATH//:/\\n}'
-alias show_options='setopt'  # zsh equivalent
-alias fix_stty='stty sane'
-alias cic='setopt NO_CASE_GLOB'  # zsh equivalent for case-insensitive completion
+#------------------------------------------////
+# Source common shell configuration
+#------------------------------------------////
+if [ -f "$HOME/.shell_common" ]; then
+    . "$HOME/.shell_common"
+fi
 
-# cd: Always list directory contents upon 'cd'
-cd() {
-  builtin cd "$@"
-  ll
-}
+#------------------------------------------////
+# Zsh-specific configuration
+#------------------------------------------////
 
-# mcd: Makes new Dir and jumps inside
-mcd() { mkdir -p "$1" && cd "$1"; }
+# Reload alias (zsh-specific)
+alias reload='source ~/.zshrc'
 
-# trash: Moves a file to the MacOS trash
-trash() { command mv "$@" ~/.Trash; }
-
-# ql: Opens any file in MacOS Quicklook Preview
-ql() { qlmanage -p "$*" >&/dev/null; }
-
-alias DT='tee ~/Desktop/terminalOut.txt'
-
-#   Full Recursive Directory Listing
-#   ------------------------------------------
-alias lr='ls -R | grep ":$" | sed -e '\''s/:$//'\'' -e '\''s/[^-][^\/]*\//--/g'\'' -e '\''s/^/   /'\'' -e '\''s/-/|/'\'' | less'
-
-#   mans: Search manpage given in argument '1' for term given in argument '2'
-#   ------------------------------------------------------------
-mans() {
-  man $1 | grep -iC2 --color=always $2 | less
-}
-
-#   showa: to remind yourself of an alias
-#   ------------------------------------------------------------
-showa() { grep --color=always -i -a1 $@ ~/.zshrc | grep -v '^\s*$' | less -FSRXc; }
-
-#   -------------------------------
-#   FILE AND FOLDER MANAGEMENT
-#   -------------------------------
-
-zipf() { zip -r "$1".zip "$1"; }
-alias numFiles='echo $(ls -1 | wc -l)'
-alias make1mb='mkfile 1m ./1MB.dat'
-alias make5mb='mkfile 5m ./5MB.dat'
-alias make10mb='mkfile 10m ./10MB.dat'
-
-#   cdf: 'Cd's to frontmost window of MacOS Finder
-#   ------------------------------------------------------
-cdf() {
-  currFolderPath=$(
-    /usr/bin/osascript <<EOT
-            tell application "Finder"
-                try
-            set currFolder to (folder of the front window as alias)
-                on error
-            set currFolder to (path to desktop folder as alias)
-                end try
-                POSIX path of currFolder
-            end tell
-EOT
-  )
-  echo "cd to \"$currFolderPath\""
-  cd "$currFolderPath"
-}
-
-#   extract: Extract most know archives with one command
-#   ---------------------------------------------------------
-extract() {
-  if [ -f $1 ]; then
-    case $1 in
-    *.tar.bz2) tar xjf $1 ;;
-    *.tar.gz) tar xzf $1 ;;
-    *.bz2) bunzip2 $1 ;;
-    *.rar) unrar e $1 ;;
-    *.gz) gunzip $1 ;;
-    *.tar) tar xf $1 ;;
-    *.tbz2) tar xjf $1 ;;
-    *.tgz) tar xzf $1 ;;
-    *.zip) unzip $1 ;;
-    *.Z) uncompress $1 ;;
-    *.7z) 7z x $1 ;;
-    *) echo "'$1' cannot be extracted via extract()" ;;
-    esac
-  else
-    echo "'$1' is not a valid file"
-  fi
-}
-
-#   ---------------------------
-#   SEARCHING
-#   ---------------------------
-
-alias qfind="find . -name "
-ff() { /usr/bin/find . -name "$@"; }
-ffs() { /usr/bin/find . -name "$@"'*'; }
-ffe() { /usr/bin/find . -name '*'"$@"; }
-
-#   spotlight: Search for a file using MacOS Spotlight's metadata
-#   -----------------------------------------------------------
-spotlight() { mdfind "kMDItemDisplayName == '$@'wc"; }
-
-#   ---------------------------
-#   PROCESS MANAGEMENT
-#   ---------------------------
-
-findPid() { lsof -t -c "$@"; }
-
-alias memHogsTop='top -l 1 -o rsize | head -20'
-alias memHogsPs='ps wwaxm -o pid,stat,vsize,rss,time,command | head -10'
-alias cpu_hogs='ps wwaxr -o pid,stat,%cpu,time,command | head -10'
-alias topForever='top -l 9999999 -s 10 -o cpu'
-alias ttop="top -R -F -s 10 -o rsize"
-
-my_ps() { ps $@ -u $USER -o pid,%cpu,%mem,start,time,bsdtime,command; }
-
-#   ---------------------------
-#   NETWORKING
-#   ---------------------------
-
-alias myip='curl ip.appspot.com'
-alias netCons='lsof -i'
-alias flushDNS='dscacheutil -flushcache'
-alias lsock='sudo /usr/sbin/lsof -i -P'
-alias lsockU='sudo /usr/sbin/lsof -nP | grep UDP'
-alias lsockT='sudo /usr/sbin/lsof -nP | grep TCP'
-alias ipInfo0='ipconfig getpacket en0'
-alias ipInfo1='ipconfig getpacket en1'
-alias openPorts='sudo lsof -i | grep LISTEN'
-alias showBlocked='sudo ipfw list'
-
-#   ii: display useful host related information
-#   -------------------------------------------------------------------
-ii() {
-  echo -e "\nYou are logged on $HOST"
-  echo -e "\nAdditional information: "
-  uname -a
-  echo -e "\nUsers logged on: "
-  w -h
-  echo -e "\nCurrent date: "
-  date
-  echo -e "\nMachine stats: "
-  uptime
-  echo -e "\nCurrent network location: "
-  scselect
-  echo -e "\nPublic facing IP Address: "
-  myip
-  echo
-}
-
-#   ---------------------------------------
-#   SYSTEMS OPERATIONS & INFORMATION
-#   ---------------------------------------
-
-alias mountReadWrite='/sbin/mount -uw /'
-alias cleanupDS="find . -type f -name '*.DS_Store' -ls -delete"
-alias finderShowHidden='defaults write com.apple.finder ShowAllFiles TRUE'
-alias finderHideHidden='defaults write com.apple.finder ShowAllFiles FALSE'
-alias cleanupLS="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -kill -r -domain local -domain system -domain user && killall Finder"
-alias screensaverDesktop='/System/Library/Frameworks/ScreenSaver.framework/Resources/ScreenSaverEngine.app/Contents/MacOS/ScreenSaverEngine -background'
-
-#   ---------------------------------------
-#   WEB DEVELOPMENT
-#   ---------------------------------------
-
-alias apacheEdit='sudo edit /etc/httpd/httpd.conf'
-alias apacheRestart='sudo apachectl graceful'
-alias editHosts='sudo edit /etc/hosts'
-alias herr='tail /var/log/httpd/error_log'
-alias apacheLogs="less +F /var/log/apache2/error_log"
-httpHeaders() { /usr/bin/curl -I -L $@; }
-httpDebug() { /usr/bin/curl $@ -o /dev/null -w "dns: %{time_namelookup} connect: %{time_connect} pretransfer: %{time_pretransfer} starttransfer: %{time_starttransfer} total: %{time_total}\n"; }
+# Show most popular commands (zsh-specific syntax)
+alias top-commands='history 1 | awk "{print \$2}" | awk "{print \$1}" | sort | uniq -c | sort -rn | head -10'
