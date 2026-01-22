@@ -1,0 +1,91 @@
+{
+  "$schema": "https://modelcontextprotocol.io/schema/mcp.json",
+  "_comment": "Claude Code MCP Server Configuration Example",
+  "_description": "Copy this to ~/.config/claude/mcp.json (Linux/WSL) or ~/Library/Application Support/Claude/mcp.json (macOS)",
+  "_wsl_note": "For WSL: Use Linux paths, Docker Desktop integration works seamlessly",
+
+  "mcpServers": {
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "_category": "CORE - Recommended for all users",
+      "_description": "Enhanced reasoning and problem-solving capabilities"
+    },
+
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+      "_category": "CORE - Recommended for all users",
+      "_description": "File system access and manipulation",
+      "_note": "Provides additional file operations beyond Claude Code's built-in tools"
+    },
+
+    "web-search": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-web-search"],
+      "_category": "OPTIONAL - Useful for research",
+      "_description": "Web search capabilities for finding documentation and solutions",
+      "_note": "Requires API key - check MCP documentation for setup"
+    },
+
+    "github": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "YOUR_GITHUB_TOKEN_HERE"
+      },
+      "_category": "OPTIONAL - For GitHub integration",
+      "_description": "GitHub API integration for repository operations",
+      "_setup": "1. Get token from https://github.com/settings/tokens (classic token with repo scope)",
+      "_setup2": "2. Replace YOUR_GITHUB_TOKEN_HERE with your actual token",
+      "_setup3": "3. Requires Docker (Docker Desktop for WSL users)",
+      "_wsl_note": "Ensure Docker Desktop has WSL2 integration enabled in Settings > Resources > WSL Integration"
+    },
+
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"],
+      "_category": "EXPERIMENTAL - Untested in Claude Code",
+      "_description": "Context management with Upstash",
+      "_note": "May require additional setup - see https://github.com/upstash/context7-mcp"
+    },
+
+    "browsertools": {
+      "command": "npx",
+      "args": ["@agentdeskai/browser-tools-mcp"],
+      "_category": "EXPERIMENTAL - Untested in Claude Code",
+      "_description": "Browser automation capabilities",
+      "_note": "Compatibility with Claude Code not verified"
+    },
+
+    "magic-mcp": {
+      "command": "npx",
+      "args": ["-y", "@21st-dev/magic-mcp"],
+      "_category": "EXPERIMENTAL - Untested in Claude Code",
+      "_description": "Magic MCP server for enhanced capabilities",
+      "_note": "Compatibility with Claude Code not verified"
+    }
+  },
+
+  "_installation_instructions": {
+    "linux_wsl": "cp claude-mcp.example.json ~/.config/claude/mcp.json",
+    "macos": "cp claude-mcp.example.json ~/Library/Application\\ Support/Claude/mcp.json",
+    "windows": "Not applicable - use WSL for Claude Code on Windows",
+    "note": "Remove all _comment, _description, _category, _note, _setup*, _wsl_note, and _installation_instructions fields before using",
+    "minimal_config": "For minimal setup, keep only sequential-thinking and filesystem servers"
+  },
+
+  "_security_warnings": {
+    "api_keys": "NEVER commit this file with real API keys to git",
+    "tokens": "Add this file to .gitignore if it contains secrets",
+    "docker_env": "Docker environment variables are visible to container - use secure token storage in production",
+    "wsl_access": "WSL can access Windows filesystem - be cautious with credential files"
+  }
+}
