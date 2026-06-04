@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test-matrix:
+    name: Dockerfile.test-matrix (ubuntu:24.04)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build + run install stages
+        run: docker build -f Dockerfile.test-matrix -t dotfiles-test .
+
+      # Auth-gated tools (Claude OAuth, Codex OAuth, gh PAT) deliberately
+      # not exercised here. They require interactive auth that lives outside
+      # CI. Document the omission rather than hide it:
+      - name: Note on auth-gated tools
+        run: |
+          echo "Skipped (require interactive auth, not run in CI):"
+          echo "  - Claude Code CLI install + login"
+          echo "  - Codex CLI install + login"
+          echo "  - gh-with-PAT push flows"
+          echo "These are verified manually after a fresh install — see README.md."
+
+  shellcheck:
+    name: shellcheck bin/*.sh
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y shellcheck
+      - run: shellcheck --severity=warning bin/*.sh
+
+  manifest-parse:
+    name: manifest/skills.yaml parses
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 -c "
+          import yaml, sys
+          m = yaml.safe_load(open('manifest/skills.yaml'))
+          assert m['version'] == 1, 'version pin lost'
+          for s in m['skills']:
+              for key in ('name', 'description', 'source', 'install_to'):
+                  assert key in s, f'{s.get(\"name\", \"?\")} missing {key}'
+              assert s['source']['type'] in ('subpath', 'git'), s['name']
+          print(f'manifest OK: {len(m[\"skills\"])} skills')
+          "

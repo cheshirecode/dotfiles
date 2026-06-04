@@ -1,0 +1,40 @@
+# Example .envrc — copy to a directory above your fork checkouts and run
+# `direnv allow`. Keeps OSS identity separate from $DAYJOB identity without
+# storing PATs in plaintext.
+#
+# Lookup order for GH_TOKEN:
+#   1. `gh auth token` (already authenticated via `gh auth login`)
+#   2. `pass show github.com/<user>` (passwordstore.org)
+#   3. macOS keychain (`security find-generic-password`)
+# If none resolve, leaves GH_TOKEN unset so `gh` prompts you to log in.
+
+# Unset the work identity so it can't leak into pushes from this tree.
+unset GITHUB_TOKEN
+
+resolve_gh_token() {
+  if command -v gh >/dev/null 2>&1; then
+    token=$(gh auth token 2>/dev/null || true)
+    [[ -n "$token" ]] && { echo "$token"; return; }
+  fi
+
+  if command -v pass >/dev/null 2>&1; then
+    token=$(pass show "github.com/${GITHUB_USER:-cheshirecode}" 2>/dev/null | head -1 || true)
+    [[ -n "$token" ]] && { echo "$token"; return; }
+  fi
+
+  if [[ "$(uname -s)" == "Darwin" ]] && command -v security >/dev/null 2>&1; then
+    token=$(security find-generic-password \
+      -s "github.com" -a "${GITHUB_USER:-cheshirecode}" -w 2>/dev/null || true)
+    [[ -n "$token" ]] && { echo "$token"; return; }
+  fi
+}
+
+if token=$(resolve_gh_token) && [[ -n "$token" ]]; then
+  export GH_TOKEN="$token"
+fi
+
+# git author identity for this tree (don't rely on global config).
+export GIT_AUTHOR_NAME="${GITHUB_USER:-cheshirecode}"
+export GIT_AUTHOR_EMAIL="${GITHUB_USER:-cheshirecode}@users.noreply.github.com"
+export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME"
+export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
