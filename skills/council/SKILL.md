@@ -43,15 +43,27 @@ else:
 
 The user can override with `/council --bg X` or `/council --fg X`.
 
+## Iron Laws (refusal conditions — mechanical, not soft norms)
+
+- **NO STAGE-6 CONCLUSION WITHOUT N≥2 VERIFIERS RETURNING.** If only one verifier returns (other timed out and retry failed), the entire list is marked `unverified` and surfaced as such; do not silently rubber-stamp.
+- **NO STAGE-4 ITEM WITHOUT A `[supports: angle-X claim-Y]` CITATION.** Orchestrator rejects uncited items before passing to Stage 5. Synthesis cannot smuggle invented items.
+- **NO CROSS-ANGLE READS IN STAGE 1.** Every research sub-agent's prompt MUST contain the literal clause "You are research angle N of N. Do not Read, Grep, or Monitor outputs of other angles. Do not coordinate." Independence is mechanical, not aspirational.
+- **NO AUTO-PICKING SIDES ON DISAGREEMENT.** When verifiers split, output a `Disagreement:` block; never silently arbitrate. (Real example: this skill's own author once flagged a hallucinated framework as suspicious instead of synthesizing it in — that's the discipline.)
+
+## Numeric refusal thresholds
+
+- Spawning `<2` or `>7` sub-agents in a single stage requires an explicit `--allow-N` flag. Below 2 defeats independence; above 7 produces synthesis noise.
+- Sub-agent prompts longer than 800 words ≈ scope creep — split the angle.
+
 ## Recipe
 
 1. **Decompose the topic.** State the question. Pick 3–5 research angles that don't overlap. Example for "should we adopt library X?": (a) what does it do, (b) license + maintenance status, (c) competing libraries, (d) integration cost with our stack, (e) failure-mode survey from issues + forums.
-2. **Spawn research sub-agents** (Stage 1). One per angle. Each gets a self-contained prompt with the angle's scope + the original question for context. Sync or async per the decision rule above. **Do not let them talk to each other.**
+2. **Spawn research sub-agents** (Stage 1). One per angle. Each gets a self-contained prompt with the angle's scope + the original question for context. Sync or async per the decision rule above. **Cross-angle isolation clause is mandatory** (see Iron Laws). Do NOT pass another agent's transcript into a sibling agent's prompt.
 3. **Collect findings** (Stage 2). Read each return; quote-tag the key claims per angle. Output: `=== Stage 2 findings ===` block with one bullet per angle's top 3-5 claims + a one-line "agent claims" attribution.
-4. **Discussion sub-agent** (Stage 3). Prompt: "Here are findings from 5 independent research passes. Identify (a) agreements across angles, (b) disagreements, (c) gaps no angle covered, (d) contradictions." Single sub-agent, focused read. Output: `=== Stage 3 discussion ===`.
-5. **Synthesis sub-agent** (Stage 4). Prompt: "Here are findings + discussion. Produce a single list of N concrete items (decisions, recommendations, action steps, lessons — task-shape determines). Each item: one line + one-line rationale. Reject anything not supported by the findings." Output: `=== Stage 4 synthesis (draft) ===`.
-6. **Verification sub-agents** (Stage 5). 2-3 of them, parallel. Each gets the draft list + ALL the original findings. Prompt: "For each item in this list, check: (a) is it supported by ≥1 finding? (b) does it overstate beyond what findings say? (c) is it consistent with other items? Return: per-item verdict + cited finding lines." Output: `=== Stage 5 verifications ===` — one block per verifier.
-7. **Conclude** (Stage 6). Merge verifier objections: drop unsupported items; soften overstatements; surface unresolved disputes inline (don't silently pick a side). Output: `=== Stage 6 FINAL LIST ===` + a brief "unresolved" tail.
+4. **Discussion sub-agent** (Stage 3). Prompt: "Here are findings from N independent research passes. Identify (a) agreements across angles, (b) disagreements, (c) gaps no angle covered, (d) contradictions." Single sub-agent, focused read. Output: `=== Stage 3 discussion ===`.
+5. **Synthesis sub-agent** (Stage 4). Prompt: "Here are findings + discussion. Produce a single list of N concrete items. **Every item MUST end with `[supports: angle-X claim-Y]`**; orchestrator drops uncited items." Output: `=== Stage 4 synthesis (draft) ===`.
+6. **Verification sub-agents** (Stage 5). 2-3 of them, parallel. Each gets the draft list + ALL the original findings — and NOTHING from prior verifiers (independence). Prompt: "For each item, return: SUPPORT / QUALIFY / REJECT + cited finding lines." Output: `=== Stage 5 verifications ===` — one block per verifier.
+7. **Conclude** (Stage 6). **Quorum rule:** an item is kept only if `support ≥ ceil(M_returned / 2)` AND zero hard rejects. On verifier timeout, recompute `M_returned` (don't reuse the planned `M` — that's how a single rubber-stamper becomes "the council agreed"). Items failing quorum move to `Unresolved:`. Surface disagreements; never silently arbitrate. Output: `=== Stage 6 FINAL LIST ===` + `Unresolved:` tail.
 
 ## Run-until-completion behavior
 
@@ -86,19 +98,23 @@ Angles: <N> · Verifiers: <M>
   Contradictions: <list>
 
 === Stage 4 synthesis (draft) ===
-  1. <item> — <rationale>
-  2. ...
+  1. <item> — <rationale> [supports: A2, C1]
+  2. <item> — <rationale> [supports: B3]
+  ...
+  (Uncited items dropped by orchestrator; never reach Stage 5.)
 
 === Stage 5 verifications ===
   Verifier 1: <support|reject|qualify> per item
   Verifier 2: ...
   Verifier 3: ...
+  Verifiers returned: M_returned of M_planned (timeouts noted)
 
 === Stage 6 FINAL LIST ===
-  1. <item> — <rationale> [N/M verifiers support]
+  1. <item> — <rationale> [supports: A2, C1] [verifiers: 2/2 SUPPORT]
   2. ...
 
-  Unresolved: <list of contested items, or "none">
+  Unresolved: <items failing quorum or with hard rejects>
+  Status: verified (M_returned ≥ 2) | UNVERIFIED (M_returned < 2)
 ```
 
 ## Anti-patterns
