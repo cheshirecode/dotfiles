@@ -2,6 +2,14 @@
 # Ubuntu 24.04 box. Single image to start; add fedora/arch/alpine layers
 # only when a real cross-distro bug shows up.
 #
+# NOTE on duplication with cheshirecode/sandbox/Dockerfile:
+# The apt base layer + gh keyring setup overlaps ~5 lines with that file.
+# Council item #9 considered extracting a shared base; rejected because the
+# cost (registry image or submodule) outweighs the ~5 lines saved. If a third
+# image joins, revisit and publish a base image to ghcr.io.
+# Divergence: this file is CI-only (shellcheck → dry-run → install → doctor).
+# The sandbox Dockerfile is a dev container with tini + entrypoint + STOPSIGNAL.
+#
 # Stages:
 #   1. shellcheck       — static-lint every bin/*.sh
 #   2. dry-run install  — manifest parse + skills-skip behavior

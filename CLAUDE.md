@@ -7,6 +7,21 @@
 
 ---
 
+## Commit hygiene (forward-discipline; lesson from a past bundled commit)
+
+A single commit should advance a single concern. When work touches both
+**guidance/posture text** (this file, README.md) AND **behavioral guards**
+(bin/*.sh, manifest, hooks), split into separate commits even if they
+landed in the same edit session. Reviewers reading destructive-command
+guardrails should not have to skip over a karpathy preamble (and vice
+versa); the diff lenses differ.
+
+Past anti-pattern (kept here so we don't repeat it): commit `98cd75f`
+bundled "karpathy posture preamble" with "git reset --hard preconditions"
+— two separable concerns. The council that audited it (Stage 6 item #6)
+rejected retroactive `git rebase -i` + force-push as net-negative; the
+correction lives forward in this rule.
+
 ## Reading posture (apply before treating any section as a recipe)
 
 This is a guidance document, not a runnable checklist. When an agent reads
