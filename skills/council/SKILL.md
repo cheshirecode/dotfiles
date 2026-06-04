@@ -117,6 +117,15 @@ Angles: <N> · Verifiers: <M>
   Status: verified (M_returned ≥ 2) | UNVERIFIED (M_returned < 2)
 ```
 
+## Meta-orchestration (beyond the 6 stages)
+
+These apply at every stage, not just Stage 1.
+
+- **Token budget table before fanout.** Before spawning N sub-agents, emit a 1-line budget estimate (e.g., `5 angles × ~600 tok prompt × ~1500 tok response ≈ 10.5k`). Refuse to fan out >20k tokens of simultaneous research without explicit user OK.
+- **Verifier transcript isolation.** Stage-5 verifiers receive ONLY the Stage-4 synthesis draft + the original Stage-2 findings. Never pass them a Stage-3 discussion summary, a sibling verifier's verdict, or the orchestrator's own commentary. Cross-contamination defeats independence.
+- **Duplicate-collapse pass before Stage 6.** Walk the synthesis draft; collapse near-duplicate items keeping the strongest phrasing. Log the dropped twins in an `Internal: deduped X items` line so silent dedup isn't possible.
+- **Fresh-Agent invocations per stage.** Sibling sub-agents in the same stage share no parent context beyond their prompt. Across stages, do not pass one stage's full sub-agent transcript into the next; pass only the explicit deliverable (findings list, draft, verdicts).
+
 ## Anti-patterns
 
 - **Don't let research agents talk during Stage 1.** Cross-talk defeats the council's blind-spot reduction. Stages 3-5 are where cross-pollination happens.
@@ -124,6 +133,7 @@ Angles: <N> · Verifiers: <M>
 - **Don't skip Stage 3 (discussion) when synthesis looks easy.** The discussion step surfaces contradictions and gaps; synthesis without it produces a happy-path list that misses real tension.
 - **Don't auto-pick a side on unresolved disputes.** Surface them to the user. The council's job is to inform, not to silently arbitrate.
 - **Don't run a council on a one-shot question.** If you'd answer it in 30 seconds yourself, the council is overhead for nothing.
+- **Don't trust specific post-cutoff claims without a verification pass.** If a research agent returns very precise details about something the orchestrator can't recognize (a framework, a release date, a stat), spawn a skeptical-default verifier with WebSearch/WebFetch before promoting the claim. (Inspiration: a real council session where two research agents returned plausible fabricated specifics that a verification pass corrected.)
 
 ## Pairings
 
