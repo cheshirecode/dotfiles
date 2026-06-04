@@ -66,10 +66,52 @@ fi
 
 echo "doctor: hooks"
 settings="$HOME/.claude/settings.json"
-if [[ -f "$settings" ]] && grep -q autosave "$settings" 2>/dev/null; then
-  ok "Claude Code hooks wired (autosave mentioned in $settings)"
+# Council guardrail #9: JSON-schema check, not substring grep. A comment
+# containing "autosave" used to pass the old `grep -q autosave` test.
+if [[ ! -f "$settings" ]]; then
+  warn "hooks not wired ($settings absent — run install-worklog.sh)"
 else
-  warn "hooks not wired (run install-worklog.sh, then verify $settings)"
+  hook_check=$(python3 - "$settings" <<'PY' 2>/dev/null
+import json, sys, os
+try:
+    cfg = json.load(open(sys.argv[1]))
+except Exception as e:
+    print(f"PARSE_ERROR:{e}")
+    sys.exit(0)
+hooks = cfg.get("hooks") or {}
+problems = []
+for event in ("PreCompact", "SessionEnd"):
+    matchers = hooks.get(event) or []
+    cmds = []
+    for m in matchers:
+        for h in (m.get("hooks") or []):
+            cmd = h.get("command") or ""
+            if "autosave" in cmd:
+                cmds.append(cmd)
+    if not cmds:
+        problems.append(f"{event}: no autosave hook")
+        continue
+    # Resolve $PROJECTS_DIR / $WORKLOG_DIR if present; otherwise check literal path.
+    found_executable = False
+    for cmd in cmds:
+        # cheap path extraction — first whitespace-separated token containing autosave
+        for tok in cmd.split():
+            if "autosave" in tok:
+                # expand env vars commonly used
+                p = os.path.expandvars(os.path.expanduser(tok))
+                if os.path.isfile(p) and os.access(p, os.X_OK):
+                    found_executable = True
+                break
+    if not found_executable:
+        problems.append(f"{event}: autosave hook points at non-executable path")
+print("OK" if not problems else "; ".join(problems))
+PY
+)
+  case "$hook_check" in
+    OK) ok "Claude Code hooks wired (PreCompact + SessionEnd → autosave)" ;;
+    PARSE_ERROR:*) fail "settings.json is malformed: ${hook_check#PARSE_ERROR:}" ;;
+    *) warn "hooks check: $hook_check" ;;
+  esac
 fi
 
 echo "doctor: gh auth"
