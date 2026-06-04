@@ -142,14 +142,32 @@ def install_git(entry):
         )
         sys.exit(3)
     cache = cache_dir / name
+    # Council guardrail #10: atomic clone-or-swap on git operations.
+    # Mid-fetch network failure must not leave the cache dir in a half-state.
+    import tempfile as _tempfile
     if not cache.exists():
+        # First-time clone: clone into staging, then rename. If clone fails,
+        # there's no half-populated cache dir to confuse the next run.
         print(f"  clone {name}: {repo} → {cache}")
-        run(["git", "clone", "--quiet", f"https://github.com/{repo}.git", str(cache)])
+        if not dry:
+            staging = pathlib.Path(_tempfile.mkdtemp(prefix=f".{name}-staging-", dir=cache_dir))
+            shutil.rmtree(staging)  # mkdtemp made it; git clone wants it absent
+            try:
+                run(["git", "clone", "--quiet", f"https://github.com/{repo}.git", str(staging)])
+                run(["git", "-C", str(staging), "checkout", "--quiet", ref])
+                staging.rename(cache)
+            except Exception:
+                shutil.rmtree(staging, ignore_errors=True)
+                raise
+        else:
+            run(["git", "clone", "--quiet", f"https://github.com/{repo}.git", str(cache)])
+            run(["git", "-C", str(cache), "checkout", "--quiet", ref])
     else:
-        print(f"  pull  {name}: {cache}")
-        run(["git", "-C", str(cache), "fetch", "--quiet"])
-    print(f"  checkout {name}: {ref}")
-    run(["git", "-C", str(cache), "checkout", "--quiet", ref])
+        # Upgrade path: fetch + checkout in place; on failure, the prior
+        # checkout remains usable (git is internally atomic for these ops).
+        print(f"  upgrade {name}: {cache} → {ref[:12]}")
+        run(["git", "-C", str(cache), "fetch", "--quiet", "origin"])
+        run(["git", "-C", str(cache), "checkout", "--quiet", ref])
     dst = pathlib.Path(entry["install_to"]).expanduser()
     refuse_if_unowned(dst, name)
     if dst.is_symlink() or dst.exists():
