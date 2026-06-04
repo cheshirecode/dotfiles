@@ -55,8 +55,11 @@ RUN echo "=== Stage 2: dry-run install-skills ===" \
  && bin/install-skills.sh --dry-run
 
 # --- Stage 3: real install (no worklog clone in CI) ----------------------
+# INSTALL_RUNTIME_DEPS_YES=1 is the script's documented opt-in for non-TTY
+# contexts (council item #11 — refuse silent sudo install). CI is exactly
+# that intentional opt-in.
 RUN echo "=== Stage 3: real install ===" \
- && bin/install.sh --no-worklog
+ && INSTALL_RUNTIME_DEPS_YES=1 bin/install.sh --no-worklog
 
 # --- Stage 4: doctor ------------------------------------------------------
 # Worklog repo not cloned → doctor will WARN, not FAIL. Exit must be 0.
