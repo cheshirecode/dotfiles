@@ -7,6 +7,29 @@
 
 ---
 
+## Reading posture (apply before treating any section as a recipe)
+
+This is a guidance document, not a runnable checklist. When an agent reads
+it as input, apply Karpathy's four guidelines first:
+
+1. **Think before coding** — surface assumptions explicitly; ask if multiple
+   interpretations exist.
+2. **Simplicity first** — minimum diff that solves the asked problem; no
+   speculative abstraction; no error handling for impossible cases.
+3. **Surgical changes** — every changed line must trace to the user's
+   request. No drive-by refactoring, no whitespace edits, no "while I'm
+   here" cleanup.
+4. **Goal-driven execution** — every step carries a verifiable check; loop
+   until checks pass; never declare done without citing a verify command's
+   exit code or output.
+
+Commands shown below are illustrative. Destructive ones (`git reset --hard`,
+`rm -rf`, force-push) are documented as DANGEROUS with explicit guardrails
+in their respective sections; agents must honor those guardrails as
+preconditions, not skip past them.
+
+---
+
 ## Table of Contents
 
 1. [Introduction & Quick Start](#introduction--quick-start)
@@ -1113,13 +1136,24 @@ asdf
 Bash: git diff
 Bash: git status
 
-# Amend last commit (if not pushed)
+# Amend last commit — ONLY IF UNPUSHED.
+# Guardrail: if `git config --get branch.$(git branch --show-current).remote`
+# returns a remote AND `git rev-list @{push}..HEAD` is empty, the commit
+# is already pushed — DO NOT amend.
 Bash: git commit --amend
 
-# Undo last commit (keep changes)
+# Undo last commit (keep changes) — safe, non-destructive
 Bash: git reset --soft HEAD~1
 
-# Undo last commit (discard changes) - DANGEROUS
+# Undo last commit (DISCARD changes) — DANGEROUS, REQUIRES EXPLICIT INTENT.
+# Guardrails (all must hold):
+#   - The branch is unpushed (`git push --dry-run` shows "Everything up-to-date"
+#     is FALSE — i.e. local commits would push). If pushed, use `git revert` instead.
+#   - The user explicitly typed `--hard` in their request. Do not infer
+#     `--hard` from "undo my commit"; the soft form above is the safe default.
+#   - Working tree is clean OR user explicitly accepts losing uncommitted work.
+# An agent reading this doc as a checklist MUST refuse to run this command
+# absent all three conditions.
 Bash: git reset --hard HEAD~1
 
 # Stash changes temporarily
