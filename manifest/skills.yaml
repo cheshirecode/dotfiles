@@ -1,0 +1,131 @@
+# Agent-skill manifest — declarative spec consumed by bin/install-skills.sh.
+#
+# Each entry pins a git SHA. SHA pinning IS the integrity check (content-
+# addressed). Bump SHAs explicitly when upgrading; don't track moving branches.
+#
+# Targets:
+#   user-installed Claude Code skills under ~/.claude/skills/<name>/
+#   sourced from public GitHub repos.
+#
+# Skills that ship with Claude Code itself (init, review, security-review,
+# claude-api, loop, schedule, statusline-setup, update-config, etc.) are
+# NOT listed here — they're already on a fresh install.
+
+version: 1
+
+# High-value user-installed skills (cross-cutting, not project-specific).
+skills:
+  - name: council
+    description: Karpathy-council multi-agent research → discussion → synthesis → verification.
+    source:
+      type: subpath  # checkout a single subdir of the source repo
+      repo: cheshirecode/dotfiles  # placeholder — replace with the upstream once council ships standalone
+      ref: HEAD  # tracking; pin to SHA once upstreamed
+      path: skills/council
+    install_to: ~/.claude/skills/council
+    # Council ships in this dotfiles repo (skills/council/SKILL.md) until it
+    # graduates to a standalone repo. install-skills.sh treats subpath as
+    # "copy this directory" rather than "clone whole repo".
+
+  - name: worklog
+    description: Cross-machine work journal — the /worklog command surface.
+    source:
+      type: subpath
+      repo: cheshirecode/dotfiles
+      ref: HEAD
+      path: skills/worklog
+    install_to: ~/.claude/skills/worklog
+    # The worklog SKILL ships separately from the _worklog repo. This entry
+    # installs the skill files; bin/install-worklog.sh clones the repo +
+    # wires hooks.
+
+  - name: ship-hygiene
+    description: Pre-handoff sweep across worklog + PRs + CI.
+    source:
+      type: subpath
+      repo: cheshirecode/dotfiles
+      ref: HEAD
+      path: skills/ship-hygiene
+    install_to: ~/.claude/skills/ship-hygiene
+
+  - name: skillopt
+    description: Run microsoft/SkillOpt to optimize a skill against a benchmark.
+    source:
+      type: subpath
+      repo: cheshirecode/dotfiles
+      ref: HEAD
+      path: skills/skillopt
+    install_to: ~/.claude/skills/skillopt
+
+  - name: serena-rg-search
+    description: MCP-backed semantic code search (Serena + ripgrep router).
+    source:
+      type: subpath
+      repo: cheshirecode/dotfiles
+      ref: HEAD
+      path: skills/serena-rg-search
+    install_to: ~/.claude/skills/serena-rg-search
+    # NOTE: serena-rg-search also needs the Serena MCP server registered.
+    # See docs/mcp-servers.md for the .mcp.json snippet.
+
+  - name: karpathy-guidelines
+    description: Behavioral guidelines reducing common LLM coding mistakes.
+    source:
+      type: subpath
+      repo: cheshirecode/dotfiles
+      ref: HEAD
+      path: skills/karpathy-guidelines
+    install_to: ~/.claude/skills/karpathy-guidelines
+
+  - name: find-skills
+    description: Discover and install agent skills on demand.
+    source:
+      type: subpath
+      repo: cheshirecode/dotfiles
+      ref: HEAD
+      path: skills/find-skills
+    install_to: ~/.claude/skills/find-skills
+
+  - name: budget-mode
+    description: Terse output mode — slop-kill on diffs and prose.
+    source:
+      type: subpath
+      repo: cheshirecode/dotfiles
+      ref: HEAD
+      path: skills/budget-mode
+    install_to: ~/.claude/skills/budget-mode
+
+  - name: systematic-debugging
+    description: Root-cause-first debugging methodology.
+    source:
+      type: subpath
+      repo: cheshirecode/dotfiles
+      ref: HEAD
+      path: skills/systematic-debugging
+    install_to: ~/.claude/skills/systematic-debugging
+
+  - name: impeccable
+    description: Frontend UI design/critique skill (color, theme, layout, motion, copy).
+    source:
+      type: subpath
+      repo: cheshirecode/dotfiles
+      ref: HEAD
+      path: skills/impeccable
+    install_to: ~/.claude/skills/impeccable
+
+  - name: agent-browser
+    description: Browser-automation CLI for headless agent web interactions.
+    source:
+      type: subpath
+      repo: cheshirecode/dotfiles
+      ref: HEAD
+      path: skills/agent-browser
+    install_to: ~/.claude/skills/agent-browser
+
+# Notes:
+# - `source.ref: HEAD` is a placeholder for skills that live inside THIS repo
+#   (vendored under skills/<name>/). When a skill graduates to its own repo,
+#   change `repo:` to that URL and pin a real SHA.
+# - For ref: <sha> form, bin/install-skills.sh does `git checkout <sha>` after
+#   clone and refuses to proceed on a dirty SHA mismatch.
+# - To upgrade a skill: bump the ref:, re-run `bin/install-skills.sh`.
