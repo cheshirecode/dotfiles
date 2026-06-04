@@ -76,6 +76,26 @@ def run(cmd, check=True):
     subprocess.run(cmd, check=check)
 
 SENTINEL = ".installed_from"
+import re as _re
+
+def validate_frontmatter(skill_dir, expected_name):
+    """Council item #3: validate SKILL.md frontmatter at install time, not at
+    diagnostic time. Returns None on success, error string on failure."""
+    skill_md = pathlib.Path(skill_dir) / "SKILL.md"
+    if not skill_md.is_file():
+        return f"missing SKILL.md at {skill_md}"
+    text = skill_md.read_text()
+    m = _re.match(r'^---\s*\n(.*?)\n---', text, _re.DOTALL)
+    if not m:
+        return f"{skill_md}: no YAML frontmatter (must start with ---)"
+    block = m.group(1)
+    nm = _re.search(r'^name:\s*(\S+)', block, _re.MULTILINE)
+    if not nm:
+        return f"{skill_md}: frontmatter missing 'name:' field"
+    actual = nm.group(1).strip('"\'')
+    if actual != expected_name:
+        return f"{skill_md}: frontmatter name='{actual}' but manifest says '{expected_name}'"
+    return None
 
 def has_our_sentinel(dst):
     """True if dst is one of ours (safe to replace). Either a symlink we
@@ -108,6 +128,12 @@ def install_subpath(entry):
     if not src.exists():
         print(f"  SKIP {entry['name']}: source {src} not present (skill not vendored yet)")
         return False
+    # Council item #3: validate source frontmatter BEFORE install. Prevents a
+    # malformed SKILL.md from being symlinked into ~/.claude/skills/.
+    err = validate_frontmatter(src, entry["name"])
+    if err:
+        sys.stderr.write(f"install-skills: refusing {entry['name']}: {err}\n")
+        sys.exit(3)
     refuse_if_unowned(dst, entry["name"])
     if dst.is_symlink() or dst.exists():
         print(f"  refresh {entry['name']}: {dst}")
