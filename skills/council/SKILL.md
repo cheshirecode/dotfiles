@@ -50,10 +50,10 @@ The user can override with `/council --bg X` or `/council --fg X`.
 - **NO CROSS-ANGLE READS IN STAGE 1.** Every research sub-agent's prompt MUST contain the literal clause "You are research angle N of N. Do not Read, Grep, or Monitor outputs of other angles. Do not coordinate." Independence is mechanical, not aspirational.
 - **NO AUTO-PICKING SIDES ON DISAGREEMENT.** When verifiers split, output a `Disagreement:` block; never silently arbitrate. (Real example: this skill's own author once flagged a hallucinated framework as suspicious instead of synthesizing it in — that's the discipline.)
 
-## Numeric refusal thresholds
+## Numeric guidance (orchestrator self-enforces)
 
-- Spawning `<2` or `>7` sub-agents in a single stage requires an explicit `--allow-N` flag. Below 2 defeats independence; above 7 produces synthesis noise.
-- Sub-agent prompts longer than 800 words ≈ scope creep — split the angle.
+- Below 2 sub-agents per stage defeats independence. Above 7 produces synthesis noise. If the count falls outside [2, 7], the orchestrator names the chosen N and the reason in the Stage 1 output.
+- Sub-agent prompts longer than ~800 words signal scope creep — split the angle.
 
 ## Recipe
 
@@ -63,7 +63,7 @@ The user can override with `/council --bg X` or `/council --fg X`.
 4. **Discussion sub-agent** (Stage 3). Prompt: "Here are findings from N independent research passes. Identify (a) agreements across angles, (b) disagreements, (c) gaps no angle covered, (d) contradictions." Single sub-agent, focused read. Output: `=== Stage 3 discussion ===`.
 5. **Synthesis sub-agent** (Stage 4). Prompt: "Here are findings + discussion. Produce a single list of N concrete items. **Every item MUST end with `[supports: angle-X claim-Y]`**; orchestrator drops uncited items." Output: `=== Stage 4 synthesis (draft) ===`.
 6. **Verification sub-agents** (Stage 5). 2-3 of them, parallel. Each gets the draft list + ALL the original findings — and NOTHING from prior verifiers (independence). Prompt: "For each item, return: SUPPORT / QUALIFY / REJECT + cited finding lines." Output: `=== Stage 5 verifications ===` — one block per verifier.
-7. **Conclude** (Stage 6). **Quorum rule:** an item is kept only if `support ≥ ceil(M_returned / 2)` AND zero hard rejects. On verifier timeout, recompute `M_returned` (don't reuse the planned `M` — that's how a single rubber-stamper becomes "the council agreed"). Items failing quorum move to `Unresolved:`. Surface disagreements; never silently arbitrate. Output: `=== Stage 6 FINAL LIST ===` + `Unresolved:` tail.
+7. **Conclude** (Stage 6). Apply the Iron Laws: items unsupported by at least one returning verifier, or hard-rejected by any, move to `Unresolved:`. On verifier timeout, count only returners (don't reuse the planned M — that's how a single rubber-stamper becomes "the council agreed"). Surface disagreements; never silently arbitrate. Output: `=== Stage 6 FINAL LIST ===` + `Unresolved:` tail with verifier counts.
 
 ## Run-until-completion behavior
 
