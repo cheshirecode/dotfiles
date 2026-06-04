@@ -39,15 +39,38 @@ python3 -c 'import yaml' 2>/dev/null && ok "PyYAML importable" || fail "PyYAML n
 
 echo "doctor: skills"
 if [[ -f "$MANIFEST" ]]; then
+  # Council guardrail #12 + skill-list-error capture: validate frontmatter
+  # against manifest, not just existence. Capture python stderr so a
+  # broken manifest doesn't silently produce an empty list (which would
+  # pass the old loop with "0 failures").
+  skill_list_err=$(mktemp)
+  skill_list=$(python3 -c "
+import yaml
+print('\n'.join(s['name'] for s in yaml.safe_load(open('$MANIFEST'))['skills']))
+" 2>"$skill_list_err")
+  if [[ -z "$skill_list" ]] && [[ -s "$skill_list_err" ]]; then
+    fail "manifest parse error: $(cat "$skill_list_err")"
+  fi
+  rm -f "$skill_list_err"
   while IFS= read -r name; do
     [[ -z "$name" ]] && continue
     skill_md="$SKILLS_DIR/$name/SKILL.md"
-    if [[ -f "$skill_md" ]]; then
-      ok "$name → $skill_md"
-    else
+    if [[ ! -f "$skill_md" ]]; then
       warn "$name SKILL.md missing (run bin/install-skills.sh)"
+      continue
     fi
-  done < <(python3 -c "import yaml,sys; print('\n'.join(s['name'] for s in yaml.safe_load(open('$MANIFEST'))['skills']))" 2>/dev/null)
+    # Validate frontmatter: must start with --- and contain a name: matching dir.
+    # Python script lives at tools/check-skill-frontmatter.py (cleaner than
+    # in-script heredoc; less quoting trauma).
+    frontmatter_check=$(python3 "$REPO_ROOT/tools/check-skill-frontmatter.py" "$skill_md" "$name" 2>/dev/null)
+    case "$frontmatter_check" in
+      OK)              ok "$name → $skill_md" ;;
+      NO_FRONTMATTER)  fail "$name has no YAML frontmatter" ;;
+      NO_NAME)         fail "$name frontmatter missing name field" ;;
+      NAME_MISMATCH:*) actual="${frontmatter_check#NAME_MISMATCH:}"; fail "$name dir but frontmatter name=$actual" ;;
+      *)               warn "$name frontmatter check inconclusive" ;;
+    esac
+  done <<< "$skill_list"
 else
   fail "manifest/skills.yaml missing"
 fi
