@@ -1,0 +1,58 @@
+# Test-matrix image — verify the install scripts run cleanly on a fresh
+# Ubuntu 24.04 box. Single image to start; add fedora/arch/alpine layers
+# only when a real cross-distro bug shows up.
+#
+# Stages:
+#   1. shellcheck       — static-lint every bin/*.sh
+#   2. dry-run install  — manifest parse + skills-skip behavior
+#   3. real install     — runtime deps + skills + worklog (--no-worklog
+#                         since the test image shouldn't fork the journal)
+#   4. doctor           — exit 0 assertion
+#
+# Auth-gated tools (Claude OAuth, Codex OAuth, gh-with-PAT) are NOT
+# exercised here — those need interactive auth and live outside CI.
+#
+# Build: docker build -f Dockerfile.test-matrix -t dotfiles-test .
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH=/root/.local/bin:$PATH
+
+# Bootstrap layer — only the absolute minimum so install-runtime-deps.sh
+# has sudo + a package manager + python3 (PyYAML is installed by the
+# install script itself).
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+      ca-certificates curl gnupg sudo shellcheck \
+      python3 python3-pip python3-yaml \
+      git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add the gh apt source (so install-runtime-deps.sh can `apt install gh`).
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+      | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+      > /etc/apt/sources.list.d/github-cli.list
+
+WORKDIR /src
+COPY . /src
+
+# --- Stage 1: shellcheck --------------------------------------------------
+RUN echo "=== Stage 1: shellcheck ===" \
+ && shellcheck --severity=warning bin/*.sh
+
+# --- Stage 2: dry-run install --------------------------------------------
+RUN echo "=== Stage 2: dry-run install-skills ===" \
+ && bin/install-skills.sh --dry-run
+
+# --- Stage 3: real install (no worklog clone in CI) ----------------------
+RUN echo "=== Stage 3: real install ===" \
+ && bin/install.sh --no-worklog
+
+# --- Stage 4: doctor ------------------------------------------------------
+# Worklog repo not cloned → doctor will WARN, not FAIL. Exit must be 0.
+RUN echo "=== Stage 4: doctor ===" \
+ && bin/doctor.sh
+
+CMD ["bash"]
