@@ -33,9 +33,9 @@ for s in m.get("skills", []):
     if stype not in ("subpath", "git"):
         problems.append(f"{name}: source.type='{stype}' (want 'subpath' or 'git')")
     if stype == "subpath" and src.get("repo"):
-        # repo: is ignored for subpath but listed in current manifest — keep
-        # warn-not-fail since cleanup is a separate change.
-        pass  # downgrade: not a hard fail
+        # repo: is silently ignored for subpath sources; tolerating it lets
+        # typos lie. Hard fail.
+        problems.append(f"{name}: source.type='subpath' must not carry 'repo:' field")
     if stype == "git":
         ref = src.get("ref", "")
         if not re.fullmatch(r"[0-9a-f]{40}", ref):
