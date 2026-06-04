@@ -75,12 +75,40 @@ def run(cmd, check=True):
         return
     subprocess.run(cmd, check=check)
 
+SENTINEL = ".installed_from"
+
+def has_our_sentinel(dst):
+    """True if dst is one of ours (safe to replace). Either a symlink we
+    created (Mac/Linux happy path) or a copy with our sentinel file."""
+    if dst.is_symlink():
+        return True
+    sentinel = dst / SENTINEL
+    return sentinel.is_file()
+
+def refuse_if_unowned(dst, name):
+    """Council guardrail #8: never rmtree a user-edited skill dir.
+    If dst exists and we don't recognize it as ours, refuse + prompt."""
+    if (dst.is_symlink() or dst.exists()) and not has_our_sentinel(dst):
+        sys.stderr.write(
+            f"install-skills: refusing to replace {dst}\n"
+            f"  '{name}' has a directory there but no '{SENTINEL}' sentinel.\n"
+            f"  Either we didn't install it, or a previous install predates the\n"
+            f"  sentinel. To proceed: rm -rf {dst} (you'll lose any local edits),\n"
+            f"  then re-run install-skills.sh.\n"
+        )
+        sys.exit(3)
+
+def write_sentinel(dst, source_info):
+    """Write a sentinel so future install-skills runs recognize this dir."""
+    (dst / SENTINEL).write_text(source_info + "\n")
+
 def install_subpath(entry):
     src = repo_root / entry["source"]["path"]
     dst = pathlib.Path(entry["install_to"]).expanduser()
     if not src.exists():
         print(f"  SKIP {entry['name']}: source {src} not present (skill not vendored yet)")
         return False
+    refuse_if_unowned(dst, entry["name"])
     if dst.is_symlink() or dst.exists():
         print(f"  refresh {entry['name']}: {dst}")
         if not dry:
@@ -96,12 +124,23 @@ def install_subpath(entry):
         except OSError:
             # WSL or filesystems without symlink support — fall back to copy.
             shutil.copytree(src, dst)
+            write_sentinel(dst, f"subpath:{entry['source']['path']}")
     return True
 
 def install_git(entry):
+    import re as _re
     name = entry["name"]
     repo = entry["source"]["repo"]
     ref = entry["source"]["ref"]
+    # Council guardrail #7: refuse non-SHA refs for git-source entries.
+    # "SHA pinning IS the integrity check" — ref:HEAD or branch names defeat it.
+    if not _re.fullmatch(r"[0-9a-f]{40}", ref) and not os.environ.get("INSTALL_SKILLS_ALLOW_MOVING_REF"):
+        sys.stderr.write(
+            f"install-skills: refusing {name}: source.ref='{ref}' is not a 40-hex SHA.\n"
+            f"  type:git entries must SHA-pin so content swaps aren't invisible.\n"
+            f"  Override with INSTALL_SKILLS_ALLOW_MOVING_REF=1 if you really mean it.\n"
+        )
+        sys.exit(3)
     cache = cache_dir / name
     if not cache.exists():
         print(f"  clone {name}: {repo} → {cache}")
@@ -112,6 +151,7 @@ def install_git(entry):
     print(f"  checkout {name}: {ref}")
     run(["git", "-C", str(cache), "checkout", "--quiet", ref])
     dst = pathlib.Path(entry["install_to"]).expanduser()
+    refuse_if_unowned(dst, name)
     if dst.is_symlink() or dst.exists():
         if not dry:
             if dst.is_symlink(): dst.unlink()
@@ -123,6 +163,7 @@ def install_git(entry):
             os.symlink(cache.resolve(), dst)
         except OSError:
             shutil.copytree(cache, dst)
+            write_sentinel(dst, f"git:{repo}@{ref}")
     return True
 
 installed = skipped = 0
