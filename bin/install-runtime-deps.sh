@@ -72,6 +72,13 @@ if [[ ${#MISSING[@]} -eq 0 ]]; then
   echo "install-runtime-deps: all required tools present — nothing to do"
 else
   echo "install-runtime-deps: installing: ${MISSING[*]}"
+  # Council guardrail: non-TTY → require explicit --yes. Stops a CI image
+  # from silently installing packages it didn't intend to consent to.
+  if [[ ! -t 0 && "${INSTALL_RUNTIME_DEPS_YES:-}" != "1" ]]; then
+    echo "install-runtime-deps: refusing sudo install in non-TTY context." >&2
+    echo "  Set INSTALL_RUNTIME_DEPS_YES=1 to proceed (or run interactively)." >&2
+    exit 4
+  fi
   install_with "$PM" "${MISSING[@]}"
 fi
 
@@ -82,9 +89,25 @@ for tool in "${OPTIONAL[@]}"; do
   fi
 done
 
-# Verify Python ≥ 3.10 — worklog's bin/_lint.py uses 3.10+ syntax.
+# Council guardrail #11: Python <3.10 is a hard fail, not a warning.
+# Downstream worklog lint dies far from the cause when 3.10+ syntax is missing.
 if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'; then
-  echo "install-runtime-deps: WARNING — python3 is older than 3.10. worklog protocol needs 3.10+." >&2
+  PYVER=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:3])))' 2>/dev/null || echo "?")
+  echo "install-runtime-deps: FAIL — python3 is $PYVER, need ≥3.10." >&2
+  echo "  Remediation: pyenv install 3.11 && pyenv global 3.11   (macOS/Linux)" >&2
+  echo "              brew install python@3.11                   (macOS)" >&2
+  exit 1
 fi
+
+# Council guardrail (NICE): minimum-version assertions for gh + git.
+# Old `gh` has incompatible flags that surface as cryptic install-skills failures.
+check_min_version() {
+  local tool="$1" min="$2" current
+  current=$("$tool" --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1 || echo 0)
+  printf '%s\n%s\n' "$min" "$current" | sort -V -C 2>/dev/null && return 0
+  echo "install-runtime-deps: WARN — $tool $current is older than $min (some features may fail)" >&2
+}
+command -v gh  >/dev/null && check_min_version gh  2.40 || true
+command -v git >/dev/null && check_min_version git 2.30 || true
 
 echo "install-runtime-deps: done"
