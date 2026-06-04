@@ -136,15 +136,23 @@ The `.cursor/` directory contains Cursor-specific configurations that are mainta
 ```bash
 # Clone to your home directory
 git clone https://github.com/cheshirecode/dotfiles.git ~/.dotfiles
+cd ~/.dotfiles && bin/install.sh
 
-# For Bash
-ln -sf ~/.dotfiles/.bashrc ~/.bashrc
-ln -sf ~/.dotfiles/.bash_profile ~/.bash_profile
+# bin/install.sh is the SUPPORTED install path: detects your OS, installs
+# runtime deps, runs the agent-skill installer (with the rmtree-safety
+# sentinel), wires hooks, runs bin/doctor.sh. Idempotent — re-run is safe.
+#
+# If you want manual symlinks instead, BACK UP FIRST. `ln -sf` will
+# silently overwrite an existing real ~/.bashrc / ~/.zshrc / ~/.gitconfig
+# and destroy your work. Pattern that won't bite:
+#   for f in .bashrc .bash_profile .zshrc; do
+#     [[ -e ~/$f && ! -L ~/$f ]] && mv ~/$f ~/$f.pre-dotfiles
+#   done
+#   ln -sf ~/.dotfiles/.bashrc ~/.bashrc
+#   ln -sf ~/.dotfiles/.bash_profile ~/.bash_profile
+#   ln -sf ~/.dotfiles/.zshrc ~/.zshrc
 
-# For Zsh
-ln -sf ~/.dotfiles/.zshrc ~/.zshrc
-
-# Source the configuration
+# Reload your shell
 source ~/.bashrc  # or source ~/.zshrc
 ```
 
@@ -157,7 +165,8 @@ Includes:
 - WSL-compatible settings
 
 ```bash
-# Link git configuration
+# Link git configuration (BACK UP your existing ~/.gitconfig first!)
+[[ -e ~/.gitconfig && ! -L ~/.gitconfig ]] && mv ~/.gitconfig ~/.gitconfig.pre-dotfiles
 ln -sf ~/.dotfiles/.gitconfig ~/.gitconfig
 ```
 
