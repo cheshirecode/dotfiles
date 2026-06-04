@@ -39,10 +39,11 @@ python3 -c 'import yaml' 2>/dev/null && ok "PyYAML importable" || fail "PyYAML n
 
 echo "doctor: skills"
 if [[ -f "$MANIFEST" ]]; then
-  # Council guardrail #12 + skill-list-error capture: validate frontmatter
-  # against manifest, not just existence. Capture python stderr so a
-  # broken manifest doesn't silently produce an empty list (which would
-  # pass the old loop with "0 failures").
+  # Validation moved to install-skills.sh (council item #3 — install-time is
+  # the right layer). Doctor just confirms presence here.
+  # Skill-list error capture: a broken manifest used to silently produce an
+  # empty list which passed the loop with "0 failures". Now: stderr captured,
+  # empty-result-with-stderr = FAIL.
   skill_list_err=$(mktemp)
   skill_list=$(python3 -c "
 import yaml
@@ -55,21 +56,11 @@ print('\n'.join(s['name'] for s in yaml.safe_load(open('$MANIFEST'))['skills']))
   while IFS= read -r name; do
     [[ -z "$name" ]] && continue
     skill_md="$SKILLS_DIR/$name/SKILL.md"
-    if [[ ! -f "$skill_md" ]]; then
+    if [[ -f "$skill_md" ]]; then
+      ok "$name → $skill_md"
+    else
       warn "$name SKILL.md missing (run bin/install-skills.sh)"
-      continue
     fi
-    # Validate frontmatter: must start with --- and contain a name: matching dir.
-    # Python script lives at tools/check-skill-frontmatter.py (cleaner than
-    # in-script heredoc; less quoting trauma).
-    frontmatter_check=$(python3 "$REPO_ROOT/tools/check-skill-frontmatter.py" "$skill_md" "$name" 2>/dev/null)
-    case "$frontmatter_check" in
-      OK)              ok "$name → $skill_md" ;;
-      NO_FRONTMATTER)  fail "$name has no YAML frontmatter" ;;
-      NO_NAME)         fail "$name frontmatter missing name field" ;;
-      NAME_MISMATCH:*) actual="${frontmatter_check#NAME_MISMATCH:}"; fail "$name dir but frontmatter name=$actual" ;;
-      *)               warn "$name frontmatter check inconclusive" ;;
-    esac
   done <<< "$skill_list"
 else
   fail "manifest/skills.yaml missing"
@@ -89,52 +80,22 @@ fi
 
 echo "doctor: hooks"
 settings="$HOME/.claude/settings.json"
-# Council guardrail #9: JSON-schema check, not substring grep. A comment
-# containing "autosave" used to pass the old `grep -q autosave` test.
+# Council item #4: smallest tool that works. jq -e returns non-zero when the
+# filter result is false/null/missing; the filter asserts both events exist
+# and at least one inner command contains "autosave".
 if [[ ! -f "$settings" ]]; then
   warn "hooks not wired ($settings absent — run install-worklog.sh)"
+elif ! jq empty "$settings" 2>/dev/null; then
+  fail "settings.json malformed (not valid JSON)"
+elif jq -e '
+    [.hooks.PreCompact[]?.hooks[]?.command | strings] | any(. | contains("autosave"))
+  ' "$settings" >/dev/null 2>&1 \
+    && jq -e '
+    [.hooks.SessionEnd[]?.hooks[]?.command | strings] | any(. | contains("autosave"))
+  ' "$settings" >/dev/null 2>&1; then
+  ok "Claude Code hooks wired (PreCompact + SessionEnd → autosave)"
 else
-  hook_check=$(python3 - "$settings" <<'PY' 2>/dev/null
-import json, sys, os
-try:
-    cfg = json.load(open(sys.argv[1]))
-except Exception as e:
-    print(f"PARSE_ERROR:{e}")
-    sys.exit(0)
-hooks = cfg.get("hooks") or {}
-problems = []
-for event in ("PreCompact", "SessionEnd"):
-    matchers = hooks.get(event) or []
-    cmds = []
-    for m in matchers:
-        for h in (m.get("hooks") or []):
-            cmd = h.get("command") or ""
-            if "autosave" in cmd:
-                cmds.append(cmd)
-    if not cmds:
-        problems.append(f"{event}: no autosave hook")
-        continue
-    # Resolve $PROJECTS_DIR / $WORKLOG_DIR if present; otherwise check literal path.
-    found_executable = False
-    for cmd in cmds:
-        # cheap path extraction — first whitespace-separated token containing autosave
-        for tok in cmd.split():
-            if "autosave" in tok:
-                # expand env vars commonly used
-                p = os.path.expandvars(os.path.expanduser(tok))
-                if os.path.isfile(p) and os.access(p, os.X_OK):
-                    found_executable = True
-                break
-    if not found_executable:
-        problems.append(f"{event}: autosave hook points at non-executable path")
-print("OK" if not problems else "; ".join(problems))
-PY
-)
-  case "$hook_check" in
-    OK) ok "Claude Code hooks wired (PreCompact + SessionEnd → autosave)" ;;
-    PARSE_ERROR:*) fail "settings.json is malformed: ${hook_check#PARSE_ERROR:}" ;;
-    *) warn "hooks check: $hook_check" ;;
-  esac
+  warn "hooks not wired (PreCompact + SessionEnd missing autosave commands in $settings)"
 fi
 
 echo "doctor: gh auth"
