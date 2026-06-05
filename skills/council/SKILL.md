@@ -1,11 +1,13 @@
 ---
 name: council
-description: "Karpathy-council-style multi-agent workflow: spawn N sub-agents to research a topic in parallel, cross-pollinate findings, synthesize into one list, then verify with independent sub-agents before concluding. Use when the user invokes `/council`, says \"run a council on X\", \"get multiple opinions on Y\", or asks for an audited research pass. Runs until completion — picks foreground or background dispatch per task scope."
+description: "Karpathy-council-style multi-agent workflow with voting: spawn N sub-agents to research a topic in parallel, cross-pollinate findings via discussion, collate candidate items, then VOTE on each item with explicit karpathy-criterion ballots before concluding. Use when the user invokes `/council`, says \"run a council on X\", \"get multiple opinions on Y\", or asks for an audited research pass. Runs until completion — picks foreground or background dispatch per task scope."
 ---
 
 # council
 
-Orchestrates Karpathy's LLM-council pattern with a twist: research → discussion → synthesis → verification. Five stages, sub-agents at each, single final list as the deliverable.
+Orchestrates Karpathy's LLM-council pattern with two twists:
+1. **Five active stages + voting**: research → discussion → candidate collation → structured voting → conclude.
+2. **Voting replaces verifier-as-cleanup.** Items must clear a majority APPROVE vote to survive, with hard REJECT votes cited against explicit karpathy criteria. This solves the empirically-observed failure mode where a single synthesis agent **invents items** the verifiers then spend their budget removing.
 
 Inspired by [Karpathy's LLM Council](https://github.com/karpathy/llm-council) (multi-model debate + synthesis). This skill adapts the pattern for a single Claude session using `Agent` sub-agents instead of cross-vendor models.
 
@@ -21,12 +23,12 @@ Skip if: the question has a clear single right answer, you already know the trad
 
 | # | Stage | What | Sub-agents | Sync/async |
 |---|---|---|---|---|
-| 1 | **Research** | Each angle gets its own sub-agent doing independent research. No cross-talk. | 3–5 in parallel | async if any single agent likely >2min, else sync |
+| 1 | **Research** | Each angle gets its own sub-agent doing independent research. **Each angle proposes candidate items** in its output. No cross-talk. | 3–5 in parallel | async if any single agent likely >2min, else sync |
 | 2 | **Findings** | Orchestrator collects + tags findings per angle. | (none — orchestrator) | sync |
-| 3 | **Discussion** | One sub-agent reads ALL findings, flags agreements/disagreements/gaps/contradictions. | 1 | sync (cheap input read) |
-| 4 | **Synthesis** | One sub-agent produces the **single final list** — combining the discussion notes into actionable items. | 1 | sync |
-| 5 | **Verification** | 2–3 independent sub-agents each check the list against the original findings, flag claims unsupported / overstated / wrong. | 2–3 in parallel | sync (focused review) |
-| 6 | **Conclude** | Orchestrator merges verifier objections into a final list; surfaces any unresolved disputes to the user. | (none) | sync |
+| 3 | **Discussion** | One sub-agent reads ALL findings, flags agreements/disagreements/gaps/contradictions. May propose ADDITIONAL candidate items surfaced by cross-angle gaps. | 1 | sync |
+| 4 | **Candidate collation** | One sub-agent gathers **the union of candidate items** proposed by Stage 1 angles + Stage 3 discussion. **No invention authority** — collator may NOT add items not proposed upstream. May only dedupe + normalize phrasing. | 1 | sync |
+| 5 | **Voting** | M independent voters (≥3, odd) each fill a **structured ballot** per candidate item: APPROVE / REJECT-with-citation / QUALIFY-with-condition. Voters do not see other voters' ballots. | 3+ in parallel | sync |
+| 6 | **Tally + conclude** | Orchestrator counts votes per item. Survivors = majority APPROVE AND zero hard REJECT-with-cited-criterion. Failures move to `Killed by vote` with cited reasons. | (none) | sync |
 
 ## Sync vs async — when to spawn background agents
 
@@ -45,130 +47,163 @@ The user can override with `/council --bg X` or `/council --fg X`.
 
 ## Iron Laws (refusal conditions — mechanical, not soft norms)
 
-- **NO STAGE-6 CONCLUSION WITHOUT N≥2 VERIFIERS RETURNING.** If only one verifier returns (other timed out and retry failed), the entire list is marked `unverified` and surfaced as such; do not silently rubber-stamp.
-- **NO STAGE-4 ITEM WITHOUT A `[supports: angle-X claim-Y]` CITATION.** Orchestrator rejects uncited items before passing to Stage 5. Synthesis cannot smuggle invented items.
-- **NO CROSS-ANGLE READS IN STAGE 1.** Every research sub-agent's prompt MUST contain the literal clause "You are research angle N of N. Do not Read, Grep, or Monitor outputs of other angles. Do not coordinate." Independence is mechanical, not aspirational.
-- **NO AUTO-PICKING SIDES ON DISAGREEMENT.** When verifiers split, output a `Disagreement:` block; never silently arbitrate. (Real example: this skill's own author once flagged a hallucinated framework as suspicious instead of synthesizing it in — that's the discipline.)
+- **NO COLLATOR-INVENTED ITEMS.** Stage 4 collator's output is a strict subset of items proposed by Stage 1 angles or Stage 3 discussion. If the collator emits an item with no `[proposed-by: angle-X | discussion]` tag, the orchestrator drops it before Stage 5. The collator has **zero invention authority**.
+- **NO ITEM SURVIVES WITHOUT MAJORITY APPROVE.** An item is kept ONLY if `APPROVE_count ≥ ceil(M_returned / 2 + 1)`. Plurality doesn't suffice. Tie = killed.
+- **HARD REJECT VETOES.** Any voter's REJECT vote that cites one of the **karpathy voting criteria** (below) kills the item regardless of APPROVE count. The criterion must be named in the ballot. "I don't like it" is not a valid reject; "REJECT: violates SOLVES-EXTANT-PAIN, no user report on file" is.
+- **NO STAGE-6 CONCLUSION WITHOUT M≥2 VOTERS RETURNING.** On voter timeout, recompute `M_returned`. If `M_returned < 2`, the entire list is marked `unverified` and surfaced as such.
+- **NO CROSS-ANGLE READS IN STAGE 1.** Every research sub-agent's prompt MUST contain the literal clause "You are research angle N of N. Do not Read, Grep, or Monitor outputs of other angles. Do not coordinate."
+- **NO CROSS-VOTER READS IN STAGE 5.** Same independence law for voters — no voter sees a sibling voter's ballot.
+
+## Karpathy voting criteria
+
+Voters cast their ballots against these criteria. A REJECT must cite ≥1. An APPROVE asserts none are violated.
+
+| Criterion | Pass test | Common failure shape |
+|---|---|---|
+| **TRACES** | Item directly addresses a statement in the user's request or implied need | Synthesis added it "to be complete" |
+| **SOLVES-EXTANT-PAIN** | A current observed problem (filed report, broken behavior, user friction) | Speculative; "we might need this" |
+| **N-THRESHOLD-MET** | For abstractions/refactors: at least 3 concrete instances of the pattern exist | n=1 or n=2 — premature generalization |
+| **COST-PROPORTIONATE** | Implementation cost matches the asserted user value | Multi-day infra for a one-line user need |
+| **NON-INFRA-PADDING** | Item is user-visible, not pure tooling-for-future-tooling | "Add a manifest schema" with no consumer using it |
+
+The full ballot per item is one of:
+- **APPROVE** — all criteria pass.
+- **REJECT: <criterion>, <one-sentence justification>** — explicit veto.
+- **QUALIFY: <condition>** — keep only if condition met; condition must be a Stage-3 tension or a verifier-grade fix. Approve-with-conditions counts as 0.5 toward the majority.
 
 ## Numeric guidance (orchestrator self-enforces)
 
-- Below 2 sub-agents per stage defeats independence. Above 7 produces synthesis noise. If the count falls outside [2, 7], the orchestrator names the chosen N and the reason in the Stage 1 output.
+- Below 2 sub-agents per stage defeats independence. Above 7 produces noise.
+- Voters: **always ≥3, odd, recommended 3 or 5**. 2 voters can deadlock (1-1) which the Iron Laws kill — explicit by design, but odd counts avoid the friction.
 - Sub-agent prompts longer than ~800 words signal scope creep — split the angle.
 
 ## Recipe
 
-1. **Decompose the topic.** State the question. Pick 3–5 research angles that don't overlap. Example for "should we adopt library X?": (a) what does it do, (b) license + maintenance status, (c) competing libraries, (d) integration cost with our stack, (e) failure-mode survey from issues + forums.
-2. **Spawn research sub-agents** (Stage 1). One per angle. Each gets a self-contained prompt with the angle's scope + the original question for context. Sync or async per the decision rule above. **Cross-angle isolation clause is mandatory** (see Iron Laws). Do NOT pass another agent's transcript into a sibling agent's prompt.
-3. **Collect findings** (Stage 2). Read each return; quote-tag the key claims per angle. Output: `=== Stage 2 findings ===` block with one bullet per angle's top 3-5 claims + a one-line "agent claims" attribution.
-4. **Discussion sub-agent** (Stage 3). Prompt: "Here are findings from N independent research passes. Identify (a) agreements across angles, (b) disagreements, (c) gaps no angle covered, (d) contradictions." Single sub-agent, focused read. Output: `=== Stage 3 discussion ===`.
-5. **Synthesis sub-agent** (Stage 4). Prompt: "Here are findings + discussion. Produce a single list of N concrete items. **Every item MUST end with `[supports: angle-X claim-Y]`**; orchestrator drops uncited items." Output: `=== Stage 4 synthesis (draft) ===`.
-6. **Verification sub-agents** (Stage 5). 2-3 of them, parallel. Each gets the draft list + ALL the original findings — and NOTHING from prior verifiers (independence). Prompt: "For each item, return: SUPPORT / QUALIFY / REJECT + cited finding lines." Output: `=== Stage 5 verifications ===` — one block per verifier.
-7. **Conclude** (Stage 6). Apply the Iron Laws: items unsupported by at least one returning verifier, or hard-rejected by any, move to `Unresolved:`. On verifier timeout, count only returners (don't reuse the planned M — that's how a single rubber-stamper becomes "the council agreed"). Surface disagreements; never silently arbitrate. Output: `=== Stage 6 FINAL LIST ===` + `Unresolved:` tail with verifier counts.
+1. **Decompose the topic.** State the question. Pick 3–5 research angles that don't overlap.
+2. **Spawn research sub-agents** (Stage 1). Each gets a prompt with their angle's scope + the original question. Each agent's output must include a `Candidate items proposed by this angle:` section so Stage 4 can collate. **Cross-angle isolation clause is mandatory.**
+3. **Collect findings** (Stage 2). Read each return; quote-tag the key claims + extract candidate items per angle.
+4. **Discussion sub-agent** (Stage 3). Identifies cross-angle tensions AND may propose `Additional candidate items surfaced by cross-angle gaps:`.
+5. **Candidate collation sub-agent** (Stage 4). Prompt: "Gather the UNION of candidate items from these angles + the discussion. Dedupe near-identical items keeping the strongest phrasing. **You may not add new items.** Output: numbered list, each with `[proposed-by: <source>]` tag. Items without a proposer tag will be rejected." Output: `=== Stage 4 candidate list ===`.
+6. **Voting sub-agents** (Stage 5). M (≥3, odd) parallel voters. Each gets the candidate list + Stage 2 findings + Stage 3 discussion + the **karpathy voting criteria table above** + the original user request verbatim. Prompt template: "For each candidate item, cast a ballot: APPROVE / REJECT: <criterion> + reason / QUALIFY: <condition>. You may not see other voters' ballots." Output: `=== Stage 5 ballots ===` — one block per voter.
+7. **Tally + conclude** (Stage 6). Orchestrator counts per item:
+   - `approve = count(APPROVE)`
+   - `qualified = count(QUALIFY) * 0.5`
+   - `support = approve + qualified`
+   - `hard_rejects = list of (voter, criterion) for each REJECT`
+   - **Survive** iff `support ≥ ceil(M_returned/2 + 1)` AND `hard_rejects is empty`.
+   - **Otherwise** → `Killed by vote` with all REJECT criteria cited.
 
 ## Run-until-completion behavior
 
 The skill must finish all 6 stages in one invocation. Implementation:
-- If foreground mode: walk stages 1→6 inline, calling `Agent` for each sub-agent step. Return only when Stage 6 is written.
-- If background mode for Stage 1: spawn N `Agent(run_in_background=true)` calls; armed `Monitor` watches completion; once all N return, proceed to Stages 2-6 in foreground.
-- Never partial-return. If a verifier fails or times out, retry once, then proceed with the rest and note the gap in Stage 6 "unresolved".
+- If foreground mode: walk stages 1→6 inline.
+- If background mode for Stage 1: spawn N `Agent(run_in_background=true)` calls; armed `Monitor` watches completion; once all N return, proceed.
+- Never partial-return. If a voter fails or times out, retry once, then proceed and recompute `M_returned`.
 
 ## Output format
 
 ```
 === Council: "<topic>" ===
 Mode: <foreground|background>
-Angles: <N> · Verifiers: <M>
+Angles: <N> · Voters: <M>
 
 === Stage 1 research ===
   • angle A — 1-line summary
-  • angle B — 1-line summary
   ...
 
 === Stage 2 findings ===
   Angle A — top claims:
     1. <claim> (agent A)
-    2. ...
-  Angle B — top claims:
+    ...
+  Candidate items proposed:
+    Angle A: A-i1, A-i2
+    Angle B: B-i1
     ...
 
 === Stage 3 discussion ===
   Agreements: <list>
   Disagreements: <list>
   Gaps: <list>
-  Contradictions: <list>
+  Additional candidates proposed by discussion: D-i1, D-i2
 
-=== Stage 4 synthesis (draft) ===
-  1. <item> — <rationale> [supports: A2, C1]
-  2. <item> — <rationale> [supports: B3]
+=== Stage 4 candidate list ===
+  1. <item> [proposed-by: A] (or [proposed-by: A+D dedupe])
+  2. <item> [proposed-by: B]
   ...
-  (Uncited items dropped by orchestrator; never reach Stage 5.)
+  Collator: 0 items invented · X items deduped
 
-=== Stage 5 verifications ===
-  Verifier 1: <support|reject|qualify> per item
-  Verifier 2: ...
-  Verifier 3: ...
-  Verifiers returned: M_returned of M_planned (timeouts noted)
+=== Stage 5 ballots ===
+  Voter 1:
+    item 1: APPROVE
+    item 2: REJECT: SOLVES-EXTANT-PAIN — no user report; speculative
+    item 3: QUALIFY: only if Stage-3 tension Y resolved
+  Voter 2: ...
+  Voter 3: ...
+  Voters returned: M_returned of M_planned
 
 === Stage 6 FINAL LIST ===
-  1. <item> — <rationale> [supports: A2, C1] [verifiers: 2/2 SUPPORT]
+  1. <item> [proposed-by: A] [vote: 3 APPROVE / 0 REJECT / 0 QUALIFY → SURVIVE]
   2. ...
 
-  Unresolved: <items failing quorum or with hard rejects>
+  Killed by vote:
+    - <item> [vote: 1 APPROVE / 2 REJECT(SOLVES-EXTANT-PAIN, N-THRESHOLD-MET) → KILLED]
+    - ...
+
   Status: verified (M_returned ≥ 2) | UNVERIFIED (M_returned < 2)
 ```
 
 ## Meta-orchestration (beyond the 6 stages)
 
-These apply at every stage, not just Stage 1.
+These apply at every stage.
 
-- **Token budget table before fanout.** Before spawning N sub-agents, emit a 1-line budget estimate (e.g., `5 angles × ~600 tok prompt × ~1500 tok response ≈ 10.5k`). Refuse to fan out >20k tokens of simultaneous research without explicit user OK.
-- **Verifier transcript isolation.** Stage-5 verifiers receive ONLY the Stage-4 synthesis draft + the original Stage-2 findings. Never pass them a Stage-3 discussion summary, a sibling verifier's verdict, or the orchestrator's own commentary. Cross-contamination defeats independence.
-- **Duplicate-collapse pass before Stage 6.** Walk the synthesis draft; collapse near-duplicate items keeping the strongest phrasing. Log the dropped twins in an `Internal: deduped X items` line so silent dedup isn't possible.
-- **Fresh-Agent invocations per stage.** Sibling sub-agents in the same stage share no parent context beyond their prompt. Across stages, do not pass one stage's full sub-agent transcript into the next; pass only the explicit deliverable (findings list, draft, verdicts).
+- **Token budget table before fanout.** Before spawning N sub-agents, emit a 1-line budget estimate. Refuse >20k tokens of simultaneous research without explicit user OK.
+- **Voter ballot isolation.** Stage 5 voters receive ONLY the Stage 4 candidate list + Stage 2 findings + Stage 3 discussion + criteria table + original user request. Never pass them a sibling voter's ballot, the collator's internal reasoning, or the orchestrator's commentary.
+- **Collator has no creative authority.** If the collator outputs an untagged item, the orchestrator drops it and emits a `Collator violation:` log line before Stage 5.
+- **Fresh-Agent invocations per stage.** Siblings in the same stage share no parent context beyond their prompt. Across stages, pass only the explicit deliverable.
 
 ## Anti-patterns
 
-- **Don't let research agents talk during Stage 1.** Cross-talk defeats the council's blind-spot reduction. Stages 3-5 are where cross-pollination happens.
-- **Don't use the same sub-agent for synthesis AND verification.** Verifier must be independent; otherwise it's just rubber-stamping its own draft.
-- **Don't skip Stage 3 (discussion) when synthesis looks easy.** The discussion step surfaces contradictions and gaps; synthesis without it produces a happy-path list that misses real tension.
-- **Don't auto-pick a side on unresolved disputes.** Surface them to the user. The council's job is to inform, not to silently arbitrate.
+- **Don't let research agents talk during Stage 1.**
+- **Don't let the collator invent items.** This is the load-bearing change vs. the old synthesis-agent design — synthesis agents demonstrably invent items the verifiers then have to remove. Collation + voting eliminates the failure mode by structure.
+- **Don't use the same sub-agent for collation AND voting.** Voters must be independent.
+- **Don't skip Stage 3 discussion when collation looks easy.** Discussion surfaces gaps the angles missed; without it, the candidate pool is whatever happened to occur to the research agents.
+- **Don't auto-pick a side on tied votes.** Ties are killed by Iron Law. Use odd-count voters to avoid them.
+- **Don't trust specific post-cutoff claims without a verification pass.** If a research agent returns precise details about something the orchestrator can't recognize (a framework, a release date, a stat), spawn a skeptical-default verifier with WebSearch/WebFetch before promoting the claim.
 - **Don't run a council on a one-shot question.** If you'd answer it in 30 seconds yourself, the council is overhead for nothing.
-- **Don't trust specific post-cutoff claims without a verification pass.** If a research agent returns very precise details about something the orchestrator can't recognize (a framework, a release date, a stat), spawn a skeptical-default verifier with WebSearch/WebFetch before promoting the claim. (Inspiration: a real council session where two research agents returned plausible fabricated specifics that a verification pass corrected.)
 
 ## Pairings
 
-- `Agent` tool — every sub-agent in every stage is an `Agent` call. Stage 1 may use `run_in_background=true` + `Monitor`; stages 2-6 are inline `Agent` calls.
-- `karpathy-guidelines` — apply in stage 6 to reject synthesis items that don't trace to a research finding (Karpathy's "every line should trace to the user's request" — here, every list item should trace to a finding).
-- `worklog plan` — for tasks that produce a planning artifact, feed the council's Stage 6 output as input to `/worklog plan <task>`.
+- `Agent` tool — every sub-agent in every stage is an `Agent` call.
+- `karpathy-guidelines` — provides the voting criteria. Cast your ballot against Think-Before / Simplicity-First / Surgical-Changes / Goal-Driven; the voting criteria table above is the operational form.
+- `worklog plan` — for tasks that produce a planning artifact, feed the council's Stage 6 surviving list as input to `/worklog plan <task>`.
 
 ## Examples
 
-### Quick foreground council
+### Quick foreground council with voting
 
 ```
 User: /council "should we adopt MinishLab/semble for code search?"
-Claude: Decomposing into 4 angles: what-it-does / license + maintenance / competitors (serena, ripgrep, ag) / integration cost.
-        [Stage 1] 4 sync sub-agents (~90s each) … done
-        [Stage 2] findings tagged
-        [Stage 3] discussion sub-agent (~60s) … 2 disagreements, 1 gap
-        [Stage 4] synthesis (~60s) … 6 draft items
-        [Stage 5] 2 verifiers (~90s parallel) … 5 items supported, 1 qualified
-        [Stage 6] final list of 6 (1 qualified) + 1 unresolved
-```
-
-### Background research council
-
-```
-User: /council "best practices for prompt caching on Anthropic API"
-Claude: 6 angles needed (caching basics / cost model / cache hits/misses observed / failure modes / vendor docs / community lessons). Estimated 4min each → background mode.
-        [Stage 1] 6 Agent(run_in_background=true) launched. Monitor armed.
-        … notifications stream in as each completes …
-        [Stages 2-6] foreground after all 6 return.
+Claude: 4 angles. Mode: foreground. Voters: 3.
+        [Stage 1] 4 angles return findings + 8 candidate items
+        [Stage 2] findings tagged · 8 candidates extracted
+        [Stage 3] discussion · 1 additional candidate from gap (D-i1) → 9 total
+        [Stage 4] collator dedupes A-i2 + B-i1 → 8 candidates · 0 invented
+        [Stage 5] 3 voters cast ballots in parallel
+        [Stage 6] tally: 5 SURVIVE / 3 KILLED-BY-VOTE
+                  Killed citations: 2× SOLVES-EXTANT-PAIN, 1× N-THRESHOLD-MET
 ```
 
 ### Council declines itself
 
 ```
 User: /council "what's 2+2?"
-Claude: This isn't a council task — a single agent (me) answers in one token. Skipping; the answer is 4.
+Claude: Not a council task — single-agent answer in one token. Skipping; 4.
 ```
+
+## Why voting (vs. the old synthesis + verification flow)
+
+The old flow had **one synthesis agent producing items** and 2–3 verifiers as a cleanup pass. Three consecutive councils in one session showed the same failure: synthesis invented 60–90% of items; verifiers caught most via their independence budget. This is structurally backwards — items should clear an explicit bar to enter, not enter by default and need removal.
+
+Voting replaces the asymmetry. The collator can only gather; voters apply explicit criteria; items need a positive vote count to survive. The verifier's "REJECT-with-citation" power is preserved as the voter's REJECT ballot. No item gets in just because synthesis was feeling generous.
+
+This is a fork of the original Karpathy pattern, not a strict implementation. The original used cross-vendor debate to surface disagreement; this version uses cross-agent voting to surface non-justified inclusion.
