@@ -35,9 +35,13 @@ else
 fi
 
 # Smoke: status should not error.
+# Note: status.sh has no --quiet flag; just call it and limit output via head.
+# Dogfood discovery: passing --quiet here caused "unknown arg --quiet" abort
+# (status.sh exits non-zero on unknown args, tripping the elseif WARN even
+# when the underlying worklog is healthy).
 if [[ -x "$TARGET/bin/status.sh" ]]; then
   echo "install-worklog: smoke-test bin/status.sh"
-  "$TARGET/bin/status.sh" --quiet 2>&1 | head -5 || {
+  "$TARGET/bin/status.sh" 2>&1 | head -5 || {
     echo "install-worklog: WARN — bin/status.sh exited non-zero (may need LDAP setup)" >&2
   }
 fi
