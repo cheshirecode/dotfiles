@@ -2,11 +2,11 @@
 # Read-only seed pack for `/worklog init --full`.
 # Emits exact Linear issue identifiers, Notion page targets, and PR numbers
 # from active task files so the tool layer can do deterministic external scans.
-# Cold-start safe: if people/cheshirecode/active does not exist yet, emits zero tasks.
+# Cold-start safe: if people/<ldap>/active does not exist yet, emits zero tasks.
 #
 # Usage:
 #   bin/init-scan.sh
-#   bin/init-scan.sh --ldap cheshirecode
+#   bin/init-scan.sh --ldap <ldap>
 #   bin/init-scan.sh --format=json
 
 set -euo pipefail
@@ -22,7 +22,7 @@ while [[ $# -gt 0 ]]; do
     --format)   FORMAT="$2"; shift ;;
     -h|--help)
       cat <<EOF
-usage: init-scan.sh [--ldap=cheshirecode] [--format=markdown|json]
+usage: init-scan.sh [--ldap=<ldap>] [--format=markdown|json]
   read-only seed pack for exact Linear / Notion / PR scans during init --full
 EOF
       exit 0

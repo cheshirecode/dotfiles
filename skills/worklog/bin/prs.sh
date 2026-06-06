@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# prs.sh — list open PRs in cheshirecode org requesting review from the caller
+# prs.sh — list open PRs in $WORKLOG_GH_ORG org requesting review from the caller
 # or their team(s), updated within the last N days.
 #
 # Usage: bin/prs.sh [--days N]   (default: 5)
@@ -10,6 +10,17 @@
 #   first-match dedup: priority @me > team sections (alphabetical by slug)
 
 set -euo pipefail
+
+# Identity: which GitHub org to query. Per-clone via env, with fallback
+# to the active git remote's owner. Hard-fail if neither resolves —
+# refusing to silently query someone else's org.
+if [[ -z "${WORKLOG_GH_ORG:-}" ]]; then
+  WORKLOG_GH_ORG="$(gh repo view --json owner -q .owner.login 2>/dev/null || true)"
+fi
+if [[ -z "${WORKLOG_GH_ORG:-}" ]]; then
+  echo "prs: set WORKLOG_GH_ORG (or run inside a clone with a gh-recognized remote)" >&2
+  exit 1
+fi
 
 DAYS=5
 while [ $# -gt 0 ]; do
@@ -34,9 +45,9 @@ if [ ! -f "$CONFIG" ]; then
   exit 1
 fi
 
-# Resolve caller's cheshirecode team slugs → approver filter slugs (deduped, sorted).
+# Resolve caller's $WORKLOG_GH_ORG team slugs → approver filter slugs (deduped, sorted).
 MEMBER_SLUGS=$(gh api /user/teams --paginate \
-  --jq '.[] | select(.organization.login == "cheshirecode") | .slug' \
+  --jq '.[] | select(.organization.login == "$WORKLOG_GH_ORG") | .slug' \
   2>/dev/null || true)
 
 APPROVER_SLUGS=$(
@@ -58,7 +69,7 @@ SEEN_FILE=$(mktemp); trap 'rm -f "$SEEN_FILE"' EXIT
 emit_section() {
   local label="$1"; shift
   local rows
-  rows=$(gh search prs --owner cheshirecode --state open --updated ">=$SINCE" \
+  rows=$(gh search prs --owner $WORKLOG_GH_ORG --state open --updated ">=$SINCE" \
     "$@" --json "$FIELDS" --template "$TEMPLATE" 2>/dev/null || true)
   [ -z "$rows" ] && return 0
   local filtered=""
@@ -80,5 +91,5 @@ emit_section "review-requested: @me" --review-requested "@me"
 
 printf '%s\n' "$APPROVER_SLUGS" | sort -u | while IFS= read -r slug; do
   [ -z "$slug" ] && continue
-  emit_section "team: $slug" --review-requested "cheshirecode/$slug"
+  emit_section "team: $slug" --review-requested "$WORKLOG_GH_ORG/$slug"
 done
