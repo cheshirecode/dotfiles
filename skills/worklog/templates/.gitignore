@@ -9,3 +9,12 @@
 # Python bytecode from bin/_*.py helpers:
 __pycache__/
 *.pyc
+# bin/ scripts moved to dotfiles skill SoT — only the README tombstone is committed:
+bin/*.sh
+bin/*.py
+bin/__pycache__/
+bin/git-hooks/
+!bin/README.md
+# Per-machine agent state — never track across clones:
+.agents/
+.claude/
