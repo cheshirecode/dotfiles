@@ -1,0 +1,35 @@
+# Clean corpus — should survive scrub() in bin/export-setup.sh untouched.
+#
+# Adds realistic worklog-shaped content with strings that look secret-adjacent
+# but are NOT secrets. If anything below gets modified by the scrubber on a
+# clean run, a regex is over-eager — anchor it or narrow the character class.
+#
+# Audit-prompt references: "Test the scrubber on clean content."
+
+## Slugs that brush against secret regex prefixes
+ai-risk-management-eval
+ghost-pattern-proxy
+github-actions-pinning
+sky-asset-rebuild
+akia-archetype-store
+aiza-prompt-eval-pipeline
+
+## Realistic content tokens we emit in commit bodies / PR refs
+PR ideogram-ai/ui#1234 lands the carve-out.
+Commit f3a9 dropped LCP to 2139ms.
+See SHA reference 0e0a117 in custom-models-critical-path-perf.
+Cherry-pick 289bb65 onto release/2026-04.
+Full-SHA permalink: https://github.com/ideogram-ai/_worklog/commit/0e0a117ff3c4d5e6f7890abcdef1234567890abc
+Tree object 0e0a117ff3c4d5e6f7890abcdef1234567890abc at HEAD~3.
+
+## Encoded IDs (base64-shaped, never literal secrets)
+user_id ABCDEFGHIJKLMNOPQRSTUVWXYZab== was the test account
+request_id Pq0Lj9mZTU8aB2KsR1fXq== shows up in logs
+
+## URLs and refs
+https://github.com/ideogram-ai/_worklog/pull/42
+https://linear.app/ideogram/issue/ENG-1532
+
+## Code-shaped tokens
+const SK_PREFIX = "sk-test-only";   // reference, not a secret value
+const GHP_PREFIX = "ghp_demo_only"; // reference
