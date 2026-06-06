@@ -15,25 +15,28 @@
 #                                   docs/helpers.md § Pre-commit hook.
 #
 # Usage:
-#   bin/install-hooks.sh              # dry-run (prints the merged settings)
-#   bin/install-hooks.sh --write      # apply the change
-#   bin/install-hooks.sh --uninstall  # remove the hooks (dry-run)
-#   bin/install-hooks.sh --uninstall --write
+#   install-hooks.sh                                  # dry-run for cwd / $WORKLOG_REPO
+#   install-hooks.sh --write                          # apply
+#   install-hooks.sh --data-root=<path>               # dry-run for a specific clone
+#   install-hooks.sh --data-root=<path> --write       # apply to that clone
+#   install-hooks.sh --uninstall [--data-root=<path>] [--write]
 #
 # Idempotent: re-running --write is a no-op once the hooks are present.
-# Only touches entries pointing at this repo's scripts.
+# Only touches entries pointing at the skill's scripts.
 
 set -euo pipefail
 
 MODE="install"
 WRITE=0
+DATA_ROOT_OVERRIDE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --write)     WRITE=1 ;;
-    --uninstall) MODE="uninstall" ;;
+    --write)         WRITE=1 ;;
+    --uninstall)     MODE="uninstall" ;;
+    --data-root=*)   DATA_ROOT_OVERRIDE="${1#--data-root=}" ;;
     -h|--help)
-      sed -n '2,19p' "$0"
+      sed -n '2,23p' "$0"
       exit 0
       ;;
     *) echo "install-hooks: unknown arg: $1" >&2; exit 2 ;;
@@ -44,10 +47,18 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_lib.sh
 . "$SCRIPT_DIR/_lib.sh"
-REPO_ROOT="$(resolve_worklog_repo)" || exit 1
+# --data-root overrides WORKLOG_REPO env / cwd-walk
+if [[ -n "$DATA_ROOT_OVERRIDE" ]]; then
+  [[ -d "$DATA_ROOT_OVERRIDE/.git" || -f "$DATA_ROOT_OVERRIDE/.git" ]] \
+    || { echo "install-hooks: --data-root=$DATA_ROOT_OVERRIDE is not a git repo" >&2; exit 1; }
+  REPO_ROOT="$(cd "$DATA_ROOT_OVERRIDE" && pwd)"
+else
+  REPO_ROOT="$(resolve_worklog_repo)" || exit 1
+fi
 cd "$REPO_ROOT"
-AUTOSAVE="$REPO_ROOT/bin/autosave.sh"
-KERNELS="$REPO_ROOT/bin/compact-kernels.sh"
+# Scripts live in the skill (this dir), not in the data repo's bin/
+AUTOSAVE="$SCRIPT_DIR/autosave.sh"
+KERNELS="$SCRIPT_DIR/compact-kernels.sh"
 SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
 
 for s in "$AUTOSAVE" "$KERNELS"; do
@@ -143,10 +154,12 @@ else:
 PY
 
 # ---- git pre-commit hook --------------------------------------------------
-# Wire `core.hooksPath = bin/git-hooks` so the versioned pre-commit script
-# fires for everyone who runs install-hooks.sh on their clone. Idempotent.
+# Wire `core.hooksPath` to the skill's git-hooks dir. Absolute path is the
+# only sane option post-relocation — the hooks live in dotfiles, not in
+# the data repo. Per-machine brittle (path differs per host); --data-root
+# callers re-run install-hooks.sh per machine to refresh.
 CURRENT_HOOKS_PATH="$(git -C "$REPO_ROOT" config --get core.hooksPath || true)"
-DESIRED="bin/git-hooks"
+DESIRED="$SCRIPT_DIR/git-hooks"
 
 if [[ "$MODE" == "install" ]]; then
   if [[ "$CURRENT_HOOKS_PATH" == "$DESIRED" ]]; then
