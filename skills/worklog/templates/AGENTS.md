@@ -22,11 +22,11 @@ The slug is the content-addressable ID that binds every surface together. No bri
 
 **Forward (PR → task):** trailer or branch-tail → glob `people/*/active/<slug>.md`. LDAP falls out of the matched path. This is what the event-driven checkpoint workflow does.
 
-**Reverse (task → PRs):** `git log --grep="Worklog-Slug: <slug>"` in `_worklog` enumerates every `Worklog-PR:` trailer ever attached to that slug. `bin/status.sh --slug=<slug>` already parses this.
+**Reverse (task → PRs):** `git log --grep="Worklog-Slug: <slug>"` in `_worklog` enumerates every `Worklog-PR:` trailer ever attached to that slug. `"$WORKLOG_BIN/status.sh" --slug=<slug>` already parses this.
 
-**Authority rule:** trailers in git log are the source of truth for PR linkage. `pr:` frontmatter is an **optional cache** for human skim — never the index. `bin/checkpoint.sh --pr=N` writes both in sync, so drift shouldn't happen; if it does, trailers win.
+**Authority rule:** trailers in git log are the source of truth for PR linkage. `pr:` frontmatter is an **optional cache** for human skim — never the index. `"$WORKLOG_BIN/checkpoint.sh" --pr=N` writes both in sync, so drift shouldn't happen; if it does, trailers win.
 
-Uniqueness invariant: slugs are globally unique across `people/*/`. That's what makes both the glob and the grep work without disambiguation. Enforced by convention — `bin/lint.sh` validates per-file format (see [docs/protocol.md § Lint rules](./docs/protocol.md#lint-rules)) but does not cross-check uniqueness. Collisions surface at write time: `ls people/*/active/<slug>.md` returning >1 match during checkpoint is the signal.
+Uniqueness invariant: slugs are globally unique across `people/*/`. That's what makes both the glob and the grep work without disambiguation. Enforced by convention — `"$WORKLOG_BIN/lint.sh"` validates per-file format (see [docs/protocol.md § Lint rules](./docs/protocol.md#lint-rules)) but does not cross-check uniqueness. Collisions surface at write time: `ls people/*/active/<slug>.md` returning >1 match during checkpoint is the signal.
 
 **SHAs are not navigation primitives.** History rewrites (Tier-2 squash, see `worklog-log-compaction-squash`) are an accepted maintenance event; SHAs cited in messages, PR descriptions, or task bodies dangle after a rewrite. Reference past work by `<slug> + commit subject prefix`, not by SHA.
 
@@ -39,7 +39,7 @@ Uniqueness invariant: slugs are globally unique across `people/*/`. That's what 
 - Bare descriptor (e.g. `pillbutton-style-merge`) is a first-class slug. No `wip-` placeholder.
 - Optional `eng-<N>-` prefix (e.g. `eng-1515-stack`) when a Linear ID is already known at create time and you want grep to join against Linear.
 - Descriptor: lowercase kebab, 1–4 tokens, ≤30 chars total.
-- **Retroactive rename is optional, not mandatory.** If a Linear ID later becomes load-bearing for cross-referencing, `bin/checkpoint.sh <new-slug> --rename=<old-slug>` emits a `Worklog-Previous-Slug` trailer. Otherwise the bare slug stays — a Linear-less task is not provisional. Rename only while `status != archived`.
+- **Retroactive rename is optional, not mandatory.** If a Linear ID later becomes load-bearing for cross-referencing, `"$WORKLOG_BIN/checkpoint.sh" <new-slug> --rename=<old-slug>` emits a `Worklog-Previous-Slug` trailer. Otherwise the bare slug stays — a Linear-less task is not provisional. Rename only while `status != archived`.
 
 ## Task file format
 
@@ -69,13 +69,13 @@ Optional sections as needed: `## Notes from <session>`, `## Open questions`, `##
 
 Optional frontmatter keys (`notion`, `pr`, `pr_repos`, `graphite_stack`, `reopens`, `external_refs`, plus relation keys below) — see [docs/protocol.md](./docs/protocol.md#optional-pipeline-indexed-frontmatter-keys).
 
-`pr:` is a **cache** of the latest PR numbers for human skim. The authority is `Worklog-PR:` trailers in git log (keyed by `Worklog-Slug:`). `bin/checkpoint.sh --pr=N` writes both; the event-driven bot writes trailers without touching frontmatter. If they disagree, trailers win. Omitting `pr:` is fine — reverse-lookup by grep still works.
+`pr:` is a **cache** of the latest PR numbers for human skim. The authority is `Worklog-PR:` trailers in git log (keyed by `Worklog-Slug:`). `"$WORKLOG_BIN/checkpoint.sh" --pr=N` writes both; the event-driven bot writes trailers without touching frontmatter. If they disagree, trailers win. Omitting `pr:` is fine — reverse-lookup by grep still works.
 
 ### Task relations
 
 Four optional frontmatter keys express links between tasks. All single-direction — never write both sides.
 
-- **`parent_slug: <slug>`** — points to the umbrella/program task (typically `kind: program`). Program stewards derive their children list with `bin/children.sh <self-slug>` (or `grep parent_slug: <self-slug> people/*/active/*.md people/*/archive/*.md` for a dependency-free fallback). Never add a `children:` key on the parent — the reverse index is always computed.
+- **`parent_slug: <slug>`** — points to the umbrella/program task (typically `kind: program`). Program stewards derive their children list with `"$WORKLOG_BIN/children.sh" <self-slug>` (or `grep parent_slug: <self-slug> people/*/active/*.md people/*/archive/*.md` for a dependency-free fallback). Never add a `children:` key on the parent — the reverse index is always computed.
 - **`related: [{slug, note}]`** — peer links that aren't parent/child. `note` is a one-line *why this relates* (purpose of the link), not a description of where the slug appears in the body. Required (otherwise the link rots). Lint auto-injects a `(auto-added; refine note)` placeholder when a body-mention is undeclared; refine it before archive — the lint warns if the placeholder survives. Good: `note: "carve-out regex lives there; keep invariants aligned"`. Bad: `note: "mentioned in Context section"` (rephrases the body, not the relation). Same shape as `external_refs:`.
 - **`supersedes: <slug>`** — this task replaces an older approach that was abandoned mid-flight. Write it on the new task. On archiving the old one, add `superseded_by: <new-slug>` to its frontmatter and the one-line archive reason referencing the new slug.
 - **`reopens: <slug>`** — post-archive regression or follow-on (existing key; see FSM).
@@ -105,7 +105,7 @@ supersedes: old-approach-slug
 
 The `project:` slug groups related tasks. Linear is one valid source among several — use whichever fits the task.
 
-0. **First: enumerate existing values** with `bin/related-search.sh --projects` (or `awk '/^project:/{print $2}' people/*/active/*.md | sort -u`). Reuse a slug if your task fits an existing program. Only invent a new slug for genuinely new work. Avoid creating closely-named-but-distinct values — `marketing-site-2026` / `new-marketing-page-serving` / `marketing-intake` is the kind of sprawl this catches.
+0. **First: enumerate existing values** with `"$WORKLOG_BIN/related-search.sh" --projects` (or `awk '/^project:/{print $2}' people/*/active/*.md | sort -u`). Reuse a slug if your task fits an existing program. Only invent a new slug for genuinely new work. Avoid creating closely-named-but-distinct values — `marketing-site-2026` / `new-marketing-page-serving` / `marketing-intake` is the kind of sprawl this catches.
 1. If `linear:` is set → fetch the issue, take the `project.url` slug verbatim so it joins against Linear without transformation.
 2. If body has `ENG-\d+` refs and a dominant project emerges (>50% of referenced issues share a project) → propose that slug.
 3. Otherwise → deduce a short, descriptive slug (kebab-case, 1–3 tokens) from task context. Ask the human to confirm before writing.
@@ -130,14 +130,14 @@ Proposal tasks (`kind: proposal` + `status: draft`) have their own 3-exit lifecy
 
 ## Editing rules
 
-0. **Prior-art grep before editing infrastructure surfaces.** Before changing config that other tasks may have already settled — `gsutil` upload commands, nginx config, `proxy_pass` rules, terraform cache rules, image/video pipeline scripts, any `Cache-Control` decision — run `bin/related-search.sh <surface-keyword>` over active + recent-archive task bodies and skim the hits. Design tasks specify these decisions in prose; a code edit that flips them silently is the same class of error as inventing a conflicting decision in a new task (worklog-prior-art-check § Problem miss #4). The grep takes 5 seconds; reverting a wrong flip after PR review costs minutes-to-days. Companion to the [new]-task grep step in sync mode.
+0. **Prior-art grep before editing infrastructure surfaces.** Before changing config that other tasks may have already settled — `gsutil` upload commands, nginx config, `proxy_pass` rules, terraform cache rules, image/video pipeline scripts, any `Cache-Control` decision — run `"$WORKLOG_BIN/related-search.sh" <surface-keyword>` over active + recent-archive task bodies and skim the hits. Design tasks specify these decisions in prose; a code edit that flips them silently is the same class of error as inventing a conflicting decision in a new task (worklog-prior-art-check § Problem miss #4). The grep takes 5 seconds; reverting a wrong flip after PR review costs minutes-to-days. Companion to the [new]-task grep step in sync mode.
 1. **Only edit files under your own `people/<ldap>/`.** To contribute to a peer's task, append a `## Notes from <your-ldap>` block at the bottom of their file and let the owner merge.
 2. **Do not rename peers' files.** Open a new one in your own namespace if scope diverges.
 3. **Frontmatter is required.** A task without frontmatter is not discoverable via grep.
 4. **No secrets.** No API keys, tokens, private URLs beyond what Linear/GitHub already expose internally.
 5. **Commit terse, push often.** Every meaningful state change is a commit. Noise is fine; staleness is not.
 6. **No sibling directories under `people/<ldap>/`.** Only task `.md` files and (optionally) `.gitkeep`. Binary fixtures, JSON captures, scripts — live in the product repo the task's PR(s) touch.
-7. **Never `git rebase` / `git pull --rebase` / force-push during normal sync.** Linear history is the audit trail. Carve-out: explicit maintenance ops *do* rewrite history — `bin/log-compact.sh` (compact same-slug checkpoint bursts), `bin/cache-purge.sh` (remove historical `.cache/` paths), or other deliberate cleanup. These tag `pre-<op>-<ts>` for recovery and assume single-committer windows. After any such op, run `bin/post-rewrite-prompt.sh` and paste its output to other live sessions so they reset cleanly. If `git pull` reports non-fast-forward and you didn't rewrite locally: `git stash push -u -m pre-recovery && git reset --hard origin/main && git stash pop`, then re-apply any wiped commits via reflog or by redoing the edits + checkpoint.
+7. **Never `git rebase` / `git pull --rebase` / force-push during normal sync.** Linear history is the audit trail. Carve-out: explicit maintenance ops *do* rewrite history — `"$WORKLOG_BIN/log-compact.sh"` (compact same-slug checkpoint bursts), `"$WORKLOG_BIN/cache-purge.sh"` (remove historical `.cache/` paths), or other deliberate cleanup. These tag `pre-<op>-<ts>` for recovery and assume single-committer windows. After any such op, run `"$WORKLOG_BIN/post-rewrite-prompt.sh"` and paste its output to other live sessions so they reset cleanly. If `git pull` reports non-fast-forward and you didn't rewrite locally: `git stash push -u -m pre-recovery && git reset --hard origin/main && git stash pop`, then re-apply any wiped commits via reflog or by redoing the edits + checkpoint.
 
 ## Commit message convention
 
@@ -160,7 +160,7 @@ Goal: `git log` alone answers who touched which task when and whether state flip
 | `Worklog-Kind:`          | On `create` commits.                                                                           |
 | `Worklog-Linear:`        | On `create` commits **only when a Linear ID exists**. Omit the trailer entirely otherwise — absence is the signal. |
 | `Worklog-Project:`       | On `create` / status-flip / archive commits. Value is the `project:` frontmatter slug.         |
-| `Worklog-PR:`            | Authority for task↔PR linkage. `bin/checkpoint.sh --pr=N` emits it; also auto-emitted from frontmatter `pr:` cache (comma-separated if multiple). |
+| `Worklog-PR:`            | Authority for task↔PR linkage. `"$WORKLOG_BIN/checkpoint.sh" --pr=N` emits it; also auto-emitted from frontmatter `pr:` cache (comma-separated if multiple). |
 | `Worklog-Previous-Slug:` | On rename commits. Value is the old slug.                                                      |
 
 Prefixed (`Worklog-`) to avoid collision with git-standard trailers. LDAP is not a trailer — derivable from `git log --author` and the `people/<ldap>/` path.
@@ -235,7 +235,7 @@ the durable first-class interface once available.
 
 The worklog is the **cross-session** journal. Agents **MUST** also show **in-session** progress so the human can follow along without re-reading the transcript. Open a task list up front for any multi-step work (≥3 steps, or any task with verification gates / deploy / review) and update each step as it moves `pending → in_progress → completed`. Mark each done immediately, not in a batch at the end.
 
-**Self-check on every session resume + on starting any new multi-step task:** read the active task's `## Next` checkboxes; for each unchecked `- [ ]` item, add a tracker entry NOW (don't wait for the system reminder, don't wait for the user to ask). The `bin/context.sh <slug>` output's "Tracker-ready snippet" section formats each item ready to paste/exec — use it.
+**Self-check on every session resume + on starting any new multi-step task:** read the active task's `## Next` checkboxes; for each unchecked `- [ ]` item, add a tracker entry NOW (don't wait for the system reminder, don't wait for the user to ask). The `"$WORKLOG_BIN/context.sh" <slug>` output's "Tracker-ready snippet" section formats each item ready to paste/exec — use it.
 
 The protocol exists because agents drift. Documented evidence: 2026-04-27 review session ran ~30 multi-step commits with zero `TaskCreate` invocations despite the system reminder firing repeatedly (`docs/lessons.md` 2026-04 entry; `worklog-review-2026-04` Tier-1 #5).
 
@@ -272,7 +272,7 @@ In-session tracker state (`TaskList`, `update_plan`, canvas) does **not** surviv
 
 Compact proactively, not reactively — around 60% context, not when the warning fires. By the warning, the model is already summarizing a degraded view. Before `/compact`:
 
-1. Run `/worklog sync` (or `bin/checkpoint.sh <slug>`) so the file holds current state, not the conversation.
+1. Run `/worklog sync` (or `"$WORKLOG_BIN/checkpoint.sh" <slug>`) so the file holds current state, not the conversation.
 2. Pass the worklog-aware instruction: `/compact $(cat docs/compact-instruction.md)` — it tells the model to anchor on slug + `next_action:` + last pushed SHA + mid-debug state, and to drop tool transcripts.
 
 After `/compact` (or any session resume): **first check `_worklog/.cache/compact-kernels.md`** with a mtime gate:
@@ -282,7 +282,7 @@ After `/compact` (or any session resume): **first check `_worklog/.cache/compact
 ```
 If the gate passes, read it once for all-active-tasks orientation (~7 lines per task). The file also carries a `# Stale after: <ISO>` header as a secondary cue. If stale or absent, skip and fall through to per-task reads. Then **re-read `people/<ldap>/active/<slug>.md` before your first action**, and state the slug + `next_action:` back to the user as a verification check. If the compact summary and the file disagree, the file wins.
 
-Claude Code only: wire `bin/autosave.sh` + `bin/compact-kernels.sh` as `PreCompact` and `SessionEnd` hooks so uncommitted task edits land in git before the summary bakes in, AND a resume kernel per active task is dumped to `.cache/compact-kernels.md` for the next session. `bin/install-hooks.sh --write` (idempotent). Codex CLI / Cursor have no hook equivalent; they rely on layer 3 (re-read the file on resume — and may manually run `bin/compact-kernels.sh` before ending a session). Full detail: [docs/protocol.md § Surviving compaction](./docs/protocol.md#surviving-compaction).
+Claude Code only: wire `"$WORKLOG_BIN/autosave.sh"` + `"$WORKLOG_BIN/compact-kernels.sh"` as `PreCompact` and `SessionEnd` hooks so uncommitted task edits land in git before the summary bakes in, AND a resume kernel per active task is dumped to `.cache/compact-kernels.md` for the next session. `"$WORKLOG_BIN/install-hooks.sh" --write` (idempotent). Codex CLI / Cursor have no hook equivalent; they rely on layer 3 (re-read the file on resume — and may manually run `"$WORKLOG_BIN/compact-kernels.sh"` before ending a session). Full detail: [docs/protocol.md § Surviving compaction](./docs/protocol.md#surviving-compaction).
 
 ### Work breakdown with sequential-thinking
 
@@ -303,9 +303,9 @@ Every agent must checkpoint — **do not wait for the user to ask** — on:
 4. **User signals** ("checkpoint", "wrap up", "save state", "switching machines").
 5. **Scope change** — checkpoint the old task before pivoting.
 
-Use `bin/checkpoint.sh <slug> [--status=X --next="..." --pr=N]` — it bumps `last_updated`, optionally flips `status`/`next_action`, emits trailers, commits, pushes. Don't reinvent the commit dance. When the work for a slug also touches sibling files (README, AGENTS.md, code under `bin/`), pass `--include=<path>` (repeatable) so the task file and the sibling change land in one commit with the right trailers. Full trigger rules + context-tight guidance: [docs/protocol.md](./docs/protocol.md#checkpoint-discipline--triggers).
+Use `"$WORKLOG_BIN/checkpoint.sh" <slug> [--status=X --next="..." --pr=N]` — it bumps `last_updated`, optionally flips `status`/`next_action`, emits trailers, commits, pushes. Don't reinvent the commit dance. When the work for a slug also touches sibling files (README, AGENTS.md, code under `bin/`), pass `--include=<path>` (repeatable) so the task file and the sibling change land in one commit with the right trailers. Full trigger rules + context-tight guidance: [docs/protocol.md](./docs/protocol.md#checkpoint-discipline--triggers).
 
-**Autosave vs checkpoint — two layers, different verbs.** `bin/autosave.sh` is the **durability layer**: a slugless safety snapshot wired to Claude Code's PreCompact / SessionEnd hooks (per `bin/install-hooks.sh`) plus available for manual invocation. It exists so non-Claude agents (Codex CLI, Cursor, plain shell/vim) and Claude itself never lose work when context resets or sessions end. `bin/checkpoint.sh <slug>` is the **audit-trail layer**: per-slug, advances a single task's logical state, emits `Worklog-Slug:` + `Worklog-Status:` + other trailers. Autosave commits carry a `Worklog-Trigger: pre-compact | session-end | manual` trailer so `git log` consumers can filter (`bin/status.sh` already excludes autosave commits by default; pass `--include-meta` to surface them).
+**Autosave vs checkpoint — two layers, different verbs.** `"$WORKLOG_BIN/autosave.sh"` is the **durability layer**: a slugless safety snapshot wired to Claude Code's PreCompact / SessionEnd hooks (per `"$WORKLOG_BIN/install-hooks.sh"`) plus available for manual invocation. It exists so non-Claude agents (Codex CLI, Cursor, plain shell/vim) and Claude itself never lose work when context resets or sessions end. `"$WORKLOG_BIN/checkpoint.sh" <slug>` is the **audit-trail layer**: per-slug, advances a single task's logical state, emits `Worklog-Slug:` + `Worklog-Status:` + other trailers. Autosave commits carry a `Worklog-Trigger: pre-compact | session-end | manual` trailer so `git log` consumers can filter (`"$WORKLOG_BIN/status.sh"` already excludes autosave commits by default; pass `--include-meta` to surface them).
 
 Autosave is not a "bypass" of per-slug discipline — it's the cross-agent portability layer that lets the protocol work outside Claude's hook ecosystem. The 20-40 autosave commits per month in this repo are the cost of multi-agent support, not noise.
 
@@ -320,10 +320,10 @@ Worklog uses several derived caches under `.cache/` (gitignored — per-machine,
 
 | Cache | Producer | Consumer | Freshness |
 |---|---|---|---|
-| `.cache/compact-kernels.md` + `.json` | `bin/compact-kernels.sh` (PreCompact + SessionEnd hooks) | `/worklog init` preamble, fresh-session resume | 1h |
-| `.cache/index.jsonl` | `bin/index.sh` | `bin/search.sh`, archive orphan-check | regenerated on demand |
-| `.cache/index.embeddings.jsonl` | `bin/embed.sh` | `bin/search.sh --semantic` | rebuild explicitly |
-| `.cache/claims/` (advisory mutex state) | `bin/_claim.py` via `bin/project.sh` | per-task claim arbitration | TTL per claim |
+| `.cache/compact-kernels.md` + `.json` | `"$WORKLOG_BIN/compact-kernels.sh"` (PreCompact + SessionEnd hooks) | `/worklog init` preamble, fresh-session resume | 1h |
+| `.cache/index.jsonl` | `"$WORKLOG_BIN/index.sh"` | `"$WORKLOG_BIN/search.sh"`, archive orphan-check | regenerated on demand |
+| `.cache/index.embeddings.jsonl` | `"$WORKLOG_BIN/embed.sh"` | `"$WORKLOG_BIN/search.sh" --semantic` | rebuild explicitly |
+| `.cache/claims/` (advisory mutex state) | `"$WORKLOG_BIN/_claim.py"` via `"$WORKLOG_BIN/project.sh"` | per-task claim arbitration | TTL per claim |
 | `.cache/sessions/<sid>.json` | `bin/_lib.sh::resolve_session_id` | claim-holder identification in LOCKED_BY messages | session lifetime |
 
 Two-session same-machine race on the same cache: the second writer wins; the first writer's state was already mirrored to the vault (caches are read-only from the vault's perspective). No cache stores authoritative state.
@@ -353,9 +353,9 @@ bin/codex-surface-check.sh                         # README/AGENTS/local Codex s
 
 Design docs that cite warehouse data should commit the queries that produced the numbers. Layout: `queries/<slug>/<name>.sql` (top-level `queries/` dir, NOT under `people/<ldap>/`). Required header: `-- @env: prod|staging` and `-- @description: <one-liner>`. Optional `-- @max-rows:` (default 1000).
 
-**No literal PII in committed queries.** No email addresses, no long base64-shaped tokens (matches typical user_id / org_id encoding). Use `bq --parameter=name:STRING:value` if you need to scope by id at run time. `bin/sql.sh run` enforces both rules and refuses to execute on violation.
+**No literal PII in committed queries.** No email addresses, no long base64-shaped tokens (matches typical user_id / org_id encoding). Use `bq --parameter=name:STRING:value` if you need to scope by id at run time. `"$WORKLOG_BIN/sql.sh" run` enforces both rules and refuses to execute on violation.
 
-Response cache lives at `.cache/queries/<slug>/<name>.json` (gitignored). The cache means design-doc reviewers read the same numbers the author saw without re-running the query; force-refresh with `bin/sql.sh run <slug> <name> --no-cache`.
+Response cache lives at `.cache/queries/<slug>/<name>.json` (gitignored). The cache means design-doc reviewers read the same numbers the author saw without re-running the query; force-refresh with `"$WORKLOG_BIN/sql.sh" run <slug> <name> --no-cache`.
 
 Cross-task lessons surfaced by shipped work live in [`docs/lessons.md`](./docs/lessons.md) — append a one-line entry when an archive produces a generalizable insight that future readers shouldn't have to re-derive from `git log`.
 
@@ -391,7 +391,7 @@ or its archived successor for rationale):
 Bot commits are identifiable in `git log` by author `worklog-bot
 <ldap@users.noreply.github.com>` — the name field distinguishes them from humans while
 the email still routes to the right `people/<ldap>/` namespace for
-`bin/status.sh --author=<ldap>` queries.
+`"$WORKLOG_BIN/status.sh" --author=<ldap>` queries.
 
 ## Codex first-class `worklog` command
 
@@ -409,7 +409,7 @@ Supported forms:
 - `worklog context <slug> [--for=resume|review]`
 - `worklog plan <task>` — emit a structured CoT/ToT/Reflexion plan block (paste-ready into a task body)
 - `worklog spawn <task>` — emit a self-contained handoff prompt
-- `worklog export` — write a sanitized setup artifact to `/tmp/worklog-setup-<ts>.txt` (shells out to `bin/export-setup.sh`, which is agent-agnostic)
+- `worklog export` — write a sanitized setup artifact to `/tmp/worklog-setup-<ts>.txt` (shells out to `"$WORKLOG_BIN/export-setup.sh"`, which is agent-agnostic)
 - `worklog import <path>` — merge an export artifact into this machine's setup
 - `worklog lint [--cross-task]` — validate task files; `--cross-task` adds drift checks
 - `worklog review` — periodic protocol review; Codex uses `update_plan` for live tracking
@@ -431,9 +431,9 @@ Execution rules in Codex:
    - `worklog plan` — structured CoT/ToT/Reflexion plan block; pure generator, no preamble, no writes
    - `worklog spawn` — self-contained handoff prompt for a fresh session
    - `worklog export` / `worklog import` — round-trip setup across machines
-     (both shell out to `bin/export-setup.sh` + the same awk-parsed artifact
+     (both shell out to `"$WORKLOG_BIN/export-setup.sh"` + the same awk-parsed artifact
      format Claude's skill uses; no Claude-specific deps)
-   - `worklog lint` — `bin/lint.sh`, with optional `--cross-task`
+   - `worklog lint` — `"$WORKLOG_BIN/lint.sh"`, with optional `--cross-task`
    - `worklog review` — protocol review loop, with Codex `update_plan`
      replacing Claude `TaskCreate`
 4. If flags are omitted, make the same reasonable-default choices a human
@@ -446,7 +446,7 @@ Execution rules in Codex:
 
 When doing a read-only full init scan across GitHub / Linear / Notion:
 
-1. Start with `bin/init-scan.sh --format=json`. It emits exact IDs and URLs from active task files.
+1. Start with `"$WORKLOG_BIN/init-scan.sh" --format=json`. It emits exact IDs and URLs from active task files.
    - If it returns zero tasks, that is a normal cold-start state for a brand-new LDAP.
 2. **Linear:** if a task has `linear:` or an `eng-<N>-` slug prefix, query the exact identifier first (`identifier: ENG-<N>`). Only fall back to semantic search when no exact ID exists.
 3. **Notion:** if a task has flat `notion:` frontmatter or a Notion URL in body / `external_refs`, fetch that target directly. Do not semantic-search for a page when an exact page id or URL already exists.
@@ -459,7 +459,7 @@ For a brand-new user / machine, the following are normal and should not be treat
 
 - `_worklog` had to be cloned just now
 - `people/<ldap>/` does not exist yet
-- `bin/init-scan.sh` returns zero tasks
+- `"$WORKLOG_BIN/init-scan.sh"` returns zero tasks
 - `git log --author=<ldap>` returns no `_worklog` commits yet
 
 In that state, treat `_worklog` as an empty journal and survey GitHub / Linear / Notion directly during `init --full`. The first pass is proposal-only: group discovered signals into candidate task files, show the grouping rationale and likely `next_action`, and wait for confirmation before writing. Do not fabricate task files just to make the repo non-empty; only create a task when there is concrete in-flight work to track and the user accepts the proposal.
@@ -474,4 +474,4 @@ In that state, treat `_worklog` as an empty journal and survey GitHub / Linear /
 - For exploratory questions: 2–3 sentence recommendation + tradeoff, not a plan dump.
 - Never reply to human PR comments as the user.
 - Verify state against reality (`git status`, `gh pr list`, `gt log`) before trusting worklog claims.
-- **Standup / status-update asks get a 3–5 sentence prose synthesis**, not a `bin/status.sh` dump. Group shipped work by theme, not slug; name the work, not the PR number. Full rules: [docs/protocol.md § Standup synthesis](./docs/protocol.md#standup-synthesis--prose-not-a-dump).
+- **Standup / status-update asks get a 3–5 sentence prose synthesis**, not a `"$WORKLOG_BIN/status.sh"` dump. Group shipped work by theme, not slug; name the work, not the PR number. Full rules: [docs/protocol.md § Standup synthesis](./docs/protocol.md#standup-synthesis--prose-not-a-dump).
