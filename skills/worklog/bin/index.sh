@@ -30,10 +30,10 @@ EOF
 esac
 
 if [[ "$STDOUT" == "1" ]]; then
-  exec python3 bin/_index.py
+  exec python3 "$SCRIPT_DIR/_index.py"
 fi
 
 mkdir -p .cache
-python3 bin/_index.py > .cache/index.jsonl
+python3 "$SCRIPT_DIR/_index.py" > .cache/index.jsonl
 count=$(wc -l < .cache/index.jsonl | tr -d ' ')
 echo ".cache/index.jsonl  $count tasks"

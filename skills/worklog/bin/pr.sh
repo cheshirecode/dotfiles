@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(resolve_worklog_repo)" || exit 1
 cd "$REPO_ROOT"
 # shellcheck source=_query.sh
-. bin/_query.sh
+. "$SCRIPT_DIR/_query.sh"
 
 PR="${1:-}"
 case "$PR" in
