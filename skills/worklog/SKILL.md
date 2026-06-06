@@ -1,17 +1,15 @@
 ---
 name: worklog
-description: One skill for the shared `_worklog` repo. Ten modes — `init`, `sync`, `status`, `context`, `plan`, `spawn`, `export`, `import`, `lint`, `review`. Invoke as `/worklog <mode> [args]`. Bare `/worklog` or `/worklog help` prints the subcommand menu and stops. Unknown arg → show menu.
+description: One skill for the shared `_worklog` repo. Eleven modes — `init`, `sync`, `status`, `context`, `plan`, `spawn`, `export`, `import`, `lint`, `project`, `review`. Invoke as `/worklog <mode> [args]`. Bare `/worklog` or `/worklog help` prints the subcommand menu and stops. Unknown arg → show menu.
 ---
 
 # worklog
 
-Single entry point for the shared `_worklog` protocol. Canonical protocol lives in `_worklog/AGENTS.md` — do not duplicate it here.
-
-This file is a **router**. Mode detail lives in `modes/<name>.md` and is loaded on-demand. Do NOT load mode files you aren't invoking.
+Single entry point for the shared `_worklog` protocol. Canonical protocol lives in `_worklog/AGENTS.md`. This file is a **router** + **quickref**. Mode detail lives in `modes/<name>.md` and is loaded on-demand.
 
 ## Routing — first thing, before anything else
 
-Parse the first argument. If it's empty, `help`, `-h`, `--help`, or not in the mode table below, print the menu verbatim and **stop** — no preamble, no tool calls, no file reads.
+Parse the first argument. If empty, `help`, `-h`, `--help`, or unknown, print the menu verbatim and **stop** — no preamble, no tool calls, no file reads.
 
 ```
 /worklog — shared cross-machine work journal
@@ -32,72 +30,109 @@ Parse the first argument. If it's empty, `help`, `-h`, `--help`, or not in the m
 flags detail: see modes/<name>.md
 ```
 
-Known modes: `init`, `sync`, `status`, `context`, `plan`, `spawn`, `export`, `import`, `lint`, `project`, `review`, `help`. Anything else → menu.
-
-Once a known mode is parsed: run preamble (if required — see table), read `modes/<mode>.md`, follow it.
+Once a known mode is parsed: run preamble (per table), read `modes/<mode>.md`, follow it.
 
 ## Mode → preamble requirement
 
-| Mode    | Needs preamble? | Reads AGENTS.md? | lessons.md? |
-|---------|-----------------|------------------|-------------|
-| init    | yes             | yes              | quickref (limit=15) |
-| sync    | yes             | only if writing a new/existing task file | no |
-| status  | yes (minimal — LDAP + projects-dir only; no pull) | no | no |
-| context | yes (minimal)   | no               | no |
-| plan    | no              | no               | no |
-| spawn   | no              | no               | no |
-| export  | no              | no               | no |
-| import  | no              | no               | no |
-| lint    | no              | no               | no |
-| project | yes (minimal — LDAP only; no pull for read-only subcommands) | no | no |
-| review  | yes             | yes              | full |
+| Mode    | Preamble | Reads AGENTS.md? | lessons.md? |
+|---------|----------|------------------|-------------|
+| init    | `--full` | yes              | quickref (limit=15) |
+| sync    | `--full` | only if writing a new/existing task | no |
+| status  | `--minimal` | no            | no |
+| context | `--minimal` | no            | no |
+| plan    | none     | no               | no |
+| spawn   | none     | no               | no |
+| export  | none     | no               | no |
+| import  | none     | no               | no |
+| lint    | none     | no               | no |
+| project | `--minimal` (read-only subs); `--full` (mutating) | no | no |
+| review  | `--full` | yes              | full |
 
-## Preamble — run only if the mode column above says yes
+## Preamble — single call
 
-Skip any step you already completed earlier in the current conversation turn — don't re-resolve LDAP, re-pull, or re-read AGENTS.md within a single session.
+```bash
+cd "$PROJECTS_DIR/_worklog" && bin/preamble.sh [--minimal|--full]
+```
 
-0. **Resume kernels first.** Check `$PROJECTS_DIR/_worklog/.cache/compact-kernels.md` programmatically:
-   ```bash
-   f="$PROJECTS_DIR/_worklog/.cache/compact-kernels.md"
-   [ -f "$f" ] && [ $(( $(date +%s) - $(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f") )) -lt 3600 ] && echo read
-   ```
-   If it echoes `read`, Read the file before anything else — it's the per-active-task resume summary auto-dumped by `PreCompact` / `SessionEnd` hooks. Orients you on all active tasks for the cost of one small file. If absent or stale (>1h), skip silently and fall through to per-task reads. The file itself also carries a `# Stale after: <ISO>` header as a secondary freshness cue.
+(If `$PROJECTS_DIR` is unset, resolve: `dirname "$(git rev-parse --show-toplevel)"`, else first existing of `~/Documents/projects` `~/projects` `~/code` `~/src` `~/dev` `~/repos`, else ask.)
 
-   **Tracker hydration:** `bin/compact-kernels.sh` also emits `.cache/compact-kernels.json` — same data, machine-shaped: `[{slug, status, last_updated, last_sha, next_action, open_items}, ...]`. After reading the .md, walk the JSON and call `TaskCreate` once per `open_items` entry across active tasks (subject = item, description = `<slug>: <status>`). Cap at ~10 total tasks to keep the tracker focused; pick most-recently-updated slugs first.
+Emits `LDAP=`, `PROJECTS_DIR=`, `NAMESPACE=`, `PULL=` key/value lines plus a `### roster` block (top 15 active tasks by `last_updated`, one tab-separated line each). Internally handles: LDAP resolve (24h cached), namespace bootstrap, rate-limited `git pull` (5-min stamp), `.gitconfig.lock` cleanup, autosave-if-dirty.
 
-   **Dedupe before TaskCreate.** Call `TaskList` first; collect existing tracker subjects (lowercased + stripped of leading/trailing whitespace). Skip any `open_items` text that already matches. The kernel JSON is read-only; the tracker is one-way (no upsert API); skip-already-present is the only protection against duplicates on preamble re-entry within the same session (`/clear`, mid-conversation tooling re-entry, repeated `/worklog` invocations).
+Skip re-invocation within the same session — bin/preamble.sh is idempotent but the tool turns aren't free.
 
-   This mechanical hydration closes the "Claude forgot to hydrate" loophole from `worklog-review-2026-04` Tier-1 #5; the dedupe step closes the "Claude hydrated twice" follow-on (worklog-task-create-dedupe).
-1. **Resolve LDAP.** `bin/_lib.sh::resolve_ldap` (`WORKLOG_LDAP → repo git email → cheshirecode`). Echo it.
-2. **Resolve `$PROJECTS_DIR`.** `dirname "$(git rev-parse --show-toplevel 2>/dev/null)"`; else first existing of `~/Documents/projects` `~/projects` `~/code` `~/src` `~/dev` `~/repos`; else ask.
-3. **Sync worklog repo** (skip for status/context — they're read-only and stale-tolerant):
-   ```bash
-   [ -d "$PROJECTS_DIR/_worklog" ] || gh repo clone cheshirecode/_worklog "$PROJECTS_DIR/_worklog"
-   cd "$PROJECTS_DIR/_worklog"
-   git config pull.rebase false; git config pull.ff true
-   # Pre-pull dirty check (advisory): autostash silently moves edits and can
-   # pop with conflicts that go unnoticed. If dirty, run autosave first.
-   . bin/_lib.sh
-   if ! detect_dirty_worklog; then
-     bin/autosave.sh
-   fi
-   git pull --no-rebase --autostash
-   ```
-   **Never** `git rebase` or `git pull --rebase` during normal sync — checkpoints are the audit trail. Maintenance ops (`bin/log-compact.sh`, `bin/cache-purge.sh`) rewrite history deliberately and emit a recovery prompt via `bin/post-rewrite-prompt.sh`. See `AGENTS.md` § Editing rules.
-4. **Ensure namespace.** If `people/$LDAP/` missing, create `{active,archive}/` with `.gitkeep` in `archive/`, commit + push.
-5. **Read `docs/cheatsheet.md` first.** Imperative-only quick-card derived from AGENTS.md (~50 lines). Covers slug grammar, FSM, editing rules, tooling shortlist, hooks, body conventions. Consult AGENTS.md (next step) only when the cheatsheet doesn't answer a specific question.
-6. **Read AGENTS.md** only when the table above says yes (`init` and `review` always; others if cheatsheet didn't suffice). Authoritative for task-file format, status FSM, checkpoint discipline, editing rules — the *why* behind every cheatsheet imperative.
-7. **Read `docs/lessons.md` per the table above.** High-recurrence lessons are distilled in Claude memory (`feedback_lessons.md`) and load without a file read — no need to re-derive them from the ledger. For `review`: read the full file. For `init --full`: read quickref only (`limit=15`, covers the `## Quickref` header). All other modes: skip — the memory-resident lessons cover the dominant failure modes. Skip on subsequent preambles in the same conversation turn.
+### Tracker hydration (after preamble)
 
-## Slug & shared boundaries (cross-mode, always apply)
+For each active task with open `## Next` items you intend to act on, call `TaskCreate`. **Emit every `TaskCreate` call as parallel tool calls in a single tool-use turn** — one assistant message with N concurrent `TaskCreate` blocks, not N sequential turns. Dedupe first: call `TaskList`, lowercase + strip each existing subject, skip kernel items that already match. Cap at ~10 tracker entries total (most-recently-updated tasks first).
 
-Slug grammar: `^(eng-\d+-)?[a-z0-9]+(-[a-z0-9]+)*$`. Linear ID known → `eng-<N>-<desc>`. Not yet → bare `<desc>`. No `wip-` prefix. Rename via `bin/checkpoint.sh <new> --rename=<old>`.
+If the roster gave you enough orientation, skip hydration. If you need the full kernel detail, Read `.cache/compact-kernels.md` (~95KB) on-demand — never automatically.
+
+For per-task detail, use `bin/context.sh <slug>` (its output ends in a `Tracker-ready snippet` block formatted for parallel `TaskCreate`).
+
+### AGENTS.md / cheatsheet / lessons.md
+
+- `AGENTS.md`: read only when the mode table says yes, OR when this quickref doesn't answer a specific question (frontmatter schema edge case, FSM corner, rare relation field).
+- `docs/cheatsheet.md`: superseded by the Quickref section below for routine work. Open only for the long-tail (semantic search filter syntax, project subcommand flags, SQL helper details).
+- `docs/lessons.md`: high-recurrence lessons live in Claude memory (`feedback_lessons.md`) — no read needed for non-review modes.
+
+## Quickref — imperatives only (baked from cheatsheet)
+
+### Slugs
+- Grammar: `^(eng-\d+-)?[a-z0-9]+(-[a-z0-9]+)*$`. Linear ID known → `eng-<N>-<desc>`. Else bare `<desc>`. No `wip-`.
+- Rename: `bin/checkpoint.sh <new> --rename=<old>`. Cross-task rewrites: `bin/refactor.sh <new> --rename=<old>`.
+
+### Status FSM
+- Linear: `draft → in-progress → in-review → shipping → archived`.
+- Side: `blocked` — `next_action` MUST start with `Waiting on`.
+- Flip via `bin/checkpoint.sh <slug> --status=X`. Never edit frontmatter `status:` alongside a separate `Worklog-Status:` trailer.
+- `--status=archived` is rejected by checkpoint — use `bin/archive.sh <slug> --reason=<shipped|superseded|abandoned|merged|obsolete>`.
+
+### Editing rules
+- Edit only `people/$LDAP/`. Other namespaces read-only.
+- Never `git rebase` / `git pull --rebase` / force-push during normal sync. Maintenance ops (`bin/log-compact.sh`, `bin/cache-purge.sh`) are the carve-out — see AGENTS.md.
+- Prior-art grep before infra surfaces: `bin/related-search.sh <keyword>`.
+
+### Tooling shortlist
+- Save: `bin/checkpoint.sh <slug>` (single) · `bin/checkpoint-batch.sh < json` (atomic multi).
+- Archive: `bin/archive.sh <slug> --reason=<…>`.
+- Safety: `bin/autosave.sh` (slugless snapshot). Hooks wired by `bin/install-hooks.sh --write`.
+- Standup: `bin/status.sh [--since=… --project=… --slug=…]`.
+- Per-task pack: `bin/context.sh <slug> [--for=resume|review|compact]`.
+- Slug lookup: `bin/slug.sh <fragment>`.
+- Search: `bin/search.sh <pattern> [--active|--archive] [--kind= --status= --project= --linear= --pr= --repo= --ldap=]`; `--list` (slugs only), `--json`, `--semantic [--top=N]`.
+- Multi-task project: `bin/project.sh new|next|claim|release|reap|verify|list <slug>`.
+- Lint: `bin/lint.sh [--cross-task]`. Composite audit: `bin/audit.sh`.
+- SQL: `bin/sql.sh new|run|list|show <slug> <name>`.
+
+### Frontmatter
+- `kind` ∈ {bug, bugfix, cleanup, debug, design, impl, infra, investigation, ops, perf, plan, postmortem, program, proposal, review, runbook, spike, tooling}.
+- Notion page IDs → `notion: <id>` (no dashes), NOT `external_refs:`. `init --full` matches against `notion:`.
+
+### Body
+- Cite cross-task refs in `related[]`, not just prose.
+- Bare body slugs auto-wrap to `[[<slug>]]` via `bin/auto-slug-link.py`. Frontmatter slugs stay bare.
+- Round-trip safe: `grep -l '<slug>' people/` matches both forms.
+
+### Commits
+- `Worklog-Slug:` trailer MUST resolve to an existing task file.
+- `Worklog-Status:` trailer MUST match frontmatter `status:` for that slug.
+- Both enforced by `bin/git-hooks/commit-msg`. Hand-rolling status flips via trailer alone is rejected.
+
+### Hooks
+- Pre-commit blocks: lint errors on staged task files, scrubber regressions, ruff/shellcheck errors, secrets via `bin/pre-commit-scan.sh`.
+- Commit-msg blocks: typo `Worklog-Slug:`, trailer-vs-frontmatter drift.
+- Post-commit advisory (TTL 1h): cross-task lint warnings, retro prompt on archive.
+- Bypass any hook (one-shot, last-resort): `WORKLOG_NO_HOOK=1 git commit …`.
+
+### Sessions
+- Multi-session collision warning on `checkpoint.sh` if another session touched same slug <5min ago. Advisory; never blocks.
+- Resume kernels live at `.cache/compact-kernels.{md,json}`. Preamble emits a top-15 roster from `.json`; only Read the `.md` (~95KB) on-demand for full detail.
+
+## Slug & shared boundaries
 
 - Only edit files under `people/$LDAP/`.
 - Follow AGENTS.md checkpoint discipline after any mode completes.
-- Never `git rebase`, `git pull --rebase`, or force-push during normal sync. Maintenance ops are the carve-out — see AGENTS.md.
-- Prefer `bin/checkpoint.sh` and `bin/autosave.sh` over hand-rolling the commit dance. New helper needed → new single-purpose script, don't widen an existing one.
+- Prefer `bin/checkpoint.sh` and `bin/autosave.sh` over hand-rolling commits. New helper needed → new single-purpose script.
 
 ## Codex / Cursor / other agents
 
-Non-Claude agents don't invoke this skill. They read `README.md` and `AGENTS.md` directly. Subcommand hints for them live in `README.md` under "Helpers" — keep that list in sync with the menu above when modes change.
+Non-Claude agents don't invoke this skill. They read `README.md` and `AGENTS.md` directly. Subcommand hints for them live in `README.md` § Helpers — keep that list in sync with the menu above when modes change.

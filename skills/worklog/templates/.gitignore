@@ -1,0 +1,11 @@
+.DS_Store
+*.log
+.env
+.env.*
+.vscode/
+.idea/
+# Derivative index (rebuilt on demand by bin/index.sh):
+.cache/
+# Python bytecode from bin/_*.py helpers:
+__pycache__/
+*.pyc

@@ -1,0 +1,10 @@
+# Don't COPY transient or host-specific state into the e2e images.
+# The Dockerfiles re-init git fresh + add a local bare origin so the
+# helpers' `git push` calls succeed without a real network remote.
+.git
+.cache
+.DS_Store
+*.swp
+*~
+__pycache__
+*.pyc

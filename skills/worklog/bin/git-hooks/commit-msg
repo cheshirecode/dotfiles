@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Worklog commit-msg hook. Validates trailer-vs-frontmatter consistency
+# at commit time, before the commit lands.
+#
+# Two checks (both block on mismatch; bypass with WORKLOG_NO_HOOK=1):
+#
+#   1. Worklog-Slug: trailer must resolve to an active or archive task file
+#      under people/*/. Catches typo'd slug trailers that strand commits in
+#      cross-task-lint silently. (worklog-commit-msg-slug-validate)
+#
+#   2. Worklog-Status: <X> trailer must match frontmatter status: <X> for the
+#      same slug. Catches the parallel-ledger drift class — yesterday's batch
+#      of 7 tasks hand-wrote in-review trailers without flipping frontmatter,
+#      requiring a separate cleanup pass. (worklog-trailer-frontmatter-autoflip)
+#
+# Bypass: `WORKLOG_NO_HOOK=1 git commit ...`. Same env as pre-commit.
+
+set -euo pipefail
+
+[[ -n "${WORKLOG_NO_HOOK:-}" ]] && exit 0
+
+MSG_FILE="$1"
+[[ -f "$MSG_FILE" ]] || exit 0
+
+cd "$(git rev-parse --show-toplevel)"
+
+# Pull all Worklog-Slug + Worklog-Status trailers via git interpret-trailers.
+# Multiple trailers possible (e.g. batch commits — see worklog-checkpoint-batch).
+SLUGS="$(git interpret-trailers --parse <"$MSG_FILE" 2>/dev/null \
+  | awk -F': *' '/^Worklog-Slug:/ {print $2}' || true)"
+STATUSES="$(git interpret-trailers --parse <"$MSG_FILE" 2>/dev/null \
+  | awk -F': *' '/^Worklog-Status:/ {print $2}' || true)"
+
+[[ -z "$SLUGS" ]] && exit 0
+
+# Check 1: every slug resolves to a task file.
+INVALID=0
+while IFS= read -r slug; do
+  [[ -z "$slug" ]] && continue
+  if ! compgen -G "people/*/active/$slug.md" >/dev/null 2>&1 \
+     && ! compgen -G "people/*/archive/$slug.md" >/dev/null 2>&1; then
+    echo "commit-msg: Worklog-Slug: '$slug' does not resolve to people/*/{active,archive}/$slug.md" >&2
+    if [[ -x bin/slug.sh ]]; then
+      suggest="$(bin/slug.sh "$slug" 2>/dev/null || true)"
+      [[ -n "$suggest" && "$suggest" != "$slug" ]] && \
+        echo "commit-msg:   Did you mean '$suggest'?" >&2
+    fi
+    INVALID=1
+  fi
+done <<< "$SLUGS"
+
+if (( INVALID )); then
+  echo "commit-msg: rejecting commit. Bypass with WORKLOG_NO_HOOK=1." >&2
+  exit 1
+fi
+
+# Check 2: trailer-vs-frontmatter status must match.
+# Pair slugs and statuses by line position. If counts don't match (e.g. one
+# slug, no status trailer), skip — that's a normal create / archive commit.
+SLUG_COUNT="$(printf '%s' "$SLUGS" | grep -c .)" || true
+STATUS_COUNT="$(printf '%s' "$STATUSES" | grep -c .)" || true
+[[ "$SLUG_COUNT" -ne "$STATUS_COUNT" ]] && exit 0
+[[ -z "$STATUSES" ]] && exit 0
+
+DRIFT=0
+paste <(printf '%s\n' "$SLUGS") <(printf '%s\n' "$STATUSES") | \
+while IFS=$'\t' read -r slug trailer_status; do
+  [[ -z "$slug" || -z "$trailer_status" ]] && continue
+  task_file=""
+  for state in active archive; do
+    candidate="$(ls people/*/$state/"$slug.md" 2>/dev/null | head -1)"
+    [[ -n "$candidate" ]] && task_file="$candidate" && break
+  done
+  [[ -z "$task_file" ]] && continue
+  fm_status="$(awk -F': *' '/^status:/ {print $2; exit}' "$task_file" | tr -d '[:space:]')"
+  if [[ -n "$fm_status" && "$fm_status" != "$trailer_status" ]]; then
+    {
+      echo "commit-msg: trailer Worklog-Status: $trailer_status does not match frontmatter status: $fm_status for slug '$slug'"
+      echo "commit-msg:   align with: bin/checkpoint.sh $slug --status=$trailer_status"
+      echo "commit-msg:   or remove the trailer from this commit message."
+    } >&2
+    exit 1
+  fi
+done
