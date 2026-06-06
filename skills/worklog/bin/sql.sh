@@ -30,7 +30,11 @@
 
 set -euo pipefail
 
-cd "$(git rev-parse --show-toplevel)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_lib.sh
+. "$SCRIPT_DIR/_lib.sh"
+REPO_ROOT="$(resolve_worklog_repo)" || exit 1
+cd "$REPO_ROOT"
 
 usage() {
   sed -n '/^# Usage:/,/^$/p' "$0" | sed 's/^# \?//'

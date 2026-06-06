@@ -28,7 +28,11 @@ set -euo pipefail
 
 [[ -n "${WORKLOG_NO_SCAN:-}" ]] && exit 0
 
-cd "$(git rev-parse --show-toplevel)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_lib.sh
+. "$SCRIPT_DIR/_lib.sh"
+REPO_ROOT="$(resolve_worklog_repo)" || exit 1
+cd "$REPO_ROOT"
 
 # Pull staged additions: lines starting with a single `+` and not `+++` headers.
 ADDED="$(git diff --cached --no-color -U0 -- ':!tests/**' \

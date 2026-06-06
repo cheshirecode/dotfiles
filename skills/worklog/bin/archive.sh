@@ -79,8 +79,8 @@ fi
 # durable structural dependence and the child should be reparented first.
 # `related[]` is a peer link and resolves fine to an archived target per
 # AGENTS.md § Task relations, so it does not block archive.
-if [[ -x bin/index.sh ]]; then
-  bin/index.sh >/dev/null 2>&1 || true
+if [[ -x "$SCRIPT_DIR/index.sh" ]]; then
+  "$SCRIPT_DIR/index.sh" >/dev/null 2>&1 || true
   if [[ -f .cache/index.jsonl ]]; then
     ORPHAN_REPORT="$(jq -r --arg s "$SLUG" '
       select(.state == "active" and .slug != $s)
