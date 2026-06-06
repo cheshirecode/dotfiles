@@ -18,6 +18,10 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
+# Skill bin/ is the dir holding the script that invokes us — git uses
+# core.hooksPath which points at skills/worklog/bin/git-hooks/.
+SKILL_BIN="$(cd "$(dirname "$0")/.." && pwd)"
+
 # Staged paths (added/copied/modified/renamed; deletes don't need checking).
 # Read into an array via while-read for bash 3.2 compatibility (macOS default).
 CHANGED=()
@@ -26,6 +30,28 @@ while IFS= read -r line; do
 done < <(git diff --cached --name-only --diff-filter=ACMR)
 
 (( ${#CHANGED[@]} > 0 )) || exit 0
+
+# Council #12: empty-bin/ guard. Data repos must not re-acquire bin/ scripts —
+# the SoT lives in the dotfiles skill (~/Documents/oss/dotfiles/skills/worklog/bin/).
+# Reject any staged addition under bin/ except the README.md tombstone.
+BAD_BIN=()
+for f in "${CHANGED[@]}"; do
+  case "$f" in
+    bin/README.md) : ;;
+    bin/*.sh|bin/*.py|bin/git-hooks/*|bin/__pycache__/*)
+      BAD_BIN+=("$f") ;;
+  esac
+done
+if (( ${#BAD_BIN[@]} > 0 )); then
+  echo "pre-commit: REFUSING — bin/ scripts have moved to the dotfiles skill SoT." >&2
+  echo "  staged for commit (would be rejected):" >&2
+  printf '    %s\n' "${BAD_BIN[@]}" >&2
+  echo "" >&2
+  echo "  Source of truth: ~/Documents/oss/dotfiles/skills/worklog/bin/" >&2
+  echo "  This data repo only carries the bin/README.md tombstone." >&2
+  echo "  Bypass (rare): WORKLOG_NO_HOOK=1 git commit ..." >&2
+  exit 1
+fi
 
 match() {
   local pat="$1" f
@@ -46,7 +72,7 @@ except Exception: print(0)
 ' 2>/dev/null)"
   if [[ "${errs:-0}" -gt 0 ]]; then
     echo "pre-commit: lint error in $f" >&2
-    bin/lint.sh --file="$f" >&2 || true
+    "$SKILL_BIN/lint.sh" --file="$f" >&2 || true
     LINT_FAIL=1
   fi
 done
@@ -132,7 +158,9 @@ fi
 
 # 7. Secret-leak scan on staged additions (advisory by default; strict via
 #    WORKLOG_STRICT_SCAN=1; bypass via WORKLOG_NO_SCAN=1).
-bin/pre-commit-scan.sh || exit 1
+#    Resolves to the skill's pre-commit-scan.sh (this hook lives at
+#    skills/worklog/bin/git-hooks/pre-commit; its sibling is bin/pre-commit-scan.sh).
+"$(dirname "$0")/../pre-commit-scan.sh" || exit 1
 
 # 8. Claim arbitration: for any staged task file with a `claim:` block change,
 #    refuse if HEAD already holds a non-stale claim under a different session.
@@ -150,7 +178,7 @@ for f in "${CHANGED[@]}"; do
   parent="$(git show ":$f" 2>/dev/null | awk -F': *' '/^parent_slug:/ {print $2; exit}' || true)"
   stale="30m"
   if [[ -n "$parent" ]]; then
-    s="$(python3 bin/_claim.py project-stale-after "$parent" 2>/dev/null || true)"
+    s="$(python3 "$SKILL_BIN/_claim.py" project-stale-after "$parent" 2>/dev/null || true)"
     [[ -n "$s" ]] && stale="$s"
   fi
 
@@ -158,7 +186,7 @@ for f in "${CHANGED[@]}"; do
   tmp_head="$(mktemp)"
   git show ":$f"     > "$tmp_staged" 2>/dev/null || true
   git show "HEAD:$f" > "$tmp_head"   2>/dev/null || true
-  if ! python3 bin/_claim.py arbitrate \
+  if ! python3 "$SKILL_BIN/_claim.py" arbitrate \
       --staged="$tmp_staged" --head="$tmp_head" --stale-after="$stale" 2>&1; then
     echo "pre-commit: claim arbitration rejected $f" >&2
     rm -f "$tmp_staged" "$tmp_head"
@@ -183,10 +211,12 @@ if (( ! docs_staged )); then
   done
 fi
 
-# D5. Scrubber regex parity between bin/export-setup.sh and tests/export/test_scrubber.sh.
-if match '^bin/export-setup\.sh$' || match '^tests/export/test_scrubber\.sh$'; then
-  prod="$(grep -oE 's\{.+\}\{<REDACTED:SECRET>\}g;' bin/export-setup.sh | sort -u)"
-  test="$(grep -oE 's\{.+\}\{<REDACTED:SECRET>\}g;' tests/export/test_scrubber.sh | sort -u)"
+# D5. Scrubber regex parity check (skill-only — fires only when the SoT files
+# are touched in the dotfiles repo, not in data-repo commits).
+if [[ -f "$SKILL_BIN/export-setup.sh" && -f "$SKILL_BIN/../tests/export/test_scrubber.sh" ]] \
+   && (match '^bin/export-setup\.sh$' || match '^tests/export/test_scrubber\.sh$'); then
+  prod="$(grep -oE 's\{.+\}\{<REDACTED:SECRET>\}g;' "$SKILL_BIN/export-setup.sh" | sort -u)"
+  test="$(grep -oE 's\{.+\}\{<REDACTED:SECRET>\}g;' "$SKILL_BIN/../tests/export/test_scrubber.sh" | sort -u)"
   if [[ "$prod" != "$test" ]]; then
     echo "pre-commit: D5 advisory — scrubber secret-regex set differs between scrub() and test_scrubber.sh" >&2
   fi
