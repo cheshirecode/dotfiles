@@ -9,12 +9,20 @@ Called by bin/context.sh with:
 import json
 import pathlib
 import re
+import os
 import subprocess
 import sys
 
 import yaml
 
-KNOWN_REPOS = ("cheshirecode/<repo>", "cheshirecode/<repo>", "cheshirecode/<repo>", "cheshirecode/<repo>", "_worklog")
+# Repos to enrich PR data against. Format: "owner/repo" full strings.
+# Source: $WORKLOG_KNOWN_REPOS env (comma-separated). Empty -> skip PR
+# enrichment entirely (better than guessing the wrong org from a
+# placeholder list — pre-Phase-2 the list was bootstrap-scrubbed to
+# "cheshirecode/<repo>" placeholders that resolved to nonsense).
+KNOWN_REPOS = tuple(
+  r.strip() for r in os.environ.get("WORKLOG_KNOWN_REPOS", "").split(",") if r.strip()
+)
 FRONTMATTER_FIELDS = ("status", "project", "kind", "linear", "pr", "last_updated", "next_action")
 
 
@@ -90,14 +98,15 @@ def fetch_prs(pr_field) -> list[dict]:
     numbers = re.findall(r"\d+", str(pr_field))
   prs = []
   for n in numbers:
-    for repo in KNOWN_REPOS:
+    # Skip silently if no known repos configured — better than guessing org.
+    for repo_full in KNOWN_REPOS:
       try:
         out = subprocess.run(
-          ["gh", "pr", "view", n, "-R", f"cheshirecode/{repo}",
+          ["gh", "pr", "view", n, "-R", repo_full,
            "--json", "number,title,state,url,isDraft,reviewDecision,mergedAt"],
           capture_output=True, text=True, timeout=10, check=True,
         ).stdout
-        prs.append({"repo": repo, **json.loads(out)})
+        prs.append({"repo": repo_full, **json.loads(out)})
         break
       except Exception:
         continue
