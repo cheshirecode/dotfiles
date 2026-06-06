@@ -105,11 +105,123 @@ PY
   rm -rf "$fake_home"
 }
 
+# Council #31: worklog skill bin/ — static lint + fixture-vault smoke. Catches
+# the relocation-class regression where bin/foo.sh sibling-script calls drift
+# back to data-repo-relative paths after Phase-2 deleted in-repo bin/.
+test_worklog_skill() {
+  echo "=== worklog skill (shellcheck + ruff + fixture-vault smoke) ==="
+  local skill="$REPO_ROOT/skills/worklog"
+  local sb="$skill/bin"
+  [[ -d "$sb" ]] || { fail "skills/worklog/bin/ missing"; return; }
+
+  # 1. shellcheck on all .sh under skill bin/ (excluding git-hooks/ — same severity gate).
+  if command -v shellcheck >/dev/null; then
+    if shellcheck --severity=warning "$sb"/*.sh "$sb"/git-hooks/* 2>&1 | grep -E '^In ' >/dev/null; then
+      fail "shellcheck skills/worklog/bin/"
+    else
+      ok "shellcheck skills/worklog/bin/ (incl. git-hooks)"
+    fi
+  else
+    say SKIP "shellcheck not installed"
+  fi
+
+  # 2. python syntax + ruff (skip ruff if absent).
+  if python3 -m compileall -q "$sb" 2>&1 | grep -q .; then
+    fail "python compile skills/worklog/bin/"
+  else
+    ok "python compile skills/worklog/bin/"
+  fi
+  if command -v ruff >/dev/null; then
+    if ruff check "$sb" >/dev/null 2>&1; then
+      ok "ruff skills/worklog/bin/"
+    else
+      ruff check "$sb" 2>&1 | head -10 >&2
+      fail "ruff skills/worklog/bin/"
+    fi
+  else
+    say SKIP "ruff not installed"
+  fi
+
+  # 3. Fixture-vault smoke. Bootstrap a throwaway data repo using the skill's
+  # init-new-data-repo.sh; then exercise the core mode surface against it.
+  local vault rc
+  vault=$(mktemp -d)/test-vault
+  set +e
+  bash "$sb/init-new-data-repo.sh" "$vault" test-ldap >/dev/null 2>&1
+  rc=$?
+  set -e
+  if [[ $rc -eq 0 && -f "$vault/AGENTS.md" && -d "$vault/people/test-ldap/active" ]]; then
+    ok "init-new-data-repo bootstraps clean (vault @ $vault)"
+  else
+    fail "init-new-data-repo failed (rc=$rc)"
+    rm -rf "$(dirname "$vault")"
+    return
+  fi
+
+  # Idempotent re-run: zero diffs in working tree.
+  set +e
+  bash "$sb/init-new-data-repo.sh" "$vault" test-ldap >/dev/null 2>&1
+  if [[ -z "$(git -C "$vault" status --porcelain)" ]]; then
+    ok "init-new-data-repo idempotent (no diff on re-run)"
+  else
+    fail "init-new-data-repo NOT idempotent — re-run dirtied the tree"
+  fi
+  set -e
+
+  # Run preamble + status + lint against the throwaway vault.
+  local out
+  out=$(WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap bash "$sb/preamble.sh" --minimal 2>&1)
+  if echo "$out" | grep -q 'LDAP=test-ldap'; then
+    ok "preamble.sh --minimal resolves vault LDAP"
+  else
+    fail "preamble.sh --minimal (got: $(echo "$out" | head -1))"
+  fi
+
+  out=$(WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap bash "$sb/status.sh" --since=today 2>&1)
+  if echo "$out" | grep -q 'test-ldap'; then
+    ok "status.sh resolves vault LDAP"
+  else
+    fail "status.sh"
+  fi
+
+  out=$(WORKLOG_REPO="$vault" bash "$sb/lint.sh" 2>&1)
+  if echo "$out" | grep -qE '0 errors'; then
+    ok "lint.sh runs clean against empty vault"
+  else
+    fail "lint.sh against empty vault (got: $(echo "$out" | head -2 | tr '\n' ' '))"
+  fi
+
+  # Empty-bin guard fires.
+  echo '#!/bin/bash' > "$vault/bin/forbidden.sh"
+  set +e
+  ( cd "$vault" \
+      && git -c core.hooksPath="$sb/git-hooks" add -f bin/forbidden.sh \
+      && git -c core.hooksPath="$sb/git-hooks" commit -m "smoke" >/dev/null 2>&1 )
+  rc=$?
+  set -e
+  if [[ $rc -ne 0 ]]; then
+    ok "pre-commit empty-bin guard rejects bin/foo.sh"
+  else
+    fail "pre-commit guard FAILED to reject (commit went through)"
+  fi
+
+  # Hard-fail when WORKLOG_REPO unset + cwd outside any clone.
+  out=$( cd /tmp && bash "$sb/kernels-roster.sh" 2>&1 || true )
+  if echo "$out" | grep -q 'cannot locate'; then
+    ok "scripts hard-fail outside a worklog clone"
+  else
+    fail "expected hard-fail outside clone, got: $(echo "$out" | head -1)"
+  fi
+
+  rm -rf "$(dirname "$vault")"
+}
+
 case "${1:-all}" in
-  static)   test_static ;;
-  fixtures) test_fixtures ;;
-  all)      test_static; test_fixtures ;;
-  *) echo "usage: $0 {static|fixtures|all}" >&2; exit 2 ;;
+  static)         test_static ;;
+  fixtures)       test_fixtures ;;
+  worklog-skill)  test_worklog_skill ;;
+  all)            test_static; test_fixtures; test_worklog_skill ;;
+  *) echo "usage: $0 {static|fixtures|worklog-skill|all}" >&2; exit 2 ;;
 esac
 
 echo

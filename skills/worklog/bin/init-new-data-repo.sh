@@ -99,6 +99,27 @@ mkdir -p "people/$LDAP/active" "people/$LDAP/archive"
 [[ -f "people/$LDAP/archive/.gitkeep" ]] || touch "people/$LDAP/archive/.gitkeep"
 echo "  = people/$LDAP/{active,archive}/ (stubs in place)"
 
+# 4b. bin/ tombstone — protocol scripts live in the dotfiles skill, not here.
+# The README is the only file ever committed under bin/; the pre-commit guard
+# in the skill's git-hooks rejects any other staged bin/* addition.
+mkdir -p bin
+if [[ ! -f bin/README.md ]]; then
+  cat > bin/README.md <<TOMBSTONE
+# bin/ moved to dotfiles skill
+
+Worklog protocol scripts live at:
+
+    ~/Documents/oss/dotfiles/skills/worklog/bin/
+
+Invoke via the \`\$WORKLOG_BIN\` env var (set by the per-clone \`.envrc\`).
+
+Bootstrap a fresh data repo:
+
+    "\$WORKLOG_BIN/init-new-data-repo.sh" <path> [<ldap>]
+TOMBSTONE
+  echo "  + bin/README.md (tombstone)"
+fi
+
 # 5. .envrc (only if missing — never overwrite existing customization)
 if [[ ! -f .envrc ]]; then
   {
