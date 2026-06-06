@@ -324,7 +324,7 @@ Worklog uses several derived caches under `.cache/` (gitignored — per-machine,
 | `.cache/index.jsonl` | `"$WORKLOG_BIN/index.sh"` | `"$WORKLOG_BIN/search.sh"`, archive orphan-check | regenerated on demand |
 | `.cache/index.embeddings.jsonl` | `"$WORKLOG_BIN/embed.sh"` | `"$WORKLOG_BIN/search.sh" --semantic` | rebuild explicitly |
 | `.cache/claims/` (advisory mutex state) | `"$WORKLOG_BIN/_claim.py"` via `"$WORKLOG_BIN/project.sh"` | per-task claim arbitration | TTL per claim |
-| `.cache/sessions/<sid>.json` | `bin/_lib.sh::resolve_session_id` | claim-holder identification in LOCKED_BY messages | session lifetime |
+| `.cache/sessions/<sid>.json` | `"$WORKLOG_BIN/_lib.sh"::resolve_session_id` | claim-holder identification in LOCKED_BY messages | session lifetime |
 
 Two-session same-machine race on the same cache: the second writer wins; the first writer's state was already mirrored to the vault (caches are read-only from the vault's perspective). No cache stores authoritative state.
 
