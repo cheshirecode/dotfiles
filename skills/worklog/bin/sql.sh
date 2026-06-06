@@ -101,8 +101,16 @@ EOF
       exit 2
     fi
 
-    PROJECT="cheshirecode"
-    [[ "$ENV" == "staging" ]] && PROJECT="cheshirecode"
+    # GCP project per env. Set via $WORKLOG_BQ_PROJECT (prod) and
+    # $WORKLOG_BQ_PROJECT_STAGING (else falls back to prod). Hard-fail
+    # if unset rather than silently query someone else's billing project.
+    PROJECT="${WORKLOG_BQ_PROJECT:-}"
+    [[ "$ENV" == "staging" ]] && PROJECT="${WORKLOG_BQ_PROJECT_STAGING:-${WORKLOG_BQ_PROJECT:-}}"
+    if [[ -z "$PROJECT" ]]; then
+      echo "sql: WORKLOG_BQ_PROJECT not set — refusing to run." >&2
+      echo "     export WORKLOG_BQ_PROJECT=<gcp-project>  (and optionally WORKLOG_BQ_PROJECT_STAGING)" >&2
+      exit 2
+    fi
 
     CACHE_DIR=".cache/queries/$SLUG"
     CACHE="$CACHE_DIR/$NAME.json"
