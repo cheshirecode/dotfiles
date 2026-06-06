@@ -32,7 +32,7 @@ Task:
 
 Deliverables:
   <one-line expectation — PR, file, prompt, report, etc.>
-  End with a checkpoint: `cd <$PROJECTS_DIR>/_worklog && bin/checkpoint.sh <slug>`
+  End with a checkpoint: `cd <$PROJECTS_DIR>/_worklog && "$WORKLOG_BIN/checkpoint.sh" <slug>`
   (or create a task file first via `/worklog sync` if none exists).
 ```
 

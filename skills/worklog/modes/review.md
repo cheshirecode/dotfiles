@@ -37,7 +37,7 @@ The shape is fixed; the content is empirical to whatever's actually painful in t
 
 ## Iteration loop
 
-1. **Iter 0 — baseline facts.** Capture concrete numbers: commit count, active/archive counts, helper latencies (`time bin/status.sh`, `time bin/lint.sh --cross-task`, etc.), tasks per repo, today's session evidence.
+1. **Iter 0 — baseline facts.** Capture concrete numbers: commit count, active/archive counts, helper latencies (`time "$WORKLOG_BIN/status.sh"`, `time "$WORKLOG_BIN/lint.sh" --cross-task`, etc.), tasks per repo, today's session evidence.
 2. **Iter 1 — structure gaps.** Frontmatter schema, `active/`/`archive/` boundary, relations graph, slug-as-join-key, `.cache/`. Cite concrete observations. Cost + risk per gap.
 3. **Iter 2 — skills gaps.** Mode files, init/sync/context/spawn/import/export/lint/review wrappers, mode-doc drift.
 4. **Iter 3 — `bin/*` command gaps.** Helper scripts, hook integration, refactor candidates.

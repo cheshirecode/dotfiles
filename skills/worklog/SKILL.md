@@ -48,60 +48,70 @@ Once a known mode is parsed: run preamble (per table), read `modes/<mode>.md`, f
 | project | `--minimal` (read-only subs); `--full` (mutating) | no | no |
 | review  | `--full` | yes              | full |
 
+## Paths — single source of truth
+
+Scripts live in the dotfiles skill, NOT in the data repo:
+
+```bash
+WORKLOG_BIN="${WORKLOG_BIN:-$HOME/Documents/oss/dotfiles/skills/worklog/bin}"
+WORKLOG_REPO="${WORKLOG_REPO:?per-clone .envrc must export this}"
+```
+
+Every example below uses `$WORKLOG_BIN/foo.sh` — these are the dotfiles-shipped scripts. The `WORKLOG_REPO` env var (set by each clone's `.envrc`) tells the scripts which data repo they're operating on; identity (LDAP) is resolved per-clone from `WORKLOG_LDAP` env, else git email, else `$USER`.
+
 ## Preamble — single call
 
 ```bash
-cd "$PROJECTS_DIR/_worklog" && bin/preamble.sh [--minimal|--full]
+cd "$WORKLOG_REPO" && "$WORKLOG_BIN/preamble.sh" [--minimal|--full]
 ```
-
-(If `$PROJECTS_DIR` is unset, resolve: `dirname "$(git rev-parse --show-toplevel)"`, else first existing of `~/Documents/projects` `~/projects` `~/code` `~/src` `~/dev` `~/repos`, else ask.)
 
 Emits `LDAP=`, `PROJECTS_DIR=`, `NAMESPACE=`, `PULL=` key/value lines plus a `### roster` block (top 15 active tasks by `last_updated`, one tab-separated line each). Internally handles: LDAP resolve (24h cached), namespace bootstrap, rate-limited `git pull` (5-min stamp), `.gitconfig.lock` cleanup, autosave-if-dirty.
 
-Skip re-invocation within the same session — bin/preamble.sh is idempotent but the tool turns aren't free.
+Skip re-invocation within the same session — preamble.sh is idempotent but the tool turns aren't free.
 
 ### Tracker hydration (after preamble)
 
 For each active task with open `## Next` items you intend to act on, call `TaskCreate`. **Emit every `TaskCreate` call as parallel tool calls in a single tool-use turn** — one assistant message with N concurrent `TaskCreate` blocks, not N sequential turns. Dedupe first: call `TaskList`, lowercase + strip each existing subject, skip kernel items that already match. Cap at ~10 tracker entries total (most-recently-updated tasks first).
 
-If the roster gave you enough orientation, skip hydration. If you need the full kernel detail, Read `.cache/compact-kernels.md` (~95KB) on-demand — never automatically.
+If the roster gave you enough orientation, skip hydration. If you need the full kernel detail, Read `$WORKLOG_REPO/.cache/compact-kernels.md` (~95KB) on-demand — never automatically.
 
-For per-task detail, use `bin/context.sh <slug>` (its output ends in a `Tracker-ready snippet` block formatted for parallel `TaskCreate`).
+For per-task detail, use `"$WORKLOG_BIN/context.sh" <slug>` (its output ends in a `Tracker-ready snippet` block formatted for parallel `TaskCreate`).
 
 ### AGENTS.md / cheatsheet / lessons.md
 
-- `AGENTS.md`: read only when the mode table says yes, OR when this quickref doesn't answer a specific question (frontmatter schema edge case, FSM corner, rare relation field).
-- `docs/cheatsheet.md`: superseded by the Quickref section below for routine work. Open only for the long-tail (semantic search filter syntax, project subcommand flags, SQL helper details).
-- `docs/lessons.md`: high-recurrence lessons live in Claude memory (`feedback_lessons.md`) — no read needed for non-review modes.
+- `$WORKLOG_REPO/AGENTS.md`: read only when the mode table says yes, OR when this quickref doesn't answer a specific question (frontmatter schema edge case, FSM corner, rare relation field). Per-clone — each clone has its own copy seeded from `$WORKLOG_BIN/../templates/AGENTS.md`.
+- `$WORKLOG_BIN/../templates/docs/cheatsheet.md`: superseded by the Quickref section below for routine work. Open only for the long-tail (semantic search filter syntax, project subcommand flags, SQL helper details).
+- `$WORKLOG_BIN/../templates/docs/lessons.md`: high-recurrence lessons live in Claude memory (`feedback_lessons.md`) — no read needed for non-review modes.
 
 ## Quickref — imperatives only (baked from cheatsheet)
 
 ### Slugs
 - Grammar: `^(eng-\d+-)?[a-z0-9]+(-[a-z0-9]+)*$`. Linear ID known → `eng-<N>-<desc>`. Else bare `<desc>`. No `wip-`.
-- Rename: `bin/checkpoint.sh <new> --rename=<old>`. Cross-task rewrites: `bin/refactor.sh <new> --rename=<old>`.
+- Rename: `"$WORKLOG_BIN/checkpoint.sh" <new> --rename=<old>`. Cross-task rewrites: `"$WORKLOG_BIN/refactor.sh" <new> --rename=<old>`.
 
 ### Status FSM
 - Linear: `draft → in-progress → in-review → shipping → archived`.
 - Side: `blocked` — `next_action` MUST start with `Waiting on`.
-- Flip via `bin/checkpoint.sh <slug> --status=X`. Never edit frontmatter `status:` alongside a separate `Worklog-Status:` trailer.
-- `--status=archived` is rejected by checkpoint — use `bin/archive.sh <slug> --reason=<shipped|superseded|abandoned|merged|obsolete>`.
+- Flip via `"$WORKLOG_BIN/checkpoint.sh" <slug> --status=X`. Never edit frontmatter `status:` alongside a separate `Worklog-Status:` trailer.
+- `--status=archived` is rejected by checkpoint — use `"$WORKLOG_BIN/archive.sh" <slug> --reason=<shipped|superseded|abandoned|merged|obsolete>`.
 
 ### Editing rules
-- Edit only `people/$LDAP/`. Other namespaces read-only.
-- Never `git rebase` / `git pull --rebase` / force-push during normal sync. Maintenance ops (`bin/log-compact.sh`, `bin/cache-purge.sh`) are the carve-out — see AGENTS.md.
-- Prior-art grep before infra surfaces: `bin/related-search.sh <keyword>`.
+- Edit only `$WORKLOG_REPO/people/$LDAP/`. Other namespaces read-only.
+- Never `git rebase` / `git pull --rebase` / force-push during normal sync. Maintenance ops (`$WORKLOG_BIN/log-compact.sh`, `$WORKLOG_BIN/cache-purge.sh`) are the carve-out — see AGENTS.md.
+- Prior-art grep before infra surfaces: `"$WORKLOG_BIN/related-search.sh" <keyword>`.
 
 ### Tooling shortlist
-- Save: `bin/checkpoint.sh <slug>` (single) · `bin/checkpoint-batch.sh < json` (atomic multi).
-- Archive: `bin/archive.sh <slug> --reason=<…>`.
-- Safety: `bin/autosave.sh` (slugless snapshot). Hooks wired by `bin/install-hooks.sh --write`.
-- Standup: `bin/status.sh [--since=… --project=… --slug=…]`.
-- Per-task pack: `bin/context.sh <slug> [--for=resume|review|compact]`.
-- Slug lookup: `bin/slug.sh <fragment>`.
-- Search: `bin/search.sh <pattern> [--active|--archive] [--kind= --status= --project= --linear= --pr= --repo= --ldap=]`; `--list` (slugs only), `--json`, `--semantic [--top=N]`.
-- Multi-task project: `bin/project.sh new|next|claim|release|reap|verify|list <slug>`.
-- Lint: `bin/lint.sh [--cross-task]`. Composite audit: `bin/audit.sh`.
-- SQL: `bin/sql.sh new|run|list|show <slug> <name>`.
+- Save: `"$WORKLOG_BIN/checkpoint.sh" <slug>` (single) · `"$WORKLOG_BIN/checkpoint-batch.sh" < json` (atomic multi).
+- Archive: `"$WORKLOG_BIN/archive.sh" <slug> --reason=<…>`.
+- Safety: `"$WORKLOG_BIN/autosave.sh"` (slugless snapshot). Hooks wired by `"$WORKLOG_BIN/install-hooks.sh" --write`.
+- Standup: `"$WORKLOG_BIN/status.sh" [--since=… --project=… --slug=…]`.
+- Per-task pack: `"$WORKLOG_BIN/context.sh" <slug> [--for=resume|review|compact]`.
+- Slug lookup: `"$WORKLOG_BIN/slug.sh" <fragment>`.
+- Search: `"$WORKLOG_BIN/search.sh" <pattern> [--active|--archive] [--kind= --status= --project= --linear= --pr= --repo= --ldap=]`; `--list` (slugs only), `--json`, `--semantic [--top=N]`.
+- Multi-task project: `"$WORKLOG_BIN/project.sh" new|next|claim|release|reap|verify|list <slug>`.
+- Lint: `"$WORKLOG_BIN/lint.sh" [--cross-task]`. Composite audit: `"$WORKLOG_BIN/audit.sh"`.
+- SQL: `"$WORKLOG_BIN/sql.sh" new|run|list|show <slug> <name>`.
+- New data repo: `"$WORKLOG_BIN/init-new-data-repo.sh" <path> [<ldap>]` (Phase 4 — not shipped yet).
 
 ### Frontmatter
 - `kind` ∈ {bug, bugfix, cleanup, debug, design, impl, infra, investigation, ops, perf, plan, postmortem, program, proposal, review, runbook, spike, tooling}.
@@ -109,7 +119,7 @@ For per-task detail, use `bin/context.sh <slug>` (its output ends in a `Tracker-
 
 ### Body
 - Cite cross-task refs in `related[]`, not just prose.
-- Bare body slugs auto-wrap to `[[<slug>]]` via `bin/auto-slug-link.py`. Frontmatter slugs stay bare.
+- Bare body slugs auto-wrap to `[[<slug>]]` via `"$WORKLOG_BIN/auto-slug-link.py"`. Frontmatter slugs stay bare.
 - Round-trip safe: `grep -l '<slug>' people/` matches both forms.
 
 ### Commits
@@ -118,7 +128,7 @@ For per-task detail, use `bin/context.sh <slug>` (its output ends in a `Tracker-
 - Both enforced by `bin/git-hooks/commit-msg`. Hand-rolling status flips via trailer alone is rejected.
 
 ### Hooks
-- Pre-commit blocks: lint errors on staged task files, scrubber regressions, ruff/shellcheck errors, secrets via `bin/pre-commit-scan.sh`.
+- Pre-commit blocks: lint errors on staged task files, scrubber regressions, ruff/shellcheck errors, secrets via `"$WORKLOG_BIN/pre-commit-scan.sh"`.
 - Commit-msg blocks: typo `Worklog-Slug:`, trailer-vs-frontmatter drift.
 - Post-commit advisory (TTL 1h): cross-task lint warnings, retro prompt on archive.
 - Bypass any hook (one-shot, last-resort): `WORKLOG_NO_HOOK=1 git commit …`.
@@ -131,7 +141,7 @@ For per-task detail, use `bin/context.sh <slug>` (its output ends in a `Tracker-
 
 - Only edit files under `people/$LDAP/`.
 - Follow AGENTS.md checkpoint discipline after any mode completes.
-- Prefer `bin/checkpoint.sh` and `bin/autosave.sh` over hand-rolling commits. New helper needed → new single-purpose script.
+- Prefer `"$WORKLOG_BIN/checkpoint.sh"` and `"$WORKLOG_BIN/autosave.sh"` over hand-rolling commits. New helper needed → new single-purpose script.
 
 ## Codex / Cursor / other agents
 

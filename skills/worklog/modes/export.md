@@ -10,7 +10,7 @@ checkpoints. Pure export.
 
 ## Steps
 
-1. Run `bin/export-setup.sh` (no args). It collects `AGENTS.md`,
+1. Run `"$WORKLOG_BIN/export-setup.sh"` (no args). It collects `AGENTS.md`,
    `README.md`, `docs/*.md`, `bin/*` (scripts only), both local worklog
    skill files, and the advisory agent settings/config surfaces
    (`~/.claude/settings*.json`, `~/.codex/config.toml`). Secrets get
