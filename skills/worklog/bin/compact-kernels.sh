@@ -18,9 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/_lib.sh"
 REPO_ROOT="$(resolve_worklog_repo)" || exit 1
 cd "$REPO_ROOT"
-cd "$REPO_ROOT"
 
-. "$REPO_ROOT/bin/_lib.sh"
 LDAP="$(resolve_ldap)"
 
 ACTIVE_DIR="people/$LDAP/active"
