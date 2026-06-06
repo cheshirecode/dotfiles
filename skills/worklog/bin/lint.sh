@@ -16,4 +16,4 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(resolve_worklog_repo)" || exit 1
 cd "$REPO_ROOT"
 
-exec python3 bin/_lint.py "$@"
+exec python3 "$SCRIPT_DIR/_lint.py" "$@"
