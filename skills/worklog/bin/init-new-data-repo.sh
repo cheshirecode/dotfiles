@@ -73,8 +73,9 @@ else
   echo "  git repo already initialized"
 fi
 
-# 2. Copy verbatim templates (top-level)
-for f in AGENTS.md README.md CLAUDE.md .gitignore .yamllint .dockerignore; do
+# 2. Copy verbatim templates (top-level). Dockerfiles are optional CI scaffold —
+# include them so every clone has the same lint-in-docker capability.
+for f in AGENTS.md README.md CLAUDE.md .gitignore .yamllint .dockerignore Dockerfile.alpine Dockerfile.debian; do
   src="$TEMPLATES/$f"
   if [[ -f "$src" && ! -f "$f" ]]; then
     cp "$src" "$f"
@@ -92,6 +93,19 @@ if [[ ! -d docs ]]; then
 else
   echo "  = docs/ (kept existing)"
 fi
+
+# 3b. projects/ (MOC explainer + per-clone data area). Ship only the README;
+# clone-specific MOC pages land later as the user creates them.
+mkdir -p projects
+if [[ ! -f projects/README.md ]]; then
+  cp "$TEMPLATES/projects/README.md" projects/README.md
+  echo "  + projects/README.md (from template)"
+fi
+
+# 3c. queries/ skeleton. Empty .gitkeep — clone-specific SQL libraries land
+# under queries/<slug>/<name>.sql as the user runs $WORKLOG_BIN/sql.sh new.
+mkdir -p queries
+[[ -f queries/.gitkeep ]] || touch queries/.gitkeep
 
 # 4. People namespace
 mkdir -p "people/$LDAP/active" "people/$LDAP/archive"

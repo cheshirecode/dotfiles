@@ -1,0 +1,30 @@
+# E2E test image for _worklog on Linux glibc + GNU coreutils.
+# Counterpart: Dockerfile.alpine (musl + busybox).
+#
+# Build:  docker build -t worklog-e2e:debian -f Dockerfile.debian .
+# Run:    docker run --rm worklog-e2e:debian
+# Driver: bin/e2e-docker.sh (parallel build/run for both images).
+
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      git python3 python3-yaml perl ripgrep jq ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace/_worklog
+COPY . /workspace/_worklog
+
+RUN git init -q -b main \
+ && git config user.email "ldap-test@example.com" \
+ && git config user.name "ldap-test" \
+ && git init -q --bare /tmp/origin.git \
+ && git remote add origin /tmp/origin.git \
+ && git add -A \
+ && git -c commit.gpgsign=false commit -q -m "seed for e2e" \
+ && git push -q -u origin main
+
+ENV USER=ldap-test
+ENV PROJECTS_DIR=/workspace
+
+CMD ["bin/e2e.sh"]
