@@ -70,7 +70,7 @@ if [[ "$APPLY" -eq 1 ]]; then
 fi
 
 # Locate the LDAP-namespaced task files.
-. bin/_lib.sh
+. "$SCRIPT_DIR/_lib.sh"
 LDAP="$(resolve_ldap)"
 
 OLD_FILE=""
@@ -141,7 +141,7 @@ fi
 #    trailer). Note: checkpoint only stages NEW_FILE; we stage the rewritten
 #    references too so they all land in one commit.
 git add $ALL_HITS 2>/dev/null || true
-bin/checkpoint.sh "$NEW_SLUG" --rename="$OLD_SLUG" --next="Cross-task slug rename: $OLD_SLUG → $NEW_SLUG, $COUNT references rewritten."
+  "$SCRIPT_DIR/checkpoint.sh" "$NEW_SLUG" --rename="$OLD_SLUG" --next="Cross-task slug rename: $OLD_SLUG → $NEW_SLUG, $COUNT references rewritten."
 
 echo ""
 echo "refactor: done."

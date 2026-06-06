@@ -117,7 +117,7 @@ LOG_ARGS=(--reverse --format=%H%x1f%aI%x1f%aN%x1f%s%x1f%b%x1e)
 [[ -n "$UNTIL" ]] && LOG_ARGS+=(--until="$UNTIL")
 
 git log "${LOG_ARGS[@]}" \
-  | python3 bin/_log_compact.py "$SLUG" "$KEYWORD" "$WINDOW_SEC" "$MIN_BURST" "$PLAN_FILE" "$SIDECAR"
+  | python3 "$SCRIPT_DIR/_log_compact.py" "$SLUG" "$KEYWORD" "$WINDOW_SEC" "$MIN_BURST" "$PLAN_FILE" "$SIDECAR"
 
 echo ""
 
@@ -142,7 +142,7 @@ git push origin "$TAG"
 TODO="/tmp/log-compact-todo-${TS}"
 MSGS_DIR="/tmp/log-compact-msgs-${TS}"
 echo "log-compact: generating rebase todo..."
-python3 bin/_log_compact_apply.py "$SIDECAR" "$TODO" "$MSGS_DIR"
+python3 "$SCRIPT_DIR/_log_compact_apply.py" "$SIDECAR" "$TODO" "$MSGS_DIR"
 
 # GIT_SEQUENCE_EDITOR is invoked once with the auto-generated todo; we replace
 # it byte-for-byte with our own. GIT_EDITOR is invoked once per `reword`; we

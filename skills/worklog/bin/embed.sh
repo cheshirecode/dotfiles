@@ -19,7 +19,11 @@
 
 set -euo pipefail
 
-cd "$(git rev-parse --show-toplevel)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=_lib.sh
+. "$SCRIPT_DIR/_lib.sh"
+REPO_ROOT="$(resolve_worklog_repo)" || exit 1
+cd "$REPO_ROOT"
 
 INDEX=".cache/index.jsonl"
 EMBED=".cache/index.embeddings.jsonl"
@@ -37,7 +41,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$REFRESH" = "1" ] || [ ! -f "$INDEX" ]; then
-  bin/index.sh >/dev/null
+  "$SCRIPT_DIR/index.sh" >/dev/null
 fi
 
 ALL=$ALL python3 "$(dirname "$0")/_embed.py" "$INDEX" "$EMBED"

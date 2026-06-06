@@ -61,9 +61,8 @@ fi
 if [[ "$STATUS" == "archived" ]]; then
   cat >&2 <<EOF
 checkpoint: --status=archived is the wrong tool. Use:
-  bin/archive.sh $SLUG --reason=<shipped|superseded|abandoned|merged|obsolete>
-
-bin/archive.sh moves active/ → archive/, clears next_action, runs the
+  "$SCRIPT_DIR/archive.sh" $SLUG --reason=<shipped|superseded|abandoned|merged|obsolete>
+  "$SCRIPT_DIR/archive.sh" moves active/ → archive/, clears next_action, runs the
 orphan-check, prepends the Archived line to ## Context, and emits the
 retro prompt. checkpoint.sh would only flip frontmatter and leave a
 zombie file in active/.
@@ -133,10 +132,10 @@ PY
 # session, refresh `claim.heartbeat_at` so the work commit advances the
 # liveness signal (per worklog-project-mode.md § Mutex protocol). No-op
 # otherwise. Errors are swallowed — heartbeat is best-effort.
-if [[ -x bin/_claim.py ]]; then
-  SID_FOR_TICK="$(. bin/_lib.sh; resolve_session_id 2>/dev/null || true)"
+if [[ -x "$SCRIPT_DIR/_claim.py" ]]; then
+  SID_FOR_TICK="$(. "$SCRIPT_DIR/_lib.sh"; resolve_session_id 2>/dev/null || true)"
   if [[ -n "$SID_FOR_TICK" ]]; then
-    python3 bin/_claim.py tick "$FILE" --session="$SID_FOR_TICK" 2>/dev/null || true
+    python3 "$SCRIPT_DIR/_claim.py" tick "$FILE" --session="$SID_FOR_TICK" 2>/dev/null || true
   fi
 fi
 
@@ -144,14 +143,14 @@ fi
 # Body-only; frontmatter is byte-for-byte preserved (bare slugs there are
 # load-bearing per AGENTS.md "Slug as join key"). Idempotent. Bypass with
 # WORKLOG_NO_AUTOLINK=1.
-if [[ -z "${WORKLOG_NO_AUTOLINK:-}" ]] && [[ -x bin/auto-slug-link.py ]]; then
-  bin/auto-slug-link.py --apply --file="$FILE" >/dev/null 2>&1 || true
+if [[ -z "${WORKLOG_NO_AUTOLINK:-}" ]] && [[ -x "$SCRIPT_DIR/auto-slug-link.py" ]]; then
+  "$SCRIPT_DIR/auto-slug-link.py" --apply --file="$FILE" >/dev/null 2>&1 || true
 fi
 
 # Soft lint gate — single-file scope. Stderr-only, never blocks the checkpoint.
 # Bypass with WORKLOG_NO_LINT=1 (e.g. in hooks / non-interactive contexts).
-if [[ -z "${WORKLOG_NO_LINT:-}" ]] && [[ -x bin/lint.sh ]]; then
-  bin/lint.sh --file="$FILE" --format=json 2>/dev/null | python3 - >&2 <<'PY' || true
+if [[ -z "${WORKLOG_NO_LINT:-}" ]] && [[ -x "$SCRIPT_DIR/lint.sh" ]]; then
+  "$SCRIPT_DIR/lint.sh" --file="$FILE" --format=json 2>/dev/null | python3 - >&2 <<'PY' || true
 import json, sys
 try:
   data = json.load(sys.stdin)

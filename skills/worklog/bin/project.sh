@@ -114,12 +114,12 @@ EOF
   local PLAN
   PLAN="$(SLUG="$SLUG" GOAL="$GOAL" OBJECTIVE="$OBJECTIVE" STALE_AFTER="$STALE_AFTER" \
           LDAP="$LDAP" TODAY="$TODAY" TASKS_JSON="$TASKS_JSON" REPOS="$REPOS" \
-          python3 "$REPO_ROOT/bin/_project.py" plan-new)" || {
+          python3 "$SCRIPT_DIR/_project.py" plan-new)" || {
     echo "project new: plan failed" >&2; return 1
   }
 
   if (( DRY )); then
-    echo "$PLAN" | python3 "$REPO_ROOT/bin/_project.py" print-dry-plan
+    echo "$PLAN" | python3 "$SCRIPT_DIR/_project.py" print-dry-plan
     return 0
   fi
 
@@ -132,14 +132,14 @@ EOF
   # checkpoint-batch.sh requires the files to already exist (find_task only
   # globs existing). So: write files, then bulk-add via a single git commit
   # crafted here (not via checkpoint.sh per child, which would push 1+N times).
-  python3 "$REPO_ROOT/bin/_project.py" materialize-new <<< "$PLAN"
+  python3 "$SCRIPT_DIR/_project.py" materialize-new <<< "$PLAN"
 
   # Stage everything + commit + push in one shot (parent + children atomic).
   verify_provenance || return 1
   git pull --no-rebase --autostash -q
 
   local META
-  META="$(echo "$PLAN" | python3 "$REPO_ROOT/bin/_project.py" print-create-meta)"
+  META="$(echo "$PLAN" | python3 "$SCRIPT_DIR/_project.py" print-create-meta)"
   local SUBJECT BODY TRAILERS
   SUBJECT="$(echo "$META" | python3 -c 'import json,sys;print(json.load(sys.stdin)["subject"])')"
   BODY="$(echo "$META" | python3 -c 'import json,sys;print(json.load(sys.stdin)["body"])')"
@@ -168,7 +168,7 @@ for p in json.load(sys.stdin)["paths"]: print(p)')
 cmd_next() {
   local SLUG="${1:-}"
   [[ -z "$SLUG" ]] && { echo "project next: slug required" >&2; return 2; }
-  PROJECT_SLUG="$SLUG" python3 "$REPO_ROOT/bin/_project.py" next
+  PROJECT_SLUG="$SLUG" python3 "$SCRIPT_DIR/_project.py" next
 }
 
 # ---------- sub: claim / release / reap (phase 2) ----------
@@ -188,13 +188,13 @@ _run_under_flock() {
     "$@"
     return $?
   fi
-  WORKLOG_CLAIM_LOCKED=1 python3 "$REPO_ROOT/bin/_flock.py" \
+  WORKLOG_CLAIM_LOCKED=1 python3 "$SCRIPT_DIR/_flock.py" \
     "$(_claim_lockfile)" -- "$@"
 }
 
 # Resolve a project's stale_after duration via _claim.py; default 30m.
 _project_stale_after() {
-  python3 "$REPO_ROOT/bin/_claim.py" project-stale-after "$1" 2>/dev/null || echo "30m"
+  python3 "$SCRIPT_DIR/_claim.py" project-stale-after "$1" 2>/dev/null || echo "30m"
 }
 
 # Internal: claim a specific child slug for the current session.
@@ -209,7 +209,7 @@ _do_claim() {
 
   # Read current claim state.
   local CUR
-  CUR="$(python3 "$REPO_ROOT/bin/_claim.py" read "$CHILD_PATH")"
+  CUR="$(python3 "$SCRIPT_DIR/_claim.py" read "$CHILD_PATH")"
   local CUR_SID
   CUR_SID="$(echo "$CUR" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("session_id") or "")')"
 
@@ -223,7 +223,7 @@ _do_claim() {
       return 0
     fi
     # Different session — check staleness.
-    if python3 "$REPO_ROOT/bin/_claim.py" is-stale "$CHILD_PATH" --stale-after="$STALE" >/dev/null 2>&1; then
+    if python3 "$SCRIPT_DIR/_claim.py" is-stale "$CHILD_PATH" --stale-after="$STALE" >/dev/null 2>&1; then
       echo "STALE $CHILD held by $CUR_SID (can reap)"
       return 0
     fi
@@ -238,7 +238,7 @@ _do_claim() {
   fi
 
   # Write claim block (refuses if non-stale + different session).
-  if ! python3 "$REPO_ROOT/bin/_claim.py" write "$CHILD_PATH" \
+  if ! python3 "$SCRIPT_DIR/_claim.py" write "$CHILD_PATH" \
         --session="$SESSION" --stale-after="$STALE"; then
     return 1
   fi
@@ -250,7 +250,7 @@ _do_claim() {
   git pull --no-rebase --autostash -q || true
   # After pull, the on-disk file may have changed. Re-write the claim to
   # reassert it (write enforces arbitration again).
-  if ! python3 "$REPO_ROOT/bin/_claim.py" write "$CHILD_PATH" \
+  if ! python3 "$SCRIPT_DIR/_claim.py" write "$CHILD_PATH" \
         --session="$SESSION" --stale-after="$STALE"; then
     echo "claim: lost race after pull — another session holds $CHILD" >&2
     return 1
@@ -286,7 +286,7 @@ cmd_claim() {
     # Walk eligible children in declaration order; try to claim the first
     # not-locked one. Re-uses cmd_next logic but loops over candidates.
     local CANDIDATES
-    CANDIDATES="$(PROJECT_SLUG="$PROJECT" python3 "$REPO_ROOT/bin/_project.py" eligible-list)" || {
+    CANDIDATES="$(PROJECT_SLUG="$PROJECT" python3 "$SCRIPT_DIR/_project.py" eligible-list)" || {
       echo "$CANDIDATES" >&2; return 1
     }
     [[ -z "$CANDIDATES" ]] && { echo "project claim next: no eligible tasks" >&2; return 1; }
@@ -327,12 +327,12 @@ cmd_release() {
   [[ -z "$CHILD_PATH" ]] && { echo "release: no task file for '$CHILD'" >&2; return 1; }
   SESSION="$(resolve_session_id)"
 
-  if ! python3 "$REPO_ROOT/bin/_claim.py" clear "$CHILD_PATH" --session="$SESSION"; then
+  if ! python3 "$SCRIPT_DIR/_claim.py" clear "$CHILD_PATH" --session="$SESSION"; then
     return 1
   fi
   verify_provenance || return 1
   git pull --no-rebase --autostash -q || true
-  python3 "$REPO_ROOT/bin/_claim.py" clear "$CHILD_PATH" --session="$SESSION" || true
+  python3 "$SCRIPT_DIR/_claim.py" clear "$CHILD_PATH" --session="$SESSION" || true
   git add "$CHILD_PATH"
   if git diff --cached --quiet; then
     echo "release: $CHILD not held by $SESSION (no-op)"
@@ -365,7 +365,7 @@ cmd_reap() {
   for f in people/*/active/*.md; do
     [[ -f "$f" ]] || continue
     local INFO SID HB
-    INFO="$(python3 "$REPO_ROOT/bin/_claim.py" read "$f" 2>/dev/null)" || continue
+    INFO="$(python3 "$SCRIPT_DIR/_claim.py" read "$f" 2>/dev/null)" || continue
     SID="$(echo "$INFO" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("session_id") or "")')"
     [[ -z "$SID" ]] && continue
     # Determine stale_after for this task: use override if provided, else
@@ -385,13 +385,13 @@ cmd_reap() {
     if [[ -n "$SESSION_FILTER" ]]; then
       [[ "$SID" == "$SESSION_FILTER" ]] && CLEAR=1
     else
-      if python3 "$REPO_ROOT/bin/_claim.py" is-stale "$f" --stale-after="$STALE" >/dev/null 2>&1; then
+      if python3 "$SCRIPT_DIR/_claim.py" is-stale "$f" --stale-after="$STALE" >/dev/null 2>&1; then
         CLEAR=1
       fi
     fi
     (( CLEAR )) || continue
     # Clear (no session filter — reap operates above ownership).
-    python3 "$REPO_ROOT/bin/_claim.py" clear "$f" || continue
+    python3 "$SCRIPT_DIR/_claim.py" clear "$f" || continue
     CLEARED+=("$(basename "$f" .md):$SID")
   done
 
@@ -427,11 +427,11 @@ cmd_reap() {
 cmd_verify() {
   # verify <slug> | verify --all
   # Exit codes: 0 clean, 1 warnings, 2 errors.
-  python3 "$REPO_ROOT/bin/_project.py" verify "$@"
+  python3 "$SCRIPT_DIR/_project.py" verify "$@"
 }
 
 cmd_list() {
-  python3 "$REPO_ROOT/bin/_project.py" list "$@"
+  python3 "$SCRIPT_DIR/_project.py" list "$@"
 }
 
 # ---------- dispatch ----------
@@ -449,7 +449,7 @@ case "$SUB" in
       esac
     else
       mkdir -p .cache/claims
-      WORKLOG_CLAIM_LOCKED=1 exec python3 "$REPO_ROOT/bin/_flock.py" \
+      WORKLOG_CLAIM_LOCKED=1 exec python3 "$SCRIPT_DIR/_flock.py" \
         "$(_claim_lockfile)" -- "$0" "$SUB" "$@"
     fi
     ;;
