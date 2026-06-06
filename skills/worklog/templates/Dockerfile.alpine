@@ -1,0 +1,30 @@
+# E2E test image for _worklog on Linux musl + busybox + GNU equivalents.
+# Counterpart: Dockerfile.debian (glibc + GNU).
+#
+# Build:  docker build -t worklog-e2e:alpine -f Dockerfile.alpine .
+# Run:    docker run --rm worklog-e2e:alpine
+# Driver: bin/e2e-docker.sh (parallel build/run for both images).
+
+FROM alpine:3.20
+
+# bash + grep + coreutils mirror typical real-world Alpine deployments
+# (busybox alone would be a stricter test; current default = realistic).
+RUN apk add --no-cache \
+      bash git python3 py3-yaml perl ripgrep jq grep coreutils gawk
+
+WORKDIR /workspace/_worklog
+COPY . /workspace/_worklog
+
+RUN git init -q -b main \
+ && git config user.email "ldap-test@example.com" \
+ && git config user.name "ldap-test" \
+ && git init -q --bare /tmp/origin.git \
+ && git remote add origin /tmp/origin.git \
+ && git add -A \
+ && git -c commit.gpgsign=false commit -q -m "seed for e2e" \
+ && git push -q -u origin main
+
+ENV USER=ldap-test
+ENV PROJECTS_DIR=/workspace
+
+CMD ["bin/e2e.sh"]
