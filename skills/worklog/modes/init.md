@@ -56,7 +56,7 @@ After printing the active-task list and before asking "which task?", **hydrate t
 - **OpenAI Codex CLI:** emit an initial `update_plan` populated from the same `## Next` items.
 - **Cursor:** populate the canvas todo card / Plan Mode entries.
 
-Run `bin/context.sh <slug>` for any focused task — its output's "Tracker-ready snippet" section formats each unchecked item ready to paste/exec.
+Run `"$WORKLOG_BIN/context.sh" <slug>` for any focused task — its output's "Tracker-ready snippet" section formats each unchecked item ready to paste/exec.
 
 Skip hydration only when every active task is at ≤2 unchecked items (single-step or trivial). Don't wait for the user to ask. Drift evidence: 2026-04-27 review session ran ~30 multi-step commits with zero `TaskCreate` invocations despite the system reminder firing repeatedly (`docs/lessons.md` 2026-04 entry).
 

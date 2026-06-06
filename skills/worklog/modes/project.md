@@ -2,20 +2,20 @@
 
 Multi-task projects with declaration-order sequencing, `depends_on:` dep graph, and per-task advisory mutex (file-based, session-id arbitrated). Design lives in the `worklog-project-mode` task; this file is the dispatch surface.
 
-**Preamble: minimal.** Resolve LDAP. The driver `bin/project.sh` handles its own validation. Read-only subcommands (`list`, `verify`, `next`) skip the worklog repo pull; mutating subcommands (`new`, `claim`, `release`, `reap`) rely on the standard preamble pull-first discipline (run preamble step 3 yourself before invoking).
+**Preamble: minimal.** Resolve LDAP. The driver `"$WORKLOG_BIN/project.sh"` handles its own validation. Read-only subcommands (`list`, `verify`, `next`) skip the worklog repo pull; mutating subcommands (`new`, `claim`, `release`, `reap`) rely on the standard preamble pull-first discipline (run preamble step 3 yourself before invoking).
 
 ## Subcommands
 
 | Form | Notes |
 |---|---|
-| `bin/project.sh new <slug> --goal=... --objective=... [--repos=a,b] [--stale-after=30m] [--dry-run]` | Read tasks-JSON on stdin (preferred) or `--tasks-json=...`. Writes the `kind: project` parent + child stubs. `--dry-run` prints the would-be files. |
-| `bin/project.sh next <slug>` | Print first claim-eligible child (deps satisfied + not held by a different session). Exit 1 with reason if nothing eligible. |
-| `bin/project.sh claim <child-slug> [--dry-run]` | Claim a task. Pre-commit arbitrates: rejects if on-disk claim is non-stale + different session. `--dry-run` returns `CLAIM_OK` / `LOCKED_BY=<holder>` / `STALE=...` without writing. |
-| `bin/project.sh claim next <slug>` | Combo: `next` then `claim`. Walks past locked tasks. |
-| `bin/project.sh release <child-slug>` | Clear your own claim. Idempotent. |
-| `bin/project.sh reap [--session=<id>] [--stale=<dur>]` | Clear claims whose heartbeat is stale (default 30m). With `--session=<id>` cascades — clears every task that session holds. |
-| `bin/project.sh verify <slug> \| --all` | Dep cycles, parent_slug ↔ tasks consistency, orphan claims. Exit `0`/`1`/`2` for clean/warnings/errors. |
-| `bin/project.sh list` | Projects + child task rollup (`<slug>  [<status>]  (N tasks: <status counts>) held=K`). |
+| `"$WORKLOG_BIN/project.sh" new <slug> --goal=... --objective=... [--repos=a,b] [--stale-after=30m] [--dry-run]` | Read tasks-JSON on stdin (preferred) or `--tasks-json=...`. Writes the `kind: project` parent + child stubs. `--dry-run` prints the would-be files. |
+| `"$WORKLOG_BIN/project.sh" next <slug>` | Print first claim-eligible child (deps satisfied + not held by a different session). Exit 1 with reason if nothing eligible. |
+| `"$WORKLOG_BIN/project.sh" claim <child-slug> [--dry-run]` | Claim a task. Pre-commit arbitrates: rejects if on-disk claim is non-stale + different session. `--dry-run` returns `CLAIM_OK` / `LOCKED_BY=<holder>` / `STALE=...` without writing. |
+| `"$WORKLOG_BIN/project.sh" claim next <slug>` | Combo: `next` then `claim`. Walks past locked tasks. |
+| `"$WORKLOG_BIN/project.sh" release <child-slug>` | Clear your own claim. Idempotent. |
+| `"$WORKLOG_BIN/project.sh" reap [--session=<id>] [--stale=<dur>]` | Clear claims whose heartbeat is stale (default 30m). With `--session=<id>` cascades — clears every task that session holds. |
+| `"$WORKLOG_BIN/project.sh" verify <slug> \| --all` | Dep cycles, parent_slug ↔ tasks consistency, orphan claims. Exit `0`/`1`/`2` for clean/warnings/errors. |
+| `"$WORKLOG_BIN/project.sh" list` | Projects + child task rollup (`<slug>  [<status>]  (N tasks: <status counts>) held=K`). |
 
 ## Tasks-JSON shape
 
@@ -33,14 +33,14 @@ Children inherit the project's `--repos` unless they declare their own. `depends
 
 ## Workflow
 
-1. `bin/project.sh new <slug> --goal=... --objective=... --repos=cheshirecode/<repo>,cheshirecode/<repo> < tasks.json` — paraphrase a `/stacking-strategy` (cheshirecode/<repo> repo) output into the JSON shape, or hand-write for non-code work.
-2. `bin/project.sh next <slug>` — pick the next eligible child.
-3. `bin/project.sh claim <child-slug>` — take the lock (one-line commit with `Worklog-Claim:` trailer).
-4. Work the task; `bin/checkpoint.sh <child-slug>` advances frontmatter `heartbeat_at:` automatically.
-5. `bin/archive.sh <child-slug> --reason=shipped --summary=...` when done (clears the claim, marks status archived).
-6. `bin/project.sh next <slug>` again → next eligible.
+1. `"$WORKLOG_BIN/project.sh" new <slug> --goal=... --objective=... --repos=cheshirecode/<repo>,cheshirecode/<repo> < tasks.json` — paraphrase a `/stacking-strategy` (cheshirecode/<repo> repo) output into the JSON shape, or hand-write for non-code work.
+2. `"$WORKLOG_BIN/project.sh" next <slug>` — pick the next eligible child.
+3. `"$WORKLOG_BIN/project.sh" claim <child-slug>` — take the lock (one-line commit with `Worklog-Claim:` trailer).
+4. Work the task; `"$WORKLOG_BIN/checkpoint.sh" <child-slug>` advances frontmatter `heartbeat_at:` automatically.
+5. `"$WORKLOG_BIN/archive.sh" <child-slug> --reason=shipped --summary=...` when done (clears the claim, marks status archived).
+6. `"$WORKLOG_BIN/project.sh" next <slug>` again → next eligible.
 
-When the whole conversation dies mid-task, claims clear automatically after `mutex.stale_after` (default 30m) on the next `bin/project.sh reap`.
+When the whole conversation dies mid-task, claims clear automatically after `mutex.stale_after` (default 30m) on the next `"$WORKLOG_BIN/project.sh" reap`.
 
 ## Cross-host (Claude Code + Codex + Cursor)
 
@@ -71,5 +71,5 @@ Parent + N Claude Code sub-agents share one session ID — same-session re-claim
 
 ## Out of scope (deferred)
 
-- Mechanical `/stacking-strategy` markdown parser is shipped (`bin/_stacking_strategy_parser.py`) but `project new` doesn't invoke it automatically — agent paraphrases into JSON. Wire it in when the manual paraphrase step bites.
+- Mechanical `/stacking-strategy` markdown parser is shipped (`"$WORKLOG_BIN/_stacking_strategy_parser.py"`) but `project new` doesn't invoke it automatically — agent paraphrases into JSON. Wire it in when the manual paraphrase step bites.
 - Phase 2 mutex acceptance tests pass; real cross-host (Claude ↔ Codex concurrent on Fred's box) hasn't fired yet. Watch for the first contention.

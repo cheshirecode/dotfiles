@@ -204,7 +204,7 @@ Codex and other agents without the Claude skill should use the same fallback lis
 
 ## User context
 
-- **Primary user:** Fred Tran (LDAP: `$LDAP`). Others welcome to add `people/<their-ldap>/`.
+- **Primary user:** Fred Tran (LDAP: `<ldap>`). Others welcome to add `people/<their-ldap>/`.
 - **Primary code repo:** `ui` (Python backend `api/` + React SPA `frontend/react/`); siblings `website`, `Landing-Page`, `devops-permissions`.
 - **Conventions:** always read the target repo's root `AGENTS.md` before editing code. Graphite: `gt restack` + `gt submit --stack --no-edit`. Never plain `git push` on stack branches. Never edit generated code.
 - **Worktree discipline:** always start new work in a git worktree — `git worktree add ../<repo>-<slug> -b <branch>`. The primary checkout is shared surface; keep it on `main`.
@@ -374,11 +374,11 @@ the PR, globs for the task file, writes a `Worklog-PR:` trailer. Order:
 
 The candidate is then looked up via `people/*/active/<slug>.md`. LDAP is
 derived from the matched path — the bot does not trust GitHub login
-(`ideogram-$LDAP`) or the branch prefix. If the glob doesn't match
+(`ideogram-<ldap>`) or the branch prefix. If the glob doesn't match
 **exactly one** file, the bot silently no-ops. Non-worklog users and PRs
 never see worklog machinery on their PRs.
 
-Status mapping (MVP; see `people/$LDAP/active/worklog-pr-event-hooks.md`
+Status mapping (MVP; see `people/<ldap>/active/worklog-pr-event-hooks.md`
 or its archived successor for rationale):
 
 - `opened` / `reopened` → `in-review`, attach `pr:`

@@ -16,7 +16,7 @@ Derived view of `AGENTS.md`. Imperatives only; no rationale. Consult `AGENTS.md`
 
 ## Editing rules
 
-- Edit only `people/$LDAP/`. Other namespaces are read-only.
+- Edit only `people/<ldap>/`. Other namespaces are read-only.
 - Never `git rebase`, `git pull --rebase`, or force-push during normal sync.
 - Maintenance ops (`bin/log-compact.sh`, `bin/cache-purge.sh`) rewrite history deliberately and emit a recovery prompt via `bin/post-rewrite-prompt.sh`. They are the carve-out.
 - Prior-art grep before editing infrastructure surfaces (gsutil, nginx, terraform): `bin/related-search.sh <surface-keyword>`.
@@ -33,7 +33,7 @@ Derived view of `AGENTS.md`. Imperatives only; no rationale. Consult `AGENTS.md`
 - Search the corpus: `bin/search.sh <pattern> [--active|--archive] [--kind= --status= --project= --linear= --pr= --repo= --ldap=]`. rg-first body search with frontmatter filters via `.cache/index.jsonl`; supports `--list` (no pattern, slugs only) and `--json`. For code-level lookups invoke the `/serena-rg-search` skill.
 - Semantic search: `bin/search.sh <query> --semantic [--top=10] [filters...]`. Cosine over `.cache/index.embeddings.jsonl` (build with `bin/embed.sh`; fastembed + BAAI/bge-small-en-v1.5, 384 dim, local-only). Use for paraphrase queries (e.g. `"lock between concurrent agents"` finds `worklog-task-mutex-isolation`). Filters compose.
 - Codex command-menu drift: `bin/codex-surface-check.sh`.
-- Multi-task project: `bin/project.sh new|next|claim|release|reap|verify|list <slug>` — see `people/$LDAP/active/worklog-project-mode.md`. `new` takes `--goal --objective` + tasks-JSON on stdin (`[{"slug":"a"},{"slug":"b","depends_on":["a"]}]`); `--dry-run` previews. `next <project>` prints the first claim-eligible child slug (deps satisfied = `status: archived`). `claim <slug>` / `claim next <project>` writes a per-task `claim:` block (advisory mutex; resolved via `$CLAUDE_CODE_SESSION_ID` / `$CODEX_SESSION_ID` / `$CURSOR_SESSION_ID` else per-machine UUID). `release <slug>` clears your own claim. `reap [--session=ID] [--stale=DUR]` clears stale claims (by session or by heartbeat-age). `verify <slug> | --all` reports cycles + parent_slug drift + orphan claims (exit 0/1/2). `list` rolls up project status. `/stacking-strategy` markdown → tasks-JSON via `bin/_stacking_strategy_parser.py`.
+- Multi-task project: `bin/project.sh new|next|claim|release|reap|verify|list <slug>` — see `people/<ldap>/active/worklog-project-mode.md`. `new` takes `--goal --objective` + tasks-JSON on stdin (`[{"slug":"a"},{"slug":"b","depends_on":["a"]}]`); `--dry-run` previews. `next <project>` prints the first claim-eligible child slug (deps satisfied = `status: archived`). `claim <slug>` / `claim next <project>` writes a per-task `claim:` block (advisory mutex; resolved via `$CLAUDE_CODE_SESSION_ID` / `$CODEX_SESSION_ID` / `$CURSOR_SESSION_ID` else per-machine UUID). `release <slug>` clears your own claim. `reap [--session=ID] [--stale=DUR]` clears stale claims (by session or by heartbeat-age). `verify <slug> | --all` reports cycles + parent_slug drift + orphan claims (exit 0/1/2). `list` rolls up project status. `/stacking-strategy` markdown → tasks-JSON via `bin/_stacking_strategy_parser.py`.
 - Lint: `bin/lint.sh [--cross-task]`. Composite report: `bin/audit.sh`.
 - SQL: `bin/sql.sh new|run|list|show <slug> <name>`. Per-slug queries live at `queries/<slug>/<name>.sql`.
 

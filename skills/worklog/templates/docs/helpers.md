@@ -14,7 +14,7 @@ Each script self-documents via `--help`. This doc is the composition playbook.
 | Search task corpus (rg-first + frontmatter filters) | `bin/search.sh <pattern> [--active --archive --kind= --status= --project= --linear= --pr= --repo= --ldap=] [--list] [--json]` |
 | Semantic search over corpus (cosine over embeddings) | `bin/search.sh <query> --semantic [--top=10] [filters...]` (build embeddings first with `bin/embed.sh`) |
 | Build / refresh the embeddings cache              | `bin/embed.sh [--refresh] [--all]` (writes `.cache/index.embeddings.jsonl`; fastembed + BAAI/bge-small-en-v1.5, local-only) |
-| Snapshot the current Claude session into a task's transcript | `bin/transcript-dump.sh <slug>` (writes `people/$LDAP/transcripts/<slug>.md`; watermarked append; auto-fires from `bin/archive.sh` and from `bin/checkpoint.sh --status=in-review\|shipping`; bypass via `WORKLOG_NO_TRANSCRIPT=1`) |
+| Snapshot the current Claude session into a task's transcript | `bin/transcript-dump.sh <slug>` (writes `people/<ldap>/transcripts/<slug>.md`; watermarked append; auto-fires from `bin/archive.sh` and from `bin/checkpoint.sh --status=in-review\|shipping`; bypass via `WORKLOG_NO_TRANSCRIPT=1`) |
 | Safety snapshot of uncommitted worklog edits     | `bin/autosave.sh`                                                   |
 | Standup-shaped summary across tasks              | `bin/status.sh [--since=... --project=... --author=...]`            |
 | Single-task chronological history                | `bin/status.sh --slug=<slug>`                                       |
