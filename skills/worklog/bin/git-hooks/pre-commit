@@ -1,0 +1,206 @@
+#!/usr/bin/env bash
+# Worklog pre-commit hook. Runs deterministic checks on staged changes,
+# path-filtered so commits that don't touch sensitive surfaces are free.
+#
+# Wired via `bin/install-hooks.sh --write` (sets core.hooksPath).
+# Bypass: `WORKLOG_NO_HOOK=1 git commit ...`.
+#
+# Checks:
+#   1. bin/lint.sh on changed people/*/{active,archive}/*.md  (errors block)
+#   2. tests/export/test_scrubber.sh   if export pipeline changed
+#   3. tests/frontmatter/test_round_trip.sh   if frontmatter parser changed
+#
+# Heuristic cross-task warnings live in bin/autosave.sh (TTL-gated, advisory).
+
+set -euo pipefail
+
+[[ -n "${WORKLOG_NO_HOOK:-}" ]] && exit 0
+
+cd "$(git rev-parse --show-toplevel)"
+
+# Staged paths (added/copied/modified/renamed; deletes don't need checking).
+# Read into an array via while-read for bash 3.2 compatibility (macOS default).
+CHANGED=()
+while IFS= read -r line; do
+  CHANGED+=("$line")
+done < <(git diff --cached --name-only --diff-filter=ACMR)
+
+(( ${#CHANGED[@]} > 0 )) || exit 0
+
+match() {
+  local pat="$1" f
+  for f in "${CHANGED[@]}"; do
+    [[ "$f" =~ $pat ]] && return 0
+  done
+  return 1
+}
+
+# 1. Per-file task lint — errors block, warnings pass through
+LINT_FAIL=0
+for f in "${CHANGED[@]}"; do
+  [[ "$f" =~ ^people/[^/]+/(active|archive)/.+\.md$ ]] || continue
+  out="$(bin/lint.sh --file="$f" --format=json 2>/dev/null || true)"
+  errs="$(printf '%s' "$out" | python3 -c 'import json,sys
+try: d=json.load(sys.stdin); print(d.get("total_errors",0))
+except Exception: print(0)
+' 2>/dev/null)"
+  if [[ "${errs:-0}" -gt 0 ]]; then
+    echo "pre-commit: lint error in $f" >&2
+    bin/lint.sh --file="$f" >&2 || true
+    LINT_FAIL=1
+  fi
+done
+(( LINT_FAIL )) && {
+  echo "pre-commit: blocking. Bypass with WORKLOG_NO_HOOK=1." >&2
+  exit 1
+}
+
+# 2. Scrubber test if export pipeline changed
+if match '^bin/export-setup\.sh$' || match '^tests/export/'; then
+  echo "pre-commit: tests/export/test_scrubber.sh" >&2
+  tests/export/test_scrubber.sh >&2 || {
+    echo "pre-commit: scrubber regression. Bypass with WORKLOG_NO_HOOK=1." >&2
+    exit 1
+  }
+fi
+
+# 3. Round-trip test if frontmatter parser / index changed
+if match '^bin/_lint\.py$' || match '^bin/_index\.py$' || match '^tests/frontmatter/'; then
+  echo "pre-commit: tests/frontmatter/test_round_trip.sh" >&2
+  tests/frontmatter/test_round_trip.sh >&2 || {
+    echo "pre-commit: round-trip regression. Bypass with WORKLOG_NO_HOOK=1." >&2
+    exit 1
+  }
+fi
+
+# 4. Ruff check on staged bin/_*.py — errors block.
+if match '^bin/_[^/]+\.py$'; then
+  if command -v ruff >/dev/null 2>&1; then
+    py_files=()
+    for f in "${CHANGED[@]}"; do
+      [[ "$f" =~ ^bin/_[^/]+\.py$ ]] && py_files+=("$f")
+    done
+    if (( ${#py_files[@]} > 0 )); then
+      echo "pre-commit: ruff check (${#py_files[@]} python file(s))" >&2
+      ruff check "${py_files[@]}" >&2 || {
+        echo "pre-commit: ruff errors. Bypass with WORKLOG_NO_HOOK=1." >&2
+        exit 1
+      }
+    fi
+  else
+    echo "pre-commit: ruff not installed; skipping python lint. (brew install ruff)" >&2
+  fi
+fi
+
+# 5. shellcheck (errors only, --severity=error) on staged bash files — errors block.
+if match '^bin/[^/]+\.sh$' || match '^bin/git-hooks/' || match '^tests/[^/]+/[^/]+\.sh$'; then
+  if command -v shellcheck >/dev/null 2>&1; then
+    sh_files=()
+    for f in "${CHANGED[@]}"; do
+      if [[ "$f" =~ ^(bin/[^/]+\.sh|bin/git-hooks/[^/]+|tests/[^/]+/[^/]+\.sh)$ ]]; then
+        sh_files+=("$f")
+      fi
+    done
+    if (( ${#sh_files[@]} > 0 )); then
+      echo "pre-commit: shellcheck (${#sh_files[@]} script(s), severity=error)" >&2
+      shellcheck --severity=error "${sh_files[@]}" >&2 || {
+        echo "pre-commit: shellcheck errors. Bypass with WORKLOG_NO_HOOK=1." >&2
+        exit 1
+      }
+    fi
+  else
+    echo "pre-commit: shellcheck not installed; skipping bash lint. (brew install shellcheck)" >&2
+  fi
+fi
+
+# 6. yamllint on staged task frontmatter — advisory (warnings, not errors).
+if match '^people/[^/]+/(active|archive)/.+\.md$'; then
+  if command -v yamllint >/dev/null 2>&1; then
+    yl_issues=0
+    for f in "${CHANGED[@]}"; do
+      [[ "$f" =~ ^people/[^/]+/(active|archive)/.+\.md$ ]] || continue
+      slice="$(awk '/^---$/{i++; if(i==2) exit; next} i==1' "$f")"
+      [[ -z "$slice" ]] && continue
+      if ! printf '%s\n' "$slice" | yamllint - >/dev/null 2>&1; then
+        echo "pre-commit: yamllint advisory — $f frontmatter has style warnings (run: yamllint <(awk '/^---\$/{i++; if(i==2) exit; next} i==1' $f))" >&2
+        yl_issues=$((yl_issues + 1))
+      fi
+    done
+    (( yl_issues > 0 )) && echo "pre-commit: $yl_issues task file(s) with yamllint warnings; advisory only" >&2
+  fi
+fi
+
+# 7. Secret-leak scan on staged additions (advisory by default; strict via
+#    WORKLOG_STRICT_SCAN=1; bypass via WORKLOG_NO_SCAN=1).
+bin/pre-commit-scan.sh || exit 1
+
+# 8. Claim arbitration: for any staged task file with a `claim:` block change,
+#    refuse if HEAD already holds a non-stale claim under a different session.
+#    Implements the per-task mutex pre-commit arbiter from
+#    people/<ldap>/active/worklog-project-mode.md § Mutex protocol.
+for f in "${CHANGED[@]}"; do
+  [[ "$f" =~ ^people/[^/]+/(active|archive)/.+\.md$ ]] || continue
+  # Skip if neither staged nor HEAD references `claim:` (cheap shortcut).
+  staged_has=0; head_has=0
+  git show ":$f" 2>/dev/null | grep -q '^claim:' && staged_has=1 || true
+  git show "HEAD:$f" 2>/dev/null | grep -q '^claim:' && head_has=1 || true
+  (( staged_has || head_has )) || continue
+
+  # Derive stale_after: parent_slug → project file → mutex.stale_after, else 30m.
+  parent="$(git show ":$f" 2>/dev/null | awk -F': *' '/^parent_slug:/ {print $2; exit}' || true)"
+  stale="30m"
+  if [[ -n "$parent" ]]; then
+    s="$(python3 bin/_claim.py project-stale-after "$parent" 2>/dev/null || true)"
+    [[ -n "$s" ]] && stale="$s"
+  fi
+
+  tmp_staged="$(mktemp)"
+  tmp_head="$(mktemp)"
+  git show ":$f"     > "$tmp_staged" 2>/dev/null || true
+  git show "HEAD:$f" > "$tmp_head"   2>/dev/null || true
+  if ! python3 bin/_claim.py arbitrate \
+      --staged="$tmp_staged" --head="$tmp_head" --stale-after="$stale" 2>&1; then
+    echo "pre-commit: claim arbitration rejected $f" >&2
+    rm -f "$tmp_staged" "$tmp_head"
+    exit 1
+  fi
+  rm -f "$tmp_staged" "$tmp_head"
+done
+
+# Drift advisories — see docs/protocol.md § Drift surfaces. Never block.
+
+# D3. bin/* mentioned in docs but no doc staged → nudge.
+docs_staged=0
+for f in "${CHANGED[@]}"; do
+  case "$f" in docs/*|AGENTS.md|README.md) docs_staged=1 ;; esac
+done
+if (( ! docs_staged )); then
+  for f in "${CHANGED[@]}"; do
+    [[ "$f" =~ ^bin/[^/]+\.(sh|py)$ ]] || continue
+    bn="${f##*/}"
+    refs="$(rg -l --no-messages "\b${bn}\b" docs/ AGENTS.md README.md 2>/dev/null | tr '\n' ' ' || true)"
+    [[ -n "$refs" ]] && echo "pre-commit: D3 advisory — $f mentioned in: ${refs}consider doc update" >&2
+  done
+fi
+
+# D5. Scrubber regex parity between bin/export-setup.sh and tests/export/test_scrubber.sh.
+if match '^bin/export-setup\.sh$' || match '^tests/export/test_scrubber\.sh$'; then
+  prod="$(grep -oE 's\{.+\}\{<REDACTED:SECRET>\}g;' bin/export-setup.sh | sort -u)"
+  test="$(grep -oE 's\{.+\}\{<REDACTED:SECRET>\}g;' tests/export/test_scrubber.sh | sort -u)"
+  if [[ "$prod" != "$test" ]]; then
+    echo "pre-commit: D5 advisory — scrubber secret-regex set differs between scrub() and test_scrubber.sh" >&2
+  fi
+fi
+
+# D8. Doc claims of .github/workflows/*.yml that don't exist on disk.
+if match '^docs/' || match '^README\.md$' || match '^AGENTS\.md$'; then
+  for d in docs/helpers.md docs/protocol.md README.md AGENTS.md; do
+    [[ -f "$d" ]] || continue
+    while IFS= read -r claimed; do
+      [[ -z "$claimed" || -e "$claimed" ]] && continue
+      echo "pre-commit: D8 advisory — $d claims $claimed but file does not exist" >&2
+    done < <(grep -oE '\.github/workflows/[a-z0-9_-]+\.yml' "$d" 2>/dev/null | sort -u)
+  done
+fi
+
+exit 0
