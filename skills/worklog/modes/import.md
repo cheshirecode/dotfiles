@@ -90,7 +90,7 @@ awk -v p="<target>" '
 
    Followed by flagged-file paths and advisory diffs.
 
-7. **Suggest a checkpoint:** `bin/checkpoint.sh worklog-import-<date>`
+7. **Suggest a checkpoint:** `"$WORKLOG_BIN/checkpoint.sh" worklog-import-<date>`
    so the `_worklog` edits land in git. The worklog repo tracks
    protocol/skill changes under `people/cheshirecode/` the same way any
    other task would.

@@ -15,14 +15,14 @@ Trivial / single-step work: skip. Use `/worklog sync` directly.
 ## Steps
 
 1. Parse the free-form task description from the argument verbatim.
-2. **Propose a slug** per AGENTS.md grammar: `^(eng-\d+-)?[a-z0-9]+(-[a-z0-9]+)*$`. If a Linear ID is mentioned in the task, use `eng-<N>-<desc>`; else bare `<desc>`. No `wip-` prefix. Keep it short, kebab-case, semantically distinct from existing slugs (the user can rename via `bin/checkpoint.sh <new> --rename=<old>` if it collides).
+2. **Propose a slug** per AGENTS.md grammar: `^(eng-\d+-)?[a-z0-9]+(-[a-z0-9]+)*$`. If a Linear ID is mentioned in the task, use `eng-<N>-<desc>`; else bare `<desc>`. No `wip-` prefix. Keep it short, kebab-case, semantically distinct from existing slugs (the user can rename via `"$WORKLOG_BIN/checkpoint.sh" <new> --rename=<old>` if it collides).
 3. Run the three passes below silently. Recurring lessons (already in Claude memory via `feedback_lessons.md`) apply implicitly — don't re-derive them; do honor them.
 4. Emit the structured block as a fenced code block (lang: `markdown`) so the user can select cleanly. The user pastes the **inner content** into `people/$LDAP/active/<slug>.md` — not the wrapping fence. No prose outside the block.
 
 ## Tools the passes may reach for
 
 - **Target codebase** (where does X live? does helper Y already exist?) → invoke the `/serena-rg-search` skill. Faster and more accurate than re-deriving from memory; matters most for CoT verify criteria and ToT "is this approach already half-built?" checks.
-- **Worklog corpus** (prior related tasks, projects to reuse) → `bin/search.sh <pattern> [filters]` for body grep, `bin/related-search.sh <surface-keyword>...` for shared-surface prior-art. Cheap; run before locking ToT picks that touch shared surfaces.
+- **Worklog corpus** (prior related tasks, projects to reuse) → `"$WORKLOG_BIN/search.sh" <pattern> [filters]` for body grep, `"$WORKLOG_BIN/related-search.sh" <surface-keyword>...` for shared-surface prior-art. Cheap; run before locking ToT picks that touch shared surfaces.
 - **Recurring lessons** — already in Claude memory (`feedback_lessons.md`); apply implicitly.
 
 Don't dump every tool into every plan — use them only when the next pass genuinely needs evidence.
@@ -64,7 +64,7 @@ This matches the architectural-question trigger in `systematic-debugging` (3+ fa
 ## Output template
 
 ```
-# Plan: <proposed-slug>  <!-- per AGENTS.md slug grammar; rename later via `bin/checkpoint.sh <new> --rename=<old>` -->
+# Plan: <proposed-slug>  <!-- per AGENTS.md slug grammar; rename later via `"$WORKLOG_BIN/checkpoint.sh" <new> --rename=<old>` -->
 
 ## Goal
 <one-sentence verifiable success criterion>
@@ -87,7 +87,7 @@ This matches the architectural-question trigger in `systematic-debugging` (3+ fa
 - <assumption> (check by: <command/lookup>).
 ```
 
-`## Next` is named to match AGENTS.md § In-session progress visibility — the checkboxes are the durable plan and `bin/context.sh <slug>` will hydrate them into `TaskCreate` / `update_plan` on resume.
+`## Next` is named to match AGENTS.md § In-session progress visibility — the checkboxes are the durable plan and `"$WORKLOG_BIN/context.sh" <slug>` will hydrate them into `TaskCreate` / `update_plan` on resume.
 
 ## Composing with the task body template
 

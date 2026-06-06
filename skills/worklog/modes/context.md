@@ -3,7 +3,7 @@
 Pure dispatch. Read-only.
 
 ```bash
-cd "$PROJECTS_DIR/_worklog" && bin/context.sh <slug> "$@"
+cd "$WORKLOG_REPO" && "$WORKLOG_BIN/context.sh" <slug> "$@"
 ```
 
 Pass-through flags: `--for=resume|review|compact` (default `resume`), `--format=markdown|json`. Follows `Worklog-Previous-Slug:` through renames; locates the file under `people/$LDAP/{active,archive}/`.

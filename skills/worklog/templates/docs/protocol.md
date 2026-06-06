@@ -529,13 +529,13 @@ bin/status.sh --slug=eng-1515-stack                # per-slug chronological hist
 
 # Ad-hoc — ripgrep (preferred; smart case, gitignore-aware, --type md, --json):
 rg --type md '^status: blocked' people/
-rg --type md '^status: in-review' people/$LDAP/active/
-rg --type md -l '\bui\b' people/$LDAP/active/ | xargs rg --type md '^repos:'
+rg --type md '^status: in-review' people/<ldap>/active/
+rg --type md -l '\bui\b' people/<ldap>/active/ | xargs rg --type md '^repos:'
 
 # POSIX fallback — grep (for contexts without rg):
 grep -l '^status: blocked' people/*/active/*.md
-grep -l '^status: in-review' people/$LDAP/active/*.md
-git log --oneline -20 people/$LDAP/active/       # recent activity
+grep -l '^status: in-review' people/<ldap>/active/*.md
+git log --oneline -20 people/<ldap>/active/       # recent activity
 ```
 
 `rg` is recommended for interactive use but is **not** a runtime dependency of `bin/*` — those scripts stay on `python3` / `grep` / `awk` / `jq` so the repo runs on a bare POSIX + Python machine (see `docs/helpers.md § Query tools`).
