@@ -1,0 +1,11 @@
+# yamllint config for _worklog. Frontmatter is the only YAML we have here;
+# we relax noisy stylistic rules and keep the structural ones.
+extends: default
+rules:
+  line-length: disable
+  document-start: disable
+  truthy: disable
+  comments:
+    min-spaces-from-content: 1
+    require-starting-space: false
+  comments-indentation: disable
