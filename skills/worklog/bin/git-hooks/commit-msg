@@ -68,7 +68,11 @@ while IFS=$'\t' read -r slug trailer_status; do
   [[ -z "$slug" || -z "$trailer_status" ]] && continue
   task_file=""
   for state in active archive; do
-    candidate="$(ls people/*/$state/"$slug.md" 2>/dev/null | head -1)"
+    # set -o pipefail + `ls foo` returning 1 on no-match would kill the
+    # loop before trying the next state. Use compgen -G which prints matches
+    # on stdout and returns 0/1; `|| true` keeps pipefail off the no-match
+    # branch so the loop can fall through to the second state.
+    candidate="$(compgen -G "people/*/$state/$slug.md" 2>/dev/null | head -1 || true)"
     [[ -n "$candidate" ]] && task_file="$candidate" && break
   done
   [[ -z "$task_file" ]] && continue
