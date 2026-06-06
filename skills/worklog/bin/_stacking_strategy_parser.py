@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Mechanical `/stacking-strategy` markdown → tasks-JSON parser.
 
-The `/stacking-strategy` skill (cheshirecode/<repo> repo) emits a `### Stack Plan` section
+The `/stacking-strategy` skill emits a `### Stack Plan` section
 followed by `#### PR N: <title>` blocks. Each PR section may contain a
 `Depends on:` line listing prior PR numbers / slugs.
 
