@@ -103,13 +103,4 @@ For deep interactive exploration consider `lnav`, but `rg` + a time filter usual
 command -v rg jq
 ```
 
-If missing:
-
-- macOS: `brew install ripgrep jq`
-- Debian/Ubuntu: `sudo apt-get install -y ripgrep jq`
-- Fedora/RHEL: `sudo dnf install -y ripgrep jq`
-- Arch: `sudo pacman -S ripgrep jq`
-
-`git` is assumed present in any repo. Serena is provided by the MCP server — if it isn't activated for the project, fall back to `rg` and don't block on it.
-
-The default posture: discovery with `rg`, structure with Serena, shape with `jq`, history with `git log`, runtime with logs.
+If missing: `brew install ripgrep jq` (macOS) · `apt-get install ripgrep jq` (Debian) · `dnf install ripgrep jq` (Fedora) · `pacman -S ripgrep jq` (Arch). `git` is assumed present in any repo. Serena is provided by the MCP server — if it isn't activated for the project, fall back to `rg` and don't block on it.
