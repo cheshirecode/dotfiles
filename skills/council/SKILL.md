@@ -209,12 +209,8 @@ User: /council "what's 2+2?"
 Claude: Not a council task — single-agent answer in one token. Skipping; 4.
 ```
 
-## Why voting (vs. the old synthesis + verification flow)
+## Why voting (vs. synthesis + verification)
 
-The old flow had **one synthesis agent producing items** and 2–3 verifiers as a cleanup pass. Three consecutive councils in one session showed the same failure: synthesis invented 60–90% of items; verifiers caught most via their independence budget. This is structurally backwards — items should clear an explicit bar to enter, not enter by default and need removal.
-
-Voting replaces the asymmetry. The collator can only gather; voters apply explicit criteria; items need a positive vote count to survive. The verifier's "REJECT-with-citation" power is preserved as the voter's REJECT ballot. No item gets in just because synthesis was feeling generous.
-
-This is a fork of the original Karpathy pattern, not a strict implementation. The original used cross-vendor debate to surface disagreement; this version uses cross-agent voting to surface non-justified inclusion.
+A single synthesis agent inventing items + verifiers as cleanup is structurally backwards — items should clear an explicit bar to enter, not enter by default and need removal. Voting flips it: the collator only gathers, voters apply explicit criteria, items need positive support to survive. Fork of Karpathy's original (which used cross-vendor debate); this uses cross-agent voting to surface non-justified inclusion.
 
 - Quick reference: M=3 → threshold 3 (unanimous) · M=5 → threshold 4 · M=7 → threshold 5.
