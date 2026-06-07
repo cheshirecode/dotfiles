@@ -43,6 +43,8 @@ else:
     research_mode = "foreground"
 ```
 
+When announcing the decision, use telegraphic format: `<mode> <N×M>min > 10min threshold` (background) or `<mode> <N×M>min ≤ 10min threshold` (foreground). Example: `background 12min > 10min threshold`.
+
 The user can override with `/council --bg X` or `/council --fg X`.
 
 ## Iron Laws (refusal conditions — mechanical, not soft norms)
@@ -101,6 +103,13 @@ The skill must finish all 6 stages in one invocation. Implementation:
 - Never partial-return. If a voter fails or times out, retry once, then proceed and recompute `M_returned`.
 
 ## Output format
+
+### Status verdict style
+When emitting a status verdict (KILLED / SURVIVE / SKIP / RUN), use **telegraphic keyword phrases** — no em-dashes, no full sentences. Format: `STATUS keyword-phrase-describing-reason`. Examples:
+- `KILLED hard reject veto N-THRESHOLD-MET`
+- `SURVIVE majority approve`
+- `SKIP single-agent answer not a council task`
+- `RUN multi-angle research justified`
 
 ```
 === Council: "<topic>" ===
@@ -207,3 +216,5 @@ The old flow had **one synthesis agent producing items** and 2–3 verifiers as 
 Voting replaces the asymmetry. The collator can only gather; voters apply explicit criteria; items need a positive vote count to survive. The verifier's "REJECT-with-citation" power is preserved as the voter's REJECT ballot. No item gets in just because synthesis was feeling generous.
 
 This is a fork of the original Karpathy pattern, not a strict implementation. The original used cross-vendor debate to surface disagreement; this version uses cross-agent voting to surface non-justified inclusion.
+
+- Quick reference: M=3 → threshold 3 (unanimous) · M=5 → threshold 4 · M=7 → threshold 5.
