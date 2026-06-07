@@ -71,10 +71,19 @@ done
 mkdir -p "$(dirname "$SETTINGS")"
 [[ -f "$SETTINGS" ]] || echo '{}' > "$SETTINGS"
 
-python3 - "$SETTINGS" "$AUTOSAVE" "$KERNELS" "$MODE" "$WRITE" <<'PY'
+# Hooks run outside direnv — pin the data repo (and optional LDAP) inline.
+WORKLOG_LDAP_FROM_ENVRC=""
+if [[ -f "$REPO_ROOT/.envrc" ]]; then
+  WORKLOG_LDAP_FROM_ENVRC="$(
+    grep -E '^export WORKLOG_LDAP=' "$REPO_ROOT/.envrc" 2>/dev/null \
+      | sed -E 's/^export WORKLOG_LDAP=//' | tr -d '"' || true
+  )"
+fi
+
+python3 - "$SETTINGS" "$AUTOSAVE" "$KERNELS" "$MODE" "$WRITE" "$REPO_ROOT" "$WORKLOG_LDAP_FROM_ENVRC" <<'PY'
 import json, pathlib, sys
 
-settings_path, autosave, kernels, mode, write_flag = sys.argv[1:6]
+settings_path, autosave, kernels, mode, write_flag, repo_root, worklog_ldap = sys.argv[1:8]
 write = write_flag == "1"
 p = pathlib.Path(settings_path)
 
@@ -97,16 +106,28 @@ if not isinstance(hooks, dict):
   print(f"install-hooks: settings.hooks is {type(hooks).__name__}, expected object", file=sys.stderr)
   sys.exit(1)
 
-def entry_matches_script(entry, script):
-  # Match any entry whose command references the given script path, to stay
-  # idempotent across `bash <path>` vs bare `<path>` invocation styles.
+def entry_references_worklog_script(entry):
+  # Match autosave/compact-kernels hooks — current skill path or legacy
+  # _worklog/bin/ tombstone era — so reinstall migrates stale entries.
   if not isinstance(entry, dict):
     return False
   for h in entry.get("hooks", []) or []:
-    if isinstance(h, dict) and h.get("type") == "command":
-      if script in (h.get("command") or ""):
-        return True
+    if not isinstance(h, dict) or h.get("type") != "command":
+      continue
+    cmd = h.get("command") or ""
+    if "autosave.sh" in cmd or "compact-kernels.sh" in cmd:
+      return True
   return False
+
+
+def build_command(script, event):
+  env_parts = [f'WORKLOG_REPO="{repo_root}"']
+  if worklog_ldap:
+    env_parts.append(f'WORKLOG_LDAP="{worklog_ldap}"')
+  env = " ".join(env_parts)
+  if script == autosave:
+    return f"{env} {script} {AUTOSAVE_FLAGS[event]}"
+  return f"{env} {script}"
 
 changed = False
 
@@ -116,21 +137,33 @@ for event in EVENTS:
     print(f"install-hooks: settings.hooks.{event} is not a list", file=sys.stderr)
     sys.exit(1)
 
-  for script in SCRIPTS:
-    present = any(entry_matches_script(e, script) for e in event_list)
-    # Autosave gets a per-event --trigger flag; kernels is bare.
-    if script == autosave:
-      command = f"{script} {AUTOSAVE_FLAGS[event]}"
-    else:
-      command = script
-    if mode == "install" and not present:
-      event_list.append({
-        "matcher": "",
-        "hooks": [{"type": "command", "command": command}],
-      })
+  if mode == "install":
+    before = len(event_list)
+    event_list[:] = [e for e in event_list if not entry_references_worklog_script(e)]
+    if len(event_list) != before:
       changed = True
-    elif mode == "uninstall" and present:
-      event_list[:] = [e for e in event_list if not entry_matches_script(e, script)]
+    desired = []
+    for script in SCRIPTS:
+      desired.append({
+        "matcher": "",
+        "hooks": [{"type": "command", "command": build_command(script, event)}],
+      })
+    for entry in desired:
+      cmd = entry["hooks"][0]["command"]
+      if not any(
+        isinstance(e, dict)
+        and any(
+          isinstance(h, dict) and h.get("type") == "command" and h.get("command") == cmd
+          for h in (e.get("hooks") or [])
+        )
+        for e in event_list
+      ):
+        event_list.append(entry)
+        changed = True
+  else:
+    before = len(event_list)
+    event_list[:] = [e for e in event_list if not entry_references_worklog_script(e)]
+    if len(event_list) != before:
       changed = True
 
   if mode == "uninstall" and not event_list:
