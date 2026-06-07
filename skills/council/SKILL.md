@@ -5,12 +5,6 @@ description: "Karpathy-council-style multi-agent research with voting. Use when 
 
 # council
 
-Orchestrates Karpathy's LLM-council pattern with two twists:
-1. **Five active stages + voting**: research → discussion → candidate collation → structured voting → conclude.
-2. **Voting replaces verifier-as-cleanup.** Items must clear a majority APPROVE vote to survive, with hard REJECT votes cited against explicit karpathy criteria. This solves the empirically-observed failure mode where a single synthesis agent **invents items** the verifiers then spend their budget removing.
-
-Inspired by [Karpathy's LLM Council](https://github.com/karpathy/llm-council) (multi-model debate + synthesis). This skill adapts the pattern for a single Claude session using `Agent` sub-agents instead of cross-vendor models.
-
 ## When to use
 
 - "Run a council on X" / "get multiple opinions on Y" / `/council <topic>`
@@ -173,7 +167,7 @@ These apply at every stage.
 ## Anti-patterns
 
 - **Don't let research agents talk during Stage 1.**
-- **Don't let the collator invent items.** This is the load-bearing change vs. the old synthesis-agent design — synthesis agents demonstrably invent items the verifiers then have to remove. Collation + voting eliminates the failure mode by structure.
+- **Don't let the collator invent items.** Iron Law; structurally eliminates the synthesis-invents-items failure mode (see Why voting).
 - **Don't use the same sub-agent for collation AND voting.** Voters must be independent.
 - **Don't skip Stage 3 discussion when collation looks easy.** Discussion surfaces gaps the angles missed; without it, the candidate pool is whatever happened to occur to the research agents.
 - **Don't auto-pick a side on tied votes.** Ties are killed by Iron Law. Use odd-count voters to avoid them.
