@@ -1,6 +1,6 @@
 ---
 name: council
-description: "Karpathy-council-style multi-agent workflow with voting: spawn N sub-agents to research a topic in parallel, cross-pollinate findings via discussion, collate candidate items, then VOTE on each item with explicit karpathy-criterion ballots before concluding. Use when the user invokes `/council`, says \"run a council on X\", \"get multiple opinions on Y\", or asks for an audited research pass. Runs until completion — picks foreground or background dispatch per task scope."
+description: "Karpathy-council-style multi-agent research with voting. Use when the user invokes `/council`, says \"run a council on X\", \"get multiple opinions on Y\", or asks for an audited research pass. Runs until completion; auto-selects foreground vs background dispatch by task scope."
 ---
 
 # council
