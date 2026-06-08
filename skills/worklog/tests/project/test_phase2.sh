@@ -26,19 +26,22 @@ trap 'echo "scratch: $SCRATCH_ROOT (left for inspection)"' ERR
 
 echo "=== Test setup ==="
 git init -q --bare "$UPSTREAM"
-git clone -q "$SOURCE" "$SCRATCH"
-rm -rf "$SCRATCH/bin"
+# Fresh scratch data repo (see test_phase1.sh for why we init rather than clone
+# $SOURCE, and why WORKLOG_REPO must be pinned to the scratch).
+git init -q "$SCRATCH"
 cp -R "$SOURCE/bin" "$SCRATCH/bin"
 rm -rf "$SCRATCH/bin/__pycache__"
 cd "$SCRATCH"
-git remote set-url origin "$UPSTREAM"
-git push -q origin HEAD:main
-git branch --set-upstream-to=origin/main main >/dev/null 2>&1 || true
+export WORKLOG_REPO="$SCRATCH"
 git config user.email "testuser@example.com"
 git config user.name "project-phase2-test"
+git remote add origin "$UPSTREAM"
+git add -A && git -c commit.gpgsign=false commit -q -m "seed: bin" --no-verify
+git push -q origin HEAD:main
+git branch --set-upstream-to=origin/main main >/dev/null 2>&1 || true
 
 LDAP="testuser"
-printf '%s' "$LDAP" > "$TMPDIR/worklog-ldap-${USER}"
+export WORKLOG_LDAP="$LDAP"
 # Strip the cloned corpus so reap-walks (which iterate every active/*.md)
 # don't pick up production stale claims and don't slow down enough for the
 # 10s stale window to race against per-file subprocess overhead. Same fix

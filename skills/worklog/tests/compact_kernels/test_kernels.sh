@@ -36,14 +36,24 @@ trap 'echo "scratch: $SCRATCH_ROOT (left for inspection)"' ERR
 echo "=== Test setup ==="
 echo "Source: $SOURCE"
 echo "Scratch: $SCRATCH"
-git clone -q "$SOURCE" "$SCRATCH"
+# Scratch is a fresh worklog *data* repo seeded with synthetic tasks below; the
+# worklog scripts run from $WORKLOG_BIN (real bin/), so we only need an empty
+# git repo here. (Post-relocation $SOURCE is a subdir of dotfiles, not a
+# clonable repo root, so `git clone "$SOURCE"` no longer works.)
+git init -q "$SCRATCH"
 cd "$SCRATCH"
+# Pin the data repo to the scratch, overriding any WORKLOG_REPO the dev's shell
+# exported via .envrc — otherwise resolve_worklog_repo() resolves the *real*
+# vault and the test operates on (or mutates) live data.
+export WORKLOG_REPO="$SCRATCH"
 git config user.email "test@example.com"
 git config user.name "compact-kernels-test"
 
-# Force a deterministic LDAP via the (isolated) cache resolve_ldap reads.
+# Force a deterministic LDAP via the public WORKLOG_LDAP override. (Poking the
+# cache file by name was brittle: _lib.sh's cache key gained a `default-` prefix,
+# so the old `worklog-ldap-$USER` path silently stopped being read.)
 LDAP="testuser"
-printf '%s' "$LDAP" > "$TMPDIR/worklog-ldap-${USER}"
+export WORKLOG_LDAP="$LDAP"
 ACTIVE="people/$LDAP/active"
 mkdir -p "$ACTIVE" "people/$LDAP/archive"
 touch "people/$LDAP/archive/.gitkeep"
