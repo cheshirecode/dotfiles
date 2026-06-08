@@ -6,6 +6,7 @@
 #   Claude Code (PreCompact + SessionEnd):
 #     - bin/autosave.sh        → uncommitted worklog edits land in git
 #                                 before the compact summary / session ends.
+#     - bin/autosave-flush.sh  → SessionEnd only: push debounced autosaves.
 #     - bin/compact-kernels.sh → one resume kernel per active task is dumped
 #                                 to _worklog/.cache/compact-kernels.md so
 #                                 the next session re-orients on one file.
@@ -58,10 +59,11 @@ fi
 cd "$REPO_ROOT"
 # Scripts live in the skill (this dir), not in the data repo's bin/
 AUTOSAVE="$SCRIPT_DIR/autosave.sh"
+FLUSH="$SCRIPT_DIR/autosave-flush.sh"
 KERNELS="$SCRIPT_DIR/compact-kernels.sh"
 SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
 
-for s in "$AUTOSAVE" "$KERNELS"; do
+for s in "$AUTOSAVE" "$FLUSH" "$KERNELS"; do
   if [[ ! -x "$s" ]]; then
     echo "install-hooks: $s not executable" >&2
     exit 1
@@ -80,10 +82,10 @@ if [[ -f "$REPO_ROOT/.envrc" ]]; then
   )"
 fi
 
-python3 - "$SETTINGS" "$AUTOSAVE" "$KERNELS" "$MODE" "$WRITE" "$REPO_ROOT" "$WORKLOG_LDAP_FROM_ENVRC" <<'PY'
+python3 - "$SETTINGS" "$AUTOSAVE" "$FLUSH" "$KERNELS" "$MODE" "$WRITE" "$REPO_ROOT" "$WORKLOG_LDAP_FROM_ENVRC" <<'PY'
 import json, pathlib, sys
 
-settings_path, autosave, kernels, mode, write_flag, repo_root, worklog_ldap = sys.argv[1:8]
+settings_path, autosave, flush, kernels, mode, write_flag, repo_root, worklog_ldap = sys.argv[1:9]
 write = write_flag == "1"
 p = pathlib.Path(settings_path)
 
@@ -96,9 +98,11 @@ except (json.JSONDecodeError, ValueError) as e:
   sys.exit(1)
 
 EVENTS = ("PreCompact", "SessionEnd")
-SCRIPTS = (autosave, kernels)
-# Per-event flag for autosave so the commit trailer can distinguish what
-# triggered the snapshot. kernels is event-agnostic — no flag.
+# SessionEnd adds autosave-flush after kernels to push debounced autosaves.
+SCRIPTS_BY_EVENT = {
+  "PreCompact": (autosave, kernels),
+  "SessionEnd": (autosave, kernels, flush),
+}
 AUTOSAVE_FLAGS = {"PreCompact": "--trigger=pre-compact", "SessionEnd": "--trigger=session-end"}
 
 hooks = data.setdefault("hooks", {})
@@ -115,7 +119,7 @@ def entry_references_worklog_script(entry):
     if not isinstance(h, dict) or h.get("type") != "command":
       continue
     cmd = h.get("command") or ""
-    if "autosave.sh" in cmd or "compact-kernels.sh" in cmd:
+    if "autosave.sh" in cmd or "autosave-flush.sh" in cmd or "compact-kernels.sh" in cmd:
       return True
   return False
 
@@ -143,7 +147,7 @@ for event in EVENTS:
     if len(event_list) != before:
       changed = True
     desired = []
-    for script in SCRIPTS:
+    for script in SCRIPTS_BY_EVENT[event]:
       desired.append({
         "matcher": "",
         "hooks": [{"type": "command", "command": build_command(script, event)}],
@@ -177,7 +181,7 @@ if not changed:
 
 if write:
   p.write_text(rendered)
-  print(f"install-hooks: {mode}ed worklog hooks (PreCompact + SessionEnd × autosave.sh + compact-kernels.sh)")
+  print(f"install-hooks: {mode}ed worklog hooks (PreCompact + SessionEnd × autosave + compact-kernels + flush)")
   print(f"install-hooks: wrote {settings_path}")
 else:
   print(f"install-hooks: DRY RUN — would {mode} worklog hooks")

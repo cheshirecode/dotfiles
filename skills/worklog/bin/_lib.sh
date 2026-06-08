@@ -252,3 +252,40 @@ for line in sys.stdin:
     } >&2
   fi
 }
+
+# Stage paths for bin/autosave.sh. Default: caller's people/$LDAP/ only.
+# WORKLOG_AUTOSAVE_WIDE=1 stages people/, docs/, bin/, projects/.
+# Returns 1 when nothing was staged (tree may still be dirty outside scope).
+autosave_stage_paths() {
+  local ldap path
+  ldap="$(resolve_ldap)"
+  if [[ "${WORKLOG_AUTOSAVE_WIDE:-0}" == "1" ]]; then
+    for path in people docs bin projects; do
+      [[ -e "$path" ]] && git add -A "$path" 2>/dev/null || true
+    done
+  else
+    [[ -d "people/$ldap" ]] && git add -A "people/$ldap/"
+  fi
+  if git diff --cached --quiet; then
+    return 1
+  fi
+  return 0
+}
+
+# True when HEAD is an unpushed autosave commit safe to amend into.
+autosave_can_amend_head() {
+  local subject upstream unpushed non_autosave
+  subject="$(git log -1 --format=%s 2>/dev/null || true)"
+  [[ "$subject" == autosave:* ]] || return 1
+  upstream="$(git rev-parse --abbrev-ref @{u} 2>/dev/null || true)"
+  [[ -n "$upstream" ]] || return 0
+  unpushed="$(git rev-list --count "${upstream}..HEAD" 2>/dev/null || echo 0)"
+  (( unpushed > 0 )) || return 1
+  non_autosave="$(git log "${upstream}..HEAD" --format=%s | { grep -vc '^autosave:' || true; })"
+  (( non_autosave == 0 ))
+}
+
+# Comma-separated staged paths for Worklog-Paths trailer (sorted, stable).
+autosave_paths_trailer() {
+  git diff --cached --name-only | LC_ALL=C sort | paste -sd, -
+}
