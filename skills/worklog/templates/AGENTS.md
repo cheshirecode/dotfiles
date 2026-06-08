@@ -208,6 +208,8 @@ Codex and other agents without the Claude skill should use the same fallback lis
 - **Primary code repo:** `ui` (Python backend `api/` + React SPA `frontend/react/`); siblings `website`, `Landing-Page`, `devops-permissions`.
 - **Conventions:** always read the target repo's root `AGENTS.md` before editing code. Graphite: `gt restack` + `gt submit --stack --no-edit`. Never plain `git push` on stack branches. Never edit generated code.
 - **Worktree discipline:** always start new work in a git worktree — `git worktree add ../<repo>-<slug> -b <branch>`. The primary checkout is shared surface; keep it on `main`.
+- **`POC-DO-NOT-MERGE/*` ui branches:** when a task names an existing PoC branch (e.g. `POC-DO-NOT-MERGE/mini-app-host-shell` on worktree `ui-mini-app-host`), **commit in-place** on that branch. Do **not** fork `fredtran/*` or other side branches unless the user explicitly asks. `next_action` must say `Continue on <branch>` — never `Fork <branch>`.
+- **Branch tracks (mini-apps):** `ideogram-ai/mini-app-poc` may use feature branches off `main`; `ideogram-ai/ui` PoC host work stays on the single named `POC-DO-NOT-MERGE/*` branch.
 
 ## First Parse Bootstrap
 
