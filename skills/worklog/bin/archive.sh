@@ -210,6 +210,9 @@ Worklog-PR: $PR_EMIT"
 
 git commit -q -m "$SLUG: archive ($REASON)" -m "next: —" -m "$TRAILERS"
 push_with_retry || exit 1
+if [[ -x "$SCRIPT_DIR/autosave-flush.sh" ]]; then
+  "$SCRIPT_DIR/autosave-flush.sh" >/dev/null 2>&1 || true
+fi
 record_session_touch "$SLUG" "archive"
 echo "archive: pushed $SLUG"
 

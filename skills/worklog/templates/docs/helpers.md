@@ -15,7 +15,8 @@ Each script self-documents via `--help`. This doc is the composition playbook.
 | Semantic search over corpus (cosine over embeddings) | `bin/search.sh <query> --semantic [--top=10] [filters...]` (build embeddings first with `bin/embed.sh`) |
 | Build / refresh the embeddings cache              | `bin/embed.sh [--refresh] [--all]` (writes `.cache/index.embeddings.jsonl`; fastembed + BAAI/bge-small-en-v1.5, local-only) |
 | Snapshot the current Claude session into a task's transcript | `bin/transcript-dump.sh <slug>` (writes `people/<ldap>/transcripts/<slug>.md`; watermarked append; auto-fires from `bin/archive.sh` and from `bin/checkpoint.sh --status=in-review\|shipping`; bypass via `WORKLOG_NO_TRANSCRIPT=1`) |
-| Safety snapshot of uncommitted worklog edits     | `bin/autosave.sh`                                                   |
+| Safety snapshot of uncommitted worklog edits     | `bin/autosave.sh` (default: `people/$LDAP/`; `WORKLOG_AUTOSAVE_WIDE=1` for full tree) |
+| Push debounced autosave commits                  | `bin/autosave-flush.sh` (SessionEnd hook; also after checkpoint/archive) |
 | Standup-shaped summary across tasks              | `bin/status.sh [--since=... --project=... --author=...]`            |
 | Single-task chronological history                | `bin/status.sh --slug=<slug>`                                       |
 | Context pack for one task (resume / review)      | `bin/context.sh <slug> [--for=resume|review]`                       |

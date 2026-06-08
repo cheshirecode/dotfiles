@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Snapshot any uncommitted worklog changes. Safe to call anytime — no-op if clean.
+# Snapshot uncommitted worklog changes. Safe to call anytime — no-op if clean.
 # Used by Claude PreCompact / SessionEnd hooks and anyone wanting a slugless save.
 #
-# Emits a `Worklog-Trigger:` trailer (pre-compact | session-end | manual) so
-# `git log` consumers can filter autosave noise. See AGENTS.md § Checkpoint discipline.
+# Default scope: people/$LDAP/ only (WORKLOG_AUTOSAVE_WIDE=1 for full tree).
+# Consecutive hook fires amend the previous unpushed autosave instead of a new commit.
+#
+# Emits Worklog-Trigger + Worklog-Paths trailers. See AGENTS.md § Checkpoint discipline.
 
 set -euo pipefail
 
@@ -24,28 +26,50 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(resolve_worklog_repo)" || exit 1
 cd "$REPO_ROOT"
 
+LDAP="$(resolve_ldap)"
+
 if [[ -z "$(git status --porcelain)" ]]; then
   exit 0
 fi
 
 git pull --no-rebase --autostash -q 2>/dev/null || true
-git add -A
-git commit -q \
-  -m "autosave: snapshot $(date +%Y-%m-%dT%H:%M:%S%z)" \
-  -m "Worklog-Trigger: $TRIGGER" 2>/dev/null || exit 0
 
-# Push debounce: PreCompact + SessionEnd hooks can fire within seconds of
-# each other. Commit always; skip push when the previous commit was also an
-# autosave within 10s — let the next flush carry both. Saves a network hit
-# without losing any work (the local commit is already there).
+if ! autosave_stage_paths; then
+  if [[ -z "${WORKLOG_AUTOSAVE_WIDE:-}" || "${WORKLOG_AUTOSAVE_WIDE:-0}" != "1" ]]; then
+    foreign="$(git status --porcelain -- people/ docs/ bin/ projects/ 2>/dev/null \
+      | grep -v "^.. people/$LDAP/" || true)"
+    if [[ -n "$foreign" ]]; then
+      echo "autosave: dirty outside people/$LDAP/ — set WORKLOG_AUTOSAVE_WIDE=1 to include" >&2
+    fi
+  fi
+  exit 0
+fi
+
+PATHS_TRAILER="$(autosave_paths_trailer)"
+TS="$(date +%Y-%m-%dT%H:%M:%S%z)"
+COMMIT_ARGS=(-q -m "autosave: snapshot $TS" -m "Worklog-Trigger: $TRIGGER")
+[[ -n "$PATHS_TRAILER" ]] && COMMIT_ARGS+=(-m "Worklog-Paths: $PATHS_TRAILER")
+
+if autosave_can_amend_head; then
+  git commit --amend "${COMMIT_ARGS[@]}" 2>/dev/null || exit 0
+else
+  git commit "${COMMIT_ARGS[@]}" 2>/dev/null || exit 0
+fi
+
+mkdir -p .cache
+date +%s > .cache/autosave-last-run
+
+# Push debounce: PreCompact + SessionEnd can fire within seconds. Commit always;
+# skip push when the previous commit was also autosave within 10s — flush later.
 LAST_SUBJECT="$(git log -1 --skip=1 --format=%s 2>/dev/null || true)"
 LAST_TS="$(git log -1 --skip=1 --format=%ct 2>/dev/null || echo 0)"
 NOW_TS="$(date +%s)"
 if [[ "$LAST_SUBJECT" == autosave:* ]] && (( NOW_TS - LAST_TS < 10 )); then
-  echo "autosave: debounced push (previous autosave $((NOW_TS - LAST_TS))s ago); next flush will carry it" >&2
+  touch .cache/autosave-push-pending
+  echo "autosave: debounced push (previous autosave $((NOW_TS - LAST_TS))s ago); run autosave-flush or next push carries it" >&2
   exit 0
 fi
 
-push_with_retry || exit 1
-# Cross-task advisory now lives in bin/git-hooks/post-commit (broader coverage:
-# fires on every commit, not only when autosave snapshots). TTL gate identical.
+if push_with_retry; then
+  rm -f .cache/autosave-push-pending
+fi
