@@ -30,6 +30,11 @@ Read these first (in order):
 Task:
   <verbatim task description from the user>
 
+Branch discipline (when task names a repo branch):
+  - If the task file § Branch names `POC-DO-NOT-MERGE/*` or an existing worktree branch: **do not** `git checkout -b` a new branch; commit in-place.
+  - If a worktree already exists for that branch (e.g. `../ui-mini-app-host`): use it; verify with `git branch --show-current`.
+  - `fredtran/*` feature branches are for normal ui PRs, not throwaway PoC host branches unless explicitly requested.
+
 Deliverables:
   <one-line expectation — PR, file, prompt, report, etc.>
   End with a checkpoint: `cd <$PROJECTS_DIR>/_worklog && "$WORKLOG_BIN/checkpoint.sh" <slug>`
