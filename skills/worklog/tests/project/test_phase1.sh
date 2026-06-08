@@ -32,21 +32,24 @@ trap 'echo "scratch: $SCRATCH_ROOT (left for inspection)"' ERR
 echo "=== Test setup ==="
 # Bare upstream the scratch repo can safely push to.
 git init -q --bare "$UPSTREAM"
-git clone -q "$SOURCE" "$SCRATCH"
-# Mirror uncommitted bin/ + lint changes from $SOURCE into the scratch clone so
-# the test exercises the working tree, not the last committed tree.
-rm -rf "$SCRATCH/bin"
+# Fresh scratch data repo seeded with the working-tree bin/. (Post-relocation
+# $SOURCE is a subdir of dotfiles, not a clonable repo root; scripts run from
+# $WORKLOG_BIN, and WORKLOG_REPO below pins resolve_worklog_repo to the scratch
+# so it can't escape to the dev's real vault.)
+git init -q "$SCRATCH"
 cp -R "$SOURCE/bin" "$SCRATCH/bin"
 rm -rf "$SCRATCH/bin/__pycache__"
 cd "$SCRATCH"
-git remote set-url origin "$UPSTREAM"
-git push -q origin HEAD:main
-git branch --set-upstream-to=origin/main main >/dev/null 2>&1 || true
+export WORKLOG_REPO="$SCRATCH"
 git config user.email "testuser@example.com"
 git config user.name "project-phase1-test"
+git remote add origin "$UPSTREAM"
+git add -A && git -c commit.gpgsign=false commit -q -m "seed: bin" --no-verify
+git push -q origin HEAD:main
+git branch --set-upstream-to=origin/main main >/dev/null 2>&1 || true
 
 LDAP="testuser"
-printf '%s' "$LDAP" > "$TMPDIR/worklog-ldap-${USER}"
+export WORKLOG_LDAP="$LDAP"
 mkdir -p "people/$LDAP/active" "people/$LDAP/archive"
 touch "people/$LDAP/archive/.gitkeep"
 # Disable hooks to keep the test focused on project.sh behavior.
