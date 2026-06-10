@@ -57,6 +57,31 @@ export WORKLOG_SKIP_PROVENANCE=1
 mkdir -p .cache; touch .cache/provenance-verified
 
 echo ""
+echo "=== 2.0: claim writer keeps frontmatter sequence indentation ==="
+cat > "people/$LDAP/active/claim-style.md" <<'EOF'
+---
+slug: claim-style
+status: in-progress
+kind: impl
+repos:
+  - oss/_worklog
+project: p2-proj
+last_updated: 2026-06-10
+next_action: "test"
+---
+
+## Context
+
+test
+EOF
+python3 "$WORKLOG_BIN/_claim.py" write "people/$LDAP/active/claim-style.md" --session=codex:style-test
+grep -q '^  - oss/_worklog$' "people/$LDAP/active/claim-style.md" || {
+  echo "FAIL: claim writer emitted indentless repos sequence"; exit 1;
+}
+rm "people/$LDAP/active/claim-style.md"
+echo "  ✓ sequence indentation preserved"
+
+echo ""
 echo "=== 2.1: project new (2-task project, stale_after=10s) ==="
 TASKS='[{"slug":"p2-a"},{"slug":"p2-b"}]'
 echo "$TASKS" | "$WORKLOG_BIN/project.sh" new p2-proj \
