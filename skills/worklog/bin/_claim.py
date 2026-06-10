@@ -53,6 +53,13 @@ import yaml
 FRONTMATTER_RE = re.compile(r"^(---\n)(.*?)(\n---\n)", re.DOTALL)
 
 
+class FrontmatterDumper(yaml.SafeDumper):
+  """Emit block sequences in the repo's yamllint-friendly frontmatter style."""
+
+  def increase_indent(self, flow: bool = False, indentless: bool = False):
+    return super().increase_indent(flow, False)
+
+
 def _now_iso() -> str:
   return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -87,7 +94,12 @@ def _read_frontmatter(path: pathlib.Path) -> tuple[str, dict, str]:
 
 def _write_frontmatter(path: pathlib.Path, fm: dict, suffix: str) -> None:
   # yaml.safe_dump emits multi-line; preserve the rest of the file untouched.
-  body = yaml.safe_dump(fm, sort_keys=False, default_flow_style=False).rstrip("\n")
+  body = yaml.dump(
+      fm,
+      Dumper=FrontmatterDumper,
+      sort_keys=False,
+      default_flow_style=False,
+  ).rstrip("\n")
   path.write_text("---\n" + body + suffix)
 
 
