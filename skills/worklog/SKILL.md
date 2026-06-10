@@ -108,6 +108,7 @@ For per-task detail, use `"$WORKLOG_BIN/context.sh" <slug>` (its output ends in 
 - Per-task pack: `"$WORKLOG_BIN/context.sh" <slug> [--for=resume|review|compact]`.
 - Slug lookup: `"$WORKLOG_BIN/slug.sh" <fragment>`.
 - Search: `"$WORKLOG_BIN/search.sh" <pattern> [--active|--archive] [--kind= --status= --project= --linear= --pr= --repo= --ldap=]`; `--list` (slugs only), `--json`, `--semantic [--top=N]`.
+- Graph viewer: `"$WORKLOG_BIN/worklog-manager" graph --repo "$WORKLOG_REPO" --format html --output /tmp/worklog-graph.html [--project=slug] [--match=text]`.
 - Multi-task project: `"$WORKLOG_BIN/project.sh" new|next|claim|release|reap|verify|list <slug>`.
 - Lint: `"$WORKLOG_BIN/lint.sh" [--cross-task]`. Composite audit: `"$WORKLOG_BIN/audit.sh"`.
 - SQL: `"$WORKLOG_BIN/sql.sh" new|run|list|show <slug> <name>`.
