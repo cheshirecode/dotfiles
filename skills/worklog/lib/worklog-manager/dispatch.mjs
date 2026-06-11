@@ -1,3 +1,4 @@
+import childProcess from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { inferIssueIntent, issueFingerprint, normalizeIssue, redactedIssue, validateIntent } from "./issue.mjs";
@@ -77,6 +78,15 @@ function buildSandboxPlan(config, issue, intent) {
       "-e",
       `console.log(${JSON.stringify(JSON.stringify(payload))})`,
     ],
+  };
+}
+
+function parseRunHeadlessSummary(stdout) {
+  const match = String(stdout || "").match(/sandbox run-headless: exit=(\d+) artifacts=(.+)\s*$/m);
+  if (!match) return null;
+  return {
+    exitCode: Number(match[1]),
+    artifacts: match[2].trim(),
   };
 }
 
@@ -207,4 +217,28 @@ export function writeDispatchArtifacts(config, dispatch) {
     fs.writeFileSync(path.join(dir, "runner-command.json"), `${JSON.stringify(dispatch.plan, null, 2)}\n`);
   }
   return dir;
+}
+
+export function executeDispatch(config, dispatch) {
+  if (!dispatch.plan) return dispatch;
+  const [command, ...args] = dispatch.plan.argv;
+  transition(dispatch.history, "running", "executing sandbox run-headless argv");
+  const result = childProcess.spawnSync(command, args, {
+    encoding: "utf8",
+    shell: false,
+    timeout: dispatch.plan.timeoutSeconds * 1000,
+  });
+  dispatch.execution = {
+    approved: Boolean(dispatch.plan.execution?.approved),
+    status: result.status,
+    signal: result.signal,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    error: result.error ? result.error.message : "",
+    runHeadless: parseRunHeadlessSummary(result.stdout),
+  };
+  dispatch.state = result.status === 0 ? "completed" : "failed";
+  transition(dispatch.history, dispatch.state, result.status === 0 ? "runner exited 0" : "runner failed");
+  dispatch.statusComment = publicStatus(dispatch);
+  return dispatch;
 }
