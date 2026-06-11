@@ -20,6 +20,7 @@ export function parseArgs(argv) {
     issueUrls: [],
     expectedIssueHash: "",
     execute: false,
+    postStatus: false,
     forceFetch: false,
     iterations: "",
     intervalSeconds: "",
@@ -62,6 +63,7 @@ export function parseArgs(argv) {
     else if (arg === "--iterations" || arg.startsWith("--iterations=")) out.iterations = Number(readValue("--iterations"));
     else if (arg === "--interval-seconds" || arg.startsWith("--interval-seconds=")) out.intervalSeconds = Number(readValue("--interval-seconds"));
     else if (arg === "--execute") out.execute = true;
+    else if (arg === "--post-status") out.postStatus = true;
     else if (arg === "--force-fetch") out.forceFetch = true;
     else if (arg === "--help" || arg === "-h") out.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
@@ -74,7 +76,7 @@ export function usage(program = "node src/cli.js") {
     "usage:",
     `  ${program} graph [--config=file] [--repo=path] [--instance=name] [--github-repo=owner/repo] [--format=json|dot|html] [--output=file] [--active-only] [--project=slug] [--match=text]`,
     `  ${program} dispatch --config=file --issue=file [--expected-issue-hash=sha256] [--execute] [--output=file]`,
-    `  ${program} poll --config=file [--issue-url=https://github.com/owner/repo/issues/N ...] [--iterations=N] [--interval-seconds=N] [--force-fetch] [--output=file]`,
+    `  ${program} poll --config=file [--issue-url=https://github.com/owner/repo/issues/N ...] [--iterations=N] [--interval-seconds=N] [--force-fetch] [--post-status] [--output=file]`,
   ].join("\n");
 }
 
@@ -209,6 +211,7 @@ export function loadConfig(args, cwd = process.cwd()) {
     issueUrl: args.issueUrl,
     expectedIssueHash: args.expectedIssueHash,
     execute: args.execute,
+    postStatus: args.postStatus,
     forceFetch: args.forceFetch,
     activeOnly: Boolean(args.activeOnly || config.activeOnly || config.graphFilter?.activeOnly),
   };

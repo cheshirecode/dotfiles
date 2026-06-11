@@ -13,6 +13,7 @@ FIXTURE_REPO="$(pwd)/tests/worklog_manager/fixtures/projects"
 CONFIG="$SCRATCH/instance.json"
 OUT_POLL="$SCRATCH/poll.json"
 OUT_NOTMOD="$SCRATCH/not-modified.json"
+OUT_POST="$SCRATCH/post-status.json"
 FAKE_BIN="$SCRATCH/bin"
 FAKE_GH_LOG="$SCRATCH/gh.log"
 mkdir -p "$FAKE_BIN"
@@ -49,13 +50,27 @@ printf '%q ' "$@" >> "${FAKE_GH_LOG:?}"
 printf '\n' >> "${FAKE_GH_LOG:?}"
 
 for arg in "$@"; do
-  if [[ "$arg" == "--method" ]]; then
+  if [[ "$arg" == "--method" && "${ALLOW_GH_METHOD:-}" != "PATCH" ]]; then
     echo "unexpected mutating gh call" >&2
     exit 97
   fi
 done
 
 joined=" $* "
+if [[ "$joined" == *"--method PATCH"* ]]; then
+  if [[ "$joined" != *"repos/example/projects-ui/issues/comments/100"* ]]; then
+    echo "unexpected PATCH target: $*" >&2
+    exit 96
+  fi
+  cat <<'JSON'
+{
+  "id": 100,
+  "html_url": "https://github.com/example/projects-ui/issues/9#issuecomment-status"
+}
+JSON
+  exit 0
+fi
+
 if [[ "$joined" == *"comments?per_page=100"* ]]; then
   cat <<'JSON'
 [
@@ -158,6 +173,25 @@ if (!out.notModified) throw new Error("second poll should be notModified");
 if (out.cursor.status !== 304) throw new Error("cursor did not record 304");
 if (out.dispatch) throw new Error("notModified poll should not dispatch");
 if (ghLog.includes("--method")) throw new Error("poll attempted a mutating gh call");
+NODE
+
+PATH="$FAKE_BIN:$PATH" FAKE_GH_LOG="$FAKE_GH_LOG" ALLOW_GH_METHOD=PATCH "$WORKLOG_BIN/worklog-manager" poll \
+  --config "$CONFIG" \
+  --issue-url https://github.com/example/projects-ui/issues/9 \
+  --force-fetch \
+  --post-status \
+  --output "$OUT_POST"
+
+node - "$OUT_POST" "$FAKE_GH_LOG" <<'NODE'
+const fs = require("node:fs");
+const out = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const ghLog = fs.readFileSync(process.argv[3], "utf8");
+if (out.comment?.action !== "updated") throw new Error("status comment was not updated");
+if (out.comment?.id !== 100) throw new Error("wrong status comment id");
+if (!ghLog.includes("--method PATCH")) throw new Error("post-status did not PATCH");
+if (ghLog.includes("polling\\ smoke") || ghLog.includes("workspace") || ghLog.includes("runner-command")) {
+  throw new Error("status comment leaked prompt or local artifact details");
+}
 NODE
 
 echo "worklog-manager poll fixture test passed"
