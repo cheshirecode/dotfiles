@@ -17,6 +17,23 @@ OUT_COMMENT="$SCRATCH/comment.json"
 OUT_REFUSED="$SCRATCH/refused.json"
 OUT_EXEC_REFUSED="$SCRATCH/execute-refused.json"
 OUT_EXEC_PLANNED="$SCRATCH/execute-planned.json"
+FAKE_SANDBOX="$SCRATCH/fake-sandbox.sh"
+FAKE_SANDBOX_LOG="$SCRATCH/fake-sandbox.log"
+
+cat > "$FAKE_SANDBOX" <<'FAKE_SANDBOX'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%q ' "$@" >> "${FAKE_SANDBOX_LOG:?}"
+printf '\n' >> "${FAKE_SANDBOX_LOG:?}"
+if [[ "${1:-}" != "run-headless" ]]; then
+  echo "expected run-headless" >&2
+  exit 91
+fi
+echo "runner payload:"
+printf '%s\n' "$*"
+echo "sandbox run-headless: exit=0 artifacts=/tmp/fake-sandbox-artifacts"
+FAKE_SANDBOX
+chmod +x "$FAKE_SANDBOX"
 
 cat > "$CONFIG" <<JSON
 {
@@ -31,7 +48,7 @@ cat > "$CONFIG" <<JSON
     "repos": ["example/projects-ui"]
   },
   "sandbox": {
-    "command": "/workspace/oss/sandbox/bin/sandbox.sh",
+    "command": "$FAKE_SANDBOX",
     "profile": "fixture"
   },
   "daemon": {
@@ -47,7 +64,7 @@ cat > "$CONFIG" <<JSON
 }
 JSON
 
-"$WORKLOG_BIN/worklog-manager" dispatch \
+FAKE_SANDBOX_LOG="$FAKE_SANDBOX_LOG" "$WORKLOG_BIN/worklog-manager" dispatch \
   --config "$CONFIG" \
   --issue tests/worklog_manager/fixtures/accepted-plan.json \
   --output "$OUT_ACCEPTED"
@@ -71,7 +88,7 @@ assert(fs.existsSync(`${out.runDir}/status-comment.md`), "status artifact missin
 assert(fs.existsSync(`${out.runDir}/runner-command.json`), "runner artifact missing");
 NODE
 
-"$WORKLOG_BIN/worklog-manager" dispatch \
+FAKE_SANDBOX_LOG="$FAKE_SANDBOX_LOG" "$WORKLOG_BIN/worklog-manager" dispatch \
   --config "$CONFIG" \
   --issue tests/worklog_manager/fixtures/freeform-default-plan.json \
   --output "$OUT_DEFAULT"
@@ -85,7 +102,7 @@ if (out.dispatch.intent.sources.slug !== "daemon.defaultSlug") throw new Error("
 if (out.dispatch.intent.command !== "plan") throw new Error("natural-language plan not inferred");
 NODE
 
-"$WORKLOG_BIN/worklog-manager" dispatch \
+FAKE_SANDBOX_LOG="$FAKE_SANDBOX_LOG" "$WORKLOG_BIN/worklog-manager" dispatch \
   --config "$CONFIG" \
   --issue tests/worklog_manager/fixtures/freeform-comment-plan.json \
   --output "$OUT_COMMENT"
@@ -102,7 +119,7 @@ if (out.dispatch.intent.command !== "plan") throw new Error("comment flow natura
 if (out.dispatch.issue.commentCount !== 3) throw new Error("comment count not redacted onto issue summary");
 NODE
 
-"$WORKLOG_BIN/worklog-manager" dispatch \
+FAKE_SANDBOX_LOG="$FAKE_SANDBOX_LOG" "$WORKLOG_BIN/worklog-manager" dispatch \
   --config "$CONFIG" \
   --issue tests/worklog_manager/fixtures/refused-identity.json \
   --output "$OUT_REFUSED"
@@ -117,7 +134,7 @@ if (!out.dispatch.refusals.some((item) => item.code === "identity.mismatch")) {
 if (out.dispatch.plan !== null) throw new Error("refused dispatch must not have a runner plan");
 NODE
 
-"$WORKLOG_BIN/worklog-manager" dispatch \
+FAKE_SANDBOX_LOG="$FAKE_SANDBOX_LOG" "$WORKLOG_BIN/worklog-manager" dispatch \
   --config "$CONFIG" \
   --execute \
   --issue tests/worklog_manager/fixtures/execute-agent-missing-confirmation.json \
@@ -132,7 +149,7 @@ if (!out.dispatch.refusals.some((item) => item.code === "execution.confirmation_
 }
 NODE
 
-"$WORKLOG_BIN/worklog-manager" dispatch \
+FAKE_SANDBOX_LOG="$FAKE_SANDBOX_LOG" "$WORKLOG_BIN/worklog-manager" dispatch \
   --config "$CONFIG" \
   --execute \
   --issue tests/worklog_manager/fixtures/execute-agent.json \
@@ -141,12 +158,21 @@ NODE
 node - "$OUT_EXEC_PLANNED" <<'NODE'
 const fs = require("node:fs");
 const out = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-if (out.dispatch.state !== "planned") throw new Error("confirmed agent should plan");
+if (out.dispatch.state !== "completed") throw new Error("confirmed agent should complete fake sandbox run");
 if (!out.dispatch.plan.execution.approved) throw new Error("execution should be approved in the plan");
-if (out.dispatch.execution) throw new Error("upstream dispatch gate must not execute sandbox");
-if (!out.dispatch.statusComment.includes("sandbox execution planned")) {
-  throw new Error("status did not identify sandbox execution plan");
+if (!out.dispatch.execution?.approved) throw new Error("execution result not approved");
+if (out.dispatch.execution.status !== 0) throw new Error("fake sandbox did not exit 0");
+if (out.dispatch.execution.runHeadless?.exitCode !== 0) throw new Error("run-headless summary not parsed");
+if (!out.dispatch.statusComment.includes("sandbox execution completed")) {
+  throw new Error("status did not identify sandbox execution completion");
 }
+NODE
+
+node - "$FAKE_SANDBOX_LOG" <<'NODE'
+const fs = require("node:fs");
+const log = fs.readFileSync(process.argv[2], "utf8");
+if (!log.includes("run-headless node -e")) throw new Error("fake sandbox was not invoked with no-shell argv");
+if (log.includes("accepted-plan")) throw new Error("sandbox log should not contain unrelated dry-run fixtures");
 NODE
 
 echo "worklog-manager dispatch fixture test passed"

@@ -1,5 +1,5 @@
 import { parseArgs, usage, loadConfig } from "./config.mjs";
-import { createDispatch, writeDispatchArtifacts } from "./dispatch.mjs";
+import { createDispatch, executeDispatch, writeDispatchArtifacts } from "./dispatch.mjs";
 import { extractGraph } from "./extract.mjs";
 import { fetchIssue, updateCursorStatus, upsertStatusComment } from "./github.mjs";
 import { readIssue } from "./issue.mjs";
@@ -27,8 +27,12 @@ function runDispatch(config) {
   }
   const graph = extractGraph(config);
   const issue = readIssue(config.issue);
-  const dispatch = createDispatch(config, graph, issue);
+  let dispatch = createDispatch(config, graph, issue);
   const runDir = writeDispatchArtifacts(config, dispatch);
+  if (config.execute && dispatch.state !== "refused") {
+    dispatch = executeDispatch(config, dispatch);
+    writeDispatchArtifacts(config, dispatch);
+  }
   writeOutput(`${JSON.stringify({ runDir, dispatch }, null, 2)}\n`, config.output);
 }
 
@@ -38,8 +42,12 @@ function pollTarget(config, graph, issueUrl) {
     return { notModified: true, target: fetched.target, cursor: fetched.cursor, issueUrl };
   }
 
-  const dispatch = createDispatch(config, graph, fetched.issue);
+  let dispatch = createDispatch(config, graph, fetched.issue);
   const runDir = writeDispatchArtifacts(config, dispatch);
+  if (config.execute && dispatch.state !== "refused") {
+    dispatch = executeDispatch(config, dispatch);
+    writeDispatchArtifacts(config, dispatch);
+  }
   let comment = null;
   if (config.postStatus) {
     comment = upsertStatusComment(config, fetched.target, dispatch.statusComment);
