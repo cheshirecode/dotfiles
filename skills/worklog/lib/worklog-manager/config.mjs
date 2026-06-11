@@ -15,6 +15,9 @@ export function parseArgs(argv) {
     graphProjects: [],
     graphMatches: [],
     activeOnly: false,
+    issue: "",
+    expectedIssueHash: "",
+    execute: false,
     help: false,
     command: "graph",
   };
@@ -45,6 +48,9 @@ export function parseArgs(argv) {
     else if (arg === "--github-repo" || arg.startsWith("--github-repo=")) out.githubRepos.push(readValue("--github-repo"));
     else if (arg === "--project" || arg.startsWith("--project=")) out.graphProjects.push(readValue("--project"));
     else if (arg === "--match" || arg.startsWith("--match=")) out.graphMatches.push(readValue("--match"));
+    else if (arg === "--issue" || arg.startsWith("--issue=")) out.issue = readValue("--issue");
+    else if (arg === "--expected-issue-hash" || arg.startsWith("--expected-issue-hash=")) out.expectedIssueHash = readValue("--expected-issue-hash");
+    else if (arg === "--execute") out.execute = true;
     else if (arg === "--help" || arg === "-h") out.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
@@ -55,6 +61,7 @@ export function usage(program = "node src/cli.js") {
   return [
     "usage:",
     `  ${program} graph [--config=file] [--repo=path] [--instance=name] [--github-repo=owner/repo] [--format=json|dot|html] [--output=file] [--active-only] [--project=slug] [--match=text]`,
+    `  ${program} dispatch --config=file --issue=file [--expected-issue-hash=sha256] [--execute] [--output=file]`,
   ].join("\n");
 }
 
@@ -93,6 +100,31 @@ function normalizeGithub(config, args) {
   };
 }
 
+function normalizeSandbox(config) {
+  const sandbox = config.sandbox || {};
+  return {
+    command: String(sandbox.command || ""),
+    profile: String(sandbox.profile || ""),
+    timeoutSeconds: Number(sandbox.timeoutSeconds || 900),
+  };
+}
+
+function normalizeDaemon(config) {
+  const daemon = config.daemon || {};
+  const execution = daemon.execution || {};
+  return {
+    expectedLogin: String(daemon.expectedLogin || config.sandbox?.profile || ""),
+    commands: uniqueSorted(daemon.commands || ["agent", "ask", "do", "plan"]),
+    defaultSlug: String(daemon.defaultSlug || ""),
+    statusCommentMarker: String(daemon.statusCommentMarker || "<!-- worklog-manager-status -->"),
+    execution: {
+      enabled: Boolean(execution.enabled || false),
+      commands: uniqueSorted(execution.commands || ["agent"]),
+      confirmation: String(execution.confirmation || "sandbox"),
+    },
+  };
+}
+
 export function loadConfig(args, cwd = process.cwd()) {
   let config = {};
   let configPath = "";
@@ -117,8 +149,9 @@ export function loadConfig(args, cwd = process.cwd()) {
     stateDir: resolveMaybePath(cwd, roots.stateDir || config.stateDir, path.join(".state", instance)),
     cacheDir: resolveMaybePath(cwd, roots.cacheDir || config.cacheDir, path.join(".cache", instance)),
     github: normalizeGithub(config, args),
-    sandbox: {},
+    sandbox: normalizeSandbox(config),
     poll: {},
+    daemon: normalizeDaemon(config),
     graphFilter: {
       projects: uniqueInOrder([
         ...(config.graphFilter?.projects || []),
@@ -133,6 +166,9 @@ export function loadConfig(args, cwd = process.cwd()) {
     },
     format,
     output: args.output ? path.resolve(cwd, args.output) : "",
+    issue: args.issue ? path.resolve(cwd, args.issue) : "",
+    expectedIssueHash: args.expectedIssueHash,
+    execute: args.execute,
     activeOnly: Boolean(args.activeOnly || config.activeOnly || config.graphFilter?.activeOnly),
   };
 }

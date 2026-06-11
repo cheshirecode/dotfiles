@@ -1,0 +1,8 @@
+{
+  "number": 6,
+  "title": "Freeform default smoke",
+  "body": "Dry-run the live polling smoke. Do not execute mutating work.",
+  "repository": "example/projects-ui",
+  "author": "fixture-user",
+  "labels": ["worklog-manager"]
+}

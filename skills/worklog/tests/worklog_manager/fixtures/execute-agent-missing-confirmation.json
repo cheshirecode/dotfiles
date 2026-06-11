@@ -1,0 +1,8 @@
+{
+  "number": 11,
+  "title": "Missing sandbox execution confirmation",
+  "body": "Worklog-Slug: projects-child\nWorklog-Command: agent\n\nThis should not execute without the explicit sandbox confirmation.",
+  "repository": "example/projects-ui",
+  "author": "fixture-user",
+  "labels": ["worklog-manager"]
+}

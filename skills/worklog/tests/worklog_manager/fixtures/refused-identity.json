@@ -1,0 +1,16 @@
+{
+  "id": "ISSUE_fixture_2",
+  "number": 43,
+  "title": "Wrong user tries to plan",
+  "body": "Worklog-Slug: projects-child\nWorklog-Command: plan\n\nThis should be refused before any runner plan is used.",
+  "repository": {
+    "full_name": "example/projects-ui"
+  },
+  "author": {
+    "login": "not-fixture-user"
+  },
+  "labels": [
+    "worklog-manager"
+  ],
+  "html_url": "https://github.example/fixture/issues/43"
+}
