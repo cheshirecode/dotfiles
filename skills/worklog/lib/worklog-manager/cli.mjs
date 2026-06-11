@@ -1,7 +1,7 @@
 import { parseArgs, usage, loadConfig } from "./config.mjs";
 import { createDispatch, writeDispatchArtifacts } from "./dispatch.mjs";
 import { extractGraph } from "./extract.mjs";
-import { fetchIssue } from "./github.mjs";
+import { fetchIssue, updateCursorStatus, upsertStatusComment } from "./github.mjs";
 import { readIssue } from "./issue.mjs";
 import { renderDot, renderHtml, writeOutput } from "./render.mjs";
 
@@ -40,13 +40,23 @@ function pollTarget(config, graph, issueUrl) {
 
   const dispatch = createDispatch(config, graph, fetched.issue);
   const runDir = writeDispatchArtifacts(config, dispatch);
+  let comment = null;
+  if (config.postStatus) {
+    comment = upsertStatusComment(config, fetched.target, dispatch.statusComment);
+    updateCursorStatus(config, fetched.target, {
+      issueHash: dispatch.issueHash,
+      lastRunId: dispatch.runId,
+      lastRunDir: runDir,
+      lastComment: comment,
+    });
+  }
   return {
     notModified: false,
     target: fetched.target,
     cursor: fetched.cursor,
     issueUrl,
     runDir,
-    comment: null,
+    comment,
     dispatch,
   };
 }
