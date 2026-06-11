@@ -1,0 +1,16 @@
+{
+  "id": "ISSUE_fixture_1",
+  "number": 42,
+  "title": "Plan the projects child task",
+  "body": "Worklog-Slug: projects-child\nWorklog-Command: plan\n\nPlease plan the next safe step for this fixture task.",
+  "repository": {
+    "full_name": "example/projects-ui"
+  },
+  "author": {
+    "login": "fixture-user"
+  },
+  "labels": [
+    "worklog-manager"
+  ],
+  "html_url": "https://github.example/fixture/issues/42"
+}

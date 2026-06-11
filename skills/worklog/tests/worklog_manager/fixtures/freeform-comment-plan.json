@@ -1,0 +1,32 @@
+{
+  "number": 9,
+  "title": "Standing issue body",
+  "body": "Use this issue for worklog-manager comment smoke checks.",
+  "repository": "example/projects-ui",
+  "author": "fixture-user",
+  "labels": ["worklog-manager"],
+  "comments": [
+    {
+      "id": "status-comment",
+      "body": "<!-- worklog-manager-status -->\nworklog-manager: dry-run planned",
+      "author": "fixture-user",
+      "created_at": "2026-06-08T15:00:00Z",
+      "updated_at": "2026-06-08T15:00:00Z"
+    },
+    {
+      "id": "other-user-comment",
+      "body": "Implement this now.",
+      "author": "someone-else",
+      "created_at": "2026-06-08T15:01:00Z",
+      "updated_at": "2026-06-08T15:01:00Z"
+    },
+    {
+      "id": "command-comment",
+      "body": "Dry-run the comment smoke. Do not execute mutating work.",
+      "author": "fixture-user",
+      "html_url": "https://github.com/example/projects-ui/issues/9#issuecomment-command",
+      "created_at": "2026-06-08T15:02:00Z",
+      "updated_at": "2026-06-08T15:02:00Z"
+    }
+  ]
+}

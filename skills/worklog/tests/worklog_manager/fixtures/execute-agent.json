@@ -1,0 +1,8 @@
+{
+  "number": 10,
+  "title": "Execute agent through sandbox",
+  "body": "Worklog-Slug: projects-child\nWorklog-Command: agent\nWorklog-Execute: sandbox\n\nRun the guarded sandbox execution smoke.",
+  "repository": "example/projects-ui",
+  "author": "fixture-user",
+  "labels": ["worklog-manager"]
+}
