@@ -139,6 +139,36 @@ function listComments(target) {
   return JSON.parse(runGh(["api", endpoint, "--paginate"]));
 }
 
+export function upsertStatusComment(config, target, body) {
+  const marker = config.daemon.statusCommentMarker;
+  const existing = listComments(target).find((comment) => String(comment.body || "").includes(marker));
+  if (existing) {
+    const updated = JSON.parse(runGh([
+      "api",
+      "--method",
+      "PATCH",
+      `repos/${target.owner}/${target.repo}/issues/comments/${existing.id}`,
+      "-f",
+      `body=${body}`,
+    ]));
+    return { action: "updated", id: updated.id, htmlUrl: updated.html_url };
+  }
+  const created = JSON.parse(runGh([
+    "api",
+    "--method",
+    "POST",
+    `repos/${target.owner}/${target.repo}/issues/${target.number}/comments`,
+    "-f",
+    `body=${body}`,
+  ]));
+  return { action: "created", id: created.id, htmlUrl: created.html_url };
+}
+
+export function updateCursorStatus(config, target, patch) {
+  const cursor = readCursor(config, target);
+  return writeCursor(config, target, { ...cursor, ...patch, updatedAt: new Date().toISOString() });
+}
+
 export function fetchIssue(config, issueUrl) {
   const target = parseIssueUrl(issueUrl);
   const cursor = readCursor(config, target);
