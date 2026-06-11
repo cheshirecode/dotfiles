@@ -16,8 +16,13 @@ export function parseArgs(argv) {
     graphMatches: [],
     activeOnly: false,
     issue: "",
+    issueUrl: "",
+    issueUrls: [],
     expectedIssueHash: "",
     execute: false,
+    forceFetch: false,
+    iterations: "",
+    intervalSeconds: "",
     help: false,
     command: "graph",
   };
@@ -49,8 +54,15 @@ export function parseArgs(argv) {
     else if (arg === "--project" || arg.startsWith("--project=")) out.graphProjects.push(readValue("--project"));
     else if (arg === "--match" || arg.startsWith("--match=")) out.graphMatches.push(readValue("--match"));
     else if (arg === "--issue" || arg.startsWith("--issue=")) out.issue = readValue("--issue");
+    else if (arg === "--issue-url" || arg.startsWith("--issue-url=")) {
+      out.issueUrl = readValue("--issue-url");
+      out.issueUrls.push(out.issueUrl);
+    }
     else if (arg === "--expected-issue-hash" || arg.startsWith("--expected-issue-hash=")) out.expectedIssueHash = readValue("--expected-issue-hash");
+    else if (arg === "--iterations" || arg.startsWith("--iterations=")) out.iterations = Number(readValue("--iterations"));
+    else if (arg === "--interval-seconds" || arg.startsWith("--interval-seconds=")) out.intervalSeconds = Number(readValue("--interval-seconds"));
     else if (arg === "--execute") out.execute = true;
+    else if (arg === "--force-fetch") out.forceFetch = true;
     else if (arg === "--help" || arg === "-h") out.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
@@ -62,6 +74,7 @@ export function usage(program = "node src/cli.js") {
     "usage:",
     `  ${program} graph [--config=file] [--repo=path] [--instance=name] [--github-repo=owner/repo] [--format=json|dot|html] [--output=file] [--active-only] [--project=slug] [--match=text]`,
     `  ${program} dispatch --config=file --issue=file [--expected-issue-hash=sha256] [--execute] [--output=file]`,
+    `  ${program} poll --config=file [--issue-url=https://github.com/owner/repo/issues/N ...] [--iterations=N] [--interval-seconds=N] [--force-fetch] [--output=file]`,
   ].join("\n");
 }
 
@@ -82,6 +95,12 @@ function uniqueInOrder(values) {
     out.push(value);
   }
   return out;
+}
+
+function listValues(value) {
+  if (Array.isArray(value)) return value;
+  if (value) return [value];
+  return [];
 }
 
 function resolveMaybePath(cwd, value, fallback) {
@@ -106,6 +125,26 @@ function normalizeSandbox(config) {
     command: String(sandbox.command || ""),
     profile: String(sandbox.profile || ""),
     timeoutSeconds: Number(sandbox.timeoutSeconds || 900),
+  };
+}
+
+function normalizePoll(config, args) {
+  const poll = config.poll || {};
+  const intervalSeconds = args.intervalSeconds === ""
+    ? Number(poll.intervalSeconds || 60)
+    : Number(args.intervalSeconds);
+  return {
+    enabled: Boolean(poll.enabled || false),
+    intervalSeconds,
+    iterations: args.iterations === ""
+      ? Number(poll.iterations || 1)
+      : Number(args.iterations),
+    issueQuery: String(poll.issueQuery || ""),
+    issueUrls: uniqueInOrder([
+      ...listValues(poll.issueUrls),
+      ...listValues(poll.issueUrl),
+      ...args.issueUrls,
+    ]),
   };
 }
 
@@ -150,7 +189,7 @@ export function loadConfig(args, cwd = process.cwd()) {
     cacheDir: resolveMaybePath(cwd, roots.cacheDir || config.cacheDir, path.join(".cache", instance)),
     github: normalizeGithub(config, args),
     sandbox: normalizeSandbox(config),
-    poll: {},
+    poll: normalizePoll(config, args),
     daemon: normalizeDaemon(config),
     graphFilter: {
       projects: uniqueInOrder([
@@ -167,8 +206,10 @@ export function loadConfig(args, cwd = process.cwd()) {
     format,
     output: args.output ? path.resolve(cwd, args.output) : "",
     issue: args.issue ? path.resolve(cwd, args.issue) : "",
+    issueUrl: args.issueUrl,
     expectedIssueHash: args.expectedIssueHash,
     execute: args.execute,
+    forceFetch: args.forceFetch,
     activeOnly: Boolean(args.activeOnly || config.activeOnly || config.graphFilter?.activeOnly),
   };
 }
