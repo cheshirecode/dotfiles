@@ -109,6 +109,7 @@ For per-task detail, use `"$WORKLOG_BIN/context.sh" <slug>` (its output ends in 
 - Slug lookup: `"$WORKLOG_BIN/slug.sh" <fragment>`.
 - Search: `"$WORKLOG_BIN/search.sh" <pattern> [--active|--archive] [--kind= --status= --project= --linear= --pr= --repo= --ldap=]`; `--list` (slugs only), `--json`, `--semantic [--top=N]`.
 - Graph viewer: `"$WORKLOG_BIN/worklog-manager" graph --repo "$WORKLOG_REPO" --format html --output /tmp/worklog-graph.html [--project=slug] [--match=text]`.
+- Issue dispatch dry-run: `"$WORKLOG_BIN/worklog-manager" dispatch --config <instance.json> --issue <issue.json> --output /tmp/dispatch.json` writes local artifacts only; live polling/comment mutation stays outside this helper.
 - Multi-task project: `"$WORKLOG_BIN/project.sh" new|next|claim|release|reap|verify|list <slug>`.
 - Lint: `"$WORKLOG_BIN/lint.sh" [--cross-task]`. Composite audit: `"$WORKLOG_BIN/audit.sh"`.
 - SQL: `"$WORKLOG_BIN/sql.sh" new|run|list|show <slug> <name>`.
