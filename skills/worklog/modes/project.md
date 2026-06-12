@@ -29,7 +29,7 @@ Each task is a `{slug, [title], [kind], [depends_on], [repos]}` object:
 ]
 ```
 
-Children inherit the project's `--repos` unless they declare their own. `depends_on:` lives only in the parent's `tasks:` block — child stubs do **not** carry a top-level `depends_on:`.
+Children inherit the project's `--repos` unless they declare their own. `depends_on:` lives only in the parent's `tasks:` block — child stubs do **not** carry a top-level `depends_on:`. `worklog-manager graph` renders those declarations as `depends_on` edges from dependency to dependent, so the example above becomes `foo -> bar` and `foo -> baz`.
 
 ## Workflow
 
