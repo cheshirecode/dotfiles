@@ -47,7 +47,7 @@ Uniqueness invariant: slugs are globally unique across `people/*/`. That's what 
 ---
 slug: <slug>
 status: draft | in-progress | in-review | blocked | shipping | archived
-kind: design | review | spike | impl | ops | debug | program | postmortem | runbook | proposal | bugfix | investigation | plan | infra   # extended; lint also grandfathers legacy bug | perf | tooling
+kind: design | review | spike | impl | ops | debug | program | project | postmortem | runbook | proposal | bugfix | investigation | plan | infra   # extended; lint also grandfathers legacy bug | perf | tooling
 repos: [<name>, ...]   # e.g. [ui, website]; [] for doc-only work
 linear:                # optional; add ENG-<N> if/when one exists. Omit the key entirely when not applicable.
 project:               # see "Resolving project:" below
@@ -79,6 +79,17 @@ Four optional frontmatter keys express links between tasks. All single-direction
 - **`related: [{slug, note}]`** — peer links that aren't parent/child. `note` is a one-line *why this relates* (purpose of the link), not a description of where the slug appears in the body. Required (otherwise the link rots). Lint auto-injects a `(auto-added; refine note)` placeholder when a body-mention is undeclared; refine it before archive — the lint warns if the placeholder survives. Good: `note: "carve-out regex lives there; keep invariants aligned"`. Bad: `note: "mentioned in Context section"` (rephrases the body, not the relation). Same shape as `external_refs:`.
 - **`supersedes: <slug>`** — this task replaces an older approach that was abandoned mid-flight. Write it on the new task. On archiving the old one, add `superseded_by: <new-slug>` to its frontmatter and the one-line archive reason referencing the new slug.
 - **`reopens: <slug>`** — post-archive regression or follow-on (existing key; see FSM).
+
+Project parents (`kind: project`) may also declare project-local dependency order in their frontmatter `tasks:` list:
+
+```yaml
+tasks:
+  - slug: api
+  - slug: ui
+    depends_on: [api]
+```
+
+`depends_on` stays in the parent `tasks:` list only — never add a top-level `depends_on:` to child stubs. The worklog graph derives a `depends_on` edge from each dependency to the dependent task (`api -> ui` above), with the parent project slug recorded as the declaration source.
 
 Rules:
 
@@ -136,7 +147,7 @@ Proposal tasks (`kind: proposal` + `status: draft`) have their own 3-exit lifecy
 3. **Frontmatter is required.** A task without frontmatter is not discoverable via grep.
 4. **No secrets.** No API keys, tokens, private URLs beyond what Linear/GitHub already expose internally.
 5. **Commit terse, push often.** Every meaningful state change is a commit. Noise is fine; staleness is not.
-6. **No sibling directories under `people/<ldap>/`.** Only task `.md` files and (optionally) `.gitkeep`. Binary fixtures, JSON captures, scripts — live in the product repo the task's PR(s) touch.
+6. **No sibling directories under `people/<ldap>/` except `transcripts/`.** Active/archive contain only task `.md` files and (optionally) `.gitkeep`. `transcripts/` is non-task, non-indexed source material written by archive/status helpers. There is no `shipped/` state directory; terminal tasks live in `archive/`. Binary fixtures, JSON captures, scripts — live in the product repo the task's PR(s) touch.
 7. **Never `git rebase` / `git pull --rebase` / force-push during normal sync.** Linear history is the audit trail. Carve-out: explicit maintenance ops *do* rewrite history — `"$WORKLOG_BIN/log-compact.sh"` (compact same-slug checkpoint bursts), `"$WORKLOG_BIN/cache-purge.sh"` (remove historical `.cache/` paths), or other deliberate cleanup. These tag `pre-<op>-<ts>` for recovery and assume single-committer windows. After any such op, run `"$WORKLOG_BIN/post-rewrite-prompt.sh"` and paste its output to other live sessions so they reset cleanly. If `git pull` reports non-fast-forward and you didn't rewrite locally: `git stash push -u -m pre-recovery && git reset --hard origin/main && git stash pop`, then re-apply any wiped commits via reflog or by redoing the edits + checkpoint.
 
 ## Commit message convention
@@ -332,6 +343,8 @@ Two-session same-machine race on the same cache: the second writer wins; the fir
 
 ## Helpers
 
+`bin/foo.sh` below is shorthand for `"$WORKLOG_BIN/foo.sh"`; scripts live in the dotfiles skill, not in this data repo's `bin/` tombstone.
+
 ```bash
 bin/checkpoint.sh <slug> [--status=X --next="..." --pr=N --rename=OLD --include=PATH ...]
 bin/checkpoint-batch.sh < json                      # atomic multi-task checkpoint (one push for N flips)
@@ -414,12 +427,13 @@ Supported forms:
 - `worklog export` — write a sanitized setup artifact to `/tmp/worklog-setup-<ts>.txt` (shells out to `"$WORKLOG_BIN/export-setup.sh"`, which is agent-agnostic)
 - `worklog import <path>` — merge an export artifact into this machine's setup
 - `worklog lint [--cross-task]` — validate task files; `--cross-task` adds drift checks
+- `worklog project new|next|claim|release|reap|verify|list` — multi-task project workflow with advisory claims
 - `worklog review` — periodic protocol review; Codex uses `update_plan` for live tracking
 
 Execution rules in Codex:
 
 1. Run the corresponding `_worklog` workflow using the helper scripts in
-   `bin/` plus the rules in this file.
+   `$WORKLOG_BIN` plus the rules in this file.
 2. Prefer doing the work over describing the work. If the user typed
    `worklog status`, produce the status update; don't reply with command
    documentation unless they asked "how does `worklog status` work?".
@@ -436,6 +450,7 @@ Execution rules in Codex:
      (both shell out to `"$WORKLOG_BIN/export-setup.sh"` + the same awk-parsed artifact
      format Claude's skill uses; no Claude-specific deps)
    - `worklog lint` — `"$WORKLOG_BIN/lint.sh"`, with optional `--cross-task`
+   - `worklog project` — `"$WORKLOG_BIN/project.sh"` multi-task project orchestration
    - `worklog review` — protocol review loop, with Codex `update_plan`
      replacing Claude `TaskCreate`
 4. If flags are omitted, make the same reasonable-default choices a human
