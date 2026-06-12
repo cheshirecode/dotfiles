@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { parseArgs, usage, loadConfig } from "./config.mjs";
 import { createDispatch, executeDispatch, writeDispatchArtifacts } from "./dispatch.mjs";
 import { extractGraph } from "./extract.mjs";
@@ -6,6 +7,37 @@ import { readIssue } from "./issue.mjs";
 import { renderDot, renderHtml, writeOutput } from "./render.mjs";
 
 export const POLL_RUN_SCHEMA_VERSION = "worklog.poll-run.v1";
+
+function requireExpectedLogin(config, action) {
+  if (!config.daemon.expectedLogin) {
+    throw new Error(`${action} requires daemon.expectedLogin so trusted issue/comment authors are explicit.`);
+  }
+}
+
+function requireSandboxCommand(config) {
+  const command = config.sandbox.command;
+  if (!command) {
+    throw new Error("--execute requires sandbox.command.");
+  }
+  let stat;
+  try {
+    stat = fs.statSync(command);
+  } catch {
+    throw new Error(`--execute requires an executable sandbox.command; not found: ${command}`);
+  }
+  if (!stat.isFile() || (stat.mode & 0o111) === 0) {
+    throw new Error(`--execute requires an executable sandbox.command: ${command}`);
+  }
+}
+
+function preflightRuntime(config, action) {
+  if (action === "poll" || config.postStatus || config.execute) {
+    requireExpectedLogin(config, action);
+  }
+  if (config.execute) {
+    requireSandboxCommand(config);
+  }
+}
 
 function runGraph(config) {
   const graph = extractGraph(config);
@@ -25,6 +57,7 @@ function runDispatch(config) {
   if (!config.issue) {
     throw new Error("dispatch requires --issue=file");
   }
+  preflightRuntime(config, "dispatch");
   const graph = extractGraph(config);
   const issue = readIssue(config.issue);
   let dispatch = createDispatch(config, graph, issue);
@@ -96,6 +129,7 @@ function sleepSeconds(seconds) {
 }
 
 function runPoll(config) {
+  preflightRuntime(config, "poll");
   const issueUrls = config.poll.issueUrls;
   if (!issueUrls.length) {
     throw new Error("poll requires --issue-url=https://github.com/owner/repo/issues/N or poll.issueUrls in config");

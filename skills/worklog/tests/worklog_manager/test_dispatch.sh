@@ -11,6 +11,7 @@ trap 'rm -rf "$SCRATCH"' EXIT
 
 FIXTURE_REPO="$(pwd)/tests/worklog_manager/fixtures/projects"
 CONFIG="$SCRATCH/instance.json"
+BAD_SANDBOX_CONFIG="$SCRATCH/bad-sandbox-instance.json"
 OUT_ACCEPTED="$SCRATCH/accepted.json"
 OUT_DEFAULT="$SCRATCH/default.json"
 OUT_COMMENT="$SCRATCH/comment.json"
@@ -18,7 +19,9 @@ OUT_REFUSED="$SCRATCH/refused.json"
 OUT_EXEC_REFUSED="$SCRATCH/execute-refused.json"
 OUT_EXEC_PLANNED="$SCRATCH/execute-planned.json"
 OUT_EXEC_FREEFORM="$SCRATCH/execute-freeform.json"
+OUT_EXEC_BAD_SANDBOX="$SCRATCH/execute-bad-sandbox.json"
 FAKE_SANDBOX="$SCRATCH/fake-sandbox.sh"
+BAD_SANDBOX="$SCRATCH/not-executable-sandbox.sh"
 FAKE_SANDBOX_LOG="$SCRATCH/fake-sandbox.log"
 
 cat > "$FAKE_SANDBOX" <<'FAKE_SANDBOX'
@@ -35,6 +38,7 @@ printf '%s\n' "$*"
 echo "sandbox run-headless: exit=0 artifacts=/tmp/fake-sandbox-artifacts"
 FAKE_SANDBOX
 chmod +x "$FAKE_SANDBOX"
+printf '#!/usr/bin/env bash\nexit 92\n' > "$BAD_SANDBOX"
 
 cat > "$CONFIG" <<JSON
 {
@@ -50,6 +54,35 @@ cat > "$CONFIG" <<JSON
   },
   "sandbox": {
     "command": "$FAKE_SANDBOX",
+    "profile": "fixture"
+  },
+  "daemon": {
+    "expectedLogin": "fixture-user",
+    "defaultSlug": "projects-child",
+    "commands": ["ask", "plan", "do", "agent"],
+    "execution": {
+      "enabled": true,
+      "commands": ["agent"],
+      "confirmation": "sandbox"
+    }
+  }
+}
+JSON
+
+cat > "$BAD_SANDBOX_CONFIG" <<JSON
+{
+  "schemaVersion": "worklog-manager.instance.v1",
+  "instance": "fixture-projects",
+  "roots": {
+    "worklogRepo": "$FIXTURE_REPO",
+    "stateDir": "$SCRATCH/bad-sandbox-state",
+    "cacheDir": "$SCRATCH/bad-sandbox-cache"
+  },
+  "github": {
+    "repos": ["example/projects-ui"]
+  },
+  "sandbox": {
+    "command": "$BAD_SANDBOX",
     "profile": "fixture"
   },
   "daemon": {
@@ -149,6 +182,21 @@ if (!out.dispatch.refusals.some((item) => item.code === "execution.confirmation_
   throw new Error("missing execution.confirmation_missing refusal");
 }
 NODE
+
+set +e
+FAKE_SANDBOX_LOG="$FAKE_SANDBOX_LOG" "$WORKLOG_BIN/worklog-manager" dispatch \
+  --config "$BAD_SANDBOX_CONFIG" \
+  --execute \
+  --issue tests/worklog_manager/fixtures/execute-agent.json \
+  --output "$OUT_EXEC_BAD_SANDBOX" \
+  2> "$SCRATCH/execute-bad-sandbox.err"
+status=$?
+set -e
+if [[ "$status" -eq 0 ]]; then
+  echo "non-executable sandbox command unexpectedly succeeded" >&2
+  exit 1
+fi
+grep -q "requires an executable sandbox.command" "$SCRATCH/execute-bad-sandbox.err"
 
 FAKE_SANDBOX_LOG="$FAKE_SANDBOX_LOG" "$WORKLOG_BIN/worklog-manager" dispatch \
   --config "$CONFIG" \

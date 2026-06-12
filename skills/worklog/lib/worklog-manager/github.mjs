@@ -18,6 +18,12 @@ export function parseIssueUrl(url) {
   };
 }
 
+export function ensureIssueTargetAllowed(config, target) {
+  if (!config.github.repos.includes(target.fullName)) {
+    throw new Error(`Issue repository '${target.fullName}' is not in this instance allowlist.`);
+  }
+}
+
 function cursorFile(config, target) {
   return path.join(config.stateDir, "github-cursors", `${target.owner}-${target.repo}-issue-${target.number}.json`);
 }
@@ -140,6 +146,7 @@ function listComments(target) {
 }
 
 export function upsertStatusComment(config, target, body) {
+  ensureIssueTargetAllowed(config, target);
   const marker = config.daemon.statusCommentMarker;
   const existing = listComments(target).find((comment) => String(comment.body || "").includes(marker));
   if (existing) {
@@ -171,6 +178,7 @@ export function updateCursorStatus(config, target, patch) {
 
 export function fetchIssue(config, issueUrl) {
   const target = parseIssueUrl(issueUrl);
+  ensureIssueTargetAllowed(config, target);
   const cursor = readCursor(config, target);
   let issueResponse = fetchIssueData(config, target, cursor);
   const comments = normalizeFetchedComments(listComments(target));

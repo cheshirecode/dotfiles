@@ -11,9 +11,11 @@ trap 'rm -rf "$SCRATCH"' EXIT
 
 FIXTURE_REPO="$(pwd)/tests/worklog_manager/fixtures/projects"
 CONFIG="$SCRATCH/instance.json"
+MISSING_LOGIN_CONFIG="$SCRATCH/missing-login-instance.json"
 OUT_POLL="$SCRATCH/poll.json"
 OUT_NOTMOD="$SCRATCH/not-modified.json"
 OUT_POST="$SCRATCH/post-status.json"
+OUT_REFUSED="$SCRATCH/refused.json"
 FAKE_BIN="$SCRATCH/bin"
 FAKE_GH_LOG="$SCRATCH/gh.log"
 mkdir -p "$FAKE_BIN"
@@ -36,6 +38,29 @@ cat > "$CONFIG" <<JSON
   },
   "daemon": {
     "expectedLogin": "fixture-user",
+    "defaultSlug": "projects-child",
+    "commands": ["ask", "plan", "do", "agent"]
+  }
+}
+JSON
+
+cat > "$MISSING_LOGIN_CONFIG" <<JSON
+{
+  "schemaVersion": "worklog-manager.instance.v1",
+  "instance": "fixture-projects-missing-login",
+  "roots": {
+    "worklogRepo": "$FIXTURE_REPO",
+    "stateDir": "$SCRATCH/missing-login-state",
+    "cacheDir": "$SCRATCH/missing-login-cache"
+  },
+  "github": {
+    "repos": ["example/projects-ui"]
+  },
+  "sandbox": {
+    "command": "/workspace/oss/sandbox/bin/sandbox.sh",
+    "profile": ""
+  },
+  "daemon": {
     "defaultSlug": "projects-child",
     "commands": ["ask", "plan", "do", "agent"]
   }
@@ -134,6 +159,47 @@ exit 98
 FAKE_GH
 chmod +x "$FAKE_BIN/gh"
 
+: > "$FAKE_GH_LOG"
+set +e
+PATH="$FAKE_BIN:$PATH" FAKE_GH_LOG="$FAKE_GH_LOG" "$WORKLOG_BIN/worklog-manager" poll \
+  --config "$CONFIG" \
+  --issue-url https://github.com/example/not-allowed/issues/9 \
+  --force-fetch \
+  --output "$OUT_REFUSED" \
+  2> "$SCRATCH/refused-repo.err"
+status=$?
+set -e
+if [[ "$status" -eq 0 ]]; then
+  echo "disallowed repo poll unexpectedly succeeded" >&2
+  exit 1
+fi
+grep -q "example/not-allowed" "$SCRATCH/refused-repo.err"
+if [[ -s "$FAKE_GH_LOG" ]]; then
+  echo "disallowed repo preflight should not call gh" >&2
+  exit 1
+fi
+
+: > "$FAKE_GH_LOG"
+set +e
+PATH="$FAKE_BIN:$PATH" FAKE_GH_LOG="$FAKE_GH_LOG" "$WORKLOG_BIN/worklog-manager" poll \
+  --config "$MISSING_LOGIN_CONFIG" \
+  --issue-url https://github.com/example/projects-ui/issues/9 \
+  --force-fetch \
+  --output "$OUT_REFUSED" \
+  2> "$SCRATCH/missing-login.err"
+status=$?
+set -e
+if [[ "$status" -eq 0 ]]; then
+  echo "missing expectedLogin poll unexpectedly succeeded" >&2
+  exit 1
+fi
+grep -q "requires daemon.expectedLogin" "$SCRATCH/missing-login.err"
+if [[ -s "$FAKE_GH_LOG" ]]; then
+  echo "missing expectedLogin preflight should not call gh" >&2
+  exit 1
+fi
+
+: > "$FAKE_GH_LOG"
 PATH="$FAKE_BIN:$PATH" FAKE_GH_LOG="$FAKE_GH_LOG" "$WORKLOG_BIN/worklog-manager" poll \
   --config "$CONFIG" \
   --issue-url https://github.com/example/projects-ui/issues/9 \
