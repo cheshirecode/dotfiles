@@ -139,7 +139,7 @@ function inferCommand(text) {
   const executableText = normalized.replace(/\bdry[-\s]?run\b/g, "");
   const negatesExecution = /\b(do not|don't|dont|without|no)\s+(execute|run|mutate|apply|executing|running|mutating|applying)\b/.test(normalized)
     || /\bnon[-\s]?mutating\b/.test(normalized);
-  if (!negatesExecution && /\b(do|execute|run|apply|implement)\b/.test(executableText)) add("do");
+  if (!negatesExecution && !candidates.includes("agent") && /\b(do|execute|run|apply|implement)\b/.test(executableText)) add("do");
 
   if (candidates.length === 1) return { command: candidates[0], source: "natural-language" };
   if (candidates.length > 1) {
@@ -153,6 +153,27 @@ function inferCommand(text) {
     };
   }
   return { command: "", source: "" };
+}
+
+function inferExecution(text, confirmation) {
+  const target = String(confirmation || "").toLowerCase();
+  if (!target) return { requested: false, target: "", source: "" };
+
+  const normalized = String(text || "").toLowerCase();
+  const targetRe = new RegExp(`\\b${escapeRe(target)}\\b`);
+  if (!targetRe.test(normalized)) return { requested: false, target: "", source: "" };
+
+  const negatesExecution = /\b(do not|don't|dont|without|no|not)\s+(sandbox\s+)?(execute|run|mutate|apply|executing|running|mutating|applying|execution)\b/.test(normalized)
+    || /\bwithout\b[^.!\n]{0,80}\bsandbox\b/.test(normalized)
+    || /\bno\s+sandbox\b/.test(normalized)
+    || /\bnon[-\s]?mutating\b/.test(normalized)
+    || /\bdry[-\s]?run\b/.test(normalized);
+  if (negatesExecution) return { requested: false, target: "", source: "" };
+
+  const asksForExecution = /\b(execute|execution|run|running|run[-\s]?headless|smoke)\b/.test(normalized);
+  if (!asksForExecution) return { requested: false, target: "", source: "" };
+
+  return { requested: true, target, source: "natural-language" };
 }
 
 export function parseIssueIntent(issue) {
@@ -208,6 +229,10 @@ export function inferIssueIntent(issue, graph, config) {
     intent.command = inferred.command;
     intent.sources.command = inferred.source;
     if (inferred.error) intent.errors.push(inferred.error);
+  }
+
+  if (!intent.execute.requested) {
+    intent.execute = inferExecution(text, config?.daemon?.execution?.confirmation);
   }
 
   return intent;
