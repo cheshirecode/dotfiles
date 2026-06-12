@@ -17,6 +17,7 @@ OUT_COMMENT="$SCRATCH/comment.json"
 OUT_REFUSED="$SCRATCH/refused.json"
 OUT_EXEC_REFUSED="$SCRATCH/execute-refused.json"
 OUT_EXEC_PLANNED="$SCRATCH/execute-planned.json"
+OUT_EXEC_FREEFORM="$SCRATCH/execute-freeform.json"
 FAKE_SANDBOX="$SCRATCH/fake-sandbox.sh"
 FAKE_SANDBOX_LOG="$SCRATCH/fake-sandbox.log"
 
@@ -166,6 +167,26 @@ if (out.dispatch.execution.runHeadless?.exitCode !== 0) throw new Error("run-hea
 if (!out.dispatch.statusComment.includes("sandbox execution completed")) {
   throw new Error("status did not identify sandbox execution completion");
 }
+NODE
+
+FAKE_SANDBOX_LOG="$FAKE_SANDBOX_LOG" "$WORKLOG_BIN/worklog-manager" dispatch \
+  --config "$CONFIG" \
+  --execute \
+  --issue tests/worklog_manager/fixtures/freeform-comment-execute.json \
+  --output "$OUT_EXEC_FREEFORM"
+
+node - "$OUT_EXEC_FREEFORM" <<'NODE'
+const fs = require("node:fs");
+const out = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+if (out.dispatch.state !== "completed") throw new Error("freeform sandbox comment should complete fake sandbox run");
+if (out.dispatch.intent.source.type !== "issue-comment") throw new Error("trusted execution comment was not selected");
+if (out.dispatch.intent.source.id !== "execute-command-comment") throw new Error("wrong execution comment selected");
+if (out.dispatch.intent.slug !== "projects-child") throw new Error("freeform execution slug not inferred");
+if (out.dispatch.intent.command !== "agent") throw new Error("freeform execution command not inferred");
+if (out.dispatch.intent.sources.slug !== "natural-language") throw new Error("unexpected freeform execution slug source");
+if (out.dispatch.intent.sources.command !== "natural-language") throw new Error("unexpected freeform execution command source");
+if (out.dispatch.intent.execute.source !== "natural-language") throw new Error("sandbox execution confirmation was not inferred");
+if (!out.dispatch.execution?.approved) throw new Error("freeform execution was not approved");
 NODE
 
 node - "$FAKE_SANDBOX_LOG" <<'NODE'
