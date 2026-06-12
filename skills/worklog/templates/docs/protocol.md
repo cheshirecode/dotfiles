@@ -127,7 +127,7 @@ Most commits are self-loops (same status, bumped `last_updated` / `next_action` 
 
 `kind:` is a grep-friendly tag for task class — a hint, not a schema gate. A task's `kind:` may add optional frontmatter keys (e.g., `notion:`, `pr:`, `incident:`) and body sections, but must never remove, rename, or override the required fields (`slug`, `status`, `repos`, `last_updated`, `next_action`) or the `## Context` / `## Next` sections. Any script or agent reading a task file must work uniformly across kinds.
 
-Current kinds: `design | review | spike | impl | ops | debug | program | postmortem | runbook | proposal`. New kinds may be added ad hoc — same substitutability rule applies.
+Current kinds: `design | review | spike | impl | ops | debug | program | project | postmortem | runbook | proposal`. New kinds may be added ad hoc — same substitutability rule applies.
 
 Extended ad-hoc kinds observed in the corpus (accepted by `bin/lint.sh`):
 
@@ -154,6 +154,7 @@ If you need a new kind, use it and add it to `KINDS` in `bin/_lint.py` plus this
 - `ops` — one-shot infra/ops change.
 - `debug` — reproducing + fixing a specific bug.
 - `program` — multi-task stewardship: coordinates a design doc, Linear tickets, and iteration log across a phase/initiative (Amazon/Google "program"). Add sections for Linear hygiene and Iteration log.
+- `project` — multi-task execution container managed by `project.sh`. May add `tasks:` and `mutex:` frontmatter plus transient child-task `claim:` blocks. These keys are project-mode metadata, not general schema expansion points; ordinary task readers must still rely on the required fields and `## Context` / `## Next`. The graph exporter treats each `tasks[].depends_on` entry as a `depends_on` edge from dependency to dependent (`api -> ui` when `ui` depends on `api`).
 - `postmortem` — incident RCA (Google SRE). Sections: timeline, root cause, action items, invariants lifted.
 - `runbook` — repeatable ops procedure an agent can follow (Google SRE). Distinct from `ops` (one-shot) — runbooks are meant to be re-run.
 - `proposal` — unrealized follow-on awaiting a decision. No code yet. Always paired with `status: draft`. See "Proposal tasks" below.
@@ -217,6 +218,17 @@ related:
 supersedes: eng-1503-p17c-resolver-v4   # optional; abandoned alternative
 ```
 
+For `kind: project` parents, project-local sequencing lives in the parent `tasks:` list and is graph-indexed as dependency edges:
+
+```yaml
+tasks:
+  - slug: api
+  - slug: ui
+    depends_on: [api]
+```
+
+The direction is `api -> ui` (dependency to dependent), and `depends_on` must not be copied onto child task frontmatter.
+
 Rules:
 
 - Slugs are bare (no path, no `.md`). Every slug must resolve to a real file under `people/*/active/` or `people/*/archive/` at commit time.
@@ -224,6 +236,7 @@ Rules:
 - `note` is required on each `related` entry. Force the *why* into the file; "see also: <slug>" in prose is not sufficient.
 - Prefer `parent_slug` over a prose breadcrumb when the relationship is durable (child of a `program`, follow-on from a design task, etc.). Transient mentions can stay in prose.
 - `supersedes` / `superseded_by` is the symmetric pair for abandoned-approach replacement. Set `superseded_by` on the old task in the same commit that archives it; set `supersedes` on the successor.
+- `tasks[].depends_on` is for project execution order only. It is graph-visible, but it is not a substitute for `parent_slug`, `related`, or status/claim state.
 
 ## Proposal tasks (unrealized follow-ons)
 
