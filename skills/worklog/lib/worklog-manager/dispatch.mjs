@@ -115,7 +115,7 @@ function validateAgainstConfig(config, graph, issue, intent, fingerprint) {
       errors.push(refusal("execution.command_not_allowed", `Command '${intent.command}' is not enabled for sandbox execution.`));
     }
     if (!intent.execute.requested || intent.execute.target !== config.daemon.execution.confirmation) {
-      errors.push(refusal("execution.confirmation_missing", `Issue must include Worklog-Execute: ${config.daemon.execution.confirmation} before --execute can run.`));
+      errors.push(refusal("execution.confirmation_missing", `Issue must explicitly request ${config.daemon.execution.confirmation} execution before --execute can run.`));
     }
   }
   return errors;
