@@ -10,6 +10,10 @@ cd "$TMP"
 git init -q
 git config user.email tester@example.com
 git config user.name Tester
+export GIT_AUTHOR_NAME=Tester
+export GIT_AUTHOR_EMAIL=tester@example.com
+export GIT_COMMITTER_NAME=Tester
+export GIT_COMMITTER_EMAIL=tester@example.com
 mkdir -p people/tester/active
 
 cat > people/tester/active/fresh-task.md <<'EOF'
