@@ -22,6 +22,19 @@ bundled "karpathy posture preamble" with "git reset --hard preconditions"
 rejected retroactive `git rebase -i` + force-push as net-negative; the
 correction lives forward in this rule.
 
+## Checkout and branch discipline (lesson from detached Codex worktrees)
+
+When the user targets `oss/dotfiles` or `/Users/fredtran/Documents/oss/dotfiles`,
+use that primary checkout on `main` as the delivery surface and commit directly
+to `main` unless the user explicitly asks for a branch or PR.
+
+Temporary agent worktrees under `.codex/worktrees/.../dotfiles` may be detached
+or branch-prefixed by default. Treat them as scratch/integration surfaces only:
+if work starts there, port or merge the exact changes back into the primary
+`oss/dotfiles` checkout, validate from that checkout, and push `main` from
+there. Do not let "detached HEAD" in a temporary worktree silently turn a
+direct-main request into a side branch.
+
 ## Reading posture (apply before treating any section as a recipe)
 
 This is a guidance document, not a runnable checklist. When an agent reads
