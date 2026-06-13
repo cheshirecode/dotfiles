@@ -133,6 +133,10 @@ function inferCommand(text) {
     || /\bwithout\s+(executing|running|mutating|applying)\b/.test(normalized)) {
     add("plan");
   }
+  if (/\b(list|show|count|status)\b/.test(normalized)
+    || /\b(how many|what|which|where|when|who)\b/.test(normalized)) {
+    add("ask");
+  }
   if (/\b(ask|question|answer)\b/.test(normalized)) add("ask");
   if (/\b(agent|autonomous)\b/.test(normalized)) add("agent");
 
@@ -289,7 +293,7 @@ export function validateIntent(intent) {
   else if (!SLUG_RE.test(intent.slug)) errors.push({ code: "slug.invalid", message: "Worklog-Slug is not a valid worklog slug." });
 
   if (!intent.command && !hasCommandResolutionError) errors.push({ code: "command.missing", message: "Issue must say ask, plan, do, agent, dry-run, or use Worklog-Command: ask|plan|do|agent." });
-  else if (!COMMAND_RE.test(intent.command)) errors.push({ code: "command.invalid", message: "Worklog-Command must be ask, plan, do, or agent." });
+  else if (intent.command && !COMMAND_RE.test(intent.command)) errors.push({ code: "command.invalid", message: "Worklog-Command must be ask, plan, do, or agent." });
 
   if (intent.execute.requested && !EXECUTE_RE.test(intent.execute.target)) {
     errors.push({ code: "execution.invalid_target", message: "Worklog-Execute must be sandbox." });

@@ -1,0 +1,8 @@
+{
+  "number": 14,
+  "title": "Ambiguous read and do",
+  "body": "List commits then implement it for projects-child.",
+  "repository": "example/projects-ui",
+  "author": "fixture-user",
+  "labels": ["worklog-manager"]
+}

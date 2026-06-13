@@ -7,6 +7,7 @@ const FORMATS = new Set(["json", "dot", "html"]);
 export function parseArgs(argv) {
   const out = {
     config: "",
+    configs: [],
     format: "html",
     output: "",
     repo: "",
@@ -45,7 +46,10 @@ export function parseArgs(argv) {
     };
 
     if (arg === "--active-only") out.activeOnly = true;
-    else if (arg === "--config" || arg.startsWith("--config=")) out.config = readValue("--config");
+    else if (arg === "--config" || arg.startsWith("--config=")) {
+      out.config = readValue("--config");
+      out.configs.push(out.config);
+    }
     else if (arg === "--format" || arg.startsWith("--format=")) out.format = readValue("--format");
     else if (arg === "--output" || arg.startsWith("--output=")) out.output = readValue("--output");
     else if (arg === "-o") out.output = readValue("-o");
@@ -77,6 +81,7 @@ export function usage(program = "node src/cli.js") {
     `  ${program} graph [--config=file] [--repo=path] [--instance=name] [--github-repo=owner/repo] [--format=json|dot|html] [--output=file] [--active-only] [--project=slug] [--match=text]`,
     `  ${program} dispatch --config=file --issue=file [--expected-issue-hash=sha256] [--execute] [--output=file]`,
     `  ${program} poll --config=file [--issue-url=https://github.com/owner/repo/issues/N ...] [--iterations=N] [--interval-seconds=N] [--force-fetch] [--post-status] [--output=file]`,
+    `  ${program} validate-watchers --config=file --config=file [...] [--output=file]`,
   ].join("\n");
 }
 
@@ -150,14 +155,18 @@ function normalizePoll(config, args) {
   };
 }
 
-function normalizeDaemon(config) {
+function markerName(instance) {
+  return String(instance || "default").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "default";
+}
+
+function normalizeDaemon(config, instance) {
   const daemon = config.daemon || {};
   const execution = daemon.execution || {};
   return {
     expectedLogin: String(daemon.expectedLogin || config.sandbox?.profile || ""),
     commands: uniqueSorted(daemon.commands || ["agent", "ask", "do", "plan"]),
     defaultSlug: String(daemon.defaultSlug || ""),
-    statusCommentMarker: String(daemon.statusCommentMarker || "<!-- worklog-manager-status -->"),
+    statusCommentMarker: String(daemon.statusCommentMarker || `<!-- worklog-manager-status:${markerName(instance)} -->`),
     execution: {
       enabled: Boolean(execution.enabled || false),
       commands: uniqueSorted(execution.commands || ["agent"]),
@@ -192,7 +201,7 @@ export function loadConfig(args, cwd = process.cwd()) {
     github: normalizeGithub(config, args),
     sandbox: normalizeSandbox(config),
     poll: normalizePoll(config, args),
-    daemon: normalizeDaemon(config),
+    daemon: normalizeDaemon(config, instance),
     graphFilter: {
       projects: uniqueInOrder([
         ...(config.graphFilter?.projects || []),

@@ -119,7 +119,8 @@ For per-task detail, use `"$WORKLOG_BIN/context.sh" <slug>` (its output ends in 
 - Search: `"$WORKLOG_BIN/search.sh" <pattern> [--active|--archive] [--kind= --status= --project= --linear= --pr= --repo= --ldap=]`; `--list` (slugs only), `--json`, `--semantic [--top=N]`.
 - Graph viewer: `"$WORKLOG_BIN/worklog-manager" graph --repo "$WORKLOG_REPO" --format html --output /tmp/worklog-graph.html [--project=slug] [--match=text]`.
 - Issue dispatch: `"$WORKLOG_BIN/worklog-manager" dispatch --config <instance.json> --issue <issue.json> --output /tmp/dispatch.json` writes local artifacts; `--execute` runs the planned sandbox argv only when instance config and `Worklog-Execute: sandbox` both approve it.
-- Issue poll dry-run: `"$WORKLOG_BIN/worklog-manager" poll --config <instance.json> --issue-url https://github.com/<owner>/<repo>/issues/<n> --output /tmp/poll.json` fetches through `gh api`, updates local cursor/run artifacts, and posts no GitHub comments unless `--post-status` is passed.
+- Issue poll dry-run: `"$WORKLOG_BIN/worklog-manager" poll --config <instance.json> --issue-url https://github.com/<owner>/<repo>/issues/<n> --output /tmp/poll.json` requires `poll.enabled=true`, fetches through `gh api`, updates local cursor/run artifacts, records ignored learning events under `.cache/<instance>/learning/`, and posts no GitHub comments unless `--post-status` is passed.
+- Watcher config audit: `"$WORKLOG_BIN/worklog-manager" validate-watchers --config <projects.json> --config <oss.json>` checks separate watcher instances for shared state/cache dirs and same-issue status-marker collisions before polling.
 - Multi-task project: `"$WORKLOG_BIN/project.sh" new|next|claim|release|reap|verify|list <slug>`.
 - Lint: `"$WORKLOG_BIN/lint.sh" [--cross-task]`. Composite audit: `"$WORKLOG_BIN/audit.sh"`.
 - SQL: `"$WORKLOG_BIN/sql.sh" new|run|list|show <slug> <name>`.
