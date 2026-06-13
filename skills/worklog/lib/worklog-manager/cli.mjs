@@ -4,7 +4,9 @@ import { createDispatch, executeDispatch, writeDispatchArtifacts } from "./dispa
 import { extractGraph } from "./extract.mjs";
 import { fetchIssue, updateCursorStatus, upsertStatusComment } from "./github.mjs";
 import { readIssue } from "./issue.mjs";
+import { recordLearningEvent } from "./learning.mjs";
 import { renderDot, renderHtml, writeOutput } from "./render.mjs";
+import { validateWatcherConfigs } from "./watchers.mjs";
 
 export const POLL_RUN_SCHEMA_VERSION = "worklog.poll-run.v1";
 
@@ -72,7 +74,9 @@ function runDispatch(config) {
 function pollTarget(config, graph, issueUrl) {
   const fetched = fetchIssue(config, issueUrl);
   if (fetched.notModified) {
-    return { notModified: true, target: fetched.target, cursor: fetched.cursor, issueUrl };
+    const result = { notModified: true, target: fetched.target, cursor: fetched.cursor, issueUrl };
+    recordLearningEvent(config, result);
+    return result;
   }
 
   let dispatch = createDispatch(config, graph, fetched.issue);
@@ -91,7 +95,7 @@ function pollTarget(config, graph, issueUrl) {
       lastComment: comment,
     });
   }
-  return {
+  const result = {
     notModified: false,
     target: fetched.target,
     cursor: fetched.cursor,
@@ -100,6 +104,8 @@ function pollTarget(config, graph, issueUrl) {
     comment,
     dispatch,
   };
+  recordLearningEvent(config, result);
+  return result;
 }
 
 function summarizePollResults(results) {
@@ -131,6 +137,9 @@ function sleepSeconds(seconds) {
 function runPoll(config) {
   preflightRuntime(config, "poll");
   const issueUrls = config.poll.issueUrls;
+  if (!config.poll.enabled) {
+    throw new Error("poll requires poll.enabled=true in config before polling work starts");
+  }
   if (!issueUrls.length) {
     throw new Error("poll requires --issue-url=https://github.com/owner/repo/issues/N or poll.issueUrls in config");
   }
@@ -168,20 +177,35 @@ function runPoll(config) {
   }, null, 2)}\n`, config.output);
 }
 
+function runValidateWatchers(args) {
+  if (args.configs.length < 1) {
+    throw new Error("validate-watchers requires at least one --config=file");
+  }
+  const configs = args.configs.map((configPath) => loadConfig({ ...args, config: configPath, issueUrls: [], issueUrl: "" }));
+  const result = validateWatcherConfigs(configs);
+  writeOutput(`${JSON.stringify(result, null, 2)}\n`, configs[0]?.output || "");
+  if (!result.ok) {
+    throw new Error(`watcher config validation failed with ${result.errors.length} error(s)`);
+  }
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     console.log(usage(process.env.WORKLOG_MANAGER_USAGE || "worklog-manager"));
     return;
   }
-  const config = loadConfig(args);
-
   if (args.command === "graph") {
+    const config = loadConfig(args);
     runGraph(config);
   } else if (args.command === "dispatch") {
+    const config = loadConfig(args);
     runDispatch(config);
   } else if (args.command === "poll") {
+    const config = loadConfig(args);
     runPoll(config);
+  } else if (args.command === "validate-watchers") {
+    runValidateWatchers(args);
   } else {
     throw new Error(`Unknown command: ${args.command}`);
   }

@@ -15,6 +15,8 @@ BAD_SANDBOX_CONFIG="$SCRATCH/bad-sandbox-instance.json"
 OUT_ACCEPTED="$SCRATCH/accepted.json"
 OUT_DEFAULT="$SCRATCH/default.json"
 OUT_COMMENT="$SCRATCH/comment.json"
+OUT_ASK="$SCRATCH/ask.json"
+OUT_AMBIG_READ_DO="$SCRATCH/ambiguous-read-do.json"
 OUT_REFUSED="$SCRATCH/refused.json"
 OUT_EXEC_REFUSED="$SCRATCH/execute-refused.json"
 OUT_EXEC_PLANNED="$SCRATCH/execute-planned.json"
@@ -151,6 +153,41 @@ if (out.dispatch.intent.source.author !== "fixture-user") throw new Error("wrong
 if (out.dispatch.intent.slug !== "projects-child") throw new Error("comment flow default slug not applied");
 if (out.dispatch.intent.command !== "plan") throw new Error("comment flow natural-language plan not inferred");
 if (out.dispatch.issue.commentCount !== 3) throw new Error("comment count not redacted onto issue summary");
+NODE
+
+FAKE_SANDBOX_LOG="$FAKE_SANDBOX_LOG" "$WORKLOG_BIN/worklog-manager" dispatch \
+  --config "$CONFIG" \
+  --issue tests/worklog_manager/fixtures/freeform-comment-ask.json \
+  --output "$OUT_ASK"
+
+node - "$OUT_ASK" <<'NODE'
+const fs = require("node:fs");
+const out = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+if (out.dispatch.state !== "planned") throw new Error("freeform ask comment should plan");
+if (out.dispatch.intent.source.type !== "issue-comment") throw new Error("latest trusted ask comment was not selected");
+if (out.dispatch.intent.source.id !== "ask-command-comment") throw new Error("wrong ask comment selected");
+if (out.dispatch.intent.slug !== "projects-child") throw new Error("ask comment default slug not applied");
+if (out.dispatch.intent.command !== "ask") throw new Error("read-only phrase did not infer ask");
+if (out.dispatch.intent.sources.command !== "natural-language") throw new Error("unexpected ask command source");
+if (out.dispatch.plan.execution.active) throw new Error("ask plan should not activate execution");
+if (out.dispatch.plan.execution.approved) throw new Error("ask plan should not approve execution");
+NODE
+
+FAKE_SANDBOX_LOG="$FAKE_SANDBOX_LOG" "$WORKLOG_BIN/worklog-manager" dispatch \
+  --config "$CONFIG" \
+  --issue tests/worklog_manager/fixtures/freeform-ambiguous-read-do.json \
+  --output "$OUT_AMBIG_READ_DO"
+
+node - "$OUT_AMBIG_READ_DO" <<'NODE'
+const fs = require("node:fs");
+const out = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+if (out.dispatch.state !== "refused") throw new Error("mixed read and mutate intent should refuse");
+if (!out.dispatch.refusals.some((item) => item.code === "command.ambiguous")) {
+  throw new Error("missing command.ambiguous refusal");
+}
+if (out.dispatch.refusals.some((item) => item.code === "command.invalid")) {
+  throw new Error("ambiguous command should not also be command.invalid");
+}
 NODE
 
 FAKE_SANDBOX_LOG="$FAKE_SANDBOX_LOG" "$WORKLOG_BIN/worklog-manager" dispatch \
