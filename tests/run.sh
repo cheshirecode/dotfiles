@@ -27,11 +27,59 @@ test_static() {
     say SKIP "shellcheck not installed"
   fi
   if ./tools/check-manifest.sh >/dev/null 2>&1; then ok "check-manifest.sh"; else fail "check-manifest.sh"; fi
+  if python3 - <<'PY'
+import pathlib
+import re
+
+import yaml
+
+problems = []
+for skill_md in sorted(pathlib.Path("skills").glob("*/SKILL.md")):
+    text = skill_md.read_text()
+    match = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
+    if not match:
+        problems.append(f"{skill_md}: missing YAML frontmatter")
+        continue
+    fm = yaml.safe_load(match.group(1)) or {}
+    expected = skill_md.parent.name
+    if fm.get("name") != expected:
+        problems.append(f"{skill_md}: name={fm.get('name')!r}, expected {expected!r}")
+if problems:
+    print("\n".join(problems))
+    raise SystemExit(1)
+PY
+  then ok "skill SKILL.md frontmatter"; else fail "skill SKILL.md frontmatter"; fi
+  if python3 - <<'PY'
+import pathlib
+import re
+
+text = pathlib.Path("skills/council/SKILL.md").read_text()
+checks = {
+    "support formula": "APPROVE_count + (0.5 * QUALIFY_count)" in text,
+    "formula text": "ceil(M_returned / 2 + 1)" in text,
+    "M=3 threshold": "M=3 threshold 3" in text,
+    "M=5 threshold": "M=5 threshold 4" in text,
+    "M=7 threshold": "M=7 threshold 5" in text,
+}
+missing = [name for name, ok in checks.items() if not ok]
+if missing:
+    print("missing council threshold contract: " + ", ".join(missing))
+    raise SystemExit(1)
+PY
+  then ok "council voting threshold contract"; else fail "council voting threshold contract"; fi
 }
 
 # Council items #1, #6: fixture-driven red-path tests for guardrails.
 test_fixtures() {
   echo "=== fixtures (red-path guardrail tests) ==="
+  local python_site_path
+  python_site_path=$(python3 - <<'PY'
+import pathlib
+import yaml
+
+print(pathlib.Path(yaml.__file__).resolve().parents[1])
+PY
+)
 
   # --- #6: check-manifest.sh subpath+repo HARD FAIL ---
   local bad_manifest tmpdir
@@ -77,7 +125,7 @@ PY
   mkdir -p "$unowned_dst"
   echo "user-edited content" > "$unowned_dst/SKILL.md"
   set +e
-  HOME="$fake_home" ./bin/install-skills.sh council >/dev/null 2>&1
+  HOME="$fake_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" ./bin/install-skills.sh council >/dev/null 2>&1
   rc=$?
   set -e
   if [[ $rc -eq 3 ]]; then
@@ -94,7 +142,7 @@ PY
   cp "$REPO_ROOT/skills/council/SKILL.md" "$unowned_dst/SKILL.md"
   echo "subpath:skills/council" > "$unowned_dst/.installed_from"
   set +e
-  HOME="$fake_home" ./bin/install-skills.sh council >/dev/null 2>&1
+  HOME="$fake_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" ./bin/install-skills.sh council >/dev/null 2>&1
   rc=$?
   set -e
   if [[ $rc -eq 0 ]]; then
@@ -103,6 +151,62 @@ PY
     fail "install-skills rejected sentineled dst (got exit=$rc, expected 0)"
   fi
   rm -rf "$fake_home"
+
+  local skill_names skill_name skill_md
+  skill_names=$(python3 - <<'PY'
+import pathlib
+import yaml
+
+manifest = yaml.safe_load(open("manifest/skills.yaml"))
+for entry in manifest.get("skills", []):
+    if entry["name"] == "worklog":
+        continue
+    source = entry.get("source", {})
+    if source.get("type") != "subpath":
+        continue
+    skill_md = pathlib.Path(source["path"]) / "SKILL.md"
+    if skill_md.is_file():
+        print(entry["name"])
+PY
+)
+  while IFS= read -r skill_name; do
+    [[ -z "$skill_name" ]] && continue
+    fake_home=$(mktemp -d)
+    set +e
+    HOME="$fake_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" ./bin/install-skills.sh "$skill_name" >/dev/null 2>&1
+    rc=$?
+    set -e
+    skill_md="$fake_home/.claude/skills/$skill_name/SKILL.md"
+    if [[ $rc -eq 0 && -f "$skill_md" ]]; then
+      ok "install-skills installs $skill_name"
+    else
+      fail "install-skills failed for $skill_name (rc=$rc)"
+    fi
+    rm -rf "$fake_home"
+  done <<< "$skill_names"
+
+  if python3 - <<'PY'
+import re
+
+leak_re = re.compile(
+    r"worklog|\[POST-MERGE|next_action|/ship-hygiene|/impeccable|/worklog|"
+    r"people/[a-z]+/active|iteration [0-9]|per the (audit|critique)|scope chosen",
+    re.I,
+)
+
+def flagged(line, changed_paths):
+    skill_surface = any(
+        path.startswith("skills/") or path == "manifest/skills.yaml"
+        for path in changed_paths
+    )
+    if skill_surface and re.search(r"/(ship-hygiene|impeccable|worklog)\b", line):
+        return False
+    return bool(leak_re.search(line))
+
+assert not flagged("+ Document /ship-hygiene usage for skill PRs", ["skills/ship-hygiene/SKILL.md"])
+assert flagged("+ next_action from people/oss/active/foo.md", ["README.md"])
+PY
+  then ok "ship-hygiene skill PR leak exception"; else fail "ship-hygiene skill PR leak exception"; fi
 }
 
 # Council #31: worklog skill bin/ — static lint + fixture-vault smoke. Catches
@@ -206,7 +310,7 @@ test_worklog_skill() {
   fi
 
   # Hard-fail when WORKLOG_REPO unset + cwd outside any clone.
-  out=$( cd /tmp && bash "$sb/kernels-roster.sh" 2>&1 || true )
+  out=$( cd /tmp && env -u WORKLOG_REPO -u WORKLOG_LDAP -u WORKLOG_NS bash "$sb/kernels-roster.sh" 2>&1 || true )
   if echo "$out" | grep -q 'cannot locate'; then
     ok "scripts hard-fail outside a worklog clone"
   else

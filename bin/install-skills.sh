@@ -126,8 +126,15 @@ def install_subpath(entry):
     src = repo_root / entry["source"]["path"]
     dst = pathlib.Path(entry["install_to"]).expanduser()
     if not src.exists():
-        print(f"  SKIP {entry['name']}: source {src} not present (skill not vendored yet)")
-        return False
+        if entry.get("optional") is True:
+            print(f"  SKIP optional {entry['name']}: source {src} not present")
+            return False
+        sys.stderr.write(
+            f"install-skills: refusing {entry['name']}: source {src} not present\n"
+            f"  Required subpath skills must exist in this repo. Add optional: true\n"
+            f"  only if the absence is intentional.\n"
+        )
+        sys.exit(3)
     # Council item #3: validate source frontmatter BEFORE install. Prevents a
     # malformed SKILL.md from being symlinked into ~/.claude/skills/.
     err = validate_frontmatter(src, entry["name"])

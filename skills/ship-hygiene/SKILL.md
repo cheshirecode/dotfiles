@@ -11,7 +11,7 @@ A periodic sweep skill. Three surfaces share the same staleness pattern: a workl
 
 - Pre-handoff (you're about to hand a stack off to a reviewer or a teammate)
 - End-of-week clean-up
-- After a multi-day spike where the worklog task body has grown 100+ lines
+- After a multi-day spike where the worklog task body has crossed 150 lines and the decision is already made
 - User explicitly: "tidy my open PRs", "ship hygiene", "/ship-hygiene"
 
 Skip if: only one PR open, body is short, no recent worklog activity. Overhead not earned.
@@ -19,7 +19,7 @@ Skip if: only one PR open, body is short, no recent worklog activity. Overhead n
 ## Surfaces + verbs
 
 1. **Worklog task body** — `people/$LDAP/active/<slug>.md`. Verb: **compress**. Keep lessons, gotchas, decisions, re-runnable commands. Drop ToT/Reflexion/Assumptions sections once decided. Drop historical iteration tables — git log is the audit trail.
-2. **Open PR titles+bodies + the diff's code comments** — `gh pr list --author @me --state open`. Verb: **audit, don't blind-edit**. Conv-Commit prefixes already correct? Body sized 1-4KB? Leave alone. Slop trigger: body >5KB with stale checklists, OR title missing prefix on a NEW PR (skip the fix on PRs older than a week — reviewers may have linked the original title). **Internal-reference purge (always):** PR title/body AND code comments are reviewer- and product-facing; strip leaked internal artifacts — worklog slugs/paths (`people/<ldap>/active/*`, `[POST-MERGE-CLEANUP]`, `next_action`), skill names (`/ship-hygiene`, `/impeccable`, `/worklog`), agent-process chatter ("Iteration 3", "per the audit", "scope chosen"), preview/worktree internals that don't help a reader understand the change. Keep the framing **external-facing and product-first** (what changed for users + why) **unless the change is a pure engineering/infra task** (refactor, codegen, tooling, migration) — then technical framing is fine, but the worklog/skill/agent-chatter purge still applies.
+2. **Open PR titles+bodies + the diff's code comments** — `gh pr list --author @me --state open`. Verb: **audit, don't blind-edit**. Conv-Commit prefixes already correct? Body sized 1-4KB? Leave alone. Slop trigger: body >5KB with stale checklists, OR title missing prefix on a NEW PR (skip the fix on PRs older than a week — reviewers may have linked the original title). **Internal-reference purge (always):** PR title/body AND code comments are reviewer- and product-facing; strip leaked internal artifacts — worklog slugs/paths (`people/<ldap>/active/*`, `[POST-MERGE-CLEANUP]`, `next_action`), agent-process chatter ("Iteration 3", "per the audit", "scope chosen"), preview/worktree internals that don't help a reader understand the change. Strip skill command names (`/ship-hygiene`, `/impeccable`, `/worklog`) unless the PR itself changes dotfiles skill files, `manifest/skills.yaml`, or user-facing skill docs; in that case the skill name is product surface, not a leak. Keep the framing **external-facing and product-first** (what changed for users + why) **unless the change is a pure engineering/infra task** (refactor, codegen, tooling, migration) — then technical framing is fine, but the worklog/agent-chatter purge still applies.
 3. **PR stack health** — CI red, unresolved comments, missing approvals. Verb: **surface, not auto-fix**. Triage red checks by pattern (single shared failure across PRs = workflow config bug; per-PR unique failures = author work). Distinguish reviewer comments from bot noise (preview-deploy, lighthouse-ci, github-actions are bot signatures).
 4. **Post-merge cleanup readiness** — the throwaway resources a PR leaves behind: its sibling worktree, its remote+local branch, and any live preview deploy. Verb: **prepare a note, never execute pre-merge**. For each open PR backed by these, emit the exact teardown commands and persist them as a `[POST-MERGE-CLEANUP]` note in the worklog task so they survive the merge and the next session. Running teardown while the PR is still open would kill the reviewer's preview and orphan the branch — only stage the note.
 
@@ -31,7 +31,7 @@ Skip if: only one PR open, body is short, no recent worklog activity. Overhead n
 4. **List open PRs:** `gh pr list --author @me --state open --repo <each-repo> --json number,title,reviewDecision,isDraft,updatedAt`.
 5. **Per-PR dashboard:** for each non-draft PR, gather `body_length`, `failed_checks`, `pending_checks`, `comment_count`, last-comment-author. Print as a table.
 6. **Title audit:** flag PRs missing Conv-Commit prefix OR with stale prefix (`frontend:` → `feat(spa):` style). **Do not edit titles on PRs older than 7 days** without explicit user confirmation.
-7. **Body + comment audit:** flag PRs with body >5KB; read those bodies for stale checklists, ASCII art, duplicate context. Then scan for **internal-reference leaks** in (a) the title, (b) the body, and (c) code comments added by the diff: `gh pr diff <n> | grep -nE '^\+' | grep -iE 'worklog|\[POST-MERGE|next_action|/ship-hygiene|/impeccable|/worklog|people/[a-z]+/active|iteration [0-9]|per the (audit|critique)|scope chosen'`. For PR title/body, **fix in place** (it's your own reviewer-facing text — rewrite product-first, drop the internal refs). For **code comments**, surface them and fix only if they're genuinely leaked process notes; keep durable why-comments. Respect the pure-engineering exception (technical framing OK; internal-tooling chatter still goes).
+7. **Body + comment audit:** flag PRs with body >5KB; read those bodies for stale checklists, ASCII art, duplicate context. Then scan for **internal-reference leaks** in (a) the title, (b) the body, and (c) code comments added by the diff: `gh pr diff <n> | grep -nE '^\+' | grep -iE 'worklog|\[POST-MERGE|next_action|/ship-hygiene|/impeccable|/worklog|people/[a-z]+/active|iteration [0-9]|per the (audit|critique)|scope chosen'`. For PR title/body, **fix in place** (it's your own reviewer-facing text — rewrite product-first, drop the internal refs). For **code comments**, surface them and fix only if they're genuinely leaked process notes; keep durable why-comments. If the PR changes `skills/**`, `manifest/skills.yaml`, or skill docs, allow the relevant skill command names and still purge worklog paths, `next_action`, and agent-process chatter. Respect the pure-engineering exception (technical framing OK; internal-tooling chatter still goes).
 8. **CI triage:** group failed checks by name. If the same check fails on N>1 PRs → systemic (workflow config bug, not per-PR). Surface the systemic finding as ONE actionable line.
 9. **Comment triage:** check the last comment's author per PR. Bot signatures (`github-actions`, `vercel`, preview-deploy automation under the user's own login) → not unresolved review. Surface only PRs with a real reviewer comment that hasn't been responded to.
 10. **Post-merge cleanup note:** for each open PR backed by a sibling worktree and/or a live preview, assemble the teardown commands and record them as a `[POST-MERGE-CLEANUP]` note in the worklog task (and surface them in the output). Discover the pieces: worktree via `git worktree list | grep <branch-slug>`; preview name from the branch slug / earlier deploy; services from the diff (`frontend`, `ui`, `admin-dashboard`). Template (do NOT run until the PR is merged):
@@ -48,7 +48,7 @@ Skip if: only one PR open, body is short, no recent worklog activity. Overhead n
   <slug>: N → M lines (-X%). Commit: <sha>
 
 === PR title/body audit ===
-  N PRs scanned. M flagged for review (list). No blind edits applied.
+  N PRs scanned. M flagged for review (list). Blind edits: none. Internal-ref cleanup: <none | PRs updated>.
   Internal-ref purge: <PRs whose title/body were de-internalized> · code comments: <clean | leaks at file:line>.
 
 === CI red ===
@@ -90,7 +90,7 @@ Skip if: only one PR open, body is short, no recent worklog activity. Overhead n
 ```
 User: /ship-hygiene
 Claude: [identifies skillopt-setup as the slop-heavy task]
-        [compresses 134 → 74 lines, commits]
+        [compresses 168 → 84 lines, commits]
         [scans 18 open PRs — all Conv-Commit clean]
         [surfaces 3-PR systemic CI workflow bug as a single line]
         [confirms no real reviewer comments need response]

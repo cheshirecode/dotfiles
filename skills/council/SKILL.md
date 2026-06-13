@@ -22,7 +22,7 @@ Skip if: the question has a clear single right answer, you already know the trad
 | 3 | **Discussion** | One sub-agent reads ALL findings, flags agreements/disagreements/gaps/contradictions. May propose ADDITIONAL candidate items surfaced by cross-angle gaps. | 1 | sync |
 | 4 | **Candidate collation** | One sub-agent gathers **the union of candidate items** proposed by Stage 1 angles + Stage 3 discussion. **No invention authority** — collator may NOT add items not proposed upstream. May only dedupe + normalize phrasing. | 1 | sync |
 | 5 | **Voting** | M independent voters (≥3, odd) each fill a **structured ballot** per candidate item: APPROVE / REJECT-with-citation / QUALIFY-with-condition. Voters do not see other voters' ballots. | 3+ in parallel | sync |
-| 6 | **Tally + conclude** | Orchestrator counts votes per item. Survivors = majority APPROVE AND zero hard REJECT-with-cited-criterion. Failures move to `Killed by vote` with cited reasons. | (none) | sync |
+| 6 | **Tally + conclude** | Orchestrator counts support per item. Survivors = support threshold met AND zero hard REJECT-with-cited-criterion. Failures move to `Killed by vote` with cited reasons. | (none) | sync |
 
 ## Sync vs async — when to spawn background agents
 
@@ -44,7 +44,7 @@ The user can override with `/council --bg X` or `/council --fg X`.
 ## Iron Laws (refusal conditions — mechanical, not soft norms)
 
 - **NO COLLATOR-INVENTED ITEMS.** Stage 4 collator's output is a strict subset of items proposed by Stage 1 angles or Stage 3 discussion. If the collator emits an item with no `[proposed-by: angle-X | discussion]` tag, the orchestrator drops it before Stage 5. The collator has **zero invention authority**.
-- **NO ITEM SURVIVES WITHOUT MAJORITY APPROVE.** An item is kept ONLY if `APPROVE_count ≥ ceil(M_returned / 2 + 1)`. Plurality doesn't suffice. Tie = killed.
+- **NO ITEM SURVIVES WITHOUT SUPPORT THRESHOLD.** An item is kept ONLY if `APPROVE_count + (0.5 * QUALIFY_count) ≥ ceil(M_returned / 2 + 1)`. Plurality doesn't suffice. Tie = killed.
 - **HARD REJECT VETOES.** Any voter's REJECT vote that cites one of the **karpathy voting criteria** (below) kills the item regardless of APPROVE count. The criterion must be named in the ballot. "I don't like it" is not a valid reject; "REJECT: violates SOLVES-EXTANT-PAIN, no user report on file" is.
 - **NO STAGE-6 CONCLUSION WITHOUT M≥2 VOTERS RETURNING.** On voter timeout, recompute `M_returned`. If `M_returned < 2`, the entire list is marked `unverified` and surfaced as such.
 - **NO CROSS-ANGLE READS IN STAGE 1.** Every research sub-agent's prompt MUST contain the literal clause "You are research angle N of N. Do not Read, Grep, or Monitor outputs of other angles. Do not coordinate."
@@ -65,7 +65,7 @@ Voters cast their ballots against these criteria. A REJECT must cite ≥1. An AP
 The full ballot per item is one of:
 - **APPROVE** — all criteria pass.
 - **REJECT: <criterion>, <one-sentence justification>** — explicit veto.
-- **QUALIFY: <condition>** — keep only if condition met; condition must be a Stage-3 tension or a verifier-grade fix. Approve-with-conditions counts as 0.5 toward the majority.
+- **QUALIFY: <condition>** — keep only if condition met; condition must be a Stage-3 tension or a verifier-grade fix. Qualify counts as 0.5 support toward the threshold.
 
 ## Numeric guidance (orchestrator self-enforces)
 
@@ -207,4 +207,4 @@ Claude: Not a council task — single-agent answer in one token. Skipping; 4.
 
 A single synthesis agent inventing items + verifiers as cleanup is structurally backwards — items should clear an explicit bar to enter, not enter by default and need removal. Voting flips it: the collator only gathers, voters apply explicit criteria, items need positive support to survive. Fork of Karpathy's original (which used cross-vendor debate); this uses cross-agent voting to surface non-justified inclusion.
 
-- Quick reference: M=3 → threshold 3 (unanimous) · M=5 → threshold 4 · M=7 → threshold 5.
+- Quick reference: support threshold is `ceil(M_returned / 2 + 1)`: M=3 threshold 3 · M=5 threshold 4 · M=7 threshold 5.
