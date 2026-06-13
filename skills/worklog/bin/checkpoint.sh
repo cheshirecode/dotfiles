@@ -18,6 +18,7 @@ NEXT=""
 PR=""
 RENAME_FROM=""
 INCLUDES=()
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -69,8 +70,15 @@ zombie file in active/.
 EOF
   exit 1
 fi
+case "$STATUS" in
+  ""|draft|in-progress|in-review|blocked|shipping) ;;
+  *)
+    echo "checkpoint: status '$STATUS' not in FSM: draft | in-progress | in-review | blocked | shipping | archived" >&2
+    echo "checkpoint: use archive.sh for archived; map legacy 'done' to shipping or archive intentionally." >&2
+    exit 2
+    ;;
+esac
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_lib.sh
 . "$SCRIPT_DIR/_lib.sh"
 REPO_ROOT="$(resolve_worklog_repo)" || exit 1
@@ -96,9 +104,9 @@ fi
 
 TODAY="$(date +%Y-%m-%d)"
 
-python3 - "$FILE" "$TODAY" "$STATUS" "$NEXT" <<'PY'
+python3 - "$FILE" "$TODAY" "$STATUS" "$NEXT" "$PR" <<'PY'
 import sys, re, pathlib
-path, today, status, next_action = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+path, today, status, next_action, pr = sys.argv[1:6]
 p = pathlib.Path(path)
 text = p.read_text()
 def yaml_double_quote(s):
@@ -125,6 +133,15 @@ if status:
     sub('status', status)
 if next_action:
     sub('next_action', next_action, quote=True)
+if pr:
+    m = re.search(r'^pr:\s*(.+)$', text, re.MULTILINE)
+    if not m:
+        sub('pr', f'[{pr}]')
+    else:
+        existing = re.findall(r'\d+', m.group(1))
+        if pr not in existing:
+            existing.append(pr)
+            sub('pr', '[' + ', '.join(existing) + ']')
 p.write_text(text)
 PY
 
@@ -150,7 +167,8 @@ fi
 # Soft lint gate — single-file scope. Stderr-only, never blocks the checkpoint.
 # Bypass with WORKLOG_NO_LINT=1 (e.g. in hooks / non-interactive contexts).
 if [[ -z "${WORKLOG_NO_LINT:-}" ]] && [[ -x "$SCRIPT_DIR/lint.sh" ]]; then
-  "$SCRIPT_DIR/lint.sh" --file="$FILE" --format=json 2>/dev/null | python3 - >&2 <<'PY' || true
+  lint_json="$("$SCRIPT_DIR/lint.sh" --file="$FILE" --format=json 2>/dev/null || true)"
+  printf '%s' "$lint_json" | python3 -c '
 import json, sys
 try:
   data = json.load(sys.stdin)
@@ -158,10 +176,10 @@ except Exception:
   sys.exit(0)
 for item in data.get("issues", []):
   for e in item.get("errors", []):
-    print(f"checkpoint: lint ERROR  {e}", file=sys.stderr)
+    print(f"checkpoint: lint ERROR  {e}")
   for w in item.get("warnings", []):
-    print(f"checkpoint: lint warn   {w}", file=sys.stderr)
-PY
+    print(f"checkpoint: lint warn   {w}")
+' >&2 || true
 fi
 
 git pull --no-rebase --autostash -q
@@ -309,6 +327,7 @@ fi
 TRAILERS=""
 append_trailer() { TRAILERS="${TRAILERS}${TRAILERS:+
 }$1: $2"; }
+append_trailer "Worklog-Slug" "$SLUG"
 
 PROJECT="$(awk -F': *' '/^project:/ {print $2; exit}' "$FILE" || true)"
 if [[ $IS_NEW_FILE -eq 1 ]]; then
@@ -351,5 +370,5 @@ echo "checkpoint: pushed $SLUG"
 # Doesn't touch task body — only appends to people/$LDAP/transcripts/<slug>.md.
 if [[ "$STATUS" == "in-review" || "$STATUS" == "shipping" ]]; then
   SLUG="$SLUG" LDAP="$LDAP" TRIGGER="status:$STATUS" \
-    python3 "$(dirname "$0")/_dump_transcript.py" 2>/dev/null || true
+    python3 "$SCRIPT_DIR/_dump_transcript.py" 2>/dev/null || true
 fi

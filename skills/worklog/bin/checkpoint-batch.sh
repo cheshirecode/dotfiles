@@ -5,7 +5,7 @@
 # Required per record: slug. Optional: status, next, pr.
 #
 # For each record:
-#   1. Validate slug resolves to people/*/{active,archive}/<slug>.md
+#   1. Validate slug resolves to people/*/active/<slug>.md
 #   2. Rewrite frontmatter (last_updated → today; status/next/pr per record)
 #   3. Stage the file
 #
@@ -29,7 +29,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(resolve_worklog_repo)" || exit 1
 cd "$REPO_ROOT"
 
-LDAP="$(resolve_ldap)"
 verify_provenance || exit 1
 
 # Read entire stdin as JSON array.
@@ -45,11 +44,11 @@ if not isinstance(records, list):
     print("checkpoint-batch: input must be a JSON array", file=sys.stderr)
     sys.exit(2)
 today = datetime.date.today().isoformat()
+STATUSES = {"draft", "in-progress", "in-review", "blocked", "shipping"}
 
 def find_task(slug):
-    for state in ("active", "archive"):
-        for p in pathlib.Path("people").glob(f"*/{state}/{slug}.md"):
-            return p
+    for p in pathlib.Path("people").glob(f"*/active/{slug}.md"):
+        return p
     return None
 
 def yaml_double_quote(s):
@@ -68,48 +67,91 @@ def sub(text, field, value, quote=False):
         return pattern.sub(lambda _m: f'{field}: {value}', text, count=1)
     return re.sub(r'^(---\n.*?)(\n---)', lambda m: f'{m.group(1)}\n{field}: {value}{m.group(2)}', text, count=1, flags=re.DOTALL)
 
+def pr_values(value):
+    if value is None or value == "":
+        return []
+    if isinstance(value, list):
+        raw = value
+    else:
+        raw = [value]
+    vals = []
+    for item in raw:
+        vals.extend(re.findall(r'\d+', str(item)))
+    return vals
+
+def merge_prs(text, requested):
+    requested_vals = pr_values(requested)
+    if not requested_vals:
+        return text, []
+    existing_vals = []
+    m = re.search(r'^pr:\s*(.+)$', text, re.MULTILINE)
+    if m:
+        existing_vals = re.findall(r'\d+', m.group(1))
+    merged = []
+    for val in existing_vals + requested_vals:
+        if val not in merged:
+            merged.append(val)
+    return sub(text, "pr", "[" + ", ".join(merged) + "]"), requested_vals
+
 errors = []
 plan = []
+seen = set()
 for rec in records:
+    if not isinstance(rec, dict):
+        errors.append("record must be an object")
+        continue
     slug = rec.get("slug")
     if not slug:
         errors.append("record missing 'slug'")
         continue
+    if slug in seen:
+        errors.append(f"duplicate slug '{slug}'")
+        continue
+    seen.add(slug)
     p = find_task(slug)
     if p is None:
-        errors.append(f"no task file for slug '{slug}'")
+        errors.append(f"no active task file for slug '{slug}'")
         continue
+    requested_status = rec.get("status")
+    if requested_status:
+        if requested_status == "archived":
+            errors.append(f"{slug}: status=archived is not supported by checkpoint-batch; use archive.sh")
+            continue
+        if requested_status not in STATUSES:
+            errors.append(f"{slug}: status '{requested_status}' not in FSM: {sorted(STATUSES | {'archived'})}")
+            continue
     text = p.read_text()
     text = sub(text, "last_updated", today)
     flipped = False
     summary_parts = []
-    if rec.get("status"):
+    if requested_status:
         # Read current status to detect flip.
         m = re.search(r'^status:\s*(\S+)', text, re.MULTILINE)
         old = m.group(1) if m else ""
-        text = sub(text, "status", rec["status"])
-        if old and old != rec["status"]:
+        text = sub(text, "status", requested_status)
+        if old and old != requested_status:
             flipped = True
-            summary_parts.append(f"status: {old}→{rec['status']}")
+            summary_parts.append(f"status: {old}→{requested_status}")
         else:
-            summary_parts.append(f"status: {rec['status']}")
+            summary_parts.append(f"status: {requested_status}")
     if rec.get("next"):
         text = sub(text, "next_action", rec["next"], quote=True)
         summary_parts.append("next updated")
-    if rec.get("pr"):
-        text = sub(text, "pr", str(rec["pr"]))
-        summary_parts.append(f"pr={rec['pr']}")
+    if "pr" in rec:
+        text, added_prs = merge_prs(text, rec.get("pr"))
+        if added_prs:
+            summary_parts.append(f"pr={','.join(added_prs)}")
     if not summary_parts:
         summary_parts.append("last_updated bump")
-    p.write_text(text)
-    plan.append((slug, ", ".join(summary_parts), "true" if flipped else "false", str(p), rec.get("status", "")))
+    plan.append((slug, ", ".join(summary_parts), "true" if flipped else "false", str(p), requested_status or "", text))
 
 if errors:
     for e in errors:
         print(f"ERROR: {e}", file=sys.stderr)
     sys.exit(2)
 
-for slug, summary, flipped, file, status in plan:
+for slug, summary, flipped, file, status, text in plan:
+    pathlib.Path(file).write_text(text)
     print(f"{slug}\t{summary}\t{flipped}\t{file}\t{status}")
 PY
 )"

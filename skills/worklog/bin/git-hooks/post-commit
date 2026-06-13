@@ -4,7 +4,7 @@
 # at most hourly; otherwise the stamp-file mtime gates it out instantly.
 #
 # Output: cross-task warning / error counts on stderr. Never blocks.
-# Inspect details with `bin/lint.sh --cross-task` or `/worklog lint --cross-task`.
+# Inspect details with the skill `lint.sh --cross-task` or `/worklog lint --cross-task`.
 #
 # Bypass: `WORKLOG_NO_HOOK=1 git commit ...` (same env as pre-commit).
 
@@ -13,6 +13,7 @@ set -euo pipefail
 [[ -n "${WORKLOG_NO_HOOK:-}" ]] && exit 0
 
 cd "$(git rev-parse --show-toplevel)"
+SKILL_BIN="$(cd "$(dirname "$0")/.." && pwd)"
 
 STAMP=".cache/cross-task.stamp"
 TTL=3600
@@ -21,14 +22,14 @@ mtime=$(stat -c %Y "$STAMP" 2>/dev/null || stat -f %m "$STAMP" 2>/dev/null || ec
 now=$(date +%s)
 (( now - mtime > TTL )) || exit 0
 
-bin/lint.sh --cross-task --format=json 2>/dev/null | python3 -c "
+"$SKILL_BIN/lint.sh" --cross-task --format=json 2>/dev/null | python3 -c "
 import json, sys
 try:
   d = json.load(sys.stdin)
   e = d.get('total_errors', 0)
   w = d.get('total_warnings', 0)
   if e or w:
-    print(f'post-commit: cross-task — {e} error(s), {w} warning(s)  (run bin/lint.sh --cross-task to inspect)', file=sys.stderr)
+    print(f'post-commit: cross-task — {e} error(s), {w} warning(s)  (run $SKILL_BIN/lint.sh --cross-task to inspect)', file=sys.stderr)
   # If any warning is the body-mention shape (the most common, repeatedly hit
   # during 2026-04 sessions), suggest the auto-stub fix-up. Cheap one-line nudge
   # at the moment of friction. See worklog-review-2026-04 Tier-1 #1.
@@ -39,7 +40,7 @@ try:
     if 'body mentions slug' in warn
   )
   if body_mention:
-    print(f'post-commit: {body_mention} body-mention warning(s) — run bin/lint.sh --fix-related to auto-stub', file=sys.stderr)
+    print(f'post-commit: {body_mention} body-mention warning(s) — run $SKILL_BIN/lint.sh --fix-related to auto-stub', file=sys.stderr)
 except Exception:
   pass
 " || true

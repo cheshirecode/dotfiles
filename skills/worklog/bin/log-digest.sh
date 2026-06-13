@@ -53,5 +53,5 @@ LOG_ARGS=(log --format='%H%x1f%ct%x1f%s%x1f%b%x1e' --since="$SINCE")
 [[ -n "$UNTIL" ]] && LOG_ARGS+=(--until="$UNTIL")
 [[ -n "$SLUG" ]] && LOG_ARGS+=(--grep="^${SLUG}:")
 
-git "${LOG_ARGS[@]}" | python3 "$(dirname "${BASH_SOURCE[0]}")/_log_digest.py" \
+git "${LOG_ARGS[@]}" | python3 "$SCRIPT_DIR/_log_digest.py" \
   ${PASS[@]+"${PASS[@]}"}

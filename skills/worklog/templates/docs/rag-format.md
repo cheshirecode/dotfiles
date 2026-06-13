@@ -54,19 +54,19 @@ Serena's LSP-backed `find_symbol` / `get_symbols_overview` work on markdown too 
 
 Multi-agent: serena is an MCP server, so every MCP-capable client can use it — **Claude Code, Codex (CLI and App), Cursor, VSCode assistants, JetBrains, Gemini-CLI** all have documented integrations (see [oraios/serena](https://github.com/oraios/serena) Quick Start). Bootstrap check: configure the serena MCP per the client's setup docs; if the agent has no MCP support or the server is unreachable, fall back to `rg` with heading anchors (`rg -A5 '^## Invariants' people/*/`).
 
-### Tier 3 — local gitignored hybrid index (BM25 + dense), escape hatch
+### Tier 3 — local gitignored semantic index, escape hatch
 
 Use when tiers 1-2 miss concept queries repeatedly:
 
 - "Find prior tasks about *flaky preview deploys*" — concept match, not keyword match.
 - "What decisions have we made about *carve-out fallback behavior*" — scattered mentions, no single tag.
 
-Design (not yet built — trigger is ≥3 concept-search failures in a week):
+Current implementation:
 
-1. `bin/embed.sh` — reads `people/*/*/*.md`, emits `.cache/embeddings.jsonl` (gitignored). Chunk by `## ` section, not by token window. Prepend a one-sentence context blurb per chunk (Anthropic's contextual-retrieval pattern, ~35% lift over naive embeddings).
-2. `bin/search.sh "<query>"` — BM25 + dense hybrid over the cache, optional cross-encoder rerank. Returns `{slug, section, score}` rows.
-3. Works alongside tiers 1-2, doesn't replace them: agent keeps reaching for `rg` first, falls to search.sh only when concept match matters.
-4. Re-embed is a single script; model swaps cost minutes.
+1. `bin/embed.sh` — reads `.cache/index.jsonl`, emits `.cache/index.embeddings.jsonl` (gitignored). One embedding record per task body, frontmatter stripped. `--refresh` rebuilds the index first and re-embeds all records.
+2. `bin/search.sh "<query>" --semantic [--top=N]` — cosine search over `.cache/index.embeddings.jsonl`, filtered through the same frontmatter index as ordinary search. It warns when embeddings are missing or older than source files.
+3. Works alongside tiers 1-2, doesn't replace them: agent keeps reaching for `rg` first, falls to `search.sh --semantic` only when concept match matters.
+4. Future work, not current behavior: section-level chunking, BM25+dense hybrid scoring, contextual chunk prefixes, and cross-encoder reranking.
 
 **Do not commit the cache.** `.cache/` stays gitignored. The source text is in git; embeddings are a derivative. Every machine rebuilds its own cache.
 

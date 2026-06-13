@@ -40,10 +40,14 @@ if [[ ! -f "$JSON" ]]; then
 fi
 
 age=$(( $(date +%s) - $(stat -c %Y "$JSON" 2>/dev/null || stat -f %m "$JSON") ))
+if (( age > 3600 )); then
+  printf '# roster: kernels stale (age=%ss > 3600s) — skipped; run %s/compact-kernels.sh\n' "$age" "$SCRIPT_DIR"
+  exit 0
+fi
 total=$(jq 'length' "$JSON")
 shown=$(( LIMIT < total ? LIMIT : total ))
 
-printf '# roster: shown %s/%s tasks, kernels-age=%ss (stale if >3600s)\n' "$shown" "$total" "$age"
+printf '# roster: shown %s/%s tasks, kernels-age=%ss\n' "$shown" "$total" "$age"
 jq -r --argjson n "$LIMIT" '
   sort_by(.last_updated // "0000-00-00") | reverse | .[0:$n]
   | .[] | "\(.slug)\t\(.status // "-")\t\((.next_action // "-") | .[0:120])"

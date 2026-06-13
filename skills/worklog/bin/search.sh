@@ -30,10 +30,6 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=_lib.sh
-. "$SCRIPT_DIR/_lib.sh"
-REPO_ROOT="$(resolve_worklog_repo)" || exit 1
-cd "$REPO_ROOT"
 
 INDEX=".cache/index.jsonl"
 SCOPE="both"   # both | active | archive
@@ -49,6 +45,21 @@ declare -a RG_EXTRA=()
 usage() {
   sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'
 }
+
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+esac
+
+# shellcheck source=_lib.sh
+. "$SCRIPT_DIR/_lib.sh"
+REPO_ROOT="$(resolve_worklog_repo)" || exit 1
+cd "$REPO_ROOT"
+
+# shellcheck source=_query.sh
+. "$SCRIPT_DIR/_query.sh"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -85,8 +96,10 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
-if [ "$REFRESH" = "1" ] || [ ! -f "$INDEX" ]; then
+if [ "$REFRESH" = "1" ]; then
   "$SCRIPT_DIR/index.sh" >/dev/null
+else
+  ensure_index
 fi
 
 # Scope filter on top of user filters.
@@ -132,8 +145,43 @@ if [ "$SEMANTIC" = "1" ]; then
   CANDIDATES_TMP=$(mktemp)
   trap 'rm -f "$CANDIDATES_TMP"' EXIT
   printf '%s\n' "$CANDIDATE_FILES" > "$CANDIDATES_TMP"
+  python3 - "$CANDIDATES_TMP" ".cache/index.embeddings.jsonl" <<'PY' >&2 || true
+import json
+import pathlib
+import sys
+
+candidates = [line.strip() for line in pathlib.Path(sys.argv[1]).read_text().splitlines() if line.strip()]
+embed_path = pathlib.Path(sys.argv[2])
+try:
+  by_file = {}
+  for line in embed_path.read_text().splitlines():
+    if not line.strip():
+      continue
+    rec = json.loads(line)
+    by_file[rec.get("file", "")] = rec
+except Exception:
+  print("search.sh: warning: embedding cache is unreadable; run bin/embed.sh --refresh")
+  sys.exit(0)
+
+missing = 0
+stale = 0
+for file_name in candidates:
+  path = pathlib.Path(file_name)
+  rec = by_file.get(file_name)
+  if rec is None:
+    missing += 1
+    continue
+  try:
+    if path.stat().st_mtime > float(rec.get("mtime", 0)) + 1e-3:
+      stale += 1
+  except OSError:
+    stale += 1
+
+if missing or stale:
+  print(f"search.sh: warning: semantic cache stale ({missing} missing, {stale} older than source); run bin/embed.sh --refresh")
+PY
   JSON="$JSON" TOP_K="$TOP_K" CANDIDATES_FILE="$CANDIDATES_TMP" QUERY="$PATTERN" \
-    python3 "$(dirname "$0")/_semantic_search.py"
+    python3 "$SCRIPT_DIR/_semantic_search.py"
   exit $?
 fi
 

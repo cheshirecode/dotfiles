@@ -298,7 +298,11 @@ def _cross_task_checks(
   # divergence is fine.
   if latest_status_trailers and isinstance(status, str):
     trailer_status = latest_status_trailers.get(slug)
-    if trailer_status and trailer_status != status:
+    if trailer_status and trailer_status not in STATUSES:
+      errors.append(
+        f"latest Worklog-Status: trailer '{trailer_status}' for this slug is not in FSM: {sorted(STATUSES)}"
+      )
+    elif trailer_status and trailer_status != status:
       warnings.append(
         f"frontmatter status '{status}' diverges from latest "
         f"Worklog-Status: trailer '{trailer_status}' for this slug — "
@@ -443,8 +447,17 @@ def _lint_file(
       if any("notion.so" in str(r) for r in ext_refs):
         warnings.append("external_refs: contains a notion.so URL but notion: field is absent — add 'notion: <page-id>' so init --full can match this task")
 
+  body = text[m.end():]
+  if state == "active":
+    if "\n## Context" not in f"\n{body}":
+      warnings.append("missing ## Context section")
+    if "\n## Next" not in f"\n{body}":
+      warnings.append("missing ## Next section")
+  elif state == "archive" and status == "archived":
+    if not re.search(r"^Archived \d{4}-\d{2}-\d{2}:", body, re.MULTILINE):
+      warnings.append("archived task missing 'Archived YYYY-MM-DD:' marker")
+
   if cross_task and slug and isinstance(slug, str):
-    body = text[m.end():]
     ct_errors, ct_warnings = _cross_task_checks(
       fm, body, state, slug, known_slugs,
       slugs_with_pr or set(),

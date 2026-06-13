@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # Resolve sibling bin/ (relocated from data repo to skill).
-WORKLOG_BIN="${WORKLOG_BIN:-$(cd "$(dirname "$0")/../../bin" && pwd)}"
+export WORKLOG_BIN="${WORKLOG_BIN:-$(cd "$(dirname "$0")/../../bin" && pwd)}"
 
 cd "$(dirname "$0")/../.."
 SOURCE="${SOURCE:-$(pwd)}"

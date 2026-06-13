@@ -13,6 +13,15 @@
 
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export WORKLOG_BIN="${WORKLOG_BIN:-$SCRIPT_DIR}"
+export WORKLOG_REPO="${WORKLOG_REPO:-$PWD}"
+
+if [[ -d skills/worklog && "${WORKLOG_E2E_ALLOW_SOURCE:-0}" != "1" ]]; then
+  echo "e2e: refusing to run from the dotfiles/source tree; run in a disposable _worklog data repo or set WORKLOG_E2E_ALLOW_SOURCE=1" >&2
+  exit 2
+fi
+
 step=""
 out_file=$(mktemp)
 trap 'rm -f "$out_file"' EXIT

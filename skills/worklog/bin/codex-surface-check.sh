@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(resolve_worklog_repo)" || exit 1
 cd "$REPO_ROOT"
 
-EXPECTED=(help init sync status context spawn export import lint review)
+EXPECTED=(help init sync status context plan spawn export import lint project review)
 CODEX_SKILL_PATH="${CODEX_SKILL_PATH:-$HOME/.codex/skills/worklog/SKILL.md}"
 
 case "${1:-}" in
@@ -50,7 +50,7 @@ missing=0
 for surface in "${SURFACES[@]}"; do
   echo "== $surface =="
   for cmd in "${EXPECTED[@]}"; do
-    if grep -Eq "(^|[^A-Za-z0-9_/])/?worklog ${cmd}([^A-Za-z0-9_-]|$)" "$surface"; then
+    if grep -Eq "(^|[^A-Za-z0-9_/])/?worklog[[:space:]]+${cmd}([^A-Za-z0-9_-]|$)|^[[:space:]]+${cmd}([[:space:]<\\[]|$)" "$surface"; then
       printf '  ok      %s\n' "$cmd"
     else
       printf '  missing %s\n' "$cmd"

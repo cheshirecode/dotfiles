@@ -34,6 +34,10 @@ if [[ "$STDOUT" == "1" ]]; then
 fi
 
 mkdir -p .cache
-python3 "$SCRIPT_DIR/_index.py" > .cache/index.jsonl
+TMP="$(mktemp ".cache/index.jsonl.tmp.XXXXXX")"
+trap 'rm -f "$TMP"' EXIT
+python3 "$SCRIPT_DIR/_index.py" > "$TMP"
+mv -f "$TMP" .cache/index.jsonl
+trap - EXIT
 count=$(wc -l < .cache/index.jsonl | tr -d ' ')
 echo ".cache/index.jsonl  $count tasks"

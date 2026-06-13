@@ -55,8 +55,9 @@ fi
 
 # Commit history for this slug (follows renames via Worklog-Previous-Slug).
 COMMITS="$(git log --all --format='%h%x1f%ad%x1f%s%x1f%b%x1e' --date=short \
-  --grep="^${SLUG}:" --grep="Worklog-Previous-Slug: ${SLUG}\$" --regexp-ignore-case \
+  --grep="^${SLUG}:" --grep="Worklog-Slug: ${SLUG}" \
+  --grep="Worklog-Previous-Slug: ${SLUG}\$" --regexp-ignore-case \
   -n 20 || true)"
 
-echo "$COMMITS" | python3 "$(dirname "${BASH_SOURCE[0]}")/_context.py" \
+echo "$COMMITS" | python3 "$SCRIPT_DIR/_context.py" \
   "$SLUG" "$FOR" "$FORMAT" "$FILE"

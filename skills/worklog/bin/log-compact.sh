@@ -212,6 +212,15 @@ if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
   exit 3
 fi
 
+if [[ -d .cache ]]; then
+  rm -f .cache/index.jsonl .cache/index.embeddings.jsonl \
+    .cache/compact-kernels.md .cache/compact-kernels.json \
+    .cache/cross-task.stamp
+  echo "log-compact: invalidated derived caches after history rewrite"
+  echo "  refresh with: $SCRIPT_DIR/index.sh && $SCRIPT_DIR/compact-kernels.sh"
+  echo "  optional semantic refresh: $SCRIPT_DIR/embed.sh --refresh"
+fi
+
 echo ""
 echo "log-compact: force-pushing main..."
 git push --force-with-lease origin main
