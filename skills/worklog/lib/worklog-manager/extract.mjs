@@ -257,10 +257,10 @@ function filterGraph(config, nodes, edges) {
     if (matches.some((match) => haystack.includes(match))) keepIds.add(node.id);
   }
 
+  const seedIds = new Set(keepIds);
   for (const edge of edges) {
-    if (edge.relation === "project" && keepIds.has(edge.target)) keepIds.add(edge.source);
-    if (edge.relation === "parent" && keepIds.has(edge.target)) keepIds.add(edge.source);
-    if (edge.relation === "parent" && keepIds.has(edge.source)) keepIds.add(edge.target);
+    if (seedIds.has(edge.source)) keepIds.add(edge.target);
+    if (seedIds.has(edge.target)) keepIds.add(edge.source);
   }
 
   const filteredNodes = nodes.filter((node) => keepIds.has(node.id));

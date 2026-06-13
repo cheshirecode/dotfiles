@@ -11,6 +11,7 @@ SCRATCH="$(mktemp -d -t worklog-manager-graph-test-XXXXXX)"
 trap 'rm -rf "$SCRATCH"' EXIT
 
 JSON_OUT="$SCRATCH/graph.json"
+MATCH_JSON_OUT="$SCRATCH/match-graph.json"
 HTML_OUT="$SCRATCH/graph.html"
 DOT_OUT="$SCRATCH/graph.dot"
 
@@ -31,7 +32,7 @@ assert(graph.schemaVersion === "worklog.graph.v1", "unexpected graph schema");
 assert(graph.instance.name === "fixture-projects", "instance name not preserved");
 assert(graph.instance.github.repos.includes("example/projects-ui"), "github repo metadata missing");
 assert(graph.summary.nodeCount === 3, `expected 3 nodes, got ${graph.summary.nodeCount}`);
-assert(graph.summary.edgeCount === 5, `expected 5 edges, got ${graph.summary.edgeCount}`);
+assert(graph.summary.edgeCount === 6, `expected 6 edges, got ${graph.summary.edgeCount}`);
 assert(graph.summary.diagnosticCount === 0, `expected no diagnostics, got ${graph.summary.diagnosticCount}`);
 assert(graph.nodes.some((node) => node.id === "projects-root"), "missing root task");
 assert(graph.nodes.some((node) => node.id === "projects-child"), "missing child task");
@@ -41,6 +42,7 @@ assert(graph.edges.some((edge) => edge.source === "projects-root" && edge.target
 assert(graph.edges.some((edge) => edge.source === "projects-root" && edge.target === "projects-archive" && edge.relation === "parent"), "missing archived parent edge");
 assert(graph.edges.some((edge) => edge.source === "projects-root" && edge.target === "projects-archive" && edge.relation === "related"), "missing archived related edge");
 assert(graph.edges.some((edge) => edge.source === "projects-root" && edge.target === "projects-child" && edge.relation === "depends_on"), "missing depends_on edge");
+assert(graph.edges.some((edge) => edge.source === "projects-child" && edge.target === "projects-archive" && edge.relation === "related"), "missing child archive related edge");
 NODE
 
 ACTIVE_JSON_OUT="$SCRATCH/active-graph.json"
@@ -67,6 +69,24 @@ NODE
 "$WORKLOG_BIN/worklog-manager" graph \
   --repo "$FIXTURE" \
   --instance fixture-projects \
+  --match projects-child \
+  --format json \
+  --output "$MATCH_JSON_OUT"
+
+node - "$MATCH_JSON_OUT" <<'NODE'
+const fs = require("node:fs");
+const graph = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+assert(graph.nodes.some((node) => node.id === "projects-child"), "match graph missing searched node");
+assert(graph.nodes.some((node) => node.id === "projects-archive"), "match graph did not keep related neighbor");
+assert(graph.edges.some((edge) => edge.source === "projects-child" && edge.target === "projects-archive" && edge.relation === "related"), "match graph missing related neighbor edge");
+NODE
+
+"$WORKLOG_BIN/worklog-manager" graph \
+  --repo "$FIXTURE" \
+  --instance fixture-projects \
   --project projects-root \
   --match projects-child \
   --format html \
@@ -75,6 +95,10 @@ NODE
 grep -q '<title>Worklog Graph - fixture-projects</title>' "$HTML_OUT"
 grep -q 'function layout(nodes,edges)' "$HTML_OUT"
 grep -q 'parentNode' "$HTML_OUT"
+grep -q 'data-state="archive" checked' "$HTML_OUT"
+grep -q 'data-relation="related" checked' "$HTML_OUT"
+grep -q 'marker-end' "$HTML_OUT"
+grep -q 'edgeLabel' "$HTML_OUT"
 grep -q 'data-relation="depends_on"' "$HTML_OUT"
 grep -q 'function nodeTags(n)' "$HTML_OUT"
 grep -q '"projects-root"' "$HTML_OUT"
