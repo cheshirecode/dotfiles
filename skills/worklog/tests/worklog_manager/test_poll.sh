@@ -12,10 +12,16 @@ trap 'rm -rf "$SCRATCH"' EXIT
 FIXTURE_REPO="$(pwd)/tests/worklog_manager/fixtures/projects"
 CONFIG="$SCRATCH/instance.json"
 MISSING_LOGIN_CONFIG="$SCRATCH/missing-login-instance.json"
+DISABLED_CONFIG="$SCRATCH/disabled-instance.json"
+WATCHER_CONFIG="$SCRATCH/watcher-instance.json"
+OSS_CONFIG="$SCRATCH/oss-instance.json"
+COLLISION_CONFIG="$SCRATCH/collision-instance.json"
 OUT_POLL="$SCRATCH/poll.json"
 OUT_NOTMOD="$SCRATCH/not-modified.json"
 OUT_POST="$SCRATCH/post-status.json"
 OUT_REFUSED="$SCRATCH/refused.json"
+OUT_VALIDATE="$SCRATCH/validate-watchers.json"
+OUT_VALIDATE_BAD="$SCRATCH/validate-watchers-bad.json"
 FAKE_BIN="$SCRATCH/bin"
 FAKE_GH_LOG="$SCRATCH/gh.log"
 mkdir -p "$FAKE_BIN"
@@ -35,6 +41,9 @@ cat > "$CONFIG" <<JSON
   "sandbox": {
     "command": "/workspace/oss/sandbox/bin/sandbox.sh",
     "profile": "fixture"
+  },
+  "poll": {
+    "enabled": true
   },
   "daemon": {
     "expectedLogin": "fixture-user",
@@ -60,8 +69,123 @@ cat > "$MISSING_LOGIN_CONFIG" <<JSON
     "command": "/workspace/oss/sandbox/bin/sandbox.sh",
     "profile": ""
   },
+  "poll": {
+    "enabled": true
+  },
   "daemon": {
     "defaultSlug": "projects-child",
+    "commands": ["ask", "plan", "do", "agent"]
+  }
+}
+JSON
+
+cat > "$DISABLED_CONFIG" <<JSON
+{
+  "schemaVersion": "worklog-manager.instance.v1",
+  "instance": "fixture-projects-disabled",
+  "roots": {
+    "worklogRepo": "$FIXTURE_REPO",
+    "stateDir": "$SCRATCH/disabled-state",
+    "cacheDir": "$SCRATCH/disabled-cache"
+  },
+  "github": {
+    "repos": ["example/projects-ui"]
+  },
+  "sandbox": {
+    "command": "/workspace/oss/sandbox/bin/sandbox.sh",
+    "profile": "fixture"
+  },
+  "poll": {
+    "enabled": false
+  },
+  "daemon": {
+    "expectedLogin": "fixture-user",
+    "defaultSlug": "projects-child",
+    "commands": ["ask", "plan", "do", "agent"]
+  }
+}
+JSON
+
+cat > "$WATCHER_CONFIG" <<JSON
+{
+  "schemaVersion": "worklog-manager.instance.v1",
+  "instance": "fixture-projects",
+  "roots": {
+    "worklogRepo": "$FIXTURE_REPO",
+    "stateDir": "$SCRATCH/watcher-state",
+    "cacheDir": "$SCRATCH/watcher-cache"
+  },
+  "github": {
+    "repos": ["example/projects-ui"]
+  },
+  "sandbox": {
+    "command": "/workspace/oss/sandbox/bin/sandbox.sh",
+    "profile": "fixture"
+  },
+  "poll": {
+    "enabled": true,
+    "issueUrls": ["https://github.com/example/projects-ui/issues/9"]
+  },
+  "daemon": {
+    "expectedLogin": "fixture-user",
+    "defaultSlug": "projects-child",
+    "commands": ["ask", "plan", "do", "agent"]
+  }
+}
+JSON
+
+cat > "$OSS_CONFIG" <<JSON
+{
+  "schemaVersion": "worklog-manager.instance.v1",
+  "instance": "fixture-oss",
+  "roots": {
+    "worklogRepo": "$FIXTURE_REPO",
+    "stateDir": "$SCRATCH/oss-state",
+    "cacheDir": "$SCRATCH/oss-cache"
+  },
+  "github": {
+    "repos": ["example/projects-ui"]
+  },
+  "sandbox": {
+    "command": "/workspace/oss/sandbox/bin/sandbox.sh",
+    "profile": "fixture"
+  },
+  "poll": {
+    "enabled": false,
+    "issueUrls": ["https://github.com/example/projects-ui/issues/9"]
+  },
+  "daemon": {
+    "expectedLogin": "fixture-user",
+    "defaultSlug": "projects-child",
+    "commands": ["ask", "plan", "do", "agent"]
+  }
+}
+JSON
+
+cat > "$COLLISION_CONFIG" <<JSON
+{
+  "schemaVersion": "worklog-manager.instance.v1",
+  "instance": "fixture-collision",
+  "roots": {
+    "worklogRepo": "$FIXTURE_REPO",
+    "stateDir": "$SCRATCH/collision-state",
+    "cacheDir": "$SCRATCH/collision-cache"
+  },
+  "github": {
+    "repos": ["example/projects-ui"]
+  },
+  "sandbox": {
+    "command": "/workspace/oss/sandbox/bin/sandbox.sh",
+    "profile": "fixture"
+  },
+  "poll": {
+    "enabled": true,
+    "issueUrls": ["https://github.com/example/projects-ui/issues/9"]
+  },
+  "daemon": {
+    "expectedLogin": "fixture-user",
+    "defaultSlug": "projects-child",
+    "statusCommentMarker": "<!-- worklog-manager-status:fixture-projects -->",
     "commands": ["ask", "plan", "do", "agent"]
   }
 }
@@ -102,7 +226,7 @@ if [[ "$joined" == *"comments?per_page=100"* ]]; then
   {
     "id": 100,
     "node_id": "status-comment",
-    "body": "<!-- worklog-manager-status -->\nworklog-manager: dry-run planned",
+    "body": "<!-- worklog-manager-status:fixture-projects -->\nworklog-manager: dry-run planned",
     "user": {"login": "fixture-user"},
     "html_url": "https://github.com/example/projects-ui/issues/9#issuecomment-status",
     "created_at": "2026-06-08T15:00:00Z",
@@ -200,16 +324,72 @@ if [[ -s "$FAKE_GH_LOG" ]]; then
 fi
 
 : > "$FAKE_GH_LOG"
+set +e
+PATH="$FAKE_BIN:$PATH" FAKE_GH_LOG="$FAKE_GH_LOG" "$WORKLOG_BIN/worklog-manager" poll \
+  --config "$DISABLED_CONFIG" \
+  --issue-url https://github.com/example/projects-ui/issues/9 \
+  --force-fetch \
+  --output "$OUT_REFUSED" \
+  2> "$SCRATCH/disabled.err"
+status=$?
+set -e
+if [[ "$status" -eq 0 ]]; then
+  echo "disabled poll unexpectedly succeeded" >&2
+  exit 1
+fi
+grep -q "poll.enabled=true" "$SCRATCH/disabled.err"
+if [[ -s "$FAKE_GH_LOG" ]]; then
+  echo "disabled poll preflight should not call gh" >&2
+  exit 1
+fi
+
+"$WORKLOG_BIN/worklog-manager" validate-watchers \
+  --config "$WATCHER_CONFIG" \
+  --config "$OSS_CONFIG" \
+  --output "$OUT_VALIDATE"
+
+node - "$OUT_VALIDATE" <<'NODE'
+const fs = require("node:fs");
+const out = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+if (out.schemaVersion !== "worklog.watcher-validation.v1") throw new Error("unexpected watcher validation schema");
+if (!out.ok) throw new Error("projects+oss watcher validation should pass");
+if (out.errors.length) throw new Error("unexpected watcher validation errors");
+if (out.warnings.length) throw new Error("unexpected watcher validation warnings");
+NODE
+
+set +e
+"$WORKLOG_BIN/worklog-manager" validate-watchers \
+  --config "$WATCHER_CONFIG" \
+  --config "$COLLISION_CONFIG" \
+  --output "$OUT_VALIDATE_BAD" \
+  2> "$SCRATCH/validate-bad.err"
+status=$?
+set -e
+if [[ "$status" -eq 0 ]]; then
+  echo "marker collision validation unexpectedly succeeded" >&2
+  exit 1
+fi
+node - "$OUT_VALIDATE_BAD" <<'NODE'
+const fs = require("node:fs");
+const out = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+if (out.ok) throw new Error("collision validation should fail");
+if (!out.errors.some((item) => item.code === "poll.status_marker_collision")) {
+  throw new Error("missing poll.status_marker_collision");
+}
+NODE
+
+: > "$FAKE_GH_LOG"
 PATH="$FAKE_BIN:$PATH" FAKE_GH_LOG="$FAKE_GH_LOG" "$WORKLOG_BIN/worklog-manager" poll \
   --config "$CONFIG" \
   --issue-url https://github.com/example/projects-ui/issues/9 \
   --force-fetch \
   --output "$OUT_POLL"
 
-node - "$OUT_POLL" "$FAKE_GH_LOG" <<'NODE'
+node - "$OUT_POLL" "$FAKE_GH_LOG" "$SCRATCH" <<'NODE'
 const fs = require("node:fs");
 const out = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 const ghLog = fs.readFileSync(process.argv[3], "utf8");
+const scratch = process.argv[4];
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -223,6 +403,12 @@ assert(out.dispatch.intent.command === "plan", "natural-language plan not inferr
 assert(fs.existsSync(out.cursor.file), "cursor artifact missing");
 assert(fs.existsSync(`${out.runDir}/state.json`), "dispatch state artifact missing");
 assert(fs.existsSync(`${out.runDir}/status-comment.md`), "status-comment artifact missing");
+const learningFile = `${scratch}/cache/learning/refusals.jsonl`;
+assert(fs.existsSync(learningFile), "learning event missing");
+const learningText = fs.readFileSync(learningFile, "utf8");
+assert(learningText.includes('"schemaVersion":"worklog.learning-event.v1"'), "unexpected learning schema");
+assert(!learningText.includes("Dry-run the polling smoke"), "learning event leaked prompt");
+assert(!learningText.includes("/Users/"), "learning event leaked host path");
 assert(!ghLog.includes("--method"), "poll attempted a mutating gh call");
 NODE
 
