@@ -27,12 +27,21 @@ resolve_worklog_repo() {
   return 1
 }
 
-# Resolve the caller's LDAP. Precedence: $WORKLOG_LDAP -> git email -> $USER.
-# Cache key varies by LDAP override so the projects/ (work) and oss/ (personal)
-# clones don't collide on the same machine. Cached 24h to avoid re-running git
-# config / gcloud on every invocation (status.sh originally hit gcloud for ~1.2s).
+# Resolve the caller's worklog namespace (historically named LDAP). Precedence:
+# $WORKLOG_LDAP -> $WORKLOG_NS -> git email -> $USER. Cache key includes the
+# resolved repo path so projects/_worklog and oss/_worklog cannot poison each
+# other's fallback result on the same machine. Cached 24h to avoid re-running
+# git config / gcloud on every invocation.
 resolve_ldap() {
-  local cache_key="${WORKLOG_LDAP:-default-${USER:-anon}}"
+  local explicit_ns="${WORKLOG_LDAP:-${WORKLOG_NS:-}}"
+  local repo_key repo_hash
+  repo_key="${WORKLOG_REPO:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+  if command -v shasum >/dev/null 2>&1; then
+    repo_hash="$(printf '%s' "$repo_key" | shasum | awk '{print $1}')"
+  else
+    repo_hash="$(printf '%s' "$repo_key" | cksum | awk '{print $1}')"
+  fi
+  local cache_key="${explicit_ns:-default-${USER:-anon}}-${repo_hash}"
   local cache="${TMPDIR:-/tmp}/worklog-ldap-${cache_key}"
   if [[ -f "$cache" ]]; then
     local age
@@ -46,7 +55,7 @@ resolve_ldap() {
     fi
   fi
   local ldap
-  ldap="${WORKLOG_LDAP:-}"
+  ldap="$explicit_ns"
   # Strip GitHub noreply prefix `<digits>+` BEFORE stripping `@...`, so
   # 1631630+cheshirecode@users.noreply.github.com -> cheshirecode
   # (was returning "1631630+cheshirecode" which broke namespace lookups).
@@ -56,33 +65,39 @@ resolve_ldap() {
   echo "$ldap"
 }
 
-# Verify the resolved LDAP matches `git config user.email`'s local part. Runs
-# at most once per clone — emits .cache/provenance-verified on match. Hard-fail
-# on mismatch unless WORKLOG_SKIP_PROVENANCE=1. Called by bin/checkpoint.sh and
-# bin/archive.sh on every commit; the sentinel makes the steady-state cost
-# zero. Why: a misconfigured git user.email silently commits to a peer's
-# people/cheshirecode/ namespace; cheap check prevents an expensive disentangle.
+# Verify namespace/git-author provenance. Explicit namespaces (WORKLOG_LDAP or
+# WORKLOG_NS) are allowed to differ from git user.email: oss/_worklog writes
+# under people/oss while committing as cheshirecode. Without an explicit
+# namespace, the git email local-part must match the derived namespace. Runs at
+# most once per clone+identity tuple via .cache/provenance-verified.
 verify_provenance() {
   [[ "${WORKLOG_SKIP_PROVENANCE:-0}" == "1" ]] && return 0
   local sentinel=".cache/provenance-verified"
-  [[ -f "$sentinel" ]] && return 0
 
   local ldap email_local git_email
   ldap="$(resolve_ldap)"
   git_email="$(git config user.email 2>/dev/null || true)"
+  if [[ -f "$sentinel" ]]; then
+    local sent_ldap sent_email
+    sent_ldap="$(awk 'NR==1 {print $1}' "$sentinel" 2>/dev/null || true)"
+    sent_email="$(awk 'NR==1 {print $2}' "$sentinel" 2>/dev/null || true)"
+    if [[ "$sent_ldap" == "$ldap" && "$sent_email" == "$git_email" ]]; then
+      return 0
+    fi
+  fi
   if [[ -z "$git_email" ]]; then
     echo "verify_provenance: git config user.email is empty — set it before checkpointing." >&2
     echo "  git config user.email \"${ldap}@users.noreply.github.com\"" >&2
     return 1
   fi
   email_local="${git_email%@*}"
-  if [[ "$email_local" != "$ldap" ]]; then
+  if [[ -z "${WORKLOG_LDAP:-${WORKLOG_NS:-}}" && "$email_local" != "$ldap" ]]; then
     echo "verify_provenance: LDAP/email mismatch — refusing to commit." >&2
-    echo "  resolved LDAP:       $ldap (from \$WORKLOG_LDAP / git email / cache)" >&2
+    echo "  resolved namespace:  $ldap (from git email / cache)" >&2
     echo "  git config user.email: $git_email (local part: $email_local)" >&2
     echo "" >&2
-    echo "  This usually means: git user.email isn't the cheshirecode noreply," >&2
-    echo "  or this is a shared workstation." >&2
+    echo "  This usually means git user.email points at the wrong account," >&2
+    echo "  or this clone needs WORKLOG_LDAP / WORKLOG_NS in .envrc." >&2
     echo "" >&2
     echo "  Fix:    git config user.email \"${ldap}@users.noreply.github.com\"" >&2
     echo "  Bypass: WORKLOG_SKIP_PROVENANCE=1 (one-shot)" >&2
@@ -277,7 +292,7 @@ autosave_can_amend_head() {
   local subject upstream unpushed non_autosave
   subject="$(git log -1 --format=%s 2>/dev/null || true)"
   [[ "$subject" == autosave:* ]] || return 1
-  upstream="$(git rev-parse --abbrev-ref @{u} 2>/dev/null || true)"
+  upstream="$(git rev-parse --abbrev-ref '@{u}' 2>/dev/null || true)"
   [[ -n "$upstream" ]] || return 0
   unpushed="$(git rev-list --count "${upstream}..HEAD" 2>/dev/null || echo 0)"
   (( unpushed > 0 )) || return 1

@@ -64,8 +64,7 @@ REPO_ROOT="$(resolve_worklog_repo)" || exit 1
 cd "$REPO_ROOT"
 LDAP="$(resolve_ldap)"
 verify_provenance || exit 1
-SLUG_FOR_DETECT="${1:-}"
-[[ -n "$SLUG_FOR_DETECT" ]] && detect_session_collision "$SLUG_FOR_DETECT" 2>&1 || true
+detect_session_collision "$SLUG" 2>&1 || true
 
 SRC="people/$LDAP/active/$SLUG.md"
 DST="people/$LDAP/archive/$SLUG.md"
@@ -113,7 +112,7 @@ TODAY="$(date +%Y-%m-%d)"
 # the body-edit so the body-edit can decide whether to add a Transcript: link.
 # Silent skip if env not present.
 SLUG="$SLUG" LDAP="$LDAP" TRIGGER="archive" \
-  python3 "$(dirname "$0")/_dump_transcript.py" 2>/dev/null || true
+  python3 "$SCRIPT_DIR/_dump_transcript.py" 2>/dev/null || true
 
 TRANSCRIPT_FILE="people/$LDAP/transcripts/$SLUG.md"
 
@@ -159,18 +158,27 @@ if pr:
             existing.append(pr)
             sub('pr', '[' + ', '.join(existing) + ']')
 
-# Prepend archive marker to Context if not already archived-marked.
-if '\n## Context\n' in text and 'Archived ' not in text.split('\n## Context\n', 1)[1][:200]:
-    marker = f'Archived {today}: {reason}.'
-    transcript_link = ''
-    if transcript_rel and pathlib.Path(transcript_rel).exists():
-        # archive/<slug>.md and transcripts/<slug>.md are sibling dirs.
-        transcript_link = f'\nTranscript: [../transcripts/{pathlib.Path(transcript_rel).name}](../transcripts/{pathlib.Path(transcript_rel).name})'
-    text = text.replace(
-        '\n## Context\n\n',
-        f'\n## Context\n\n{marker}{transcript_link}\n\n',
-        1,
-    )
+# Prepend archive marker to Context if not already archived-marked. If an older
+# task lacks ## Context entirely, create it instead of silently archiving without
+# the browsability marker.
+marker = f'Archived {today}: {reason}.'
+transcript_link = ''
+if transcript_rel and pathlib.Path(transcript_rel).exists():
+    # archive/<slug>.md and transcripts/<slug>.md are sibling dirs.
+    transcript_link = f'\nTranscript: [../transcripts/{pathlib.Path(transcript_rel).name}](../transcripts/{pathlib.Path(transcript_rel).name})'
+marker_block = f'\n## Context\n\n{marker}{transcript_link}\n\n'
+if '\n## Context\n' in text:
+    if 'Archived ' not in text.split('\n## Context\n', 1)[1][:200]:
+        text = re.sub(
+            r'\n## Context\n\n?',
+            f'\n## Context\n\n{marker}{transcript_link}\n\n',
+            text,
+            count=1,
+        )
+elif '\n## Next\n' in text:
+    text = text.replace('\n## Next\n', f'{marker_block}## Next\n', 1)
+else:
+    text = text.rstrip() + marker_block
 
 p.write_text(text)
 PY
@@ -199,7 +207,8 @@ print(",".join(n for n in nums if n))
 PY
 )"
 
-TRAILERS="Worklog-Status: archived
+TRAILERS="Worklog-Slug: $SLUG
+Worklog-Status: archived
 Worklog-Kind: ${KIND:-}
 Worklog-Linear: ${LINEAR:-}"
 [[ -n "$PROJECT" ]] && TRAILERS+="

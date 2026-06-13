@@ -14,6 +14,7 @@ import os
 import pathlib
 import re
 import sys
+import tempfile
 
 FRONTMATTER_RE = re.compile(r"^---\n.*?\n---\n", re.DOTALL)
 
@@ -37,6 +38,20 @@ def load_existing(out_path: pathlib.Path) -> dict[str, dict]:
     except (json.JSONDecodeError, KeyError):
       continue
   return out
+
+
+def write_jsonl_atomic(out_path: pathlib.Path, records: list[dict]) -> None:
+  out_path.parent.mkdir(parents=True, exist_ok=True)
+  with tempfile.NamedTemporaryFile(
+      "w",
+      dir=out_path.parent,
+      prefix=f"{out_path.name}.tmp.",
+      delete=False,
+  ) as f:
+    tmp_path = pathlib.Path(f.name)
+    for rec in records:
+      f.write(json.dumps(rec) + "\n")
+  tmp_path.replace(out_path)
 
 
 def main() -> None:
@@ -67,10 +82,7 @@ def main() -> None:
 
   if not to_embed:
     # Rewrite from carry-over to drop slugs no longer in the index.
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with out_path.open("w") as f:
-      for rec in carry_over:
-        f.write(json.dumps(rec) + "\n")
+    write_jsonl_atomic(out_path, carry_over)
     print(f"embed: 0 new, {len(carry_over)} cached")
     return
 
@@ -90,10 +102,7 @@ def main() -> None:
     })
 
   all_records = carry_over + new_records
-  out_path.parent.mkdir(parents=True, exist_ok=True)
-  with out_path.open("w") as f:
-    for rec in all_records:
-      f.write(json.dumps(rec) + "\n")
+  write_jsonl_atomic(out_path, all_records)
   print(f"embed: {len(new_records)} new, {len(carry_over)} cached, total {len(all_records)}")
 
 

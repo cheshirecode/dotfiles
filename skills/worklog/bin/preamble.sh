@@ -48,6 +48,19 @@ else
   printf 'NAMESPACE=exists\n'
 fi
 
+active_total="$(find people -path '*/active/*.md' -type f 2>/dev/null | wc -l | tr -d '[:space:]')"
+active_namespace="$(find "people/$LDAP/active" -maxdepth 1 -name '*.md' -type f 2>/dev/null | wc -l | tr -d '[:space:]')"
+dirty_count="$(git status --porcelain -- people docs bin 2>/dev/null | wc -l | tr -d '[:space:]')"
+ahead_count="0"
+if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+  ahead_count="$(git rev-list --count '@{u}..HEAD' 2>/dev/null || echo 0)"
+  ahead_count="$(printf '%s' "$ahead_count" | tr -d '[:space:]')"
+fi
+printf 'ACTIVE_TOTAL=%s\n' "${active_total:-0}"
+printf 'ACTIVE_NAMESPACE=%s\n' "${active_namespace:-0}"
+printf 'GIT_DIRTY=%s\n' "${dirty_count:-0}"
+printf 'GIT_AHEAD=%s\n' "${ahead_count:-0}"
+
 # Pull rate limit (5 min). Always for --full; never for --minimal.
 PULL_STAMP=".cache/preamble-pull-stamp"
 if [[ "$mode" == "--full" ]]; then
@@ -74,10 +87,26 @@ else
   printf 'PULL=skip (minimal)\n'
 fi
 
-# Roster (kernels JSON one-liner per active task).
+# Roster (kernels JSON one-liner per active task). The health line is
+# intentionally separate so fresh agents can tell "no roster" from "no work".
 printf '\n### roster\n'
 if [[ -f .cache/compact-kernels.json ]]; then
+  kernel_mtime="$(stat -c %Y .cache/compact-kernels.json 2>/dev/null || stat -f %m .cache/compact-kernels.json 2>/dev/null || echo 0)"
+  kernel_age=$(( $(date +%s) - kernel_mtime ))
+  kernel_count="$(python3 - <<'PY' 2>/dev/null || echo unknown
+import json
+print(len(json.load(open(".cache/compact-kernels.json"))))
+PY
+)"
+  if [[ "$kernel_age" -gt 3600 ]]; then
+    printf '# roster-health: stale age=%ss active_namespace=%s active_total=%s\n' "$kernel_age" "${active_namespace:-0}" "${active_total:-0}"
+  elif [[ "$kernel_count" != "${active_namespace:-0}" ]]; then
+    printf '# roster-health: mismatch kernels=%s active_namespace=%s active_total=%s\n' "$kernel_count" "${active_namespace:-0}" "${active_total:-0}"
+  else
+    printf '# roster-health: fresh kernels=%s active_namespace=%s active_total=%s\n' "$kernel_count" "${active_namespace:-0}" "${active_total:-0}"
+  fi
   bash "$SCRIPT_DIR/kernels-roster.sh"
 else
-  printf '# roster: kernels missing — run bin/compact-kernels.sh\n'
+  printf '# roster-health: missing active_namespace=%s active_total=%s\n' "${active_namespace:-0}" "${active_total:-0}"
+  printf '# roster: kernels missing — run %s/compact-kernels.sh\n' "$SCRIPT_DIR"
 fi

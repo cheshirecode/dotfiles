@@ -33,7 +33,7 @@ If `$CLAUDE_HOOK` is set or stdin is not a TTY, skip conversation-WIP detection 
    - For `[existing]`: `"$WORKLOG_BIN/checkpoint.sh" <slug> [--status=X] [--next="..."]`.
    - For `[proposal]`: create with `kind: proposal`, `status: draft`, Context opening `Follow-on from <parent-slug>.`; append a `## Notes from cheshirecode` pointer to the parent if active.
 
-3. **Uncommitted `_worklog` edits.** If `git -C $WORKLOG_REPO status --porcelain` is non-empty and the above produced nothing actionable, run `"$WORKLOG_BIN/"autosave.sh`.
+3. **Uncommitted `_worklog` edits.** If `git -C $WORKLOG_REPO status --porcelain` is non-empty and the above produced nothing actionable, run `"$WORKLOG_BIN/autosave.sh"`.
 
 4. **Clean.** Report "nothing to sync" and exit.
 

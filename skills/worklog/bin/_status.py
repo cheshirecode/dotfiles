@@ -58,6 +58,13 @@ def _trailer(body: str, key: str) -> str:
   return m.group(1).strip() if m else ""
 
 
+def _trailers(body: str, key: str) -> list[str]:
+  return [
+    m.group(1).strip()
+    for m in re.finditer(rf"^{re.escape(key)}:[ \t]*(.*)$", body, re.MULTILINE)
+  ]
+
+
 def parse_commits(raw: str) -> list[dict]:
   commits = []
   for record in raw.split("\x1e"):
@@ -70,23 +77,31 @@ def parse_commits(raw: str) -> list[dict]:
     sha, subject = parts[0], parts[1]
     body = parts[2] if len(parts) > 2 else ""
     slug_m = re.match(r"^([a-z0-9][a-z0-9-]*):", subject)
-    slug = slug_m.group(1) if slug_m else None
+    trailer_slugs = [
+      s.strip()
+      for value in _trailers(body, "Worklog-Slug")
+      for s in re.split(r"[\t,]", value)
+      if s.strip()
+    ]
+    slugs = trailer_slugs or ([slug_m.group(1)] if slug_m else [None])
     next_m = re.search(r"^next:\s*(.+?)$", body, re.MULTILINE)
-    commits.append({
-      "sha": sha[:7],
-      "subject": subject,
-      "slug": slug,
-      "next": next_m.group(1).strip() if next_m else "",
-      "status": _trailer(body, "Worklog-Status"),
-      "kind": _trailer(body, "Worklog-Kind"),
-      "linear": _trailer(body, "Worklog-Linear"),
-      "pr": _trailer(body, "Worklog-PR"),
-      "prev_slug": _trailer(body, "Worklog-Previous-Slug"),
-    })
+    for slug in slugs:
+      commits.append({
+        "sha": sha[:7],
+        "subject": subject,
+        "slug": slug,
+        "next": next_m.group(1).strip() if next_m else "",
+        "status": _trailer(body, "Worklog-Status"),
+        "kind": _trailer(body, "Worklog-Kind"),
+        "linear": _trailer(body, "Worklog-Linear"),
+        "pr": _trailer(body, "Worklog-PR"),
+        "prev_slug": _trailer(body, "Worklog-Previous-Slug"),
+      })
   return commits
 
 
 def render_slug_history(commits: list[dict], focus_slug: str, fmt: str) -> None:
+  commits = [c for c in commits if c["slug"] == focus_slug or c["prev_slug"] == focus_slug]
   if fmt == "json":
     print(json.dumps(commits, indent=2))
     return
@@ -102,8 +117,7 @@ def render_slug_history(commits: list[dict], focus_slug: str, fmt: str) -> None:
 
 def read_frontmatter_field(author: str, slug: str, key: str) -> str:
   for sub in ("active", "archive"):
-    p = pathlib.Path(f"people/{author}/{sub}/{slug}.md")
-    if p.exists():
+    for p in sorted(pathlib.Path("people").glob(f"*/{sub}/{slug}.md")):
       m = re.search(rf"^{key}:[ \t]*(\S*)", p.read_text(), re.MULTILINE)
       if m:
         return m.group(1)
@@ -124,7 +138,7 @@ def _current_field(by_slug: dict, author: str, slug: str, key: str) -> str:
 
 def _resolves_to_file(author: str, slug: str, by_slug: dict) -> bool:
   for sub in ("active", "archive"):
-    if pathlib.Path(f"people/{author}/{sub}/{slug}.md").exists():
+    if any(pathlib.Path("people").glob(f"*/{sub}/{slug}.md")):
       return True
   for c in by_slug.get(slug, []):
     if c["prev_slug"] and _resolves_to_file(author, c["prev_slug"], by_slug):

@@ -2,7 +2,7 @@
 # Worklog commit-msg hook. Validates trailer-vs-frontmatter consistency
 # at commit time, before the commit lands.
 #
-# Two checks (both block on mismatch; bypass with WORKLOG_NO_HOOK=1):
+# Three checks (all block on mismatch; bypass with WORKLOG_NO_HOOK=1):
 #
 #   1. Worklog-Slug: trailer must resolve to an active or archive task file
 #      under people/*/. Catches typo'd slug trailers that strand commits in
@@ -12,6 +12,9 @@
 #      same slug. Catches the parallel-ledger drift class — yesterday's batch
 #      of 7 tasks hand-wrote in-review trailers without flipping frontmatter,
 #      requiring a separate cleanup pass. (worklog-trailer-frontmatter-autoflip)
+#
+#   3. Worklog-Status: <X> must be in the documented FSM. Catches hand-written
+#      legacy values such as done/planning even when frontmatter matches.
 #
 # Bypass: `WORKLOG_NO_HOOK=1 git commit ...`. Same env as pre-commit.
 
@@ -32,6 +35,32 @@ STATUSES="$(git interpret-trailers --parse <"$MSG_FILE" 2>/dev/null \
   | awk -F': *' '/^Worklog-Status:/ {print $2}' || true)"
 
 [[ -z "$SLUGS" ]] && exit 0
+
+valid_status() {
+  case "$1" in
+    draft|in-progress|in-review|blocked|shipping|archived) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Check 0: every status trailer is a documented FSM value, even when the
+# commit has a batch/mismatched trailer shape that cannot be frontmatter-paired.
+INVALID_STATUS=0
+while IFS= read -r trailer_status; do
+  [[ -z "$trailer_status" ]] && continue
+  if ! valid_status "$trailer_status"; then
+    {
+      echo "commit-msg: invalid Worklog-Status: $trailer_status is not in FSM"
+      echo "commit-msg:   valid: draft | in-progress | in-review | blocked | shipping | archived"
+      echo "commit-msg:   use archive.sh for archived; map legacy done/planning intentionally."
+    } >&2
+    INVALID_STATUS=1
+  fi
+done <<< "$STATUSES"
+if (( INVALID_STATUS )); then
+  echo "commit-msg: rejecting commit. Bypass with WORKLOG_NO_HOOK=1." >&2
+  exit 1
+fi
 
 # Check 1: every slug resolves to a task file.
 INVALID=0

@@ -59,6 +59,15 @@ WORKLOG_REPO="${WORKLOG_REPO:?per-clone .envrc must export this}"
 
 Every example below uses `$WORKLOG_BIN/foo.sh` — these are the dotfiles-shipped scripts. The `WORKLOG_REPO` env var (set by each clone's `.envrc`) tells the scripts which data repo they're operating on; identity (LDAP) is resolved per-clone from `WORKLOG_LDAP` env, else git email, else `$USER`.
 
+## Environment bootstrap contract
+
+Run helpers from a shell that has the target clone's environment loaded. Prefer `direnv exec "$WORKLOG_REPO" ...` when the clone has `.envrc`; direct `source` is only safe for plain shell exports and may fail on direnv helpers such as `source_up`. Required shape:
+
+- `WORKLOG_REPO` points at the live data repo (`.../_worklog`).
+- `WORKLOG_BIN` points at this skill's `bin/` directory; if unset, use `$HOME/Documents/oss/dotfiles/skills/worklog/bin`.
+- `WORKLOG_LDAP` is optional but authoritative when set; otherwise helpers fall back to git email, then `$USER`.
+- `--help` paths must not require any of those variables to be set.
+
 ## Preamble — single call
 
 ```bash
@@ -117,7 +126,7 @@ For per-task detail, use `"$WORKLOG_BIN/context.sh" <slug>` (its output ends in 
 - New data repo: `"$WORKLOG_BIN/init-new-data-repo.sh" <path> [<ldap>]` (Phase 4 — not shipped yet).
 
 ### Frontmatter
-- `kind` ∈ {bug, bugfix, cleanup, debug, design, impl, infra, investigation, ops, perf, plan, postmortem, program, proposal, review, runbook, spike, tooling}.
+- `kind` ∈ {bug, bugfix, cleanup, debug, design, impl, infra, investigation, ops, perf, plan, postmortem, program, project, proposal, review, runbook, spike, tooling}.
 - Notion page IDs → `notion: <id>` (no dashes), NOT `external_refs:`. `init --full` matches against `notion:`.
 
 ### Body
@@ -128,7 +137,7 @@ For per-task detail, use `"$WORKLOG_BIN/context.sh" <slug>` (its output ends in 
 ### Commits
 - `Worklog-Slug:` trailer MUST resolve to an existing task file.
 - `Worklog-Status:` trailer MUST match frontmatter `status:` for that slug.
-- Both enforced by `bin/git-hooks/commit-msg`. Hand-rolling status flips via trailer alone is rejected.
+- Both enforced by `"$WORKLOG_BIN/git-hooks/commit-msg"`. Hand-rolling status flips via trailer alone is rejected.
 
 ### Hooks
 - Pre-commit blocks: lint errors on staged task files, scrubber regressions, ruff/shellcheck errors, secrets via `"$WORKLOG_BIN/pre-commit-scan.sh"`.

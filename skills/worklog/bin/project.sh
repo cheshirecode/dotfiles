@@ -22,10 +22,6 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=_lib.sh
-. "$SCRIPT_DIR/_lib.sh"
-REPO_ROOT="$(resolve_worklog_repo)" || exit 1
-cd "$REPO_ROOT"
 
 usage() {
   sed -n '3,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -40,6 +36,11 @@ SUB="$1"; shift || true
 case "$SUB" in
   -h|--help|help) usage; exit 0 ;;
 esac
+
+# shellcheck source=_lib.sh
+. "$SCRIPT_DIR/_lib.sh"
+REPO_ROOT="$(resolve_worklog_repo)" || exit 1
+cd "$REPO_ROOT"
 
 # ---------- helpers ----------
 

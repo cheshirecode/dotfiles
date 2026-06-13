@@ -6,7 +6,7 @@
 # Bypass: `WORKLOG_NO_HOOK=1 git commit ...`.
 #
 # Checks:
-#   1. bin/lint.sh on changed people/*/{active,archive}/*.md  (errors block)
+#   1. $SKILL_BIN/lint.sh on changed people/*/{active,archive}/*.md  (errors block)
 #   2. tests/export/test_scrubber.sh   if export pipeline changed
 #   3. tests/frontmatter/test_round_trip.sh   if frontmatter parser changed
 #
@@ -62,10 +62,21 @@ match() {
 }
 
 # 1. Per-file task lint — errors block, warnings pass through
+BAD_TASK_PAYLOAD=()
+for f in "${CHANGED[@]}"; do
+  [[ "$f" =~ ^people/[^/]+/(active|archive)/ ]] || continue
+  [[ "$f" =~ \.md$ ]] || BAD_TASK_PAYLOAD+=("$f")
+done
+if (( ${#BAD_TASK_PAYLOAD[@]} > 0 )); then
+  echo "pre-commit: REFUSING — only .md task files belong under people/*/{active,archive}/" >&2
+  printf '    %s\n' "${BAD_TASK_PAYLOAD[@]}" >&2
+  exit 1
+fi
+
 LINT_FAIL=0
 for f in "${CHANGED[@]}"; do
   [[ "$f" =~ ^people/[^/]+/(active|archive)/.+\.md$ ]] || continue
-  out="$(bin/lint.sh --file="$f" --format=json 2>/dev/null || true)"
+  out="$("$SKILL_BIN/lint.sh" --file="$f" --format=json 2>/dev/null || true)"
   errs="$(printf '%s' "$out" | python3 -c 'import json,sys
 try: d=json.load(sys.stdin); print(d.get("total_errors",0))
 except Exception: print(0)
