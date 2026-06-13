@@ -45,14 +45,6 @@ skills:
       path: skills/ship-hygiene
     install_to: ~/.claude/skills/ship-hygiene
 
-  - name: skillopt
-    description: Run microsoft/SkillOpt to optimize a skill against a benchmark.
-    source:
-      type: subpath
-      ref: HEAD
-      path: skills/skillopt
-    install_to: ~/.claude/skills/skillopt
-
   - name: serena-rg-search
     description: MCP-backed semantic code search (Serena + ripgrep router).
     source:
@@ -70,46 +62,6 @@ skills:
       ref: HEAD
       path: skills/karpathy-guidelines
     install_to: ~/.claude/skills/karpathy-guidelines
-
-  - name: find-skills
-    description: Discover and install agent skills on demand.
-    source:
-      type: subpath
-      ref: HEAD
-      path: skills/find-skills
-    install_to: ~/.claude/skills/find-skills
-
-  - name: budget-mode
-    description: Terse output mode — slop-kill on diffs and prose.
-    source:
-      type: subpath
-      ref: HEAD
-      path: skills/budget-mode
-    install_to: ~/.claude/skills/budget-mode
-
-  - name: systematic-debugging
-    description: Root-cause-first debugging methodology.
-    source:
-      type: subpath
-      ref: HEAD
-      path: skills/systematic-debugging
-    install_to: ~/.claude/skills/systematic-debugging
-
-  - name: impeccable
-    description: Frontend UI design/critique skill (color, theme, layout, motion, copy).
-    source:
-      type: subpath
-      ref: HEAD
-      path: skills/impeccable
-    install_to: ~/.claude/skills/impeccable
-
-  - name: agent-browser
-    description: Browser-automation CLI for headless agent web interactions.
-    source:
-      type: subpath
-      ref: HEAD
-      path: skills/agent-browser
-    install_to: ~/.claude/skills/agent-browser
 
 # Notes:
 # - `source.ref: HEAD` is a placeholder for skills that live inside THIS repo

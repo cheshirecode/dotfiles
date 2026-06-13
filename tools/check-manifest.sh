@@ -14,14 +14,24 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MANIFEST="$REPO_ROOT/manifest/skills.yaml"
 
 python3 - "$MANIFEST" <<'PY'
-import sys, re, yaml
-m = yaml.safe_load(open(sys.argv[1]))
+import pathlib
+import re
+import sys
+
+import yaml
+
+manifest = pathlib.Path(sys.argv[1]).resolve()
+repo_root = manifest.parent.parent
+m = yaml.safe_load(open(manifest))
 problems = []
 seen_install_to = {}
 seen_names = set()
 
 for s in m.get("skills", []):
     name = s.get("name", "?")
+    optional = s.get("optional", False)
+    if not isinstance(optional, bool):
+        problems.append(f"{name}: optional must be boolean when present")
     if not name or name in seen_names:
         problems.append(f"{name}: duplicate or missing name")
     seen_names.add(name)
@@ -36,6 +46,26 @@ for s in m.get("skills", []):
         # repo: is silently ignored for subpath sources; tolerating it lets
         # typos lie. Hard fail.
         problems.append(f"{name}: source.type='subpath' must not carry 'repo:' field")
+    if stype == "subpath":
+        subpath = src.get("path")
+        if not subpath:
+            problems.append(f"{name}: source.type='subpath' requires source.path")
+        else:
+            skill_md = repo_root / subpath / "SKILL.md"
+            if not skill_md.is_file():
+                if optional:
+                    continue
+                problems.append(f"{name}: source.path '{subpath}' missing SKILL.md (add optional: true only if absence is intentional)")
+            else:
+                text = skill_md.read_text()
+                match = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
+                if not match:
+                    problems.append(f"{name}: {skill_md.relative_to(repo_root)} missing YAML frontmatter")
+                else:
+                    fm = yaml.safe_load(match.group(1)) or {}
+                    actual = fm.get("name")
+                    if actual != name:
+                        problems.append(f"{name}: {skill_md.relative_to(repo_root)} frontmatter name='{actual}'")
     if stype == "git":
         ref = src.get("ref", "")
         if not re.fullmatch(r"[0-9a-f]{40}", ref):
