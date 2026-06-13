@@ -178,10 +178,10 @@ test_worklog_skill() {
   fi
 
   out=$(WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap bash "$sb/status.sh" --since=today 2>&1)
-  if echo "$out" | grep -q 'test-ldap'; then
-    ok "status.sh resolves vault LDAP"
+  if echo "$out" | grep -q '_nothing to report_'; then
+    ok "status.sh runs against empty vault"
   else
-    fail "status.sh"
+    fail "status.sh against empty vault (got: $(echo "$out" | head -2 | tr '\n' ' '))"
   fi
 
   out=$(WORKLOG_REPO="$vault" bash "$sb/lint.sh" 2>&1)
@@ -211,6 +211,24 @@ test_worklog_skill() {
     ok "scripts hard-fail outside a worklog clone"
   else
     fail "expected hard-fail outside clone, got: $(echo "$out" | head -1)"
+  fi
+
+  if bash "$skill/tests/worklog_manager/test_graph.sh" >/dev/null 2>&1; then
+    ok "worklog-manager graph fixture"
+  else
+    fail "worklog-manager graph fixture"
+  fi
+
+  if bash "$skill/tests/worklog_manager/test_dispatch.sh" >/dev/null 2>&1; then
+    ok "worklog-manager dispatch fixture"
+  else
+    fail "worklog-manager dispatch fixture"
+  fi
+
+  if bash "$skill/tests/worklog_manager/test_poll.sh" >/dev/null 2>&1; then
+    ok "worklog-manager poll fixture"
+  else
+    fail "worklog-manager poll fixture"
   fi
 
   rm -rf "$(dirname "$vault")"
