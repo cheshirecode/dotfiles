@@ -125,6 +125,12 @@ function normalizeRepos(repos) {
   return Array.isArray(repos) ? repos.map(String).filter(Boolean).sort() : [];
 }
 
+function stringList(value) {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (value) return [String(value)];
+  return [];
+}
+
 function buildTaskNode(config, ldap, state, file, fm, diagnostics) {
   const fallbackSlug = path.basename(file, ".md");
   const relativeFile = path.relative(config.worklogRepo, file);
@@ -262,6 +268,17 @@ function filterGraph(config, nodes, edges) {
   return { enabled, filter, nodes: filteredNodes, edges: filteredEdges };
 }
 
+function filterActiveOnly(nodes, edges, enabled) {
+  if (!enabled) return { nodes, edges };
+  const keepIds = new Set(nodes
+    .filter((node) => node.state === "active" || node.state === "project")
+    .map((node) => node.id));
+  return {
+    nodes: nodes.filter((node) => keepIds.has(node.id)),
+    edges: edges.filter((edge) => keepIds.has(edge.source) && keepIds.has(edge.target)),
+  };
+}
+
 export function extractGraph(config) {
   const diagnostics = [];
   const peopleDir = path.join(config.worklogRepo, "people");
@@ -274,7 +291,7 @@ export function extractGraph(config) {
   for (const ldap of fs.readdirSync(peopleDir).sort()) {
     const ldapDir = path.join(peopleDir, ldap);
     if (!fs.statSync(ldapDir).isDirectory()) continue;
-    const states = config.activeOnly ? ["active"] : ["active", "archive"];
+    const states = ["active", "archive"];
     for (const state of states) {
       for (const file of listMarkdownFiles(path.join(ldapDir, state))) {
         taskFiles.push({ ldap, state, file });
@@ -310,6 +327,13 @@ export function extractGraph(config) {
       addEdge(edges, task.id, String(fm[field] || ""), field, "", task.file);
     }
 
+    for (const item of Array.isArray(fm.tasks) ? fm.tasks : []) {
+      if (!item || typeof item !== "object" || !item.slug) continue;
+      for (const dependency of stringList(item.depends_on)) {
+        addEdge(edges, dependency, String(item.slug), "depends_on", `declared by ${task.id}`, task.file);
+      }
+    }
+
     const project = String(fm.project || "");
     if (project && project !== "none" && project !== task.id && project !== fm.parent_slug) {
       const projectId = nodesById.has(project) ? project : addProjectNode(nodesById, project);
@@ -320,8 +344,9 @@ export function extractGraph(config) {
   resolveEdges(edges, nodesById, diagnostics);
   const sourceNodes = [...nodesById.values()].sort((a, b) => `${a.state}:${a.slug}`.localeCompare(`${b.state}:${b.slug}`));
   const sourceEdges = edges.sort((a, b) => `${a.source}:${a.target}:${a.relation}`.localeCompare(`${b.source}:${b.target}:${b.relation}`));
-  const filtered = filterGraph(config, sourceNodes, sourceEdges);
-  const filteredDiagnostics = filterDiagnostics(diagnostics, filtered.nodes, filtered.enabled);
+  const activeFiltered = filterActiveOnly(sourceNodes, sourceEdges, config.activeOnly);
+  const filtered = filterGraph(config, activeFiltered.nodes, activeFiltered.edges);
+  const filteredDiagnostics = filterDiagnostics(diagnostics, filtered.nodes, filtered.enabled || config.activeOnly);
 
   return {
     schemaVersion: GRAPH_SCHEMA_VERSION,
