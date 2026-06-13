@@ -16,7 +16,35 @@ _need_rebuild() {
   mtime=$(stat -c %Y "$INDEX" 2>/dev/null || stat -f %m "$INDEX" 2>/dev/null || echo 0)
   [[ "$mtime" =~ ^[0-9]+$ ]] || mtime=0
   now=$(date +%s)
-  [ $((now - mtime)) -gt "$MAX_AGE_SECONDS" ]
+  [ $((now - mtime)) -gt "$MAX_AGE_SECONDS" ] && return 0
+  python3 - "$INDEX" "$mtime" <<'PY'
+import json
+import pathlib
+import sys
+
+index = pathlib.Path(sys.argv[1])
+index_mtime = float(sys.argv[2])
+
+for state in ("active", "archive"):
+  for path in pathlib.Path("people").glob(f"*/{state}/*.md"):
+    try:
+      if path.stat().st_mtime > index_mtime + 1e-3:
+        sys.exit(0)
+    except OSError:
+      sys.exit(0)
+
+try:
+  for line in index.read_text().splitlines():
+    if not line.strip():
+      continue
+    file_path = pathlib.Path(json.loads(line).get("file", ""))
+    if not file_path.exists():
+      sys.exit(0)
+except Exception:
+  sys.exit(0)
+
+sys.exit(1)
+PY
 }
 
 ensure_index() {

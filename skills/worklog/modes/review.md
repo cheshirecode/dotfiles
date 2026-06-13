@@ -86,7 +86,7 @@ After Iter 6:
 3. Tier 2 lives in the task body; reopen via a `## Status update YYYY-MM-DD` section when triggered
 4. Tier 3 stays as the rejection record; revisit only with new evidence
 
-The review task itself stays `in-progress` until all approved Tier 1 items ship; then archive with `--reason="shipped Tier 1 recommendations"`.
+The review task itself stays `in-progress` until all approved Tier 1 items ship; then archive with `--reason=shipped --summary="<Tier 1 recommendations shipped>"`.
 
 ## Reference
 

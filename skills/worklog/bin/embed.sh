@@ -44,4 +44,4 @@ if [ "$REFRESH" = "1" ] || [ ! -f "$INDEX" ]; then
   "$SCRIPT_DIR/index.sh" >/dev/null
 fi
 
-ALL=$ALL python3 "$(dirname "$0")/_embed.py" "$INDEX" "$EMBED"
+ALL=$ALL python3 "$SCRIPT_DIR/_embed.py" "$INDEX" "$EMBED"

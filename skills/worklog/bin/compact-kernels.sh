@@ -27,6 +27,9 @@ OUT_MD="$OUT_DIR/compact-kernels.md"
 OUT_JSON="$OUT_DIR/compact-kernels.json"
 
 mkdir -p "$OUT_DIR"
+OUT_MD_TMP="$(mktemp "$OUT_DIR/compact-kernels.md.tmp.XXXXXX")"
+OUT_JSON_TMP="$(mktemp "$OUT_DIR/compact-kernels.json.tmp.XXXXXX")"
+trap 'rm -f "$OUT_MD_TMP" "$OUT_JSON_TMP"' EXIT
 
 # Empty-active short-circuit (matches existing behavior expected by tests).
 if ! ls "$ACTIVE_DIR"/*.md >/dev/null 2>&1; then
@@ -39,13 +42,16 @@ if ! ls "$ACTIVE_DIR"/*.md >/dev/null 2>&1; then
     printf '\nOne resume kernel per active task. Read this first after /compact\n'
     printf 'or on a new session; only open the full task file if you need more.\n\n'
     printf '_(no active tasks)_\n'
-  } > "$OUT_MD"
-  echo "[]" > "$OUT_JSON"
+  } > "$OUT_MD_TMP"
+  echo "[]" > "$OUT_JSON_TMP"
+  mv -f "$OUT_MD_TMP" "$OUT_MD"
+  mv -f "$OUT_JSON_TMP" "$OUT_JSON"
+  trap - EXIT
   echo "compact-kernels: wrote $OUT_MD (no active tasks)"
   exit 0
 fi
 
-python3 - "$ACTIVE_DIR" "$OUT_MD" "$OUT_JSON" <<'PY'
+python3 - "$ACTIVE_DIR" "$OUT_MD_TMP" "$OUT_JSON_TMP" <<'PY'
 import json, pathlib, re, sys, subprocess, datetime
 
 active_dir = pathlib.Path(sys.argv[1])
@@ -150,9 +156,12 @@ with out_md.open("w") as fh:
 # Emit json.
 out_json.write_text(json.dumps(records, indent=2) + "\n")
 
-print(f"compact-kernels: wrote {out_md} ({len(records)} task records)", file=sys.stderr)
-print(f"compact-kernels: wrote {out_json} ({len(records)} task records)", file=sys.stderr)
 PY
+
+mv -f "$OUT_MD_TMP" "$OUT_MD"
+mv -f "$OUT_JSON_TMP" "$OUT_JSON"
+trap - EXIT
 
 # Mirror old log format for any caller that grepped it.
 echo "compact-kernels: wrote $OUT_MD ($(wc -l <"$OUT_MD" | tr -d ' ') lines)"
+echo "compact-kernels: wrote $OUT_JSON"

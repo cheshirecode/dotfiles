@@ -29,4 +29,4 @@ fi
 LDAP="$(resolve_ldap)"
 
 SLUG="$SLUG" LDAP="$LDAP" TRIGGER="manual" \
-  python3 "$(dirname "$0")/_dump_transcript.py"
+  python3 "$SCRIPT_DIR/_dump_transcript.py"

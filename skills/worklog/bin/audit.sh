@@ -10,22 +10,18 @@
 #   2. Blocked too long (>=7d in blocked status)      — local jq
 #   3. In-review too long (>=14d in in-review)        — local jq
 #   4. Cross-task lint drift (declared-relation rot)  — "$SCRIPT_DIR/lint.sh" --cross-task
+#   5. Command surface drift (README/AGENTS/skill)    — codex-surface-check.sh
 #
 # Usage:
 #   bin/audit.sh                      # full report
 #   bin/audit.sh --ldap=cheshirecode        # scope to one person
-#   bin/audit.sh --section=<name>     # one of: stale, blocked, in-review, drift
+#   bin/audit.sh --section=<name>     # one of: stale, blocked, in-review, drift, surface
 #
 # Exit code is always 0 — this is a report, not a gate. Use lint.sh for CI.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=_lib.sh
-. "$SCRIPT_DIR/_lib.sh"
-REPO_ROOT="$(resolve_worklog_repo)" || exit 1
-cd "$REPO_ROOT"
-. "$SCRIPT_DIR/_query.sh"
 
 LDAP=""
 SECTION=""
@@ -37,6 +33,12 @@ for arg in "$@"; do
     *) echo "audit: unknown arg: $arg" >&2; exit 2 ;;
   esac
 done
+
+# shellcheck source=_lib.sh
+. "$SCRIPT_DIR/_lib.sh"
+REPO_ROOT="$(resolve_worklog_repo)" || exit 1
+cd "$REPO_ROOT"
+. "$SCRIPT_DIR/_query.sh"
 
 ensure_index
 TODAY=$(date +%Y-%m-%d)
@@ -103,6 +105,33 @@ fi
 
 if run_section drift; then
   echo "=== Cross-task drift (lint --cross-task warnings) ==="
-  "$SCRIPT_DIR/lint.sh" --cross-task 2>&1 | grep -E "^(WARN|ERROR)" || echo "  (clean)"
+  lint_json="$("$SCRIPT_DIR/lint.sh" --cross-task --format=json 2>/dev/null || true)"
+  printf '%s' "$lint_json" | python3 -c '
+import json, sys
+try:
+  data = json.load(sys.stdin)
+except Exception:
+  sys.exit(1)
+issues = data.get("issues", [])
+if not issues:
+  print("  (clean)")
+  sys.exit(0)
+total_errors = data.get("total_errors", 0)
+total_warnings = data.get("total_warnings", 0)
+print(f"  {total_errors} error(s), {total_warnings} warning(s)")
+for item in issues:
+  path = item.get("file", "(unknown)")
+  for err in item.get("errors", []):
+    print(f"  ERROR   {path}: {err}")
+  for warn in item.get("warnings", []):
+    print(f"  warn    {path}: {warn}")
+' || echo "  (lint unavailable)"
+  echo ""
+fi
+
+if run_section surface; then
+  echo "=== Command surface drift (README / AGENTS / skill) ==="
+  CODEX_SKILL_PATH="${CODEX_SKILL_PATH:-$SCRIPT_DIR/../SKILL.md}" \
+    "$SCRIPT_DIR/codex-surface-check.sh" 2>&1 | sed 's/^/  /' || true
   echo ""
 fi

@@ -39,4 +39,4 @@ REPO_ROOT="$(resolve_worklog_repo)" || exit 1
 cd "$REPO_ROOT"
 [[ -z "$LDAP" ]] && LDAP="$(resolve_ldap)"
 
-python3 "$(dirname "${BASH_SOURCE[0]}")/_init_scan.py" "$LDAP" "$FORMAT"
+python3 "$SCRIPT_DIR/_init_scan.py" "$LDAP" "$FORMAT"

@@ -1,6 +1,7 @@
 # Helpers — `bin/*`
 
 Each script self-documents via `--help`. This doc is the composition playbook.
+Scripts are shipped by the dotfiles skill. In this doc, `bin/foo.sh` is shorthand for `"$WORKLOG_BIN/foo.sh"`; live data repos normally carry only a `bin/README.md` tombstone.
 
 ## When to use which
 
@@ -87,9 +88,9 @@ The skill layer (`~/.claude/skills/worklog/`) is where multi-step orchestration 
 - `lint.sh` — **read-only**, validates every task file: strict-YAML frontmatter (warn on block-scalar drift), kind ∈ documented set, status ∈ FSM, project grammar, last_updated format, relation resolution, related[] notes, archive/status consistency. Exit 1 on errors. `--cross-task` adds opt-in FSM/stale-review/undeclared-ref drift checks (see `docs/protocol.md § Cross-task checks`). `checkpoint.sh` calls per-file mode softly on each save (stderr warnings only; bypass with `WORKLOG_NO_LINT=1`).
 - `task-guard.sh` — **read-only**, classifies dirty task files against claimed slug(s). `--slug=<slug>` may repeat; `--include=<path>` explicitly allows an additional dirty task path; `--format=json` emits `{claimed_slugs, dirty_task_paths, foreign_task_paths, dirty_tasks}`. Exits 2 when a dirty task file belongs to another slug, so Codex/skill write paths can treat it as a mutex held by another session and avoid broad autosave/staging.
 - `git-hooks/pre-commit` — path-filtered blocking hook. Runs per-file lint on staged task files, `tests/export/test_scrubber.sh` if the export pipeline changed, and `tests/frontmatter/test_round_trip.sh` if the frontmatter parser changed. ~95% of commits skip via path-filter. Bypass with `WORKLOG_NO_HOOK=1`.
-- `git-hooks/post-commit` — TTL'd cross-task advisory. Fires after every commit; runs `bin/lint.sh --cross-task` at most hourly (mtime gate on `.cache/cross-task.stamp`); emits warning/error counts to stderr. Never blocks. Inspect details with `bin/lint.sh --cross-task` or `/worklog lint --cross-task`.
+- `git-hooks/post-commit` — TTL'd cross-task advisory. Fires after every commit; runs `"$WORKLOG_BIN/lint.sh" --cross-task` at most hourly (mtime gate on `.cache/cross-task.stamp`); emits warning/error counts to stderr. Never blocks. Inspect details with `"$WORKLOG_BIN/lint.sh" --cross-task` or `/worklog lint --cross-task`.
 
-Both git hooks are wired by `bin/install-hooks.sh --write` (sets `core.hooksPath = bin/git-hooks` in this clone). No CI workflow today — local hooks only; add a workflow if "enforced not encouraged" becomes load-bearing.
+Both git hooks are wired by `"$WORKLOG_BIN/install-hooks.sh" --write` (sets `core.hooksPath` to the skill's absolute `git-hooks` directory). No CI workflow today — local hooks only; add a workflow if "enforced not encouraged" becomes load-bearing.
 - `index.sh` — writes `.cache/index.jsonl` — one JSON record per task with flattened frontmatter + `body_refs.{prs,linear,slugs}`. **Derivative, never committed** (see `.gitignore`). Regenerate any time; `children.sh`, `pr.sh`, `stale.sh` auto-refresh when stale (>5 min by default; override with `WORKLOG_INDEX_MAX_AGE`).
 - `children.sh` — reverse-index lookup for `parent_slug`, `supersedes`, `reopens`, and (with `--include-refs`) `related[]` + body mentions. Replaces hand-rolled `grep parent_slug: …` recipes.
 - `pr.sh` — find every task referencing a PR number in frontmatter `pr:` or body `#N`.
