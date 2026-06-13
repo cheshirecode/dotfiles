@@ -9,6 +9,14 @@ next_action: "Finish projects child."
 related:
   - slug: projects-child
     note: fixture edge
+  - slug: projects-archive
+    note: archived fixture edge
+tasks:
+  - slug: projects-root
+    kind: project
+  - slug: projects-child
+    depends_on: [projects-root]
+    kind: impl
 ---
 
 ## Context
