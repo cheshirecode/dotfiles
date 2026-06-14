@@ -145,6 +145,8 @@ if pr:
 p.write_text(text)
 PY
 
+python3 "$SCRIPT_DIR/okf.py" sync-task "$FILE" --repo "$REPO_ROOT" --date "$TODAY" >/dev/null
+
 # Heartbeat tick: if the task has a `claim:` block held by the current
 # session, refresh `claim.heartbeat_at` so the work commit advances the
 # liveness signal (per worklog-project-mode.md § Mutex protocol). No-op
