@@ -19,7 +19,7 @@ If the user says not to use a worklog, do not create, update, or suggest a workl
 
 | # | Stage | What | Sub-agents | Sync/async |
 |---|---|---|---|---|
-| 1 | **Research** | Each angle gets its own sub-agent doing independent research. **Each angle proposes candidate items** in its output. No cross-talk. | 3-5 in parallel | async if any single agent likely >2min, else sync |
+| 1 | **Research** | Each angle gets its own sub-agent doing independent research. **Each angle proposes candidate items** in its output. No cross-talk. | 3-5 in parallel | background only if total estimate >10min |
 | 2 | **Findings** | Orchestrator collects and tags findings per angle. | (none, orchestrator) | sync |
 | 3 | **Discussion** | One sub-agent reads all findings, flags agreements/disagreements/gaps/contradictions, and may propose additional candidate items surfaced by cross-angle gaps. | 1 | sync |
 | 4 | **Candidate collation** | One sub-agent gathers the union of candidate items proposed by Stage 1 angles and Stage 3 discussion. **No invention authority**: the collator may only dedupe and normalize phrasing. | 1 | sync |
@@ -29,7 +29,7 @@ If the user says not to use a worklog, do not create, update, or suggest a workl
 ## Sync vs async
 
 - **Foreground** (default): all stages run inline; small councils (3 research agents, <2min each).
-- **Background**: Stage 1 only, when research depth or count makes total research time >10min. Stages 2-6 always run foreground because they consume Stage 1 output and are cheap.
+- **Background**: Stage 1 only, when `N_research_angles * estimated_minutes_per_angle > 10`. Stages 2-6 always run foreground because they consume Stage 1 output and are cheap.
 
 Decision rule:
 ```
@@ -48,21 +48,21 @@ The user can override with `/council --bg X` or `/council --fg X`.
 - Stage 1 foreground research: wait up to 3 minutes per angle. If an angle times out or fails, retry once with the same angle and a shorter "return findings or explicit no-findings" instruction.
 - Stage 1 background research: monitor at 2-3 minute intervals. After 15 minutes without progress from an angle, retry once or mark that angle missing.
 - Stage 1 quorum: proceed when at least 2 independent research angles return. If fewer than 2 return after retry, mark the council `UNVERIFIED` and stop before Stage 3.
-- Stage 5 voters: wait up to 3 minutes per voter. Retry a timed-out or malformed voter once. Recompute returned voter counts after retries.
-- Always close completed or failed sub-agents when their stage output is no longer needed.
+- Stage 5 voters: wait up to 3 minutes per voter. Retry a timed-out or malformed voter once. If returned voters are fewer than 3 or even after retry, spawn one replacement voter when possible; otherwise mark the council `UNVERIFIED`.
+- Close completed or failed sub-agents when their stage output is no longer needed. If background Stage 1 reaches quorum and proceeds, keep monitoring still-running angles until timeout; close them without changing Stage 2 findings if they return after Stage 3 has begun.
 
 ## Iron Laws
 
 - **NO COLLATOR-INVENTED ITEMS.** Stage 4 output is a strict subset of items proposed by Stage 1 angles or Stage 3 discussion. Every collated item must cite exact upstream IDs, for example `[proposed-by: A1-i2, D-i1]`. Drop untagged or coarse tags such as `[proposed-by: A]`.
-- **NO ITEM KEPT WITHOUT MAJORITY-PLUS-ONE SUPPORT.** An item is kept only if `APPROVE_count + (0.5 * QUALIFY_count) >= ceil(M_returned / 2 + 1)`. For per-item tallying, `M_returned` means valid ballots for that item after retry. Plurality and ordinary majority do not suffice. Tie = rejected.
+- **NO ITEM KEPT WITHOUT MAJORITY-PLUS-ONE SUPPORT.** An item is kept only if `APPROVE_count + (0.5 * QUALIFY_count) >= ceil(M_returned / 2 + 1)`. `M_returned` must be odd and at least 3. Invalid item ballots never lower the denominator. Plurality and ordinary majority do not suffice. Tie = rejected.
 - **HARD REJECT VETOES.** Any voter's valid REJECT vote that cites one of the council voting criteria below rejects the item regardless of APPROVE count. The criterion must be named in the ballot. "I don't like it" is not valid.
-- **NO STAGE-6 CONCLUSION WITHOUT ENOUGH VALID VOTES.** For each item, compute support from valid ballots for that item. If an item has fewer than 2 valid ballots after one retry, mark that item `UNVERIFIED`. If most items are `UNVERIFIED`, mark the whole council `UNVERIFIED`.
+- **NO STAGE-6 CONCLUSION WITHOUT ENOUGH VALID VOTES.** For each item, compute support from valid ballots for that item against the full odd `M_returned` threshold. If an item has fewer than 3 valid item ballots after one retry, mark that item `UNVERIFIED`. If most items are `UNVERIFIED`, mark the whole council `UNVERIFIED`.
 - **NO CROSS-ANGLE READS IN STAGE 1.** Every research prompt must start with `You are research angle <angle_i> of <angle_count>. Do not Read, Grep, or Monitor outputs of other angles. Do not coordinate.`
 - **NO CROSS-VOTER READS IN STAGE 5.** Voters receive only the Stage 4 candidate list, Stage 2 findings, Stage 3 discussion, the council voting criteria, and the original request. No voter sees another voter's ballot.
 
 ## Council voting criteria
 
-Voters cast ballots against these criteria. A valid REJECT must cite exactly one or more of these names. An APPROVE asserts none are violated.
+Voters cast ballots against these criteria. A valid REJECT must cite one or more of these names. An APPROVE asserts none are violated.
 
 | Criterion | Pass test | Common failure shape |
 |---|---|---|
@@ -75,22 +75,22 @@ Voters cast ballots against these criteria. A valid REJECT must cite exactly one
 The full ballot per item is one of:
 
 - **APPROVE**: all criteria pass.
-- **REJECT: <criterion>, <one-sentence justification>**: explicit veto using only criteria names from this table.
+- **REJECT: <criterion[, criterion...]>, <one-sentence justification>**: explicit veto using only criteria names from this table.
 - **QUALIFY: <condition>**: support worth 0.5 only if the condition is a Stage 3 tension or verifier-grade fix.
 
 Before tallying, validate every ballot:
 
 - Invalid criterion name, missing item, or malformed vote -> retry that voter once.
-- Still invalid after retry -> mark that item ballot `INVALID` and exclude it from that item's support and reject counts.
+- Still invalid after retry -> mark that item ballot `INVALID`, exclude it from support/reject counts, keep the full odd `M_returned` denominator, and mark the item `UNVERIFIED` if fewer than 3 valid item ballots remain.
 - QUALIFY condition resolved before conclusion -> count as 0.5 support and state the resolution.
-- QUALIFY condition not resolved -> either carry the item as conditional in the final report or treat that QUALIFY as non-support. Do not silently count unresolved conditions.
+- QUALIFY condition not resolved -> count that ballot as non-support and mark the item `UNVERIFIED` if unresolved conditions determine the outcome. Do not silently count unresolved conditions.
 
 ## Numeric guidance
 
 - Independent fanout stages below 2 sub-agents defeat independence. This applies to Stage 1 research and Stage 5 voting, not to the single-agent discussion/collation stages.
 - Voters: always >=3, odd, recommended 3 or 5. 2 voters can deadlock (1-1), which the Iron Laws reject.
 - Sub-agent prompts longer than about 800 words signal scope creep. Split the angle.
-- Quick reference: support threshold is `ceil(M_returned / 2 + 1)`: M=3 threshold 3, M=5 threshold 4, M=7 threshold 5.
+- Quick reference: support threshold is `ceil(M_returned / 2 + 1)` for odd returned voter counts only: M=3 threshold 3, M=5 threshold 4, M=7 threshold 5. M=2 or M=4 is `UNVERIFIED` until a replacement voter restores an odd count.
 
 ## Prompt templates
 
@@ -150,7 +150,7 @@ Use only the Stage 4 candidate list, Stage 2 findings, Stage 3 discussion, the c
 
 For each item, cast exactly one ballot:
 - APPROVE
-- REJECT: <TRACES|SOLVES-EXTANT-PAIN|N-THRESHOLD-MET|COST-PROPORTIONATE|NON-INFRA-PADDING>, <one-sentence justification>
+- REJECT: <TRACES|SOLVES-EXTANT-PAIN|N-THRESHOLD-MET|COST-PROPORTIONATE|NON-INFRA-PADDING>[, ...], <one-sentence justification>
 - QUALIFY: <condition>
 
 Output:
@@ -175,7 +175,7 @@ Voter <n>:
 
 The skill must finish all 6 stages in one invocation.
 
-- If foreground mode: walk stages 1-6 inline.
+- If foreground mode: spawn Stage 1 research agents in parallel and wait up to the foreground timeout, then walk stages 2-6 inline.
 - If background mode for Stage 1: spawn N background research agents and monitor until quorum or timeout. Stages 2-6 stay foreground.
 - Never partial-return. If retries are exhausted, continue only when quorum rules allow it and mark incomplete evidence as `UNVERIFIED`.
 
@@ -235,7 +235,7 @@ The final report is outcome-first. The first 25 rendered lines should show the d
 - Stage 1 research: one-line summary per angle.
 - Stage 3 discussion: agreements, disagreements, and gaps.
 - Stage 4 collation: `0 items invented; X items deduped`.
-- Stage 6 tally: support threshold `ceil(M_returned / 2 + 1)`.
+- Stage 6 tally: support threshold `ceil(M_returned / 2 + 1)` with odd `M_returned >= 3` and at least 3 valid ballots per kept item.
 
 ## Audit Appendix
 
@@ -247,7 +247,7 @@ Put full Stage 5 ballots here, after the outcome and vote tables.
 - **Voter ballot isolation.** Stage 5 voters receive only the Stage 4 candidate list, Stage 2 findings, Stage 3 discussion, criteria table, and original user request.
 - **Collator has no creative authority.** If the collator outputs an untagged or coarse-tagged item, drop it before Stage 5 and note the violation.
 - **Fresh-agent invocations per stage.** Siblings in the same stage share no parent context beyond their prompt. Across stages, pass only the explicit deliverable.
-- **Worklog opt-in.** If the user says no worklog tracking, do not invoke `/worklog plan` or write task notes for that council.
+- **Worklog default.** `worklog plan` is an optional pairing. If the user says no worklog tracking, do not invoke `/worklog plan` or write task notes for that council.
 
 ## Anti-patterns
 
@@ -258,6 +258,8 @@ Put full Stage 5 ballots here, after the outcome and vote tables.
 - Do not auto-pick a side on tied votes. Ties are rejected.
 - Do not call the majority-plus-one rule "majority approve."
 - Do not bury the outcome behind raw ballots.
+- Do not keep an item with fewer than 3 valid item ballots.
+- Do not count unresolved QUALIFY conditions as support.
 - Do not trust specific post-cutoff claims without a verification pass.
 - Do not run a council on a one-shot question.
 
@@ -295,4 +297,4 @@ Claude: SKIP single-agent answer: 4
 
 A single synthesis agent inventing items and verifiers cleaning them up is structurally backwards. Items should clear an explicit bar to enter, not enter by default and need removal. Voting flips it: the collator only gathers, voters apply explicit criteria, and items need positive majority-plus-one support to be kept.
 
-- Quick reference: support threshold is `ceil(M_returned / 2 + 1)`: M=3 threshold 3, M=5 threshold 4, M=7 threshold 5.
+- Quick reference: support threshold is `ceil(M_returned / 2 + 1)` for odd returned voter counts only: M=3 threshold 3, M=5 threshold 4, M=7 threshold 5. M=2 or M=4 is `UNVERIFIED` until a replacement voter restores an odd count.
