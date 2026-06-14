@@ -57,10 +57,18 @@ text = pathlib.Path("skills/council/SKILL.md").read_text()
 checks = {
     "support formula": "APPROVE_count + (0.5 * QUALIFY_count)" in text,
     "formula text": "ceil(M_returned / 2 + 1)" in text,
+    "threshold name": "majority-plus-one" in text,
     "M=3 threshold": "M=3 threshold 3" in text,
     "M=5 threshold": "M=5 threshold 4" in text,
     "M=7 threshold": "M=7 threshold 5" in text,
+    "kept status": "KEPT support threshold met" in text,
+    "outcome first": "The final report is outcome-first" in text,
+    "audit appendix": "## Audit Appendix" in text,
+    "exact provenance": "[proposed-by: A1-i2, D-i1]" in text,
+    "worklog opt-in": "If the user says no worklog tracking" in text,
 }
+if "SURVIVE majority approve" in text:
+    checks["no stale majority wording"] = False
 missing = [name for name, ok in checks.items() if not ok]
 if missing:
     print("missing council threshold contract: " + ", ".join(missing))
