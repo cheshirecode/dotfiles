@@ -61,14 +61,30 @@ checks = {
     "M=3 threshold": "M=3 threshold 3" in text,
     "M=5 threshold": "M=5 threshold 4" in text,
     "M=7 threshold": "M=7 threshold 5" in text,
+    "M=4 unverified": "M=2 or M=4 is `UNVERIFIED`" in text,
+    "odd returned voters": "`M_returned` must be odd and at least 3" in text,
+    "invalid denominator": "Invalid item ballots never lower the denominator" in text,
+    "unresolved qualify": "Do not silently count unresolved conditions" in text,
     "kept status": "KEPT support threshold met" in text,
     "outcome first": "The final report is outcome-first" in text,
     "audit appendix": "## Audit Appendix" in text,
     "exact provenance": "[proposed-by: A1-i2, D-i1]" in text,
     "worklog opt-in": "If the user says no worklog tracking" in text,
+    "background rule": "background only if total estimate >10min" in text,
+    "close after quorum": "close them without changing Stage 2 findings" in text,
 }
-if "SURVIVE majority approve" in text:
-    checks["no stale majority wording"] = False
+headings = [
+    "## Outcome",
+    "## Kept Items",
+    "## Rejected Items",
+    "## Stage Notes",
+    "## Audit Appendix",
+]
+positions = [text.find(h) for h in headings]
+checks["final report section order"] = all(pos >= 0 for pos in positions) and positions == sorted(positions)
+checks["no standalone SURVIVE"] = not re.search(r"\bSURVIVE\b", text)
+majority_approve_hits = [m.start() for m in re.finditer("majority approve", text)]
+checks["majority approve only anti-pattern"] = len(majority_approve_hits) == 1 and "Do not call the majority-plus-one rule \"majority approve.\"" in text
 missing = [name for name, ok in checks.items() if not ok]
 if missing:
     print("missing council threshold contract: " + ", ".join(missing))
