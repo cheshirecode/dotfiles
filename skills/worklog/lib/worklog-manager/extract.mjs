@@ -151,6 +151,9 @@ function buildTaskNode(config, ldap, state, file, fm, diagnostics) {
       diagnostics.push(diagnostic("warning", "frontmatter.required_missing", `Task is missing required frontmatter field '${field}'.`, { file: relativeFile, slug, field }));
     }
   }
+  if (fm.type && fm.kind && String(fm.type) !== String(fm.kind)) {
+    diagnostics.push(diagnostic("warning", "okf.type_kind_mismatch", "OKF type should match worklog kind for task files.", { file: relativeFile, slug, type: fm.type, kind: fm.kind }));
+  }
 
   return {
     id: slug,
@@ -161,6 +164,9 @@ function buildTaskNode(config, ldap, state, file, fm, diagnostics) {
     state,
     status: String(fm.status || ""),
     kind: String(fm.kind || ""),
+    okfType: String(fm.type || fm.kind || ""),
+    worklogId: String(fm.worklog_id || ""),
+    timestamp: String(fm.timestamp || ""),
     project: String(fm.project || ""),
     repos: normalizeRepos(fm.repos),
     file: relativeFile,

@@ -183,6 +183,8 @@ else:
 p.write_text(text)
 PY
 
+python3 "$SCRIPT_DIR/okf.py" sync-task "$SRC" --repo "$REPO_ROOT" --date "$TODAY" >/dev/null
+
 git pull --no-rebase --autostash -q
 mkdir -p "$(dirname "$DST")"
 git mv "$SRC" "$DST"
