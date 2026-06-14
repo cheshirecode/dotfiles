@@ -16,6 +16,8 @@ Called by bin/lint.sh. Checks:
   - `related[]` entries have a `note`.
   - State/status consistency: files under archive/ should have
     `status: archived` (warn if not).
+  - With `--okf`, task frontmatter also has `type`, `worklog_id`, and
+    `timestamp`, with `type == kind` and `last_updated == timestamp[:10]`.
 
 With `--cross-task`, additionally checks active tasks for protocol drift:
   - `status: blocked` requires `next_action` starting "Waiting on" (FSM contract).
@@ -56,6 +58,7 @@ KINDS = {
 }
 STATUSES = {"draft", "in-progress", "in-review", "blocked", "shipping", "archived"}
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+ISO_TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:?\d{2})?$")
 PROJECT_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 SLUG_RE = re.compile(r"^(eng-\d+-)?[a-z0-9]+(-[a-z0-9]+)*$")
 
@@ -82,7 +85,22 @@ def _strict_yaml(raw: str) -> tuple[dict[str, Any] | None, str | None]:
       return None, "frontmatter did not parse as a mapping"
     return fm, None
   except yaml.YAMLError as e:
-    return None, f"YAML parse error: {str(e).splitlines()[0]}"
+      return None, f"YAML parse error: {str(e).splitlines()[0]}"
+
+
+def _date_from_timestamp(value: Any) -> str | None:
+  if isinstance(value, datetime.datetime):
+    return value.date().isoformat()
+  if isinstance(value, datetime.date):
+    return value.isoformat()
+  if not isinstance(value, str):
+    return None
+  value = value.strip()
+  if DATE_RE.match(value):
+    return value
+  if not ISO_TS_RE.match(value):
+    return None
+  return value[:10]
 
 
 def _slugs_with_pr_trailers() -> set[str]:
@@ -346,6 +364,7 @@ def _lint_file(
   state: str,
   known_slugs: set[str],
   cross_task: bool = False,
+  okf: bool = False,
   slugs_with_pr: set[str] | None = None,
   today: datetime.date | None = None,
   latest_status_trailers: dict[str, str] | None = None,
@@ -407,6 +426,28 @@ def _lint_file(
     errors.append("missing frontmatter key: last_updated")
   elif not DATE_RE.match(str(last_updated)):
     errors.append(f"last_updated '{last_updated}' is not YYYY-MM-DD")
+
+  if okf:
+    okf_type = fm.get("type")
+    if not okf_type:
+      errors.append("missing OKF frontmatter key: type")
+    elif kind and str(okf_type) != str(kind):
+      errors.append(f"OKF type '{okf_type}' must match kind '{kind}' for task files")
+
+    worklog_id = fm.get("worklog_id")
+    if not worklog_id:
+      errors.append("missing OKF frontmatter key: worklog_id")
+    elif "/" not in str(worklog_id):
+      errors.append(f"worklog_id '{worklog_id}' must be namespaced")
+
+    timestamp = fm.get("timestamp")
+    timestamp_date = _date_from_timestamp(timestamp)
+    if not timestamp:
+      errors.append("missing OKF frontmatter key: timestamp")
+    elif not timestamp_date:
+      errors.append(f"timestamp '{timestamp}' is not OKF ISO timestamp format")
+    elif last_updated and DATE_RE.match(str(last_updated)) and str(last_updated) != timestamp_date:
+      errors.append(f"last_updated '{last_updated}' disagrees with timestamp date '{timestamp_date}'")
 
   next_action = fm.get("next_action")
   if not next_action:
@@ -474,6 +515,7 @@ def main() -> None:
   fmt = "md"
   single_file: str | None = None
   cross_task = False
+  okf = False
   fix_related = False
   for arg in sys.argv[1:]:
     if arg in ("--format=md", "--format=markdown"):
@@ -484,6 +526,8 @@ def main() -> None:
       single_file = arg[len("--file="):]
     elif arg == "--cross-task":
       cross_task = True
+    elif arg == "--okf":
+      okf = True
     elif arg == "--fix-related":
       # --fix-related implies --cross-task (the missing-related lint runs
       # only in cross-task mode). It auto-stubs missing slug references
@@ -561,6 +605,7 @@ def main() -> None:
     errors, warnings = _lint_file(
       path, state, known_slugs,
       cross_task=cross_task,
+      okf=okf,
       slugs_with_pr=slugs_with_pr,
       today=today,
       latest_status_trailers=latest_status_trailers,

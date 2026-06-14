@@ -26,10 +26,8 @@ from __future__ import annotations
 
 import pathlib
 import re
+import os
 import sys
-
-ROOT = pathlib.Path(__file__).resolve().parent.parent
-PEOPLE = ROOT / "people"
 
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 # Match bare slugs NOT already wrapped in [[ ... ]] and NOT inside word/path
@@ -44,9 +42,29 @@ SLUG_PATTERN = re.compile(
 FENCE_RE = re.compile(r"^```")
 
 
-def collect_known_slugs() -> set[str]:
+def resolve_root(single_file: str | None = None) -> pathlib.Path:
+  env_root = os.environ.get("WORKLOG_REPO")
+  if env_root and (pathlib.Path(env_root) / "people").is_dir():
+    return pathlib.Path(env_root).resolve()
+
+  cwd = pathlib.Path.cwd()
+  if (cwd / "people").is_dir():
+    return cwd.resolve()
+
+  if single_file:
+    candidate = pathlib.Path(single_file)
+    if not candidate.is_absolute():
+      candidate = cwd / candidate
+    for parent in [candidate.resolve().parent, *candidate.resolve().parents]:
+      if (parent / "people").is_dir():
+        return parent
+
+  return cwd.resolve()
+
+
+def collect_known_slugs(people: pathlib.Path) -> set[str]:
   slugs = set()
-  for ldap_dir in PEOPLE.glob("*"):
+  for ldap_dir in people.glob("*"):
     if not ldap_dir.is_dir():
       continue
     for state in ("active", "archive"):
@@ -92,7 +110,7 @@ def convert_body(body: str, known: set[str], scope_slug: str | None = None) -> t
   return "\n".join(out_lines), changes
 
 
-def process_file(path: pathlib.Path, known: set[str], apply: bool, scope_slug: str | None) -> int:
+def process_file(root: pathlib.Path, path: pathlib.Path, known: set[str], apply: bool, scope_slug: str | None) -> int:
   text = path.read_text()
   m = FRONTMATTER_RE.match(text)
   if not m:
@@ -104,7 +122,7 @@ def process_file(path: pathlib.Path, known: set[str], apply: bool, scope_slug: s
   if apply:
     path.write_text(text[:m.end()] + new_body)
   try:
-    rel = path.resolve().relative_to(ROOT)
+    rel = path.resolve().relative_to(root)
   except ValueError:
     rel = path
   print(f"{'apply' if apply else 'dry-run'}: {rel} ({changes} bare → [[wikilink]])")
@@ -129,16 +147,21 @@ def main() -> None:
       print(f"auto-slug-link: unknown arg: {arg}", file=sys.stderr)
       sys.exit(2)
 
-  known = collect_known_slugs()
+  root = resolve_root(single_file)
+  people = root / "people"
+  known = collect_known_slugs(people)
   if not known:
     print("auto-slug-link: no task files found under people/*/")
     sys.exit(0)
 
   if single_file:
-    paths = [pathlib.Path(single_file)]
+    single_path = pathlib.Path(single_file)
+    if not single_path.is_absolute():
+      single_path = root / single_path
+    paths = [single_path]
   else:
     paths = []
-    for ldap_dir in sorted(PEOPLE.glob("*")):
+    for ldap_dir in sorted(people.glob("*")):
       if not ldap_dir.is_dir():
         continue
       for state in ("active", "archive"):
@@ -147,7 +170,7 @@ def main() -> None:
   total = 0
   files = 0
   for p in paths:
-    n = process_file(p, known, apply, scope_slug)
+    n = process_file(root, p, known, apply, scope_slug)
     if n:
       files += 1
       total += n

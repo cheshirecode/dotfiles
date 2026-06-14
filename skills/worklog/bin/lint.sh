@@ -7,6 +7,7 @@
 #   bin/lint.sh --file=PATH     # lint one people/*/{active,archive}/*.md file
 #   bin/lint.sh --format=json   # machine-readable report
 #   bin/lint.sh --cross-task    # include active-task drift checks
+#   bin/lint.sh --okf           # require OKF compatibility fields on task files
 #   bin/lint.sh --fix-related   # auto-stub undeclared body slug refs
 #
 # Set WORKLOG_NO_LINT=1 to have callers (e.g. checkpoint.sh) skip this.
