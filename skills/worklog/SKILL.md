@@ -122,7 +122,7 @@ For per-task detail, use `"$WORKLOG_BIN/context.sh" <slug>` (its output ends in 
 - Issue poll dry-run: `"$WORKLOG_BIN/worklog-manager" poll --config <instance.json> --issue-url https://github.com/<owner>/<repo>/issues/<n> --output /tmp/poll.json` requires `poll.enabled=true`, fetches through `gh api`, updates local cursor/run artifacts, records ignored learning events under `.cache/<instance>/learning/`, and posts no GitHub comments unless `--post-status` is passed.
 - Watcher config audit: `"$WORKLOG_BIN/worklog-manager" validate-watchers --config <projects.json> --config <oss.json>` checks separate watcher instances for shared state/cache dirs and same-issue status-marker collisions before polling.
 - Multi-task project: `"$WORKLOG_BIN/project.sh" new|next|claim|release|reap|verify|list <slug>`.
-- Lint: `"$WORKLOG_BIN/lint.sh" [--cross-task]`. Composite audit: `"$WORKLOG_BIN/audit.sh"`.
+- Lint: `"$WORKLOG_BIN/lint.sh" [--cross-task]`. Boundary guard for split clones: `"$WORKLOG_BIN/boundary-lint.sh"`. Composite audit: `"$WORKLOG_BIN/audit.sh" [--section=boundary]`.
 - SQL: `"$WORKLOG_BIN/sql.sh" new|run|list|show <slug> <name>`.
 - New data repo: `"$WORKLOG_BIN/init-new-data-repo.sh" <path> [<ldap>]` (Phase 4 — not shipped yet).
 

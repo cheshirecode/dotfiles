@@ -149,6 +149,7 @@ Proposal tasks (`kind: proposal` + `status: draft`) have their own 3-exit lifecy
 5. **Commit terse, push often.** Every meaningful state change is a commit. Noise is fine; staleness is not.
 6. **No sibling directories under `people/<ldap>/` except `transcripts/`.** Active/archive contain only task `.md` files and (optionally) `.gitkeep`. `transcripts/` is non-task, non-indexed source material written by archive/status helpers. There is no `shipped/` state directory; terminal tasks live in `archive/`. Binary fixtures, JSON captures, scripts — live in the product repo the task's PR(s) touch.
 7. **Never `git rebase` / `git pull --rebase` / force-push during normal sync.** Linear history is the audit trail. Carve-out: explicit maintenance ops *do* rewrite history — `"$WORKLOG_BIN/log-compact.sh"` (compact same-slug checkpoint bursts), `"$WORKLOG_BIN/cache-purge.sh"` (remove historical `.cache/` paths), or other deliberate cleanup. These tag `pre-<op>-<ts>` for recovery and assume single-committer windows. After any such op, run `"$WORKLOG_BIN/post-rewrite-prompt.sh"` and paste its output to other live sessions so they reset cleanly. If `git pull` reports non-fast-forward and you didn't rewrite locally: `git stash push -u -m pre-recovery && git reset --hard origin/main && git stash pop`, then re-apply any wiped commits via reflog or by redoing the edits + checkpoint.
+8. **Respect this clone's source boundary.** If the repo has `.worklog-boundary.json`, run `"$WORKLOG_BIN/boundary-lint.sh"` after migrations, source splits, bulk imports, or any task cleanup that could move content between worklog clones. `lint.sh` validates task shape; `boundary-lint.sh` validates that the content belongs in this clone.
 
 ## Commit message convention
 
@@ -355,6 +356,7 @@ bin/context.sh    <slug> [--for=resume|review --format=json]
 bin/init-scan.sh  [--ldap=<ldap> --format=json]    # exact Linear/Notion/PR seeds for init --full
 bin/install-hooks.sh [--write --uninstall]         # wire autosave.sh as Claude Code PreCompact hook
 bin/lint.sh       [--cross-task]                   # per-file format; --cross-task adds FSM/stale-review/undeclared-ref drift checks
+bin/boundary-lint.sh [--format=json]               # clone-boundary guard from .worklog-boundary.json
 bin/sql.sh        list|show|run|new <slug> <name>  # per-slug SQL library; runs via bq, response cache under .cache/queries/
 bin/slug.sh       [--all] <fragment>               # closest-match slug lookup (exact / substring / Levenshtein)
 bin/search.sh     <pattern> [--active --archive --kind= --status= --project= --linear= --pr= --repo= --ldap= --list --json --semantic --top=N]
