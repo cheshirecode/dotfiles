@@ -10,12 +10,13 @@
 #   2. Blocked too long (>=7d in blocked status)      — local jq
 #   3. In-review too long (>=14d in in-review)        — local jq
 #   4. Cross-task lint drift (declared-relation rot)  — "$SCRIPT_DIR/lint.sh" --cross-task
-#   5. Command surface drift (README/AGENTS/skill)    — codex-surface-check.sh
+#   5. Boundary profile drift (foreign-domain terms)  — boundary-lint.sh
+#   6. Command surface drift (README/AGENTS/skill)    — codex-surface-check.sh
 #
 # Usage:
 #   bin/audit.sh                      # full report
 #   bin/audit.sh --ldap=cheshirecode        # scope to one person
-#   bin/audit.sh --section=<name>     # one of: stale, blocked, in-review, drift, surface
+#   bin/audit.sh --section=<name>     # one of: stale, blocked, in-review, drift, boundary, surface
 #
 # Exit code is always 0 — this is a report, not a gate. Use lint.sh for CI.
 
@@ -126,6 +127,16 @@ for item in issues:
   for warn in item.get("warnings", []):
     print(f"  warn    {path}: {warn}")
 ' || echo "  (lint unavailable)"
+  echo ""
+fi
+
+if run_section boundary; then
+  echo "=== Boundary profile drift (foreign-domain terms) ==="
+  if [[ -f "$REPO_ROOT/.worklog-boundary.json" ]]; then
+    "$SCRIPT_DIR/boundary-lint.sh" 2>&1 | sed 's/^/  /' || true
+  else
+    echo "  (no .worklog-boundary.json profile)"
+  fi
   echo ""
 fi
 
