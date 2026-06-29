@@ -359,6 +359,12 @@ test_worklog_skill() {
     fail "worklog-manager poll fixture"
   fi
 
+  if bash "$skill/tests/context/test_context.sh" >/dev/null 2>&1; then
+    ok "context current Next + unique slug fixture"
+  else
+    fail "context current Next + unique slug fixture"
+  fi
+
   rm -rf "$(dirname "$vault")"
 }
 

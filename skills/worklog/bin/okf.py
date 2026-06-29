@@ -355,7 +355,6 @@ def cmd_doctor(args: argparse.Namespace) -> int:
   if local_noise:
     warnings.append(f"local/generated files are visible to git status: {', '.join(local_noise[:5])}")
 
-  dry_args = argparse.Namespace(repo=str(root), apply=False, check=False)
   pending: list[str] = []
   for path in _tracked_markdown(root):
     updated, did_change = sync_source_text(root, path, _read(path))
