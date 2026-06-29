@@ -138,3 +138,50 @@ alias reload='source ~/.bashrc'
 
 # Show most popular commands (bash-specific syntax)
 alias top-commands='history | awk "{print $2}" | awk "{print $1}" |sort|uniq -c | sort -rn | head -10'
+. ~/.super-autocomplete.bash
+unset KUBERNETES_SERVICE_PORT
+unset KUBERNETES_SERVICE_HOST
+# --- datadog-vscode-autoinstall (super) ---
+DATADOG_ID="datadog.datadog-vscode"
+
+# pick an editor CLI we can talk to
+if command -v code >/dev/null 2>&1; then
+  EDITOR_CLI=code
+elif command -v cursor >/dev/null 2>&1; then
+  EDITOR_CLI=cursor
+fi
+
+# only proceed if editor CLI exists and extension not installed
+if [ -n "$EDITOR_CLI" ] && ! "$EDITOR_CLI" --list-extensions 2>/dev/null | grep -qx "$DATADOG_ID"; then
+  # install via our own CLI
+  if command -v super >/dev/null 2>&1; then
+    super extensions enable datadog >/dev/null 2>&1 || true
+  fi
+  # verify again; if still not installed, log message
+  if ! "$EDITOR_CLI" --list-extensions 2>/dev/null | grep -qx "$DATADOG_ID"; then
+    echo "[datadog] CLI ran but extension not present yet; will retry on next shell" >&2
+  fi
+fi
+# --- end datadog-vscode-autoinstall (super) ---
+# --- claude-code-autoinstall (super) ---
+CLAUDE_CODE_ID="anthropic.claude-code"
+
+# pick an editor CLI we can talk to
+if command -v code >/dev/null 2>&1; then
+  EDITOR_CLI=code
+elif command -v cursor >/dev/null 2>&1; then
+  EDITOR_CLI=cursor
+fi
+
+# only proceed if editor CLI exists and extension not installed
+if [ -n "$EDITOR_CLI" ] && ! "$EDITOR_CLI" --list-extensions 2>/dev/null | grep -qx "$CLAUDE_CODE_ID"; then
+  # install via our own CLI
+  if command -v super >/dev/null 2>&1; then
+    super extensions enable claude-code >/dev/null 2>&1 || true
+  fi
+  # verify again; if still not installed, log message
+  if ! "$EDITOR_CLI" --list-extensions 2>/dev/null | grep -qx "$CLAUDE_CODE_ID"; then
+    echo "[claude-code] CLI ran but extension not present yet; will retry on next shell" >&2
+  fi
+fi
+# --- end claude-code-autoinstall (super) ---
