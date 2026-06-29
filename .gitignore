@@ -29,3 +29,7 @@ coverage/
 .env
 .env.*
 !.env.example
+
+# Per-host secrets and identity overlays
+.envrc.github
+.gitconfig.local

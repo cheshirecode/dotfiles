@@ -22,6 +22,8 @@ for src in "$REPO_DIR"/.*; do
   case "$name" in
     .|..|.git|.github|.gitignore) continue ;;
     .cursor) continue ;; # handled below
+    .gitconfig.cheshireCode) continue ;; # referenced by absolute path from .gitconfig
+    .envrc.github) continue ;; # gitignored secret holder, sourced explicitly
   esac
   target="$DEST/$name"
   if [ -L "$target" ] && [ "$(readlink "$target")" = "$src" ]; then
@@ -38,6 +40,19 @@ if [ -d "$REPO_DIR/.cursor" ]; then
   mkdir -p "$DEST/.cursor"
   echo "Copying $REPO_DIR/.cursor/ into $DEST/.cursor/..."
   cp -R "$REPO_DIR/.cursor/." "$DEST/.cursor/"
+fi
+
+# Bootstrap ~/.gitconfig.local (machine-local identity, untracked). The
+# committed .gitconfig pulls it in via [include]; without it, git complains
+# about a missing include path on every invocation.
+if [ ! -e "$DEST/.gitconfig.local" ]; then
+  echo "Creating empty $DEST/.gitconfig.local — fill in [user] for this machine."
+  cat > "$DEST/.gitconfig.local" <<'EOF'
+# Per-machine git identity. Add a [user] block here; do not commit this file.
+[user]
+	# name = Your Name
+	# email = you@example.com
+EOF
 fi
 
 echo "Dotfiles installation complete."
