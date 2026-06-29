@@ -1,0 +1,7 @@
+# Git identity overrides for repos owned by cheshireCode.
+# Activated via `includeIf` in ~/.gitconfig (see install.sh) so it only
+# applies when git's working directory is inside ~/.config/coderv2/dotfiles/.
+
+[user]
+	name = cheshireCode
+	email = 1631630+cheshirecode@users.noreply.github.com

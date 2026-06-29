@@ -1,6 +1,9 @@
-[user]
-	name = cheshireCode
-	email = 1631630+cheshirecode@users.noreply.github.com
+# Identity is sourced from ~/.gitconfig.local (per-machine, untracked) and,
+# when working inside ~/.config/coderv2/dotfiles/, from .gitconfig.cheshireCode.
+[include]
+	path = ~/.gitconfig.local
+[includeIf "gitdir:~/.config/coderv2/dotfiles/"]
+	path = ~/.config/coderv2/dotfiles/.gitconfig.cheshireCode
 [rebase]
 	# autosquash = true
 [core]
@@ -20,7 +23,7 @@
 	lcl = log master..HEAD --pretty='format: - %s %H'
 	l = log --all --decorate --oneline --graph
 	lgr1 = log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(bold yellow)%d%C(reset)' --all
-	lgr2 = log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(bold yellow)%d%C(reset)%n''          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)' --all	
+	lgr2 = log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(bold yellow)%d%C(reset)%n''          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)' --all
 	st = status -sb
 	last = log -1 HEAD --stat
 	cm = commit -m
