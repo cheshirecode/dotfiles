@@ -34,6 +34,31 @@ def parse_task_file(text: str) -> tuple[dict, str]:
   return fm if isinstance(fm, dict) else {}, match.group(2)
 
 
+def next_section(body: str) -> str:
+  """Return the current top-level `## Next` section body.
+
+  Older checkpoint notes can contain historical `## Next` headings and
+  checkboxes. Tracker hydration should mirror only the durable current plan,
+  not every stale checklist ever written into the task body.
+  """
+  lines = body.splitlines()
+  collected = []
+  in_next = False
+
+  for line in lines:
+    if re.match(r"^##\s+Next\b", line):
+      if in_next:
+        break
+      in_next = True
+      continue
+    if in_next and re.match(r"^##\s+", line):
+      break
+    if in_next:
+      collected.append(line)
+
+  return "\n".join(collected)
+
+
 def parse_work_items(body: str) -> list[dict]:
   """Parse `- [ ]` / `- [x]` checkboxes, folding soft-wrapped continuation
   lines into the same bullet. A continuation line is indented further than
@@ -42,7 +67,7 @@ def parse_work_items(body: str) -> list[dict]:
   current = None
   bullet_re = re.compile(r"^(\s*)-\s*\[([ xX])\]\s+(.+?)\s*$")
   new_block_re = re.compile(r"^\s*(?:[-*#]|\d+\.)\s")
-  for line in body.splitlines():
+  for line in next_section(body).splitlines():
     m = bullet_re.match(line)
     if m:
       current = {

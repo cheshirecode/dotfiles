@@ -49,8 +49,20 @@ LDAP="$(resolve_ldap)"
 FILE="people/$LDAP/active/$SLUG.md"
 [[ -f "$FILE" ]] || FILE="people/$LDAP/archive/$SLUG.md"
 if [[ ! -f "$FILE" ]]; then
-  echo "context: $SLUG not found under people/$LDAP/{active,archive}/" >&2
-  exit 1
+  matches=()
+  while IFS= read -r match; do
+    matches+=("$match")
+  done < <(find people -path "*/active/$SLUG.md" -o -path "*/archive/$SLUG.md" | sort)
+  if [[ ${#matches[@]} -eq 1 ]]; then
+    FILE="${matches[0]}"
+  elif [[ ${#matches[@]} -gt 1 ]]; then
+    echo "context: $SLUG is ambiguous across namespaces:" >&2
+    printf '  %s\n' "${matches[@]}" >&2
+    exit 1
+  else
+    echo "context: $SLUG not found under people/*/{active,archive}/" >&2
+    exit 1
+  fi
 fi
 
 # Commit history for this slug (follows renames via Worklog-Previous-Slug).
