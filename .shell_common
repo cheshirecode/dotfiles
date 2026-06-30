@@ -210,5 +210,12 @@ if [ -f "$HOME/.ssh-agent.sh" ]; then
     . "$HOME/.ssh-agent.sh"
 fi
 
+# Per-machine overrides (uncommitted): env vars, paths, secrets specific to
+# this host. e.g. worklog WORKLOG_REPO/WORKLOG_BIN exports.
+if [ -f "$HOME/.shell_common.local" ]; then
+    # shellcheck source=/dev/null
+    . "$HOME/.shell_common.local"
+fi
+
 # Call welcome message
 welcome

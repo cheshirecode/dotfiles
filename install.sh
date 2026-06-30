@@ -42,6 +42,23 @@ if [ -d "$REPO_DIR/.cursor" ]; then
   cp -R "$REPO_DIR/.cursor/." "$DEST/.cursor/"
 fi
 
+# Symlink Claude Code skills shipped in this repo into ~/.claude/skills/.
+# Code (skill + bin) is version-controlled here; per-machine data/config
+# (e.g. worklog's WORKLOG_REPO) lives outside the repo via ~/.shell_common.local.
+if [ -d "$REPO_DIR/skills" ]; then
+  mkdir -p "$DEST/.claude/skills"
+  for skill in "$REPO_DIR"/skills/*/; do
+    sname="$(basename "$skill")"
+    starget="$DEST/.claude/skills/$sname"
+    if [ -L "$starget" ] && [ "$(readlink "$starget")" = "${skill%/}" ]; then
+      continue
+    fi
+    backup "$starget"
+    echo "Symlinking skill $sname into $starget..."
+    ln -s "${skill%/}" "$starget"
+  done
+fi
+
 # Bootstrap ~/.gitconfig.local (machine-local identity, untracked). The
 # committed .gitconfig pulls it in via [include]; without it, git complains
 # about a missing include path on every invocation.
