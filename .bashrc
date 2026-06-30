@@ -9,6 +9,15 @@ if [ -f /etc/bashrc ]; then
     . /etc/bashrc
 fi
 
+# Per-machine env overrides that must load even for non-interactive shells
+# (e.g. `bash -c` from tools/hooks): worklog WORKLOG_REPO/WORKLOG_BIN, etc.
+# Keep this above the interactive guard. Interactive extras still go in
+# ~/.shell_common.local, sourced later via .shell_common.
+if [ -f "$HOME/.shell_common.local" ]; then
+    # shellcheck source=/dev/null
+    . "$HOME/.shell_common.local"
+fi
+
 # ~/.bashrc: executed by bash(1) for non-login shells.
 # If not running interactively, don't do anything
 [ -z "$PS1" ] && return
