@@ -9,6 +9,7 @@ import { extractGraph } from "../../lib/worklog-manager/extract.mjs";
 import { parseIssueUrl } from "../../lib/worklog-manager/github.mjs";
 import { refusalHint } from "../../lib/worklog-manager/hints.mjs";
 import { inferIssueIntent, normalizeIssue, validateIntent } from "../../lib/worklog-manager/issue.mjs";
+import { orderNextActions } from "../../lib/worklog-manager/render.mjs";
 import { runIssueDispatch } from "../../lib/worklog-manager/runs.mjs";
 import { validateWatcherConfigs } from "../../lib/worklog-manager/watchers.mjs";
 
@@ -227,4 +228,41 @@ test("runIssueDispatch writes planned artifacts through the shared orchestration
 test("refusalHint exposes public-safe recovery guidance", () => {
   assert.match(refusalHint("identity.mismatch"), /trusted GitHub login/);
   assert.match(refusalHint("execution.confirmation_missing"), /sandbox execution confirmation/);
+});
+
+test("orderNextActions filters no-action tasks and sorts by status priority then date then slug", () => {
+  const nodes = [
+    { id: "draft-none", type: "task", state: "active", status: "draft", slug: "draft-none", project: "p", file: "f",
+      frontmatter: { last_updated: "2026-07-01", next_action: "None — reference doc, no follow-up action" } },
+    { id: "draft-empty", type: "task", state: "active", status: "draft", slug: "draft-empty", project: "p", file: "f",
+      frontmatter: { last_updated: "2026-07-01" } },
+    { id: "draft-actionable", type: "task", state: "active", status: "draft", slug: "draft-actionable", project: "p", file: "f",
+      frontmatter: { last_updated: "2026-07-02", next_action: "Start implementation" } },
+    { id: "blocked-waiting", type: "task", state: "active", status: "blocked", slug: "blocked-waiting", project: "p", file: "f",
+      frontmatter: { last_updated: "2026-07-02", next_action: "Waiting on upstream" } },
+    { id: "review-old", type: "task", state: "active", status: "in-review", slug: "review-old", project: "p", file: "f",
+      frontmatter: { last_updated: "2026-06-01", next_action: "Watch CI" } },
+    { id: "ship-recent", type: "task", state: "active", status: "shipping", slug: "ship-recent", project: "p", file: "f",
+      frontmatter: { last_updated: "2026-06-20", next_action: "Final ack" } },
+    { id: "progress-recent", type: "task", state: "active", status: "in-progress", slug: "progress-recent", project: "p", file: "f",
+      frontmatter: { last_updated: "2026-06-20", next_action: "Keep coding" } },
+    { id: "progress-older", type: "task", state: "active", status: "in-progress", slug: "progress-older", project: "p", file: "f",
+      frontmatter: { last_updated: "2026-06-10", next_action: "Older step" } },
+    { id: "archived-task", type: "task", state: "archived", status: "done", slug: "archived-task", project: "p", file: "f",
+      frontmatter: { last_updated: "2026-07-02", next_action: "Done" } },
+    { id: "project-node", type: "project", state: "active", status: "project", slug: "proj", project: "p", file: "f",
+      frontmatter: { last_updated: "2026-07-02", next_action: "Project-level" } },
+  ];
+
+  const ordered = orderNextActions(nodes);
+  const ids = ordered.map((n) => n.id);
+
+  assert.deepEqual(ids, [
+    "progress-recent",
+    "progress-older",
+    "ship-recent",
+    "review-old",
+    "draft-actionable",
+    "blocked-waiting",
+  ], "in-progress(2, date-desc) > shipping > in-review > draft > blocked; no-action drafts excluded; archived/project excluded");
 });
