@@ -22,6 +22,7 @@ Scripts are shipped by the dotfiles skill. In this doc, `bin/foo.sh` is shorthan
 | Single-task chronological history                | `bin/status.sh --slug=<slug>`                                       |
 | Context pack for one task (resume / review)      | `bin/context.sh <slug> [--for=resume|review]`                       |
 | Exact Linear / Notion / PR scan seeds for init   | `bin/init-scan.sh [--ldap=<ldap> --format=json]`                    |
+| Preview Slack-derived task enrichments           | `bin/scrape-slack.sh [--input=slack-results.json --format=json]`    |
 | Check Codex command-menu drift                   | `bin/codex-surface-check.sh`                                        |
 | Validate every task file's frontmatter           | `bin/lint.sh [--format=json]`                                       |
 | Guard split clones from foreign-domain content   | `bin/boundary-lint.sh [--format=json]`                              |
@@ -70,6 +71,9 @@ bin/context.sh eng-1515-stack --format=json
 # Deterministic external-scan seeds for /worklog init --full:
 bin/init-scan.sh
 bin/init-scan.sh --format=json
+
+# Slack context enrichment preview (dry-run; no writes):
+bin/scrape-slack.sh --input=/tmp/slack-results.json --format=json
 ```
 
 ## Unix philosophy — one script, one thing
@@ -86,6 +90,7 @@ The skill layer (`~/.claude/skills/worklog/`) is where multi-step orchestration 
 - `status.sh` — **read-only**, emits markdown (standup-shape by default) or json. The default view groups by lifecycle bucket — shipped · in-review · in-flight · blocked — with shipped collapsed to a single slug/PR line and `next_action:` capped at the first sentence. `--format=grouped` switches to the legacy per-project × per-status view when an archive-heavy audit is the point. `--format=json` is machine-readable.
 - `context.sh` — **read-only**, emits a per-slug pack with frontmatter + recent commits + live PR states (queries GitHub for each PR in `pr:`).
 - `init-scan.sh` — **read-only**, emits exact Linear issue identifiers, Notion targets, and PR numbers from active task files so `/worklog init --full` can prefer direct fetches over fuzzy semantic scans. Cold-start safe: returns zero tasks when `people/<ldap>/active/` does not exist yet.
+- `scrape-slack.sh` — **dry-run by default**, matches captured Slack messages/threads to worklog tasks and emits proposed redacted summaries plus `external_refs: [{platform: slack, url, note}]`. Workspace-agnostic: it uses the target clone's resolved LDAP/SSO identity and reports searched/skipped workspaces plus auth limitations. With no provider/input it exits 0 as `status: unavailable`. Private surfaces require explicit `--include-dms` / `--include-mpims`; peer-owned, archived, duplicate, ambiguous, or low-score matches are proposal-only/no-op.
 - `lint.sh` — **read-only**, validates every task file: strict-YAML frontmatter (warn on block-scalar drift), kind ∈ documented set, status ∈ FSM, project grammar, last_updated format, relation resolution, related[] notes, archive/status consistency. Exit 1 on errors. `--cross-task` adds opt-in FSM/stale-review/undeclared-ref drift checks (see `docs/protocol.md § Cross-task checks`). `checkpoint.sh` calls per-file mode softly on each save (stderr warnings only; bypass with `WORKLOG_NO_LINT=1`).
 - `boundary-lint.sh` — **read-only**, scans task/project markdown for clone-boundary drift declared in `.worklog-boundary.json`. This is for split-source hygiene (for example: OSS tracker terms appearing in a work tracker, or work task vocabulary appearing in an OSS tracker), not schema correctness. Profile shape: `schema`, `label`, `include`/`exclude` globs, `deny: [{pattern,note}]`, optional `allow: [{path,pattern}]`, and `ignore_case` (default true). Use `allow` for narrow, intentional provenance exceptions such as an OSS port task citing the work source it extracted from; do not delete useful provenance just to make the guard pass. Exit 1 on matches. `bin/audit.sh --section=boundary` runs it automatically when a profile exists.
 - `task-guard.sh` — **read-only**, classifies dirty task files against claimed slug(s). `--slug=<slug>` may repeat; `--include=<path>` explicitly allows an additional dirty task path; `--format=json` emits `{claimed_slugs, dirty_task_paths, foreign_task_paths, dirty_tasks}`. Exits 2 when a dirty task file belongs to another slug, so Codex/skill write paths can treat it as a mutex held by another session and avoid broad autosave/staging.
