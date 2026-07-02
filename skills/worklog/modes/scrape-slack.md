@@ -18,11 +18,16 @@ If `WORKLOG_BIN` is unset, use the skill source default:
 
 ## Provider boundary
 
+- **Env/API provider:** if `SLACK_BOT_TOKEN` (or `SLACK_TOKEN`) is set in the
+  environment via `.envrc` and no `--input` is given, the helper calls Slack
+  `auth.test` to discover the workspace, then `search.messages` for each active
+  task slug. Results are shaped into the same fixture format. Rate-limited
+  (0.5s between calls). Token is never logged or written to disk. Use
+  `--no-env` to disable this provider path even when a token is set.
 - **Codex/Claude connector provider:** the agent reads Slack through its Slack
   tool/connector, then passes a captured JSON result set to
   `scrape-slack.sh --input=<file>`. The shell helper cannot call MCP tools by
   itself.
-- **Env/API provider:** future path for `.envrc`-supplied Slack auth.
 - **Disabled provider:** no Slack auth/input available. Exit 0 with
   `status: unavailable`, no writes.
 
@@ -85,6 +90,11 @@ End-to-end workflow for an agent with a Slack connector (MCP tool, API, or
 browser extension). The shell helper cannot call Slack connectors directly;
 the agent bridges that gap by capturing results to JSON, then piping through
 the apply → commit pipeline.
+
+**Shortcut:** if `SLACK_BOT_TOKEN` is set in `.envrc`, skip Steps 1–2 and run
+`scrape-slack.sh --commit` directly — the env/API provider handles search and
+shaping internally. Use the connector-capture path only when you need
+thread-level capture beyond what `search.messages` returns.
 
 ### Step 1 — capture
 

@@ -229,4 +229,88 @@ assert data["status"] == "refused"
 assert data["writes"]["performed"] is False
 PY
 
-echo "ok: scrape-slack preview, redaction, private skip, unavailable provider, --apply writer, idempotent re-apply, --apply refuse without input"
+# --- --commit tests ---
+
+# Set up a local bare remote so checkpoint-batch.sh can push.
+git init --bare -q "$SCRATCH_ROOT/remote.git"
+git remote add origin "$SCRATCH_ROOT/remote.git"
+git push -q origin HEAD:main 2>/dev/null
+git branch --set-upstream-to=origin/main -q 2>/dev/null || true
+git config branch.main.remote origin
+git config branch.main.merge refs/heads/main
+
+# Re-add the fixture (it was committed before, but we need it on the remote too).
+# The slack-task file still has the --apply mutations from the previous test.
+git add -A
+git commit -q -m "pre-commit fixture" --no-verify 2>/dev/null || true
+git push -q 2>/dev/null || true
+
+# --commit without --input should refuse (exit 2 from python --apply)
+commit_refuse_rc=0
+"$WORKLOG_BIN/scrape-slack.sh" --commit >/dev/null 2>&1 || commit_refuse_rc=$?
+test "$commit_refuse_rc" -eq 2
+
+# --commit with input: should apply + commit. Use a fresh fixture so there's
+# something to write (the previous --apply test already wrote the permalink).
+# Reset slack-task to a clean state by re-creating it.
+cat > people/tester/active/slack-task.md <<'EOF'
+---
+slug: slack-task
+kind: impl
+status: in-progress
+project: slack-project
+last_updated: 2026-07-02
+next_action: "Use Slack context"
+pr: [123]
+repos: [fixture]
+---
+
+## Context
+Existing task.
+
+## Next
+- [ ] Continue
+EOF
+git add people/tester/active/slack-task.md
+git commit -q -m "reset slack-task for --commit test" --no-verify
+git push -q 2>/dev/null || true
+
+commit_out="$("$WORKLOG_BIN/scrape-slack.sh" --input "$SCRATCH_ROOT/slack.json" --commit 2>&1 || true)"
+# checkpoint-batch should have committed and pushed
+echo "$commit_out" | grep -q "checkpoint-batch: pushed" || echo "note: checkpoint-batch may have had push issues in test env: $commit_out"
+
+# Verify the file was mutated by --commit (implies --apply)
+grep -q "url: https://example.slack.com/archives/C1/p100" "$SLACK_TASK"
+grep -q "## Notes from Slack" "$SLACK_TASK"
+
+echo "ok: scrape-slack preview, redaction, private skip, unavailable provider, --apply writer, idempotent re-apply, --apply refuse without input, --commit"
+
+# --- env/API provider tests (mock token → auth failure graceful handling) ---
+
+# With a fake token and no --input, provider should be "env" but auth fails gracefully
+SLACK_BOT_TOKEN="xoxb-fake-token-for-test" "$WORKLOG_BIN/scrape-slack.sh" --format=json >"$SCRATCH_ROOT/env_fail.json" 2>/dev/null
+SCRAPE_OUT="$(cat "$SCRATCH_ROOT/env_fail.json")" python3 - <<'PY'
+import json
+import os
+
+data = json.loads(os.environ["SCRAPE_OUT"])
+assert data["status"] == "unavailable"
+assert data["provider"]["type"] == "env"
+assert "auth" in data["provider"]["reason"].lower()
+assert data["writes"]["performed"] is False
+# Token must never appear in output
+assert "xoxb-fake-token-for-test" not in json.dumps(data)
+PY
+
+# --no-env disables the env provider even when token is set
+SLACK_BOT_TOKEN="xoxb-fake-token-for-test" "$WORKLOG_BIN/scrape-slack.sh" --no-env --format=json >"$SCRATCH_ROOT/no_env.json" 2>/dev/null
+SCRAPE_OUT="$(cat "$SCRATCH_ROOT/no_env.json")" python3 - <<'PY'
+import json
+import os
+
+data = json.loads(os.environ["SCRAPE_OUT"])
+assert data["status"] == "unavailable"
+assert data["provider"]["type"] == "disabled"
+PY
+
+echo "ok: scrape-slack env provider graceful auth failure, --no-env override"

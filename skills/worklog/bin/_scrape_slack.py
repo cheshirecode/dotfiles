@@ -9,6 +9,10 @@ import os
 import re
 import subprocess
 import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -19,6 +23,8 @@ SECRET_RE = re.compile(
 )
 LINEAR_RE = re.compile(r"\bENG-\d+\b", re.I)
 PR_RE = re.compile(r"(?:\bPR\s*#|\B#)(\d{2,6})\b", re.I)
+
+SLACK_API_BASE = "https://slack.com/api"
 
 
 @dataclass
@@ -47,6 +53,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--apply", action="store_true", help="reserved mutation gate; refuses writes for now")
     parser.add_argument("--include-dms", action="store_true")
     parser.add_argument("--include-mpims", action="store_true")
+    parser.add_argument("--no-env", action="store_true", help="disable env/API Slack provider even if SLACK_BOT_TOKEN is set")
     return parser.parse_args()
 
 
@@ -136,11 +143,85 @@ def load_tasks(repo: Path) -> list[Task]:
     return tasks
 
 
-def read_input(path: str | None) -> tuple[str, dict[str, Any] | None]:
-    if not path:
-        return "disabled", None
-    raw = sys.stdin.read() if path == "-" else Path(path).read_text(encoding="utf-8")
-    return "mock", json.loads(raw)
+def read_input(path: str | None, token: str | None) -> tuple[str, dict[str, Any] | None]:
+    if path:
+        raw = sys.stdin.read() if path == "-" else Path(path).read_text(encoding="utf-8")
+        return "mock", json.loads(raw)
+    if token:
+        return "env", None
+    return "disabled", None
+
+
+def resolve_env_token() -> str | None:
+    return os.environ.get("SLACK_BOT_TOKEN") or os.environ.get("SLACK_TOKEN")
+
+
+def slack_api_call(method: str, token: str, params: dict[str, Any] | None = None, _retried: bool = False) -> dict[str, Any]:
+    url = f"{SLACK_API_BASE}/{method}"
+    data = urllib.parse.urlencode(params or {}).encode()
+    req = urllib.request.Request(url, data=data, method="POST")
+    req.add_header("Authorization", f"Bearer {token}")
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        if e.code == 429 and not _retried:
+            retry_after = int(e.headers.get("Retry-After", "2"))
+            time.sleep(retry_after)
+            return slack_api_call(method, token, params, _retried=True)
+        return {"ok": False, "error": f"HTTP {e.code}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def fetch_env_results(token: str, tasks: list[Task]) -> tuple[dict[str, Any] | None, list[str]]:
+    """Search Slack for active task slugs. Returns (payload, auth_limitations)."""
+    auth = slack_api_call("auth.test", token)
+    if not auth.get("ok"):
+        return None, [f"Slack auth failed: {auth.get('error', 'unknown')}"]
+
+    workspace = {
+        "id": auth.get("team_id", "unknown"),
+        "name": auth.get("team", "unknown"),
+    }
+
+    seen_permalinks: set[str] = set()
+    messages: list[dict[str, Any]] = []
+
+    active_slugs = [t.slug for t in tasks if t.state == "active"]
+    for i, slug in enumerate(active_slugs):
+        if i > 0:
+            time.sleep(0.5)
+        result = slack_api_call("search.messages", token, {"query": slug, "count": 5})
+        if not result.get("ok"):
+            continue
+        matches = result.get("messages", {}).get("matches", [])
+        for msg in matches:
+            permalink = msg.get("permalink", "")
+            if not permalink or permalink in seen_permalinks:
+                continue
+            seen_permalinks.add(permalink)
+            channel = msg.get("channel", {})
+            surface = "public"
+            if channel.get("is_im"):
+                surface = "dm"
+            elif channel.get("is_mpim"):
+                surface = "mpim"
+            elif channel.get("is_private"):
+                surface = "private"
+            messages.append({
+                "permalink": permalink,
+                "channel": channel.get("id", ""),
+                "channel_name": channel.get("name", ""),
+                "ts": msg.get("ts", ""),
+                "thread_ts": msg.get("thread_ts", msg.get("ts", "")),
+                "surface": surface,
+                "text": msg.get("text", ""),
+                "summary": "",
+            })
+
+    return {"workspace": workspace, "messages": messages}, []
 
 
 def flatten_messages(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -461,13 +542,14 @@ def main() -> int:
     args = parse_args()
     repo = resolve_repo()
     ldap = resolve_ldap(repo, args.ldap)
-    provider_type, payload = read_input(args.input)
+    token = None if args.no_env else resolve_env_token()
+    provider_type, payload = read_input(args.input, token)
 
     if args.apply and provider_type == "disabled":
         result = {
             "schemaVersion": "worklog.scrape-slack.v1",
             "status": "refused",
-            "error": "--apply requires --input with captured Slack results",
+            "error": "--apply requires --input or env/API Slack provider (SLACK_BOT_TOKEN)",
             "provider": {"type": provider_type},
             "identity": {"ldap": ldap, "repo": str(repo) if repo else None},
             "writes": {"performed": False},
@@ -481,7 +563,7 @@ def main() -> int:
             "status": "unavailable",
             "provider": {
                 "type": "disabled",
-                "reason": "no --input fixture and no shell Slack provider configured",
+                "reason": "no --input fixture and no env/API Slack provider configured",
             },
             "identity": {"ldap": ldap, "repo": str(repo) if repo else None},
             "coverage": {"searched_workspaces": [], "skipped": [], "auth_limitations": ["Slack provider unavailable"]},
@@ -493,6 +575,27 @@ def main() -> int:
         if repo is None:
             raise SystemExit("scrape-slack: WORKLOG_REPO is unset and cwd is not a worklog repo")
         tasks = load_tasks(repo)
+
+        auth_limitations: list[str] = []
+        if provider_type == "env":
+            payload, auth_limitations = fetch_env_results(token, tasks)
+            if payload is None:
+                result = {
+                    "schemaVersion": "worklog.scrape-slack.v1",
+                    "status": "unavailable",
+                    "provider": {"type": "env", "reason": auth_limitations[0] if auth_limitations else "auth failed"},
+                    "identity": {"ldap": ldap, "repo": str(repo)},
+                    "coverage": {"searched_workspaces": [], "skipped": [], "auth_limitations": auth_limitations},
+                    "proposals": [],
+                    "checkpoint_batch": [],
+                    "writes": {"performed": False},
+                }
+                if args.format == "json":
+                    print(json.dumps(result, indent=2, sort_keys=True))
+                else:
+                    print(markdown_report(result), end="")
+                return 0
+
         proposals, coverage = build_proposals(
             tasks,
             payload or {},
@@ -501,6 +604,7 @@ def main() -> int:
             args.include_dms,
             args.include_mpims,
         )
+        coverage["auth_limitations"] = auth_limitations
         writes: dict[str, Any] = {"performed": False, "records": []}
         status = "preview"
         if args.apply:
