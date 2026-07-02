@@ -13,7 +13,7 @@ case "${1:-}" in
   -h|--help)
     cat <<'EOF'
 usage: scrape-slack.sh [--input=<slack-results.json>] [--format=json|markdown]
-                       [--ldap=<ldap>] [--threshold=N] [--apply]
+                       [--ldap=<ldap>] [--threshold=N] [--apply] [--commit]
                        [--include-dms] [--include-mpims]
 
 Preview worklog task enrichments from Slack conversations reachable by the
@@ -50,13 +50,58 @@ Flags:
   --apply           mutate task files: add external_refs + ## Notes from Slack
                     section for edit_candidate proposals (own-namespace, active,
                     non-duplicate, unambiguous, score>=threshold). Preview is still
-                    emitted in the same JSON. Does not commit; pipe checkpoint_batch
-                    to checkpoint-batch.sh to commit with trailers.
+                    emitted in the same JSON. Does not commit on its own.
+  --commit          implies --apply, then pipes checkpoint_batch to
+                    checkpoint-batch.sh for an atomic commit with trailers.
+                    Prints commit summary instead of full JSON. Run without
+                    --commit first to preview matches.
   --include-dms     allow DM-surface fixture entries
   --include-mpims   allow MPIM-surface fixture entries
+  --no-env          disable env/API provider even if SLACK_BOT_TOKEN is set
+
+Env/API provider:
+  If SLACK_BOT_TOKEN (or SLACK_TOKEN) is set in the environment (e.g. via
+  .envrc) and no --input is given, the helper calls Slack search.messages
+  for each active task slug. No hardcoded workspace — discovers via auth.test.
+  Rate-limited (0.5s between API calls). Token is never logged or written.
 EOF
     exit 0
     ;;
 esac
 
-exec python3 "$SCRIPT_DIR/_scrape_slack.py" "$@"
+# Parse for --commit: if present, strip it, add --apply, chain to checkpoint-batch.
+COMMIT=0
+PY_ARGS=()
+for arg in "$@"; do
+  if [[ "$arg" == "--commit" ]]; then
+    COMMIT=1
+  else
+    PY_ARGS+=("$arg")
+  fi
+done
+
+if [[ "$COMMIT" -eq 1 ]]; then
+  # --commit implies --apply
+  PY_ARGS+=("--apply" "--format=json")
+
+  # Run python, capture stdout.
+  OUTPUT="$(python3 "$SCRIPT_DIR/_scrape_slack.py" "${PY_ARGS[@]}")"
+  RC=$?
+
+  # If python failed (e.g. --apply refused), pass through its output + exit code.
+  if [[ $RC -ne 0 ]]; then
+    printf '%s\n' "$OUTPUT"
+    exit $RC
+  fi
+
+  # Extract checkpoint_batch and pipe to checkpoint-batch.sh if non-empty.
+  BATCH="$(printf '%s\n' "$OUTPUT" | python3 -c "import sys,json; b=json.load(sys.stdin).get('checkpoint_batch',[]); print(json.dumps(b) if b else '')")"
+
+  if [[ -n "$BATCH" ]]; then
+    printf '%s\n' "$BATCH" | "$SCRIPT_DIR/checkpoint-batch.sh" 2>&1
+  else
+    echo "scrape-slack --commit: no edit_candidate proposals to commit (all proposal-only/duplicate/unmatched)"
+  fi
+else
+  exec python3 "$SCRIPT_DIR/_scrape_slack.py" "$@"
+fi
