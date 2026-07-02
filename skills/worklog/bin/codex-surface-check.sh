@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(resolve_worklog_repo)" || exit 1
 cd "$REPO_ROOT"
 
-EXPECTED=(help init sync status context plan spawn export import lint project review)
+EXPECTED=(help init sync status context plan spawn export import lint project scrape-slack review)
 CODEX_SKILL_PATH="${CODEX_SKILL_PATH:-$HOME/.codex/skills/worklog/SKILL.md}"
 
 case "${1:-}" in

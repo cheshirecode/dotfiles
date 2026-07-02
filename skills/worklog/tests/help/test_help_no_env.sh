@@ -14,6 +14,7 @@ scripts=(
   context
   lint
   project
+  scrape-slack
   search
   status
 )
