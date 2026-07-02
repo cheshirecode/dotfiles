@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { refusalHint } from "./hints.mjs";
 
 export const LEARNING_EVENT_SCHEMA_VERSION = "worklog.learning-event.v1";
 
@@ -25,25 +26,6 @@ function learningFiles(config) {
     events: path.join(dir, "refusals.jsonl"),
     notes: path.join(dir, "notes.md"),
   };
-}
-
-function refusalHint(code) {
-  switch (code) {
-    case "command.missing":
-      return "Use a supported command word such as ask, plan, do, agent, dry-run, or an explicit Worklog-Command: ask trailer.";
-    case "slug.missing":
-      return "Mention a unique worklog slug or add Worklog-Slug: <slug>.";
-    case "slug.ambiguous":
-      return "Mention exactly one worklog slug or use Worklog-Slug: <slug>.";
-    case "command.ambiguous":
-      return "Use exactly one intent, or add Worklog-Command: ask|plan|do|agent.";
-    case "identity.mismatch":
-      return "Use the configured trusted GitHub login for this watcher.";
-    case "repo.not_allowed":
-      return "Use an issue in this instance's configured GitHub allowlist.";
-    default:
-      return "Inspect the local run artifact and adjust the issue/comment to satisfy the reported gate.";
-  }
 }
 
 function targetFromResult(result) {

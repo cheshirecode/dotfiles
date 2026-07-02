@@ -1,6 +1,7 @@
 import childProcess from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { refusalHints } from "./hints.mjs";
 import { inferIssueIntent, issueFingerprint, normalizeIssue, redactedIssue, validateIntent } from "./issue.mjs";
 
 export const DISPATCH_SCHEMA_VERSION = "worklog.issue-dispatch.v1";
@@ -124,13 +125,18 @@ function validateAgainstConfig(config, graph, issue, intent, fingerprint) {
 function publicStatus(dispatch) {
   const marker = dispatch.instance.statusCommentMarker;
   if (dispatch.state === "refused") {
+    const codes = dispatch.refusals.map((item) => item.code);
+    const hints = refusalHints(codes);
     return [
       marker,
       "worklog-manager: refused",
       "",
       `Issue: ${dispatch.issue.repository}#${dispatch.issue.number}`,
       `Slug: ${dispatch.intent.slug || "(missing)"}`,
-      `Reason: ${dispatch.refusals.map((item) => item.code).join(", ")}`,
+      `Reason: ${codes.join(", ")}`,
+      "",
+      "Next:",
+      ...hints.map((hint) => `- ${hint}`),
       "",
       "Details are redacted; see local run artifacts on the daemon host.",
     ].join("\n");

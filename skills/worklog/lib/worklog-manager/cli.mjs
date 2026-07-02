@@ -1,11 +1,11 @@
 import fs from "node:fs";
 import { parseArgs, usage, loadConfig } from "./config.mjs";
-import { createDispatch, executeDispatch, writeDispatchArtifacts } from "./dispatch.mjs";
 import { extractGraph } from "./extract.mjs";
 import { fetchIssue, updateCursorStatus, upsertStatusComment } from "./github.mjs";
 import { readIssue } from "./issue.mjs";
 import { recordLearningEvent } from "./learning.mjs";
 import { renderDot, renderHtml, writeOutput } from "./render.mjs";
+import { runIssueDispatch } from "./runs.mjs";
 import { validateWatcherConfigs } from "./watchers.mjs";
 
 export const POLL_RUN_SCHEMA_VERSION = "worklog.poll-run.v1";
@@ -62,12 +62,7 @@ function runDispatch(config) {
   preflightRuntime(config, "dispatch");
   const graph = extractGraph(config);
   const issue = readIssue(config.issue);
-  let dispatch = createDispatch(config, graph, issue);
-  const runDir = writeDispatchArtifacts(config, dispatch);
-  if (config.execute && dispatch.state !== "refused") {
-    dispatch = executeDispatch(config, dispatch);
-    writeDispatchArtifacts(config, dispatch);
-  }
+  const { runDir, dispatch } = runIssueDispatch(config, graph, issue);
   writeOutput(`${JSON.stringify({ runDir, dispatch }, null, 2)}\n`, config.output);
 }
 
@@ -79,12 +74,7 @@ function pollTarget(config, graph, issueUrl) {
     return result;
   }
 
-  let dispatch = createDispatch(config, graph, fetched.issue);
-  const runDir = writeDispatchArtifacts(config, dispatch);
-  if (config.execute && dispatch.state !== "refused") {
-    dispatch = executeDispatch(config, dispatch);
-    writeDispatchArtifacts(config, dispatch);
-  }
+  const { runDir, dispatch } = runIssueDispatch(config, graph, fetched.issue);
   let comment = null;
   if (config.postStatus) {
     comment = upsertStatusComment(config, fetched.target, dispatch.statusComment);

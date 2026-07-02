@@ -188,6 +188,8 @@ if (!out.dispatch.refusals.some((item) => item.code === "command.ambiguous")) {
 if (out.dispatch.refusals.some((item) => item.code === "command.invalid")) {
   throw new Error("ambiguous command should not also be command.invalid");
 }
+if (!out.dispatch.statusComment.includes("Next:")) throw new Error("refusal status comment missing recovery heading");
+if (!out.dispatch.statusComment.includes("Use exactly one intent")) throw new Error("ambiguous refusal missing recovery hint");
 NODE
 
 FAKE_SANDBOX_LOG="$FAKE_SANDBOX_LOG" "$WORKLOG_BIN/worklog-manager" dispatch \
@@ -203,6 +205,9 @@ if (!out.dispatch.refusals.some((item) => item.code === "identity.mismatch")) {
   throw new Error("missing identity.mismatch refusal");
 }
 if (out.dispatch.plan !== null) throw new Error("refused dispatch must not have a runner plan");
+if (!out.dispatch.statusComment.includes("Use the configured trusted GitHub login")) {
+  throw new Error("identity refusal missing recovery hint");
+}
 NODE
 
 FAKE_SANDBOX_LOG="$FAKE_SANDBOX_LOG" "$WORKLOG_BIN/worklog-manager" dispatch \
@@ -217,6 +222,9 @@ const out = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 if (out.dispatch.state !== "refused") throw new Error("missing confirmation should refuse");
 if (!out.dispatch.refusals.some((item) => item.code === "execution.confirmation_missing")) {
   throw new Error("missing execution.confirmation_missing refusal");
+}
+if (!out.dispatch.statusComment.includes("Explicitly request the configured sandbox execution confirmation")) {
+  throw new Error("execution refusal missing recovery hint");
 }
 NODE
 
