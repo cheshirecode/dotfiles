@@ -172,4 +172,61 @@ assert data["status"] == "unavailable"
 assert data["writes"]["performed"] is False
 PY
 
-echo "ok: scrape-slack preview, redaction, private skip, and unavailable provider"
+# --- --apply writer tests ---
+
+apply_out="$("$WORKLOG_BIN/scrape-slack.sh" --input "$SCRATCH_ROOT/slack.json" --apply --format=json)"
+SCRAPE_OUT="$apply_out" python3 - <<'PY'
+import json
+import os
+
+data = json.loads(os.environ["SCRAPE_OUT"])
+assert data["status"] == "applied"
+assert data["writes"]["performed"] is True
+records = {r["slug"]: r for r in data["writes"]["records"]}
+assert "slack-task" in records
+assert records["slack-task"]["written"] is True
+assert "external_refs" in records["slack-task"]["changes"]
+assert "notes_from_slack" in records["slack-task"]["changes"]
+# Only edit_candidate got written — peer-task / old-task / dup-task absent
+assert "peer-task" not in records
+assert "old-task" not in records
+assert "dup-task" not in records
+# No raw secrets in the write payload
+assert "xoxb-secret-token" not in json.dumps(data)
+PY
+
+# Verify the file was actually mutated
+SLACK_TASK="$SCRATCH/people/tester/active/slack-task.md"
+grep -q "url: https://example.slack.com/archives/C1/p100" "$SLACK_TASK"
+grep -q "## Notes from Slack" "$SLACK_TASK"
+grep -q "\[REDACTED\]" "$SLACK_TASK"
+! grep -q "xoxb-secret-token" "$SLACK_TASK"
+
+# Idempotent re-apply: second run should report written=False
+apply_out2="$("$WORKLOG_BIN/scrape-slack.sh" --input "$SCRATCH_ROOT/slack.json" --apply --format=json)"
+SCRAPE_OUT="$apply_out2" python3 - <<'PY'
+import json
+import os
+
+data = json.loads(os.environ["SCRAPE_OUT"])
+assert data["status"] == "applied"
+assert data["writes"]["performed"] is False
+records = {r["slug"]: r for r in data["writes"]["records"]}
+# slack-task permalink now a duplicate → not an edit_candidate → no write record
+assert "slack-task" not in records or records["slack-task"]["written"] is False
+PY
+
+# --apply without --input should refuse
+refuse_rc=0
+"$WORKLOG_BIN/scrape-slack.sh" --apply --format=json >"$SCRATCH_ROOT/refuse.json" 2>/dev/null || refuse_rc=$?
+test "$refuse_rc" -eq 2
+SCRAPE_OUT="$(cat "$SCRATCH_ROOT/refuse.json")" python3 - <<'PY'
+import json
+import os
+
+data = json.loads(os.environ["SCRAPE_OUT"])
+assert data["status"] == "refused"
+assert data["writes"]["performed"] is False
+PY
+
+echo "ok: scrape-slack preview, redaction, private skip, unavailable provider, --apply writer, idempotent re-apply, --apply refuse without input"

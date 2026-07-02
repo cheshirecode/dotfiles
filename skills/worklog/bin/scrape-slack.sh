@@ -47,7 +47,11 @@ Flags:
   --format FORMAT   json (default) or markdown
   --ldap LDAP       override resolved worklog namespace for ownership checks
   --threshold N     minimum score for editable match (default: 80)
-  --apply           reserved mutation gate; currently refuses live writes
+  --apply           mutate task files: add external_refs + ## Notes from Slack
+                    section for edit_candidate proposals (own-namespace, active,
+                    non-duplicate, unambiguous, score>=threshold). Preview is still
+                    emitted in the same JSON. Does not commit; pipe checkpoint_batch
+                    to checkpoint-batch.sh to commit with trailers.
   --include-dms     allow DM-surface fixture entries
   --include-mpims   allow MPIM-surface fixture entries
 EOF
