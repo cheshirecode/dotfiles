@@ -31,9 +31,28 @@ Unknown or partial coverage is non-mutating.
 
 ## Mutation gate
 
-Default behavior is dry-run JSON. Mutation requires `--apply`, but the helper
-must still preview first and write only redacted durable summaries plus
-canonical Slack permalinks under `external_refs`.
+Default behavior is dry-run JSON. Mutation requires `--apply`, which writes
+redacted durable summaries plus canonical Slack permalinks under `external_refs`
+and appends a human-readable `## Notes from Slack` section. The helper still
+emits the full preview in the same JSON output so the caller can audit what was
+written.
+
+`--apply` writes **only** to `edit_candidate` proposals — own-namespace, active
+(non-archived), non-duplicate, unambiguous, score≥threshold. All other actions
+(`proposal_only`, `duplicate_ignored`, `unmatched`) remain non-mutating.
+
+The writer does not commit. The result JSON's `checkpoint_batch` field is the
+commit handoff — pipe it to `checkpoint-batch.sh` to commit with proper
+`Worklog-Slug:` trailers and a `last_updated` bump:
+
+```bash
+scrape-slack.sh --input=results.json --apply | \
+  python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin)['checkpoint_batch']))" | \
+  checkpoint-batch.sh
+```
+
+Idempotent: re-running `--apply` with the same input is a no-op because the
+permalink is already in `external_refs` (matched at the permalink-dedup layer).
 
 Private surfaces require explicit flags:
 

@@ -339,6 +339,94 @@ def checkpoint_payload(proposals: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return payload
 
 
+def merge_external_refs(text: str, permalink: str, summary: str) -> tuple[str, bool]:
+    """Idempotently add a Slack external_refs entry to frontmatter."""
+    if not text.startswith("---\n"):
+        return text, False
+    end = text.find("\n---\n", 4)
+    if end < 0:
+        return text, False
+    fm = text[4:end]
+    after = text[end + 5:]
+
+    if f"url: {permalink}" in fm:
+        return text, False
+
+    entry = (
+        f"  - platform: slack\n"
+        f"    url: {permalink}\n"
+        f"    note: {summary}\n"
+    )
+
+    m = re.search(r'^external_refs:\s*\n((?:[ \t].+\n)*)', fm, re.MULTILINE)
+    if m:
+        new_fm = fm[:m.end()] + entry + fm[m.end():]
+    else:
+        new_fm = fm.rstrip() + "\nexternal_refs:\n" + entry
+    return "---\n" + new_fm + "---\n" + after, True
+
+
+def merge_notes_section(text: str, permalink: str, summary: str) -> tuple[str, bool]:
+    """Idempotently append a redacted bullet to ## Notes from Slack."""
+    header = "## Notes from Slack"
+    if permalink in text and header in text:
+        section_start = text.index(header)
+        section_end = _next_section_end(text, section_start + len(header))
+        if permalink in text[section_start:section_end]:
+            return text, False
+
+    bullet = f"- {summary} — [source]({permalink})"
+    if header not in text:
+        new_text = text.rstrip() + "\n\n" + header + "\n\n" + bullet + "\n"
+    else:
+        start = text.index(header)
+        end = _next_section_end(text, start + len(header))
+        block = text[start:end].rstrip()
+        new_text = text[:start] + block + "\n" + bullet + "\n" + text[end:]
+    return new_text, True
+
+
+def _next_section_end(text: str, from_idx: int) -> int:
+    m = re.search(r'\n## ', text[from_idx:])
+    return from_idx + m.start() + 1 if m else len(text)
+
+
+def apply_writes(proposals: list[dict[str, Any]], ldap: str) -> list[dict[str, Any]]:
+    """Mutate task files for edit_candidate proposals. Returns per-task write records."""
+    records: list[dict[str, Any]] = []
+    for proposal in proposals:
+        if proposal["action"] != "edit_candidate":
+            continue
+        path_str = proposal["match"]["path"]
+        slug = proposal["match"]["slug"]
+        permalink = proposal["source"]["permalink"]
+        summary = proposal["proposed"]["summary"]
+        path = Path(path_str)
+        text = path.read_text(encoding="utf-8")
+        original = text
+
+        text, refs_changed = merge_external_refs(text, permalink, summary)
+        text, notes_changed = merge_notes_section(text, permalink, summary)
+
+        changed = refs_changed or notes_changed
+        if changed:
+            path.write_text(text, encoding="utf-8")
+        records.append(
+            {
+                "slug": slug,
+                "path": path_str,
+                "permalink": permalink,
+                "written": changed,
+                "changes": [
+                    *(["external_refs"] if refs_changed else []),
+                    *(["notes_from_slack"] if notes_changed else []),
+                ],
+                "reason": "" if changed else "permalink already present (idempotent)",
+            }
+        )
+    return records
+
+
 def markdown_report(result: dict[str, Any]) -> str:
     lines = [
         f"scrape-slack: {result['status']}",
@@ -360,6 +448,12 @@ def markdown_report(result: dict[str, Any]) -> str:
             f"- {proposal['action']}: {slug} score={proposal['match']['score']} "
             f"reasons={','.join(proposal['match']['reasons']) or '-'}"
         )
+    writes = result.get("writes", {})
+    if writes.get("performed"):
+        lines.extend(["", "## Writes"])
+        for rec in writes.get("records", []):
+            if rec["written"]:
+                lines.append(f"- {rec['slug']}: {', '.join(rec['changes'])} ← {rec['permalink']}")
     return "\n".join(lines) + "\n"
 
 
@@ -369,11 +463,11 @@ def main() -> int:
     ldap = resolve_ldap(repo, args.ldap)
     provider_type, payload = read_input(args.input)
 
-    if args.apply:
+    if args.apply and provider_type == "disabled":
         result = {
             "schemaVersion": "worklog.scrape-slack.v1",
             "status": "refused",
-            "error": "--apply is reserved until the Slack enrichment writer is implemented; rerun without --apply for preview",
+            "error": "--apply requires --input with captured Slack results",
             "provider": {"type": provider_type},
             "identity": {"ldap": ldap, "repo": str(repo) if repo else None},
             "writes": {"performed": False},
@@ -407,15 +501,24 @@ def main() -> int:
             args.include_dms,
             args.include_mpims,
         )
+        writes: dict[str, Any] = {"performed": False, "records": []}
+        status = "preview"
+        if args.apply:
+            records = apply_writes(proposals, ldap)
+            writes = {
+                "performed": any(r["written"] for r in records),
+                "records": records,
+            }
+            status = "applied"
         result = {
             "schemaVersion": "worklog.scrape-slack.v1",
-            "status": "preview",
+            "status": status,
             "provider": {"type": provider_type},
             "identity": {"ldap": ldap, "repo": str(repo)},
             "coverage": coverage,
             "proposals": proposals,
             "checkpoint_batch": checkpoint_payload(proposals),
-            "writes": {"performed": False},
+            "writes": writes,
         }
 
     if args.format == "json":
