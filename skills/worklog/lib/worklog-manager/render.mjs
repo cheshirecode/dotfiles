@@ -13,6 +13,47 @@ const STATUS_COLORS = {
 
 const DEFAULT_RELATIONS = new Set(["parent", "project", "reopens", "supersedes", "superseded_by", "depends_on"]);
 
+const NEXT_ACTION_PRIORITY = {
+  "in-progress": 1,
+  "shipping": 2,
+  "in-review": 3,
+  "draft": 4,
+  "blocked": 5,
+};
+
+function actionDate(n) {
+  return Date.parse((n.frontmatter && n.frontmatter.last_updated) || n.timestamp || "") || 0;
+}
+
+function hasNextAction(n) {
+  const next = String((n.frontmatter && n.frontmatter.next_action) || "").trim();
+  return Boolean(next) && !/^none\b/i.test(next);
+}
+
+export function orderNextActions(nodes) {
+  return nodes
+    .filter((n) => n.type === "task" && n.state === "active" && hasNextAction(n))
+    .sort((a, b) => {
+      const pa = NEXT_ACTION_PRIORITY[a.status] || 6;
+      const pb = NEXT_ACTION_PRIORITY[b.status] || 6;
+      if (pa !== pb) return pa - pb;
+      const byDate = actionDate(b) - actionDate(a);
+      return byDate || a.slug.localeCompare(b.slug);
+    });
+}
+
+function nextActionView(n) {
+  return {
+    id: n.id,
+    slug: n.slug,
+    status: n.status,
+    state: n.state,
+    project: n.project,
+    file: n.file,
+    next: (n.frontmatter && n.frontmatter.next_action) || "-",
+  };
+}
+
 function quoteDot(value) {
   return `"${String(value).replaceAll("\\", "\\\\").replaceAll("\"", "\\\"")}"`;
 }
@@ -206,10 +247,12 @@ pre{margin:0;padding:14px;overflow:auto;font-size:11px;line-height:1.45;backgrou
 }
 
 function renderClientScript({ graph, dot, instanceName, nodeCount, edgeCount, diagnosticCount, worklogRepo }) {
+  const nextActions = orderNextActions(graph.nodes).map(nextActionView);
   return `
 const graph = ${scriptJson(graph)};
 const dot = ${scriptJson(dot)};
 const statusColors = ${scriptJson(STATUS_COLORS)};
+const nextActions = ${scriptJson(nextActions)};
 const stage = document.getElementById("stage");
 const canvas = document.getElementById("canvas");
 const edgeSvg = document.getElementById("edges");
@@ -306,25 +349,14 @@ function setupCounts() {
   }
 }
 
-function actionDate(n) {
-  return Date.parse(n.frontmatter && n.frontmatter.last_updated || n.timestamp || "") || 0;
-}
-
 function renderNextActions() {
-  const tasks = graph.nodes
-    .filter(function(n) { return n.type === "task" && n.state === "active"; })
-    .sort(function(a, b) {
-      const byDate = actionDate(b) - actionDate(a);
-      return byDate || a.slug.localeCompare(b.slug);
-    });
-  document.getElementById("nextActionCount").textContent = tasks.length + " active";
-  document.getElementById("nextActions").innerHTML = tasks.map(function(n) {
-    const next = n.frontmatter && n.frontmatter.next_action || "-";
+  document.getElementById("nextActionCount").textContent = nextActions.length + " active";
+  document.getElementById("nextActions").innerHTML = nextActions.map(function(n) {
     const selected = n.id === selectedId ? " selected" : "";
     return '<button type="button" class="actionRow' + selected + '" data-next-action-row data-node-id="' + esc(n.id) + '">'
       + '<div class="actionSlug">' + esc(n.slug) + '</div>'
       + '<div class="actionMeta">' + esc([n.status || n.state, n.project || "none", n.file || "-"].join(" / ")) + '</div>'
-      + '<div class="actionNext">' + esc(next) + '</div>'
+      + '<div class="actionNext">' + esc(n.next) + '</div>'
       + '</button>';
   }).join("");
 }
