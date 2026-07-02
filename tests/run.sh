@@ -359,6 +359,12 @@ test_worklog_skill() {
     fail "worklog-manager poll fixture"
   fi
 
+  if node "$skill/tests/worklog_manager/test_units.mjs" >/dev/null 2>&1; then
+    ok "worklog-manager unit fixtures"
+  else
+    fail "worklog-manager unit fixtures"
+  fi
+
   if bash "$skill/tests/context/test_context.sh" >/dev/null 2>&1; then
     ok "context current Next + unique slug fixture"
   else
