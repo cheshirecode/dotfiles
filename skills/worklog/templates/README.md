@@ -18,12 +18,12 @@ Cross-machine, cross-agent work journal for Ideogram engineers. Git is the sync 
 - **Protocol:** see [`AGENTS.md`](./AGENTS.md). Auto-loaded by Codex; read by Cursor; loaded by Claude Code via the kickoff prompt below.
 - **Layout:** `people/<ldap>/active/<slug>.md` per in-flight task; `people/<ldap>/archive/<slug>.md` once terminal.
 - **Branching:** none. Commit to `main` from every machine. Linear history during normal sync — `git pull --no-rebase`, never rebase. Maintenance ops (log compaction, cache purge) *do* rewrite history; they tag `pre-<op>-<ts>` and `"$WORKLOG_BIN/post-rewrite-prompt.sh"` emits the recovery prompt for other clones. See `AGENTS.md` § Editing rules.
-- **Helpers:** shipped by the dotfiles skill, not this data repo's `bin/`: `"$WORKLOG_BIN/checkpoint.sh"` (per-task update), `"$WORKLOG_BIN/archive.sh"` (ship/supersede), `"$WORKLOG_BIN/autosave.sh"` (slugless snapshot), `"$WORKLOG_BIN/status.sh"` (standup summary), `"$WORKLOG_BIN/context.sh"` (per-task context pack), `"$WORKLOG_BIN/init-scan.sh"` (read-only exact-scan seeds for `/worklog init --full`), `"$WORKLOG_BIN/lint.sh"` (per-file format + `--cross-task` for stale-review / blocked-FSM / undeclared-body-ref drift), `"$WORKLOG_BIN/boundary-lint.sh"` (clone-boundary drift when `.worklog-boundary.json` exists).
+- **Helpers:** shipped by the dotfiles skill, not this data repo's `bin/`: `"$WORKLOG_BIN/checkpoint.sh"` (per-task update), `"$WORKLOG_BIN/archive.sh"` (ship/supersede), `"$WORKLOG_BIN/autosave.sh"` (slugless snapshot), `"$WORKLOG_BIN/status.sh"` (standup summary), `"$WORKLOG_BIN/context.sh"` (per-task context pack), `"$WORKLOG_BIN/init-scan.sh"` (read-only exact-scan seeds for `/worklog init --full`), `"$WORKLOG_BIN/scrape-slack.sh"` (dry-run Slack context enrichment preview), `"$WORKLOG_BIN/lint.sh"` (per-file format + `--cross-task` for stale-review / blocked-FSM / undeclared-body-ref drift), `"$WORKLOG_BIN/boundary-lint.sh"` (clone-boundary drift when `.worklog-boundary.json` exists).
 - **Vault shape:** `_worklog/` opens as an Obsidian vault — folder of `.md` files with YAML frontmatter; no `.obsidian/` is checked in, so a fresh open creates a default workspace. The primary value is **Dataview queries over frontmatter** (consistent `slug` / `status` / `kind` / `last_updated` / `project` etc.). Caveat: relational edges (`parent_slug`, `related`, `supersedes`, `superseded_by`, `reopens`, project `tasks[].depends_on`) are stored as **bare slugs** because grep-as-index is load-bearing (see `AGENTS.md` "Slug as join key"). Obsidian's core graph won't traverse bare-slug frontmatter values — use `worklog-manager graph` for the protocol graph, or install Dataview (link-coercion via `dv.pages()`) / a plugin like *Frontmatter Links* for Obsidian-native views. Backlinks are sparse today since body text rarely uses `[[wikilinks]]` (the `auto-slug-link` idea in `archive/worklog-review-brainstorm.md` is the future path). Slug-grep + `git log --grep="Worklog-Slug: <slug>"` remains the authoritative join.
 
 ## Claude Code users
 
-One skill, eleven modes — see `~/.claude/skills/worklog/SKILL.md`. Bare `/worklog` (or `/worklog help`) prints the subcommand menu.
+One skill, twelve modes — see `~/.claude/skills/worklog/SKILL.md`. Bare `/worklog` (or `/worklog help`) prints the subcommand menu.
 
 First parse on a new machine/session:
 
@@ -43,6 +43,7 @@ First parse on a new machine/session:
 - `/worklog import <path>` — merge an export artifact into this machine with per-file judgment and advisory-only settings handling.
 - `/worklog lint [--cross-task]` — validate task files (per-file format; `--cross-task` adds FSM/stale-review/undeclared-ref drift checks).
 - `/worklog project <subcommand>` — multi-task project workflow (`new|next|claim|release|reap|verify|list`).
+- `/worklog scrape-slack [--input=slack-results.json]` — preview Slack-derived task context enrichments; workspace-agnostic by resolved clone identity and dry-run by default.
 - `/worklog review` — periodic protocol review across structure, skills, commands, performance, and cross-session friction.
 
 ## Codex users
@@ -71,6 +72,8 @@ defines a **prompt-level first-class command** instead:
 - `worklog lint [--cross-task]` — validate task files (per-file format;
   `--cross-task` adds drift checks)
 - `worklog project <subcommand>` — multi-task project workflow
+- `worklog scrape-slack [--input=slack-results.json]` — dry-run Slack context
+  enrichment preview
 - `worklog review` — periodic protocol review; Codex uses `update_plan`
   instead of Claude `TaskCreate`
 
@@ -101,6 +104,7 @@ Command mapping:
 - `worklog plan <task>` → render a fenced CoT/ToT/Reflexion plan block; do not execute it
 - `worklog spawn <task>` → render a fenced handoff prompt; do not execute it
 - `worklog project <subcommand>` → route to `"$WORKLOG_BIN/project.sh" <subcommand> ...`
+- `worklog scrape-slack ...` → route to `"$WORKLOG_BIN/scrape-slack.sh" ...`; if using a Slack connector, capture connector results to JSON first and pass `--input=<file>`
 - `worklog review` → create/update a review task and checkpoint iterations
 
 For a fresh Codex session, start with the kickoff prompt below.
@@ -134,5 +138,5 @@ For read-only init --full:
 - show grouped candidate task files and wait for confirmation before writing
 
 Helpers live in `$WORKLOG_BIN` — each script self-documents via `--help`:
-  checkpoint.sh  archive.sh  autosave.sh  status.sh  context.sh  init-scan.sh  boundary-lint.sh
+  checkpoint.sh  archive.sh  autosave.sh  status.sh  context.sh  init-scan.sh  scrape-slack.sh  boundary-lint.sh
 ```

@@ -1,6 +1,6 @@
 ---
 name: worklog
-description: One skill for the shared `_worklog` repo. Eleven modes — `init`, `sync`, `status`, `context`, `plan`, `spawn`, `export`, `import`, `lint`, `project`, `review`. Invoke as `/worklog <mode> [args]`. Bare `/worklog` or `/worklog help` prints the subcommand menu and stops. Unknown arg → show menu.
+description: One skill for the shared `_worklog` repo. Twelve modes — `init`, `sync`, `status`, `context`, `plan`, `spawn`, `export`, `import`, `lint`, `project`, `scrape-slack`, `review`. Invoke as `/worklog <mode> [args]`. Bare `/worklog` or `/worklog help` prints the subcommand menu and stops. Unknown arg → show menu.
 ---
 
 # worklog
@@ -24,6 +24,7 @@ Parse the first argument. If empty, `help`, `-h`, `--help`, or unknown, print th
   import <path>            merge an export artifact into this machine
   lint [--cross-task]      validate task files; --cross-task adds drift checks
   project <subcommand>     multi-task projects with per-task mutex (new|next|claim|release|reap|verify|list)
+  scrape-slack [flags]     preview Slack-derived task context enrichments
   review                   periodic protocol review (structure / skills / commands / perf)
   help                     this menu
 
@@ -46,6 +47,7 @@ Once a known mode is parsed: run preamble (per table), read `modes/<mode>.md`, f
 | import  | none     | no               | no |
 | lint    | none     | no               | no |
 | project | `--minimal` (read-only subs); `--full` (mutating) | no | no |
+| scrape-slack | none | no              | no |
 | review  | `--full` | yes              | full |
 
 ## Paths — single source of truth
@@ -121,6 +123,7 @@ For per-task detail, use `"$WORKLOG_BIN/context.sh" <slug>` (its output ends in 
 - Issue dispatch: `"$WORKLOG_BIN/worklog-manager" dispatch --config <instance.json> --issue <issue.json> --output /tmp/dispatch.json` writes local artifacts; `--execute` runs the planned sandbox argv only when instance config and `Worklog-Execute: sandbox` both approve it.
 - Issue poll dry-run: `"$WORKLOG_BIN/worklog-manager" poll --config <instance.json> --issue-url https://github.com/<owner>/<repo>/issues/<n> --output /tmp/poll.json` requires `poll.enabled=true`, fetches through `gh api`, updates local cursor/run artifacts, records ignored learning events under `.cache/<instance>/learning/`, and posts no GitHub comments unless `--post-status` is passed.
 - Watcher config audit: `"$WORKLOG_BIN/worklog-manager" validate-watchers --config <projects.json> --config <oss.json>` checks separate watcher instances for shared state/cache dirs and same-issue status-marker collisions before polling.
+- Slack context preview: `"$WORKLOG_BIN/scrape-slack.sh" [--input=slack-results.json] [--format=json]` matches captured Slack threads to tasks. Dry-run by default; workspace-agnostic by resolved clone identity; no-op when Slack is unavailable.
 - Multi-task project: `"$WORKLOG_BIN/project.sh" new|next|claim|release|reap|verify|list <slug>`.
 - Lint: `"$WORKLOG_BIN/lint.sh" [--cross-task]`. Boundary guard for split clones: `"$WORKLOG_BIN/boundary-lint.sh"`. Composite audit: `"$WORKLOG_BIN/audit.sh" [--section=boundary]`.
 - SQL: `"$WORKLOG_BIN/sql.sh" new|run|list|show <slug> <name>`.

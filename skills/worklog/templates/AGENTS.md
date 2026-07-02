@@ -354,6 +354,7 @@ bin/autosave.sh                                    # safety snapshot (PreCompact
 bin/status.sh     [--since=... --project=... --slug=... --format=json]
 bin/context.sh    <slug> [--for=resume|review --format=json]
 bin/init-scan.sh  [--ldap=<ldap> --format=json]    # exact Linear/Notion/PR seeds for init --full
+bin/scrape-slack.sh [--input=slack-results.json --format=json]  # dry-run Slack context enrichment preview
 bin/install-hooks.sh [--write --uninstall]         # wire autosave.sh as Claude Code PreCompact hook
 bin/lint.sh       [--cross-task]                   # per-file format; --cross-task adds FSM/stale-review/undeclared-ref drift checks
 bin/boundary-lint.sh [--format=json]               # clone-boundary guard from .worklog-boundary.json
@@ -430,6 +431,7 @@ Supported forms:
 - `worklog import <path>` — merge an export artifact into this machine's setup
 - `worklog lint [--cross-task]` — validate task files; `--cross-task` adds drift checks
 - `worklog project new|next|claim|release|reap|verify|list` — multi-task project workflow with advisory claims
+- `worklog scrape-slack [--input=slack-results.json]` — preview Slack-derived task context enrichments; workspace-agnostic by resolved clone identity and dry-run by default
 - `worklog review` — periodic protocol review; Codex uses `update_plan` for live tracking
 
 Execution rules in Codex:
@@ -453,6 +455,7 @@ Execution rules in Codex:
      format Claude's skill uses; no Claude-specific deps)
    - `worklog lint` — `"$WORKLOG_BIN/lint.sh"`, with optional `--cross-task`
    - `worklog project` — `"$WORKLOG_BIN/project.sh"` multi-task project orchestration
+   - `worklog scrape-slack` — `"$WORKLOG_BIN/scrape-slack.sh"` preview path; if using a Slack connector, capture connector results to JSON first and pass `--input=<file>`
    - `worklog review` — protocol review loop, with Codex `update_plan`
      replacing Claude `TaskCreate`
 4. If flags are omitted, make the same reasonable-default choices a human
