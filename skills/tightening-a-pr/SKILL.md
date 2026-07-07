@@ -17,7 +17,7 @@ When an agent finishes a PR, the code is the easy part to see and the hard part 
 - The worklog task for it accumulated real exploration — iterations, dead ends, gotchas — and the decision is now made.
 - User: "tighten up this PR", "wrap up / close out this PR", "distill and codify the learnings", "deslop before I hand this off".
 
-**Skip / downgrade if:** trivial one-commit PR with no lessons worth codifying (do the deslop step alone). Multiple open PRs to sweep periodically → that's `ship-hygiene`, not this. Implementation not actually finished → finish it first.
+**Skip / downgrade if:** trivial one-commit PR with no lessons worth codifying (do the deslop step alone). Multiple open PRs to sweep periodically → that's `ship-hygiene`, not this. Implementation not actually finished → finish it first. **No worklog task tracks this PR** → either create one first, or distill from the diff + PR body alone and skip step 4 (`checkpoint.sh` needs a slug).
 
 ## Relationship to ship-hygiene (read this — the overlap is real)
 
@@ -25,7 +25,7 @@ When an agent finishes a PR, the code is the easy part to see and the hard part 
 
 ## The pipeline (ordered — do not reorder)
 
-The order is load-bearing: you distill learnings **before** you compress the worklog (step 3 may drop the very rows the learnings live in), and you codify **before** you checkpoint (so the codified changes and the compressed worklog land as their own commits).
+The order is load-bearing: you distill learnings (step 1) **before** you compress the worklog (step 4) — the compression drops the very iteration rows the learnings live in, so a checkpoint before distilling would erase them — and you codify (step 2) **before** you checkpoint, so the codified changes and the compressed worklog land as their own separate commits.
 
 ### 1. Distill learnings — via `council`
 
@@ -43,20 +43,22 @@ For **every** kept learning, pick exactly one destination. "Note it in the PR de
 
 | Learning shape | Codify as |
 |---|---|
-| Recurring class (council `N-THRESHOLD-MET` passed) — a bug pattern, a missing lint | **Durable guard**: a `bin/*.sh` check, or a `manifest`/hook. Behavioral. |
+| Recurring class (council `N-THRESHOLD-MET` passed) — a bug pattern, a missing lint | **Durable guard**: extend an existing `bin/*.sh`/hook if one fits; add a new one only if none does. Behavioral. |
 | A posture/discipline lesson ("split these commits", "verify before X") | **CLAUDE.md rule** or a skill edit. Guidance. |
 | A concrete one-off fix/improvement, not yet recurring | **Worklog follow-up task** — a real `next_action` item, not a blocker for this PR. |
 | Speculative / n=1 / no current consumer (council would REJECT) | **Drop it.** Don't manufacture infra for a hypothetical. |
+
+Council gates whether a *learning* is kept — not its *destination*. Before writing a **new** script for a kept learning, confirm the destination decision itself clears `COST-PROPORTIONATE` / `NON-INFRA-PADDING`; an n≥3 bug class can still be a follow-up audit rather than a new guard if no cheap static check exists.
 
 **Commit-hygiene split (per this repo's CLAUDE.md):** a guidance change (CLAUDE.md/README posture) and a behavioral guard (`bin/*.sh`, manifest, hooks) are separate concerns → separate commits, even in one session. Don't bundle a CLAUDE.md rule with a lint script.
 
 ### 3. Deslop the PR title/body + tracking tasks — via `ship-hygiene`
 
-Apply `ship-hygiene`'s PR-title/body audit and **internal-reference purge** to this one PR: strip worklog slugs/paths, `[POST-MERGE-CLEANUP]`, `next_action`, "Iteration N", "per the audit/critique", "scope chosen", and skill command names (unless the PR changes skill files). Rewrite product-first (what changed for users + why) unless it's pure engineering/infra. Run ship-hygiene's leak grep against **both** the title/body and the diff's added comments. Do the same purge on the tracking worklog task's public-facing fields. Use ship-hygiene's rules verbatim — this skill does not restate them.
+Apply `ship-hygiene`'s PR-title/body audit and **internal-reference purge** to this one PR, then the same purge on the tracking worklog task's public-facing fields. `ship-hygiene` **owns** the authoritative leak-token list and the two leak greps (title/body + the diff's added comments) — run them from there rather than keeping a second copy in sync here. Rewrite product-first (what changed for users + why) unless it's pure engineering/infra; skill command names are a leak *unless* the PR changes skill files, where they're product surface.
 
-### 4. Checkpoint
+### 4. Compress + checkpoint the worklog
 
-Checkpoint the worklog body change on its own: `WORKLOG_CHECKPOINT_FORCE=1 "$WORKLOG_BIN/checkpoint.sh" <slug>`. Keep it separate from the step-2 codify commits (guard commit, guidance commit) — three concerns, up to three commits, never one bundle.
+Compress the decided iteration drama out of the task body (drop ToT/Reflexion scaffolding, verified "Assumptions", multi-row iteration tables — git log is the audit trail; keep the decision rationale, lessons, re-runnable commands, `next_action`), then checkpoint it **on its own**: `"$WORKLOG_BIN/checkpoint.sh" <slug>`. Use the plain command — its staged-scope guard *refuses* any staged path outside the task file, which is exactly what enforces the single-concern commit; do **not** pass `WORKLOG_CHECKPOINT_FORCE=1` (that bypasses the guard) unless you have a stated reason. Keep this separate from the step-2 codify commits — up to three concerns, up to three commits, never one bundle.
 
 ## Red flags — STOP, you're skipping a step
 
