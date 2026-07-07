@@ -63,6 +63,14 @@ skills:
       path: skills/karpathy-guidelines
     install_to: ~/.claude/skills/karpathy-guidelines
 
+  - name: tightening-a-pr
+    description: Single-PR post-completion close-out — distill learnings (council) → codify → deslop (ship-hygiene) → checkpoint.
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/tightening-a-pr
+    install_to: ~/.claude/skills/tightening-a-pr
+
 # Notes:
 # - `source.ref: HEAD` is a placeholder for skills that live inside THIS repo
 #   (vendored under skills/<name>/). When a skill graduates to its own repo,
