@@ -92,6 +92,17 @@ Before tallying, validate every ballot:
 - Sub-agent prompts longer than about 800 words signal scope creep. Split the angle.
 - Quick reference: support threshold is `ceil(M_returned / 2 + 1)` for odd returned voter counts only: M=3 threshold 3, M=5 threshold 4, M=7 threshold 5. M=2 or M=4 is `UNVERIFIED` until a replacement voter restores an odd count.
 
+## Model tiering per stage
+
+Map each stage to the cheapest model tier that clears its correctness bar — cheap for lookup/mechanical work, mid for judgment, frontier for whole-thread synthesis. The council-specific mapping is:
+
+- **Stage 1 research** — mid tier for judgment-bearing angles (design critique, trade-off analysis); cheap tier for purely mechanical inventory/grep angles.
+- **Stage 3 discussion** / **Stage 5 voting** — mid tier: adversarial application of the criteria is judgment work, not lookup.
+- **Stage 4 collation** — cheap tier: dedupe + tag only, no invention authority (Iron Law), so it needs no reasoning headroom.
+- **Stage 6 tally + conclusion** — the frontier orchestrator itself: cross-context judgment, QUALIFY/veto resolution, and the final report stay with the model holding the whole thread.
+
+Escalate a stage one tier only after an observed failure (timed-out or malformed return, a voter that can't apply a criterion) — never preemptively. Don't spend frontier/premium budget on a lane a mid model clears.
+
 ## Prompt templates
 
 ### Stage 1 research
