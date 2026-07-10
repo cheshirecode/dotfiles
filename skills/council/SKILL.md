@@ -94,11 +94,10 @@ Before tallying, validate every ballot:
 
 ## Model tiering per stage
 
-Map each stage to the cheapest model tier that clears its correctness bar — cheap for lookup/mechanical work, mid for judgment, frontier for whole-thread synthesis. Token price is part of the tier decision: when a model is materially cheaper on the relevant input/output side, spend more tokens there on independent coverage, negative evidence, and compact proofs instead of spending premium context on the same uncertainty.
-
-Pricing fetch/cache rule: use a timestamped provider-pricing cache for routine routing when it is <3 days old; use it only for rough routing at 3-5 days; refresh before exact dollar quotes, material billing decisions, or any current/live/latest request. Treat >5 day prices as stale. OpenRouter has a model API; OpenAI and Anthropic prices should come from official pricing docs/API surfaces.
-
-Dated 2026-07 calibration: premium/frontier examples sit around $5 input and $25-$30 output per million tokens, mid-tier examples around $2-$3 input and $10-$15 output, and cheap tiers can be near $0.10-$1 input and $0.625-$5 output. OpenRouter-hosted Chinese examples include DeepSeek V4 Flash around $0.09/$0.18, Qwen3.7 Plus around $0.32/$1.28, GLM 5.2 around $0.54/$1.76, Kimi K2.7 Code around $0.72/$3.49, and MiniMax M3 around $0.30/$1.20. Treat those numbers as a spot check, not a contract.
+Use `$which-model` for provider/model selection. Council owns the stage requirements; `which-model`
+owns model comparison, pricing freshness, first-class Chinese-model treatment, data-policy gates,
+and sequential-thinking decomposition. If `which-model` is unavailable, use the same principle:
+pick the cheapest model lane that clears the stage's capability and data-policy bar.
 
 The council-specific mapping is:
 
@@ -112,7 +111,6 @@ Cheap-token expansion rule:
 - If Stage 1 inventory/search uses a cheap tier, prefer 4-5 narrow angles over 3 broad ones when the extra angle can test a real blind spot.
 - If Stage 5 voting uses a cheap-enough mid tier, prefer 5 voters over 3 for high-impact or close-call decisions.
 - Keep cheap expansion evidence-shaped: file/line refs, commands, source citations, explicit no-finding results. More cheap tokens are for coverage, not longer prose.
-- Treat Chinese models as first-class council candidates, not fallback lanes. Compare DeepSeek, Qwen, GLM/Z.ai, Kimi/Moonshot, MiniMax/MiMo, OpenAI, Anthropic, and local/open-weight routes by capability, cost, context window, modality, latency, tool fit, and data policy; then map the winner to the stage. Do not route secrets, customer data, unreleased strategy, or private proprietary code through an unapproved provider route just because it is cheap.
 
 Escalate a stage one tier only after an observed failure (timed-out or malformed return, a voter that can't apply a criterion) — never preemptively. Don't spend frontier/premium budget on a lane a mid model clears, and don't starve cheap tiers when token price makes extra verification affordable.
 
