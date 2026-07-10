@@ -248,6 +248,53 @@ if missing:
 PY
   then ok "ship-hygiene checkpoint guard contract"; else fail "ship-hygiene checkpoint guard contract"; fi
 
+  local catalog_home catalog_fixture catalog_json
+  catalog_home=$(mktemp -d)
+  catalog_fixture="$catalog_home/models.json"
+  cat >"$catalog_fixture" <<'EOF'
+{
+  "openai": {
+    "models": {
+      "fast": {
+        "id": "openai/fast-mini",
+        "name": "Fast Mini",
+        "pricing": {"input": 0.1, "output": 0.4},
+        "limits": {"context": 128000, "output": 8192},
+        "capabilities": {"tool": true, "reasoning": false}
+      },
+      "reason": {
+        "id": "openai/reason-pro",
+        "name": "Reason Pro",
+        "pricing": {"input": 5, "output": 25},
+        "limits": {"context": 1000000, "output": 128000},
+        "capabilities": {"tool": true, "reasoning": true, "image": true}
+      }
+    }
+  }
+}
+EOF
+  catalog_json=$(
+    WHICH_MODEL_CACHE_HOME="$catalog_home/cache" \
+    WHICH_MODEL_CATALOG_SOURCE="$catalog_fixture" \
+    skills/which-model/bin/model-catalog --env opencode --refresh-if-stale --task visual --top 1
+  )
+  if python3 - "$catalog_home/cache/catalog.opencode.json" "$catalog_json" <<'PY'
+import json
+import pathlib
+import sys
+
+cache_path = pathlib.Path(sys.argv[1])
+payload = json.loads(sys.argv[2])
+catalog = payload["catalog"]
+assert cache_path.is_file()
+assert catalog["environment"] == "opencode"
+assert catalog["schema_version"] == 1
+assert len(catalog["models"]) == 2
+assert payload["recommendations"][0]["id"] == "openai/reason-pro"
+PY
+  then ok "which-model catalog warms env cache"; else fail "which-model catalog warms env cache"; fi
+  rm -rf "$catalog_home"
+
   local quiet_home quiet_out
   quiet_home=$(mktemp -d)
   quiet_out=$(HOME="$quiet_home" USER=test-agent DOTFILES_QUIET=1 bash -lc '. ./.shell_common; printf command-output')

@@ -51,22 +51,42 @@ pricing. Otherwise compare qualitatively and label any dated calibration as appr
 5. Reserve frontier/premium tokens for cross-context synthesis, high-risk judgment, visual/design
    calls when needed, and resolving contradictory evidence.
 
-## Pricing freshness
+## Model catalog freshness
 
-Price in USD per million input/output tokens. Keep a small snapshot cache:
+Cache an environment-specific model catalog, not only prices. "Available" depends on where this
+skill is running: Codex/OpenAI, Claude, Cursor, OpenCode, or an unknown harness can expose different
+models, tools, routing policies, and billing.
 
-- `$XDG_CACHE_HOME/model-pricing-snapshot.json`
-- fallback `~/.cache/model-pricing-snapshot.json`
-- temporary fallback `/tmp/model-pricing-snapshot.json`
+Catalog paths:
 
-Use cached prices for routine routing when `<3 days` old. At `3-5 days`, use cache only for rough
-routing; refresh before exact dollar quotes or material billing decisions. Treat `>5 days` as
-stale. Always refresh when the user asks for current/latest/live pricing.
+- `$XDG_CACHE_HOME/which-model/catalog.<env>.json`
+- fallback `~/.cache/which-model/catalog.<env>.json`
+- temporary/test override: `$WHICH_MODEL_CACHE_HOME/catalog.<env>.json`
 
-Use official provider sources: OpenRouter model API for OpenRouter, official OpenAI pricing docs
-or API surfaces for OpenAI, and official Anthropic pricing docs or API surfaces for Claude. For
-provider-direct DeepSeek, Qwen, GLM/Z.ai, Kimi/Moonshot, MiniMax/MiMo, or local routes, use that
-provider's official pricing/API surface when available; otherwise label prices as unverified.
+Use `bin/model-catalog` before recommending exact models:
+
+```bash
+skills/which-model/bin/model-catalog --env auto --refresh-if-stale
+skills/which-model/bin/model-catalog --env opencode --refresh-if-stale --task routine_coding --top 3
+```
+
+Provider-specific catalog implementation handoff lives in `docs/provider-handover.md`.
+
+Refresh rules:
+
+- Missing cache: build a catalog before answering.
+- `<3 days` old: use silently for routine routing.
+- `3-5 days` old: use for rough routing; refresh before exact dollar quotes or material billing
+  decisions.
+- `>5 days` old: refresh first; if refresh fails, use the stale catalog only with a warning.
+- Always refresh when the user asks for current/latest/live model availability or pricing.
+
+Catalog records should include model id, provider, availability in the current harness, input/output
+price per million tokens when known, context window, max output, capabilities, caveats, confidence,
+and normalized `task_fit` tags. Prefer official or harness-native sources: OpenCode's configured
+model surface and Models.dev for OpenCode, OpenAI model docs/API surfaces for Codex/OpenAI,
+Anthropic model/pricing docs or API surfaces for Claude, and Cursor-local or curated data for
+Cursor. Label prices or availability as unverified when the source cannot prove them.
 
 ## Routing heuristics
 
