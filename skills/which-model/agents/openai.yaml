@@ -2,3 +2,8 @@ interface:
   display_name: "Which Model"
   short_description: "Choose best-value models for a task"
   default_prompt: "Use $which-model to print model-selection guidelines or choose best-value model lanes for this task."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "sequential-thinking"
+      description: "Structured decomposition for non-trivial model-selection requests"
