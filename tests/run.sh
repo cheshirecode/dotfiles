@@ -526,6 +526,130 @@ for model in catalog["models"]:
     assert model["confidence"] == "seeded"
 PY
   then ok "which-model claude offline falls back to seeded catalog"; else fail "which-model claude offline falls back to seeded catalog"; fi
+
+  local cursor_fixture
+  cursor_fixture="$catalog_home/cursor.json"
+  cat >"$cursor_fixture" <<'EOF'
+{
+  "availableDefaultModels2": [
+    {
+      "name": "default",
+      "defaultOn": true,
+      "supportsAgent": true,
+      "variants": [{"displayName": "Auto"}]
+    },
+    {
+      "name": "composer-2.5",
+      "defaultOn": true,
+      "supportsAgent": true,
+      "parameterDefinitions": [{"id": "fast"}],
+      "variants": [
+        {
+          "displayName": "Composer 2.5 <span>Fast</span>",
+          "tooltipData": {
+            "markdownContent": "**Composer 2.5**<br />200k context window<br />Agentic coding model."
+          }
+        }
+      ]
+    },
+    {
+      "name": "gpt-5.4-mini",
+      "defaultOn": false,
+      "supportsAgent": true,
+      "parameterDefinitions": [{"id": "effort"}],
+      "variants": [
+        {
+          "displayName": "GPT-5.4 mini",
+          "tooltipData": {
+            "markdownContent": "**GPT-5.4 mini**<br />400k context window<br />Supports vision input."
+          }
+        }
+      ]
+    },
+    {
+      "name": "claude-sonnet-4-6",
+      "defaultOn": true,
+      "supportsAgent": true,
+      "variants": [{"displayName": "Claude Sonnet 4.6"}]
+    }
+  ],
+  "aiSettings": {
+    "modelOverrideEnabled": ["gpt-5.4-mini"],
+    "modelOverrideDisabled": ["claude-sonnet-4-6"],
+    "userAddedModels": []
+  }
+}
+EOF
+  catalog_json=$(
+    WHICH_MODEL_CACHE_HOME="$catalog_home/cache-cursor" \
+    WHICH_MODEL_CATALOG_SOURCE="$cursor_fixture" \
+    skills/which-model/bin/model-catalog --env cursor --refresh-if-stale --task routine_coding --top 3
+  )
+  if python3 - "$catalog_home/cache-cursor/catalog.cursor.json" "$catalog_json" <<'PY'
+import json
+import pathlib
+import sys
+
+cache_path = pathlib.Path(sys.argv[1])
+payload = json.loads(sys.argv[2])
+catalog = payload["catalog"]
+assert cache_path.is_file(), "cursor cache not written"
+assert catalog["environment"] == "cursor"
+assert any(source.get("kind") == "override" for source in catalog["sources"])
+by_id = {model["id"]: model for model in catalog["models"]}
+assert "default" not in by_id
+assert set(by_id) == {"composer-2.5", "gpt-5.4-mini", "claude-sonnet-4-6"}
+composer = by_id["composer-2.5"]
+assert composer["availability"] == "selectable_here"
+assert composer["provider"] == "cursor"
+assert composer["input_price_per_mtok"] is None
+assert composer["output_price_per_mtok"] is None
+assert composer["context_window"] == 200000
+assert "tools" in composer["capabilities"]
+assert "routine_coding" in composer["task_fit"]
+assert composer["confidence"] == "fixture"
+assert any("pricing" in c.lower() for c in composer["caveats"])
+mini = by_id["gpt-5.4-mini"]
+assert mini["provider"] == "openai"
+assert mini["availability"] == "selectable_here"
+assert mini["context_window"] == 400000
+assert "image_input" in mini["capabilities"]
+assert "reasoning" in mini["capabilities"]
+assert any("enabled" in c.lower() or "user-added" in c.lower() for c in mini["caveats"])
+disabled = by_id["claude-sonnet-4-6"]
+assert disabled["availability"] == "requires_harness_check"
+assert any("disabled" in c.lower() for c in disabled["caveats"])
+# Prefer selectable Cursor lanes over disabled ones for routine_coding.
+assert payload["recommendations"][0]["id"] in {"composer-2.5", "gpt-5.4-mini"}
+assert payload["recommendations"][0]["availability"] == "selectable_here"
+PY
+  then ok "which-model cursor catalog parses local model state"; else fail "which-model cursor catalog parses local model state"; fi
+
+  catalog_json=$(
+    WHICH_MODEL_CACHE_HOME="$catalog_home/cache-cursor-offline" \
+    WHICH_MODEL_OFFLINE=1 \
+    skills/which-model/bin/model-catalog --env cursor --force-refresh --task routine_coding --top 3
+  )
+  if python3 - "$catalog_home/cache-cursor-offline/catalog.cursor.json" "$catalog_json" <<'PY'
+import json
+import pathlib
+import sys
+
+cache_path = pathlib.Path(sys.argv[1])
+payload = json.loads(sys.argv[2])
+catalog = payload["catalog"]
+assert cache_path.is_file(), "offline cursor cache not written"
+assert catalog["environment"] == "cursor"
+assert any(source.get("kind") == "seed" for source in catalog["sources"])
+assert not any(source.get("kind") == "cursor-state-db" and "path" in source and "error" not in source for source in catalog["sources"])
+for model in catalog["models"]:
+    assert model["confidence"] == "seeded"
+    assert model["availability"] == "unverified_in_harness"
+    assert model["input_price_per_mtok"] is None
+    assert model["output_price_per_mtok"] is None
+assert any(model["id"] == "cursor-default-fast" for model in catalog["models"])
+PY
+  then ok "which-model cursor offline falls back to seeded catalog"; else fail "which-model cursor offline falls back to seeded catalog"; fi
   rm -rf "$catalog_home"
 
   local quiet_home quiet_out
