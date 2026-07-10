@@ -94,9 +94,11 @@ Before tallying, validate every ballot:
 
 ## Model tiering per stage
 
-Map each stage to the cheapest model tier that clears its correctness bar — cheap for lookup/mechanical work, mid for judgment, frontier for whole-thread synthesis. Token price is part of the tier decision: when a model is materially cheaper on the relevant input/output side, spend more tokens there on independent coverage, negative evidence, and compact proofs instead of spending premium context on the same uncertainty. Refresh exact provider prices before quoting them.
+Map each stage to the cheapest model tier that clears its correctness bar — cheap for lookup/mechanical work, mid for judgment, frontier for whole-thread synthesis. Token price is part of the tier decision: when a model is materially cheaper on the relevant input/output side, spend more tokens there on independent coverage, negative evidence, and compact proofs instead of spending premium context on the same uncertainty.
 
-As a dated 2026-07 calibration, pricing can vary by orders of magnitude: premium/frontier examples sit around $5 input and $25-$30 output per million tokens, mid-tier examples around $2-$3 input and $10-$15 output, and cheap tiers can be near $0.10-$1 input and $0.625-$5 output. OpenRouter-hosted Chinese models often sit on that cheap/mid frontier: examples include DeepSeek V4 Flash around $0.09/$0.18 per million input/output tokens, Qwen3.7 Plus around $0.32/$1.28, GLM 5.2 around $0.54/$1.76, Kimi K2.7 Code around $0.72/$3.49, and MiniMax M3 around $0.30/$1.20. Treat those numbers as a spot check, not a contract.
+Pricing fetch/cache rule: use a timestamped provider-pricing cache for routine routing when it is <3 days old; use it only for rough routing at 3-5 days; refresh before exact dollar quotes, material billing decisions, or any current/live/latest request. Treat >5 day prices as stale. OpenRouter has a model API; OpenAI and Anthropic prices should come from official pricing docs/API surfaces.
+
+Dated 2026-07 calibration: premium/frontier examples sit around $5 input and $25-$30 output per million tokens, mid-tier examples around $2-$3 input and $10-$15 output, and cheap tiers can be near $0.10-$1 input and $0.625-$5 output. OpenRouter-hosted Chinese examples include DeepSeek V4 Flash around $0.09/$0.18, Qwen3.7 Plus around $0.32/$1.28, GLM 5.2 around $0.54/$1.76, Kimi K2.7 Code around $0.72/$3.49, and MiniMax M3 around $0.30/$1.20. Treat those numbers as a spot check, not a contract.
 
 The council-specific mapping is:
 
