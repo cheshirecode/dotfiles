@@ -1,0 +1,512 @@
+#!/usr/bin/env python3
+"""Build and read an environment-specific model catalog for which-model."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import pathlib
+import re
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+from datetime import datetime, timezone
+
+
+SCHEMA_VERSION = 1
+STALE_AFTER_SECONDS = 3 * 24 * 60 * 60
+VERY_STALE_AFTER_SECONDS = 5 * 24 * 60 * 60
+ENVS = {"codex", "cursor", "claude", "opencode", "unknown"}
+
+
+TASK_ALIASES = {
+    "search": "mechanical_search",
+    "inventory": "mechanical_search",
+    "status": "mechanical_search",
+    "code": "routine_coding",
+    "coding": "routine_coding",
+    "patch": "routine_coding",
+    "refactor": "large_refactor",
+    "review": "long_context_review",
+    "long": "long_context_review",
+    "visual": "visual_design",
+    "design": "visual_design",
+    "a11y": "a11y_review",
+    "accessibility": "a11y_review",
+    "vote": "cheap_parallel_voter",
+    "council": "cheap_parallel_voter",
+    "plan": "planning",
+    "synthesis": "final_synthesis",
+}
+
+
+ENV_SEEDS = {
+    "codex": [
+        {
+            "id": "gpt-5.6-luna",
+            "display_name": "GPT-5.6 Luna",
+            "provider": "openai",
+            "availability": "selectable_here",
+            "input_price_per_mtok": 1.0,
+            "output_price_per_mtok": 6.0,
+            "context_window": 1_050_000,
+            "max_output": 128_000,
+            "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
+            "task_fit": ["mechanical_search", "routine_coding", "cheap_parallel_voter"],
+            "caveats": ["Use a stronger lane for high-risk final synthesis."],
+            "confidence": "seeded",
+        },
+        {
+            "id": "gpt-5.6-terra",
+            "display_name": "GPT-5.6 Terra",
+            "provider": "openai",
+            "availability": "selectable_here",
+            "input_price_per_mtok": 2.5,
+            "output_price_per_mtok": 15.0,
+            "context_window": 1_050_000,
+            "max_output": 128_000,
+            "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
+            "task_fit": ["routine_coding", "long_context_review", "planning"],
+            "caveats": ["More expensive than small/search lanes."],
+            "confidence": "seeded",
+        },
+        {
+            "id": "gpt-5.6-sol",
+            "display_name": "GPT-5.6 Sol",
+            "provider": "openai",
+            "availability": "selectable_here",
+            "input_price_per_mtok": 5.0,
+            "output_price_per_mtok": 30.0,
+            "context_window": 1_050_000,
+            "max_output": 128_000,
+            "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
+            "task_fit": ["final_synthesis", "visual_design", "large_refactor"],
+            "caveats": ["Reserve for work where judgment quality clears the cost."],
+            "confidence": "seeded",
+        },
+    ],
+    "claude": [
+        {
+            "id": "claude-haiku-latest",
+            "display_name": "Claude Haiku latest",
+            "provider": "anthropic",
+            "availability": "requires_harness_check",
+            "input_price_per_mtok": None,
+            "output_price_per_mtok": None,
+            "context_window": None,
+            "max_output": None,
+            "capabilities": ["text", "code"],
+            "task_fit": ["mechanical_search", "cheap_parallel_voter"],
+            "caveats": ["Resolve exact model and price from Anthropic before quoting dollars."],
+            "confidence": "seeded",
+        },
+        {
+            "id": "claude-sonnet-latest",
+            "display_name": "Claude Sonnet latest",
+            "provider": "anthropic",
+            "availability": "requires_harness_check",
+            "input_price_per_mtok": None,
+            "output_price_per_mtok": None,
+            "context_window": None,
+            "max_output": None,
+            "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
+            "task_fit": ["routine_coding", "long_context_review", "planning"],
+            "caveats": ["Refresh Anthropic catalog for exact current model IDs."],
+            "confidence": "seeded",
+        },
+    ],
+    "cursor": [
+        {
+            "id": "cursor-default-fast",
+            "display_name": "Cursor fast/default lane",
+            "provider": "cursor",
+            "availability": "unverified_in_harness",
+            "input_price_per_mtok": None,
+            "output_price_per_mtok": None,
+            "context_window": None,
+            "max_output": None,
+            "capabilities": ["text", "code", "tools"],
+            "task_fit": ["mechanical_search", "routine_coding"],
+            "caveats": ["Cursor model availability is plan/workspace dependent; verify in UI."],
+            "confidence": "seeded",
+        }
+    ],
+    "opencode": [
+        {
+            "id": "opencode/zen-recommended",
+            "display_name": "OpenCode Zen recommended lane",
+            "provider": "opencode",
+            "availability": "requires_harness_check",
+            "input_price_per_mtok": None,
+            "output_price_per_mtok": None,
+            "context_window": None,
+            "max_output": None,
+            "capabilities": ["text", "code", "tools"],
+            "task_fit": ["routine_coding", "agentic_workflow", "planning"],
+            "caveats": ["Run `opencode models` for the exact configured provider/model list."],
+            "confidence": "seeded",
+        }
+    ],
+    "unknown": [
+        {
+            "id": "cheap-long-context-code-lane",
+            "display_name": "Cheap long-context code lane",
+            "provider": "unknown",
+            "availability": "not_available_until_harness_identified",
+            "input_price_per_mtok": None,
+            "output_price_per_mtok": None,
+            "context_window": None,
+            "max_output": None,
+            "capabilities": ["text", "code"],
+            "task_fit": ["mechanical_search", "routine_coding", "long_context_review"],
+            "caveats": ["Identify the current harness before recommending an exact model."],
+            "confidence": "seeded",
+        }
+    ],
+}
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def parse_iso(value: str) -> float:
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+
+
+def cache_root() -> pathlib.Path:
+    base = os.environ.get("WHICH_MODEL_CACHE_HOME")
+    if base:
+        return pathlib.Path(base).expanduser()
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    if xdg:
+        return pathlib.Path(xdg).expanduser() / "which-model"
+    home = pathlib.Path.home()
+    if str(home):
+        return home / ".cache" / "which-model"
+    return pathlib.Path(tempfile.gettempdir()) / "which-model"
+
+
+def cache_path(env: str) -> pathlib.Path:
+    return cache_root() / f"catalog.{env}.json"
+
+
+def detect_env() -> str:
+    explicit = os.environ.get("WHICH_MODEL_ENV", "").strip().lower()
+    if explicit in ENVS:
+        return explicit
+    if os.environ.get("CODEX_SANDBOX") or os.environ.get("CODEX_HOME"):
+        return "codex"
+    if os.environ.get("CLAUDE_CODE_SESSION_ID"):
+        return "claude"
+    if os.environ.get("CURSOR_SESSION_ID") or os.environ.get("CURSOR_TRACE_ID"):
+        return "cursor"
+    if os.environ.get("OPENCODE") or os.environ.get("OPENCODE_SESSION_ID"):
+        return "opencode"
+    cwd = pathlib.Path.cwd()
+    if (cwd / "opencode.json").exists() or (cwd / ".opencode").exists():
+        return "opencode"
+    if (cwd / ".cursor").exists():
+        return "cursor"
+    if (cwd / ".claude").exists():
+        return "claude"
+    return "unknown"
+
+
+def normalize_task(value: str | None) -> str | None:
+    if not value:
+        return None
+    lowered = value.lower()
+    for needle, tag in TASK_ALIASES.items():
+        if needle in lowered:
+            return tag
+    return lowered.strip().replace(" ", "_")
+
+
+def atomic_write_json(path: pathlib.Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", dir=path.parent, prefix=f".{path.name}.", delete=False) as tmp:
+        json.dump(payload, tmp, indent=2, sort_keys=True)
+        tmp.write("\n")
+        tmp_path = pathlib.Path(tmp.name)
+    tmp_path.replace(path)
+
+
+def load_json_url(url: str) -> object:
+    with urllib.request.urlopen(url, timeout=15) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def load_json_file(path: pathlib.Path) -> object:
+    return json.loads(path.read_text())
+
+
+def local_source_payload() -> object | None:
+    source = os.environ.get("WHICH_MODEL_CATALOG_SOURCE")
+    if not source:
+        return None
+    if re.match(r"^https?://", source):
+        return load_json_url(source)
+    return load_json_file(pathlib.Path(source).expanduser())
+
+
+def from_models_dev(payload: object, env: str) -> list[dict]:
+    models: list[dict] = []
+    records: list[tuple[str, dict]] = []
+    if isinstance(payload, dict):
+        for provider, provider_data in payload.items():
+            if not isinstance(provider_data, dict):
+                continue
+            provider_models = provider_data.get("models")
+            if isinstance(provider_models, dict):
+                records.extend((provider, model) for model in provider_models.values() if isinstance(model, dict))
+            elif isinstance(provider_models, list):
+                records.extend((provider, model) for model in provider_models if isinstance(model, dict))
+            elif "id" in provider_data:
+                records.append((provider, provider_data))
+    elif isinstance(payload, list):
+        records.extend(("unknown", model) for model in payload if isinstance(model, dict))
+
+    for provider, item in records:
+        model_id = item.get("id") or item.get("slug") or item.get("name")
+        if not model_id:
+            continue
+        pricing = item.get("pricing") or {}
+        context = item.get("context") or item.get("limits") or {}
+        capabilities = item.get("capabilities") or item.get("features") or {}
+        modalities = item.get("modalities") or {}
+        cap_list = sorted(
+            {
+                key
+                for group in (capabilities, modalities)
+                if isinstance(group, dict)
+                for key, enabled in group.items()
+                if enabled
+            }
+        )
+        if not cap_list:
+            cap_list = ["text"]
+        task_fit = infer_task_fit(str(model_id), cap_list)
+        models.append(
+            {
+                "id": str(model_id),
+                "display_name": str(item.get("name") or model_id),
+                "provider": str(item.get("provider") or provider),
+                "availability": "requires_harness_check" if env != "opencode" else "selectable_if_configured",
+                "input_price_per_mtok": number_or_none(pricing.get("input") or pricing.get("input_price")),
+                "output_price_per_mtok": number_or_none(pricing.get("output") or pricing.get("output_price")),
+                "context_window": int_or_none(context.get("context") or context.get("input") or item.get("context_length")),
+                "max_output": int_or_none(context.get("output") or item.get("max_output")),
+                "capabilities": cap_list,
+                "task_fit": task_fit,
+                "caveats": [],
+                "confidence": "fresh",
+            }
+        )
+    return models
+
+
+def number_or_none(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def int_or_none(value: object) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def infer_task_fit(model_id: str, capabilities: list[str]) -> list[str]:
+    lowered = model_id.lower()
+    tags = {"mechanical_search"}
+    if any(token in lowered for token in ("code", "coder", "claude", "gpt", "qwen", "kimi", "deepseek")):
+        tags.add("routine_coding")
+    if any(token in lowered for token in ("pro", "opus", "sonnet", "sol", "reason")):
+        tags.add("planning")
+        tags.add("final_synthesis")
+    if any(token in lowered for token in ("mini", "haiku", "nano", "luna", "flash")):
+        tags.add("cheap_parallel_voter")
+    if any(cap in capabilities for cap in ("image", "image_input", "vision")):
+        tags.add("visual_design")
+    return sorted(tags)
+
+
+def run_opencode_models() -> list[dict]:
+    if os.environ.get("WHICH_MODEL_SKIP_OPENCODE_CLI"):
+        return []
+    try:
+        proc = subprocess.run(
+            ["opencode", "models"],
+            check=False,
+            text=True,
+            capture_output=True,
+            timeout=15,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return []
+    if proc.returncode != 0:
+        return []
+    models = []
+    for line in proc.stdout.splitlines():
+        line = line.strip()
+        if not line or line.startswith(("Provider", "---")):
+            continue
+        if "/" not in line:
+            continue
+        model_id = line.split()[0]
+        models.append(
+            {
+                "id": model_id,
+                "display_name": model_id,
+                "provider": model_id.split("/", 1)[0],
+                "availability": "selectable_here",
+                "input_price_per_mtok": None,
+                "output_price_per_mtok": None,
+                "context_window": None,
+                "max_output": None,
+                "capabilities": ["text", "code", "tools"],
+                "task_fit": infer_task_fit(model_id, ["text", "code", "tools"]),
+                "caveats": ["Price/capability enrichment may come from Models.dev if available."],
+                "confidence": "fresh",
+            }
+        )
+    return models
+
+
+def build_catalog(env: str) -> dict:
+    sources: list[dict] = []
+    models: list[dict] = []
+    source_payload = local_source_payload()
+    if source_payload is not None:
+        models = from_models_dev(source_payload, env)
+        sources.append({"kind": "override", "value": os.environ.get("WHICH_MODEL_CATALOG_SOURCE")})
+    elif env == "opencode":
+        models.extend(run_opencode_models())
+        if models:
+            sources.append({"kind": "opencode", "command": "opencode models"})
+        if not os.environ.get("WHICH_MODEL_OFFLINE"):
+            try:
+                models.extend(from_models_dev(load_json_url("https://models.dev/catalog.json"), env))
+                sources.append({"kind": "models.dev", "url": "https://models.dev/catalog.json"})
+            except Exception as exc:  # noqa: BLE001 - fallback cache is intentional here.
+                sources.append({"kind": "models.dev", "error": str(exc)})
+
+    if not models:
+        models = ENV_SEEDS.get(env, ENV_SEEDS["unknown"])
+        sources.append({"kind": "seed", "value": env})
+
+    generated = time.time()
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "environment": env,
+        "generated_at": now_iso(),
+        "stale_after": datetime.fromtimestamp(generated + STALE_AFTER_SECONDS, timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z"),
+        "sources": sources,
+        "models": dedupe_models(models),
+    }
+
+
+def dedupe_models(models: list[dict]) -> list[dict]:
+    seen: dict[str, dict] = {}
+    for model in models:
+        seen.setdefault(model["id"], model)
+    return sorted(seen.values(), key=lambda item: (item.get("provider", ""), item.get("id", "")))
+
+
+def read_catalog(path: pathlib.Path) -> dict | None:
+    if not path.is_file():
+        return None
+    return json.loads(path.read_text())
+
+
+def is_stale(catalog: dict) -> bool:
+    stale_after = catalog.get("stale_after")
+    if not stale_after:
+        return True
+    return parse_iso(stale_after) <= time.time()
+
+
+def is_very_stale(catalog: dict) -> bool:
+    generated_at = catalog.get("generated_at")
+    if not generated_at:
+        return True
+    return time.time() - parse_iso(generated_at) > VERY_STALE_AFTER_SECONDS
+
+
+def price_score(model: dict) -> float:
+    input_price = model.get("input_price_per_mtok")
+    output_price = model.get("output_price_per_mtok")
+    if input_price is None and output_price is None:
+        return 1000.0
+    return float(input_price or 0) + float(output_price or 0)
+
+
+def rank_models(catalog: dict, task: str | None, top: int) -> list[dict]:
+    tag = normalize_task(task)
+
+    def score(model: dict) -> tuple[int, float, str]:
+        fits = set(model.get("task_fit") or [])
+        availability = model.get("availability")
+        fit_penalty = 0 if tag and tag in fits else 1
+        availability_penalty = 0 if availability in {"selectable_here", "selectable_if_configured"} else 1
+        return (fit_penalty + availability_penalty, price_score(model), model.get("id", ""))
+
+    return sorted(catalog.get("models", []), key=score)[:top]
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--env", default="auto", help="codex, cursor, claude, opencode, unknown, or auto")
+    parser.add_argument("--refresh-if-stale", action="store_true")
+    parser.add_argument("--force-refresh", action="store_true")
+    parser.add_argument("--task", default=None)
+    parser.add_argument("--top", type=int, default=3)
+    parser.add_argument("--print-path", action="store_true")
+    args = parser.parse_args()
+
+    env = detect_env() if args.env == "auto" else args.env
+    if env not in ENVS:
+        sys.stderr.write(f"model-catalog: unknown env {env!r}\n")
+        return 2
+
+    path = cache_path(env)
+    if args.print_path:
+        print(path)
+        return 0
+
+    catalog = read_catalog(path)
+    should_refresh = args.force_refresh or catalog is None or (args.refresh_if_stale and is_stale(catalog))
+    if should_refresh:
+        catalog = build_catalog(env)
+        atomic_write_json(path, catalog)
+
+    assert catalog is not None
+    output = {
+        "path": str(path),
+        "stale": is_stale(catalog),
+        "very_stale": is_very_stale(catalog),
+        "catalog": catalog,
+    }
+    if args.task:
+        output["recommendations"] = rank_models(catalog, args.task, args.top)
+    json.dump(output, sys.stdout, indent=2, sort_keys=True)
+    print()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
