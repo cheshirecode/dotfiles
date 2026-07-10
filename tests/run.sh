@@ -231,6 +231,26 @@ assert not flagged("+ Document /ship-hygiene usage for skill PRs", ["skills/ship
 assert flagged("+ next_action from people/oss/active/foo.md", ["README.md"])
 PY
   then ok "ship-hygiene skill PR leak exception"; else fail "ship-hygiene skill PR leak exception"; fi
+
+  local quiet_home quiet_out
+  quiet_home=$(mktemp -d)
+  quiet_out=$(HOME="$quiet_home" USER=test-agent DOTFILES_QUIET=1 bash -lc '. ./.shell_common; printf command-output')
+  if [[ "$quiet_out" == "command-output" ]]; then
+    ok "DOTFILES_QUIET suppresses bash welcome"
+  else
+    fail "DOTFILES_QUIET bash output polluted (got: ${quiet_out@Q})"
+  fi
+  if command -v zsh >/dev/null; then
+    quiet_out=$(HOME="$quiet_home" USER=test-agent DOTFILES_QUIET=1 zsh -lc '. ./.shell_common; printf command-output')
+    if [[ "$quiet_out" == "command-output" ]]; then
+      ok "DOTFILES_QUIET suppresses zsh welcome"
+    else
+      fail "DOTFILES_QUIET zsh output polluted (got: ${quiet_out@Q})"
+    fi
+  else
+    say SKIP "zsh not installed"
+  fi
+  rm -rf "$quiet_home"
 }
 
 # Council #31: worklog skill bin/ — static lint + fixture-vault smoke. Catches
