@@ -19,8 +19,10 @@ should be loaded into context. Do not fetch live pricing in no-argument mode.
 ### `/which-model <task prose or capability>`
 
 If the sequential-thinking MCP is available, call it first for non-trivial tasks to decompose the
-job into capability requirements, constraints, and risk gates. Use the result to choose models; do
-not expose chain-of-thought. Skip this for obvious one-lane asks.
+job into capability requirements, constraints, and risk gates. In Claude-style tool namespaces this
+is typically `mcp__sequential-thinking__sequentialthinking`; other agents should use their
+equivalent sequential-thinking MCP tool. Use the result to choose models; do not expose
+chain-of-thought. Skip this for obvious one-lane asks.
 
 Return up to 1-3 recommendations, ordered best-value first, then fallback, then premium/escalation
 only when useful. Keep the answer compact:
