@@ -11,8 +11,8 @@ builds a real environment-specific catalog instead of relying on seeded fallback
 Current contract:
 - Canonical skill: skills/which-model/SKILL.md
 - Helper: skills/which-model/bin/model-catalog
-- Cache path: $XDG_CACHE_HOME/which-model/catalog.<env>.json, fallback ~/.cache/which-model/catalog.<env>.json
-- Test surface: tests/run.sh fixtures has "which-model catalog warms env cache"
+- Cache paths: omitted provider uses $XDG_CACHE_HOME/which-model/catalog.<env>.json; explicit provider uses $XDG_CACHE_HOME/which-model/catalog.<env>.<provider>.json; fallback root is ~/.cache/which-model/
+- Test surface: tests/run.sh fixtures has "which-model catalog warms legacy env cache"
 - Cache records must include:
   id, display_name, provider, availability, input_price_per_mtok, output_price_per_mtok,
   context_window, max_output, capabilities, task_fit, caveats, confidence.

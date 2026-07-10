@@ -55,19 +55,24 @@ pricing. Otherwise compare qualitatively and label any dated calibration as appr
 
 Cache an environment-specific model catalog, not only prices. "Available" depends on where this
 skill is running: Codex/OpenAI, Claude, Cursor, OpenCode, or an unknown harness can expose different
-models, tools, routing policies, and billing.
+models, tools, routing policies, and billing. `--env` selects the harness/session; optional
+`--provider` independently selects the catalog source and defaults to the resolved environment.
+Without `--env`, `WHICH_MODEL_ENV` wins; active session markers and process ancestry outrank passive
+home/config/credential evidence such as `CODEX_HOME`, cwd config directories, or provider API keys.
 
 Catalog paths:
 
-- `$XDG_CACHE_HOME/which-model/catalog.<env>.json`
-- fallback `~/.cache/which-model/catalog.<env>.json`
-- temporary/test override: `$WHICH_MODEL_CACHE_HOME/catalog.<env>.json`
+- omitted provider: `$XDG_CACHE_HOME/which-model/catalog.<env>.json`
+- explicit provider: `$XDG_CACHE_HOME/which-model/catalog.<env>.<provider>.json`
+- fallback root: `~/.cache/which-model/`
+- temporary/test root: `$WHICH_MODEL_CACHE_HOME/`
 
 Use `bin/model-catalog` before recommending exact models:
 
 ```bash
 skills/which-model/bin/model-catalog --env auto --refresh-if-stale
 skills/which-model/bin/model-catalog --env opencode --refresh-if-stale --task routine_coding --top 3
+skills/which-model/bin/model-catalog --env opencode --provider openrouter --refresh-if-stale
 ```
 
 Provider-specific catalog implementation handoff lives in `docs/provider-handover.md`.
