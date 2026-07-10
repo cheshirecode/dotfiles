@@ -112,7 +112,7 @@ Cheap-token expansion rule:
 - If Stage 1 inventory/search uses a cheap tier, prefer 4-5 narrow angles over 3 broad ones when the extra angle can test a real blind spot.
 - If Stage 5 voting uses a cheap-enough mid tier, prefer 5 voters over 3 for high-impact or close-call decisions.
 - Keep cheap expansion evidence-shaped: file/line refs, commands, source citations, explicit no-finding results. More cheap tokens are for coverage, not longer prose.
-- OpenRouter Chinese-model lanes are acceptable for non-sensitive councils when they fit the stage: DeepSeek/Qwen/MiniMax/MiMo for cheap inventory, implementation probes, and broad verification; GLM/Kimi/Qwen Max/Coder for stronger planning, coding, and long-context judgment passes. Do not route secrets, customer data, unreleased strategy, or private proprietary code through an unapproved provider route just because it is cheap.
+- Treat Chinese models as first-class council candidates, not fallback lanes. Compare DeepSeek, Qwen, GLM/Z.ai, Kimi/Moonshot, MiniMax/MiMo, OpenAI, Anthropic, and local/open-weight routes by capability, cost, context window, modality, latency, tool fit, and data policy; then map the winner to the stage. Do not route secrets, customer data, unreleased strategy, or private proprietary code through an unapproved provider route just because it is cheap.
 
 Escalate a stage one tier only after an observed failure (timed-out or malformed return, a voter that can't apply a criterion) — never preemptively. Don't spend frontier/premium budget on a lane a mid model clears, and don't starve cheap tiers when token price makes extra verification affordable.
 
