@@ -83,13 +83,15 @@ Refresh rules:
 
 Catalog records should include model id, provider, availability in the current harness, input/output
 price per million tokens when known, context window, max output, capabilities, caveats, confidence,
-and normalized `task_fit` tags. Prefer official or harness-native sources: OpenCode's configured
-model surface and Models.dev for OpenCode, OpenAI model docs/API surfaces for Codex/OpenAI,
-the Anthropic Models API (`https://api.anthropic.com/v1/models`, needs `ANTHROPIC_API_KEY`) for
-`claude` availability enriched with a dated Anthropic pricing/limits docs snapshot, the OpenRouter
-models API (`https://openrouter.ai/api/v1/models`) for the `openrouter` env, and Cursor local
-`state.vscdb` reactive storage (`availableDefaultModels2`) for the `cursor` env. Label prices or
-availability as unverified when the source cannot prove them.
+and normalized `task_fit` tags. Prefer official or harness-native sources that do not require the
+skill to hold provider API keys: OpenCode's configured model surface and Models.dev for OpenCode,
+OpenAI model docs/API surfaces for Codex/OpenAI, Cursor local `state.vscdb` reactive storage
+(`availableDefaultModels2`) for the `cursor` env, and the public OpenRouter models API
+(`https://openrouter.ai/api/v1/models`) for `openrouter`. For `claude`, the helper builds from a
+dated Anthropic docs snapshot (model IDs enriched with pricing/limits) with no API key and no
+network; when live availability matters the running session/agent lists models itself and injects
+that JSON via `WHICH_MODEL_CATALOG_SOURCE`—the skill must never hold an Anthropic API key. Label
+prices or availability as unverified when the source cannot prove them.
 
 ## Routing heuristics
 
