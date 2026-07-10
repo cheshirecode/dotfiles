@@ -71,6 +71,14 @@ skills:
       path: skills/tightening-a-pr
     install_to: ~/.claude/skills/tightening-a-pr
 
+  - name: which-model
+    description: Best-value model selection by capability, cost, context, modality, and data policy.
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/which-model
+    install_to: ~/.claude/skills/which-model
+
 # Notes:
 # - `source.ref: HEAD` is a placeholder for skills that live inside THIS repo
 #   (vendored under skills/<name>/). When a skill graduates to its own repo,
