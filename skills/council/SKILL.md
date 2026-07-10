@@ -96,7 +96,7 @@ Before tallying, validate every ballot:
 
 Map each stage to the cheapest model tier that clears its correctness bar — cheap for lookup/mechanical work, mid for judgment, frontier for whole-thread synthesis. Token price is part of the tier decision: when a model is materially cheaper on the relevant input/output side, spend more tokens there on independent coverage, negative evidence, and compact proofs instead of spending premium context on the same uncertainty. Refresh exact provider prices before quoting them.
 
-As a dated 2026-07 calibration, pricing can vary by orders of magnitude: premium/frontier examples sit around $5 input and $25-$30 output per million tokens, mid-tier examples around $2-$3 input and $10-$15 output, and cheap tiers can be near $0.10-$1 input and $0.625-$5 output. Treat those numbers as a spot check, not a contract.
+As a dated 2026-07 calibration, pricing can vary by orders of magnitude: premium/frontier examples sit around $5 input and $25-$30 output per million tokens, mid-tier examples around $2-$3 input and $10-$15 output, and cheap tiers can be near $0.10-$1 input and $0.625-$5 output. OpenRouter-hosted Chinese models often sit on that cheap/mid frontier: examples include DeepSeek V4 Flash around $0.09/$0.18 per million input/output tokens, Qwen3.7 Plus around $0.32/$1.28, GLM 5.2 around $0.54/$1.76, Kimi K2.7 Code around $0.72/$3.49, and MiniMax M3 around $0.30/$1.20. Treat those numbers as a spot check, not a contract.
 
 The council-specific mapping is:
 
@@ -110,6 +110,7 @@ Cheap-token expansion rule:
 - If Stage 1 inventory/search uses a cheap tier, prefer 4-5 narrow angles over 3 broad ones when the extra angle can test a real blind spot.
 - If Stage 5 voting uses a cheap-enough mid tier, prefer 5 voters over 3 for high-impact or close-call decisions.
 - Keep cheap expansion evidence-shaped: file/line refs, commands, source citations, explicit no-finding results. More cheap tokens are for coverage, not longer prose.
+- OpenRouter Chinese-model lanes are acceptable for non-sensitive councils when they fit the stage: DeepSeek/Qwen/MiniMax/MiMo for cheap inventory, implementation probes, and broad verification; GLM/Kimi/Qwen Max/Coder for stronger planning, coding, and long-context judgment passes. Do not route secrets, customer data, unreleased strategy, or private proprietary code through an unapproved provider route just because it is cheap.
 
 Escalate a stage one tier only after an observed failure (timed-out or malformed return, a voter that can't apply a criterion) — never preemptively. Don't spend frontier/premium budget on a lane a mid model clears, and don't starve cheap tiers when token price makes extra verification affordable.
 
