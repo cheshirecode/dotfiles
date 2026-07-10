@@ -4,10 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import copy
+import html
 import json
 import os
 import pathlib
 import re
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -19,7 +22,13 @@ from datetime import datetime, timezone
 SCHEMA_VERSION = 1
 STALE_AFTER_SECONDS = 3 * 24 * 60 * 60
 VERY_STALE_AFTER_SECONDS = 5 * 24 * 60 * 60
-ENVS = {"codex", "cursor", "claude", "opencode", "unknown"}
+ENVS = {"codex", "cursor", "claude", "opencode", "openrouter", "unknown"}
+OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
+ANTHROPIC_MODELS_URL = "https://api.anthropic.com/v1/models"
+ANTHROPIC_API_VERSION = "2023-06-01"
+# Anthropic's Models API returns IDs/availability but no pricing or limits, so the
+# price/context/capability fields below come from a dated docs snapshot, not the API.
+ANTHROPIC_PRICING_SNAPSHOT = "2026-01"
 
 
 TASK_ALIASES = {
@@ -270,7 +279,10 @@ ENV_SEEDS = {
             "max_output": None,
             "capabilities": ["text", "code", "tools"],
             "task_fit": ["mechanical_search", "routine_coding"],
-            "caveats": ["Cursor model availability is plan/workspace dependent; verify in UI."],
+            "caveats": [
+                "Offline seeded fallback only; refresh from Cursor local model state before exact recommendations.",
+                "Cursor model availability is plan/workspace dependent; verify in UI.",
+            ],
             "confidence": "seeded",
         }
     ],
@@ -287,6 +299,25 @@ ENV_SEEDS = {
             "capabilities": ["text", "code", "tools"],
             "task_fit": ["routine_coding", "agentic_workflow", "planning"],
             "caveats": ["Run `opencode models` for the exact configured provider/model list."],
+            "confidence": "seeded",
+        }
+    ],
+    "openrouter": [
+        {
+            "id": "openrouter/auto",
+            "display_name": "OpenRouter Auto router",
+            "provider": "openrouter",
+            "availability": "requires_harness_check",
+            "input_price_per_mtok": None,
+            "output_price_per_mtok": None,
+            "context_window": None,
+            "max_output": None,
+            "capabilities": ["text", "code", "tools"],
+            "task_fit": ["mechanical_search", "routine_coding"],
+            "caveats": [
+                "Offline seeded fallback only; refresh from the OpenRouter models API before quoting exact IDs or prices.",
+                "Verify data policy and per-provider routing before sending sensitive data.",
+            ],
             "confidence": "seeded",
         }
     ],
@@ -353,6 +384,8 @@ def detect_env() -> str:
         return "cursor"
     if (cwd / ".claude").exists():
         return "claude"
+    if os.environ.get("OPENROUTER_API_KEY"):
+        return "openrouter"
     return "unknown"
 
 
@@ -449,6 +482,219 @@ def from_models_dev(payload: object, env: str) -> list[dict]:
     return models
 
 
+def price_per_mtok(value: object) -> float | None:
+    """OpenRouter lists per-token USD prices as strings; scale to per-million-token."""
+    per_token = number_or_none(value)
+    if per_token is None or per_token < 0:
+        # OpenRouter uses negative sentinels (e.g. "-1") for dynamic/variable pricing.
+        return None
+    return round(per_token * 1_000_000, 6)
+
+
+def from_openrouter(payload: object, env: str, *, confidence: str = "fresh") -> list[dict]:
+    del env  # OpenRouter normalization is env-specific already at the call site.
+    if isinstance(payload, dict):
+        records = payload.get("data")
+    else:
+        records = payload
+    if not isinstance(records, list):
+        return []
+
+    models: list[dict] = []
+    for item in records:
+        if not isinstance(item, dict):
+            continue
+        model_id = item.get("id") or item.get("canonical_slug")
+        if not model_id:
+            continue
+        model_id = str(model_id)
+        pricing = item.get("pricing") if isinstance(item.get("pricing"), dict) else {}
+        architecture = item.get("architecture") if isinstance(item.get("architecture"), dict) else {}
+        top_provider = item.get("top_provider") if isinstance(item.get("top_provider"), dict) else {}
+        supported = item.get("supported_parameters") or []
+        supported_set = {str(param).lower() for param in supported if isinstance(param, str)}
+        reasoning_meta = item.get("reasoning") if isinstance(item.get("reasoning"), dict) else {}
+
+        cap_set = {"text"}
+        for modality in architecture.get("input_modalities") or []:
+            if modality == "image":
+                cap_set.add("image_input")
+            elif isinstance(modality, str) and modality not in {"text"}:
+                cap_set.add(modality)
+        cap_set.add("code")
+        if "tools" in supported_set or "tool_choice" in supported_set:
+            cap_set.add("tools")
+        if "reasoning" in supported_set or "include_reasoning" in supported_set or reasoning_meta:
+            cap_set.add("reasoning")
+        if "structured_outputs" in supported_set or "response_format" in supported_set:
+            cap_set.add("structured_output")
+        cap_list = sorted(cap_set)
+
+        advertised_context = int_or_none(item.get("context_length"))
+        routed_context = int_or_none(top_provider.get("context_length"))
+        # Prefer the routed/top_provider window; fall back to advertised length.
+        context_window = routed_context if routed_context is not None else advertised_context
+        input_price = price_per_mtok(pricing.get("prompt"))
+        output_price = price_per_mtok(pricing.get("completion"))
+
+        caveats: list[str] = []
+        if top_provider.get("is_moderated"):
+            caveats.append("OpenRouter reports this route as moderated.")
+        if (
+            advertised_context is not None
+            and routed_context is not None
+            and advertised_context != routed_context
+        ):
+            caveats.append(
+                f"Advertised context ({advertised_context}) differs from routed top_provider "
+                f"context ({routed_context}); using routed value."
+            )
+        if routed_context is None:
+            caveats.append("Missing routed context from top_provider; advertised length may not apply.")
+        if input_price is None or output_price is None:
+            caveats.append("Exact OpenRouter pricing unavailable for this model; do not invent dollar quotes.")
+        if reasoning_meta.get("mandatory") is True:
+            caveats.append("OpenRouter reports reasoning as mandatory for this model.")
+        expiration = item.get("expiration_date")
+        if isinstance(expiration, str) and expiration.strip():
+            caveats.append(f"OpenRouter lists expiration_date={expiration.strip()}.")
+
+        models.append(
+            {
+                "id": model_id,
+                "display_name": str(item.get("name") or model_id),
+                "provider": model_id.split("/", 1)[0] if "/" in model_id else "openrouter",
+                "availability": "selectable_here",
+                "input_price_per_mtok": input_price,
+                "output_price_per_mtok": output_price,
+                "context_window": context_window,
+                "max_output": int_or_none(top_provider.get("max_completion_tokens")),
+                "capabilities": cap_list,
+                "task_fit": infer_task_fit(model_id, cap_list),
+                "caveats": caveats,
+                "confidence": confidence,
+            }
+        )
+    return models
+
+
+# Curated Anthropic model metadata (docs snapshot; see ANTHROPIC_PRICING_SNAPSHOT).
+# Rules are matched most-specific-first against the lowercased model id. The Models
+# API supplies the id/display_name/availability; these fields fill the gaps it omits.
+ANTHROPIC_MODEL_METADATA: list[tuple[tuple[str, ...], dict]] = [
+    (("haiku-4",), {
+        "input_price_per_mtok": 1.0, "output_price_per_mtok": 5.0,
+        "context_window": 200_000, "max_output": 64_000,
+        "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
+    }),
+    (("sonnet-4",), {
+        "input_price_per_mtok": 3.0, "output_price_per_mtok": 15.0,
+        "context_window": 200_000, "max_output": 64_000,
+        "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
+    }),
+    (("opus-4",), {
+        "input_price_per_mtok": 15.0, "output_price_per_mtok": 75.0,
+        "context_window": 200_000, "max_output": 32_000,
+        "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
+    }),
+    (("3-7-sonnet", "3.7-sonnet"), {
+        "input_price_per_mtok": 3.0, "output_price_per_mtok": 15.0,
+        "context_window": 200_000, "max_output": 64_000,
+        "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
+    }),
+    (("3-5-sonnet", "3.5-sonnet"), {
+        "input_price_per_mtok": 3.0, "output_price_per_mtok": 15.0,
+        "context_window": 200_000, "max_output": 8_192,
+        "capabilities": ["text", "image_input", "code", "tools"],
+    }),
+    (("3-5-haiku", "3.5-haiku"), {
+        "input_price_per_mtok": 0.8, "output_price_per_mtok": 4.0,
+        "context_window": 200_000, "max_output": 8_192,
+        "capabilities": ["text", "image_input", "code", "tools"],
+    }),
+    (("3-opus",), {
+        "input_price_per_mtok": 15.0, "output_price_per_mtok": 75.0,
+        "context_window": 200_000, "max_output": 4_096,
+        "capabilities": ["text", "image_input", "code", "tools"],
+    }),
+    (("3-haiku",), {
+        "input_price_per_mtok": 0.25, "output_price_per_mtok": 1.25,
+        "context_window": 200_000, "max_output": 4_096,
+        "capabilities": ["text", "image_input", "code", "tools"],
+    }),
+]
+
+
+def anthropic_metadata(model_id: str) -> dict | None:
+    lowered = model_id.lower()
+    for needles, metadata in ANTHROPIC_MODEL_METADATA:
+        if any(needle in lowered for needle in needles):
+            return metadata
+    return None
+
+
+def fetch_anthropic_models() -> object:
+    api_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY/ANTHROPIC_AUTH_TOKEN not set")
+    request = urllib.request.Request(
+        f"{ANTHROPIC_MODELS_URL}?limit=1000",
+        headers={"x-api-key": api_key, "anthropic-version": ANTHROPIC_API_VERSION},
+    )
+    with urllib.request.urlopen(request, timeout=15) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def from_anthropic(payload: object, env: str, *, confidence: str = "fresh") -> list[dict]:
+    del env  # Anthropic records are only built for the claude env.
+    if isinstance(payload, dict):
+        records = payload.get("data")
+    else:
+        records = payload
+    if not isinstance(records, list):
+        return []
+
+    models: list[dict] = []
+    for item in records:
+        if not isinstance(item, dict):
+            continue
+        model_id = item.get("id")
+        if not model_id:
+            continue
+        model_id = str(model_id)
+        metadata = anthropic_metadata(model_id)
+        capabilities = list(metadata["capabilities"]) if metadata else ["text", "code"]
+        caveats: list[str] = []
+        if metadata:
+            caveats.append(
+                f"Pricing/context/limits from Anthropic docs snapshot {ANTHROPIC_PRICING_SNAPSHOT}; "
+                "verify against current pricing before billing decisions."
+            )
+        else:
+            caveats.append(
+                "No pricing/limits metadata match for this model id; refresh the docs snapshot "
+                "before quoting dollars or context limits."
+            )
+        models.append(
+            {
+                "id": model_id,
+                "display_name": str(item.get("display_name") or model_id),
+                "provider": "anthropic",
+                # The Models API confirms account access; harness may still gate selection.
+                "availability": "selectable_if_configured",
+                "input_price_per_mtok": metadata.get("input_price_per_mtok") if metadata else None,
+                "output_price_per_mtok": metadata.get("output_price_per_mtok") if metadata else None,
+                "context_window": metadata.get("context_window") if metadata else None,
+                "max_output": metadata.get("max_output") if metadata else None,
+                "capabilities": capabilities,
+                "task_fit": infer_task_fit(model_id, capabilities),
+                "caveats": caveats,
+                "confidence": confidence,
+            }
+        )
+    return models
+
+
 def number_or_none(value: object) -> float | None:
     if value is None:
         return None
@@ -470,9 +716,26 @@ def int_or_none(value: object) -> int | None:
 def infer_task_fit(model_id: str, capabilities: list[str]) -> list[str]:
     lowered = model_id.lower()
     tags = {"mechanical_search"}
-    if any(token in lowered for token in ("code", "coder", "claude", "gpt", "qwen", "kimi", "deepseek")):
+    if any(
+        token in lowered
+        for token in (
+            "code",
+            "coder",
+            "claude",
+            "gpt",
+            "qwen",
+            "kimi",
+            "deepseek",
+            "composer",
+            "grok",
+            "gemini",
+            "glm",
+            "mimo",
+            "minimax",
+        )
+    ):
         tags.add("routine_coding")
-    if any(token in lowered for token in ("pro", "opus", "sonnet", "sol", "reason")):
+    if any(token in lowered for token in ("pro", "opus", "sonnet", "sol", "reason", "fable")):
         tags.add("planning")
         tags.add("final_synthesis")
     if any(token in lowered for token in ("mini", "haiku", "nano", "luna", "flash")):
@@ -524,13 +787,255 @@ def run_opencode_models() -> list[dict]:
     return models
 
 
+def cursor_state_db_candidates() -> list[pathlib.Path]:
+    override = os.environ.get("WHICH_MODEL_CURSOR_STATE_DB")
+    if override:
+        return [pathlib.Path(override).expanduser()]
+    home = pathlib.Path.home()
+    return [
+        home / "Library" / "Application Support" / "Cursor" / "User" / "globalStorage" / "state.vscdb",
+        home / ".config" / "Cursor" / "User" / "globalStorage" / "state.vscdb",
+        home / "AppData" / "Roaming" / "Cursor" / "User" / "globalStorage" / "state.vscdb",
+    ]
+
+
+def load_cursor_reactive_storage(db_path: pathlib.Path) -> dict | None:
+    if not db_path.is_file():
+        return None
+    try:
+        with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as connection:
+            rows = connection.execute(
+                "SELECT key, value FROM ItemTable WHERE key LIKE ?",
+                ("%reactivestorage%persistentStorage%",),
+            ).fetchall()
+    except sqlite3.Error:
+        return None
+    for _key, value in rows:
+        if not isinstance(value, str):
+            continue
+        try:
+            payload = json.loads(value)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict) and isinstance(payload.get("availableDefaultModels2"), list):
+            return payload
+    return None
+
+
+def strip_html_text(value: str) -> str:
+    no_tags = re.sub(r"<[^>]+>", " ", value)
+    return re.sub(r"\s+", " ", html.unescape(no_tags)).strip()
+
+
+def cursor_provider_for(model_id: str) -> str:
+    lowered = model_id.lower()
+    if "/" in model_id:
+        return model_id.split("/", 1)[0]
+    if lowered.startswith(("claude", "anthropic")):
+        return "anthropic"
+    if lowered.startswith(("gpt", "o1", "o3", "o4", "codex")):
+        return "openai"
+    if lowered.startswith("gemini"):
+        return "google"
+    if lowered.startswith(("grok", "composer", "cursor", "default")):
+        return "cursor"
+    if lowered.startswith(("glm", "z-ai")):
+        return "z-ai"
+    if lowered.startswith(("kimi", "moonshot")):
+        return "moonshot"
+    if lowered.startswith(("mimo", "xiaomi")):
+        return "xiaomi"
+    if lowered.startswith("minimax"):
+        return "minimax"
+    return "cursor"
+
+
+def parse_cursor_context_window(tooltip_markdown: str | None) -> int | None:
+    if not tooltip_markdown:
+        return None
+    match = re.search(r"(\d+(?:\.\d+)?)\s*k\s*context", tooltip_markdown, flags=re.IGNORECASE)
+    if match:
+        return int(float(match.group(1)) * 1000)
+    match = re.search(r"(\d[\d,]*)\s*context window", tooltip_markdown, flags=re.IGNORECASE)
+    if match:
+        return int(match.group(1).replace(",", ""))
+    return None
+
+
+def from_cursor(payload: object, env: str, *, confidence: str = "fresh") -> list[dict]:
+    del env
+    if not isinstance(payload, dict):
+        return []
+
+    records = payload.get("availableDefaultModels2")
+    if not isinstance(records, list):
+        # Allow fixtures that pass the model list at the top level under "models".
+        records = payload.get("models")
+    if not isinstance(records, list):
+        return []
+
+    ai_settings = payload.get("aiSettings") if isinstance(payload.get("aiSettings"), dict) else {}
+    disabled = {
+        str(item)
+        for item in (ai_settings.get("modelOverrideDisabled") or [])
+        if isinstance(item, str)
+    }
+    enabled = {
+        str(item)
+        for item in (ai_settings.get("modelOverrideEnabled") or [])
+        if isinstance(item, str)
+    }
+    user_added = {
+        str(item)
+        for item in (ai_settings.get("userAddedModels") or [])
+        if isinstance(item, str)
+    }
+
+    models: list[dict] = []
+    for item in records:
+        if not isinstance(item, dict):
+            continue
+        model_id = item.get("name") or item.get("id")
+        if not model_id:
+            continue
+        model_id = str(model_id)
+        if model_id in {"default", "auto"}:
+            # Auto/default is a router lane, not an exact model recommendation target.
+            continue
+
+        variants = item.get("variants") if isinstance(item.get("variants"), list) else []
+        display_name = model_id
+        tooltip = ""
+        for variant in variants:
+            if not isinstance(variant, dict):
+                continue
+            raw_name = variant.get("displayNameOutsidePicker") or variant.get("displayName")
+            if isinstance(raw_name, str) and raw_name.strip():
+                cleaned = strip_html_text(raw_name)
+                if cleaned:
+                    display_name = cleaned
+                    break
+        for variant in variants:
+            if not isinstance(variant, dict):
+                continue
+            tooltip_data = variant.get("tooltipData") if isinstance(variant.get("tooltipData"), dict) else {}
+            markdown = tooltip_data.get("markdownContent")
+            if isinstance(markdown, str) and markdown.strip():
+                tooltip = markdown
+                break
+
+        cap_set = {"text", "code"}
+        if item.get("supportsAgent"):
+            cap_set.add("tools")
+        param_ids = {
+            str(param.get("id")).lower()
+            for param in (item.get("parameterDefinitions") or [])
+            if isinstance(param, dict) and param.get("id")
+        }
+        if "effort" in param_ids or "thinking" in model_id.lower() or "reasoning" in tooltip.lower():
+            cap_set.add("reasoning")
+        if re.search(r"\b(image|vision|multimodal)\b", tooltip, flags=re.IGNORECASE):
+            cap_set.add("image_input")
+        cap_list = sorted(cap_set)
+
+        context_window = parse_cursor_context_window(tooltip)
+        caveats = [
+            "Cursor local state does not expose exact token pricing; do not invent dollar quotes.",
+        ]
+        if context_window is not None:
+            caveats.append("Context window parsed from Cursor model tooltip text.")
+        else:
+            caveats.append("Context window not present in Cursor local model state.")
+
+        if model_id in disabled:
+            availability = "requires_harness_check"
+            caveats.append("Disabled in Cursor model picker overrides.")
+        else:
+            availability = "selectable_here"
+            if model_id in enabled or model_id in user_added:
+                caveats.append("Explicitly enabled or user-added in Cursor model overrides.")
+            elif item.get("defaultOn") is False:
+                caveats.append("Present in Cursor catalog but not default-on; confirm plan access.")
+
+        models.append(
+            {
+                "id": model_id,
+                "display_name": display_name,
+                "provider": cursor_provider_for(model_id),
+                "availability": availability,
+                "input_price_per_mtok": None,
+                "output_price_per_mtok": None,
+                "context_window": context_window,
+                "max_output": None,
+                "capabilities": cap_list,
+                "task_fit": infer_task_fit(model_id, cap_list),
+                "caveats": caveats,
+                "confidence": confidence,
+            }
+        )
+    return models
+
+
+def load_cursor_catalog_payload() -> tuple[dict | None, dict]:
+    """Return (payload, source_meta). payload is None when unavailable."""
+    for db_path in cursor_state_db_candidates():
+        payload = load_cursor_reactive_storage(db_path)
+        if payload is not None:
+            return payload, {"kind": "cursor-state-db", "path": str(db_path)}
+        if db_path.is_file():
+            return None, {
+                "kind": "cursor-state-db",
+                "path": str(db_path),
+                "error": "reactive storage with availableDefaultModels2 not found",
+            }
+    return None, {
+        "kind": "cursor-state-db",
+        "error": "Cursor state.vscdb not found in default locations",
+    }
+
+
+def override_confidence(source: str | None) -> str:
+    """Local fixture files are deterministic; URL overrides are treated as fresh fetches."""
+    if source and re.match(r"^https?://", source):
+        return "fresh"
+    return "fixture"
+
+
 def build_catalog(env: str) -> dict:
     sources: list[dict] = []
     models: list[dict] = []
     source_payload = local_source_payload()
     if source_payload is not None:
-        models = from_models_dev(source_payload, env)
-        sources.append({"kind": "override", "value": os.environ.get("WHICH_MODEL_CATALOG_SOURCE")})
+        source_value = os.environ.get("WHICH_MODEL_CATALOG_SOURCE")
+        if env == "openrouter":
+            models = from_openrouter(
+                source_payload,
+                env,
+                confidence=override_confidence(source_value),
+            )
+        elif env == "claude":
+            models = from_anthropic(
+                source_payload,
+                env,
+                confidence=override_confidence(source_value),
+            )
+        else:
+            models = from_models_dev(source_payload, env)
+        sources.append({"kind": "override", "value": source_value})
+    elif env == "openrouter":
+        if not os.environ.get("WHICH_MODEL_OFFLINE"):
+            try:
+                models.extend(from_openrouter(load_json_url(OPENROUTER_MODELS_URL), env, confidence="fresh"))
+                sources.append({"kind": "openrouter", "url": OPENROUTER_MODELS_URL})
+            except Exception as exc:  # noqa: BLE001 - fallback cache is intentional here.
+                sources.append({"kind": "openrouter", "error": str(exc)})
+    elif env == "claude":
+        if not os.environ.get("WHICH_MODEL_OFFLINE"):
+            try:
+                models.extend(from_anthropic(fetch_anthropic_models(), env, confidence="fresh"))
+                sources.append({"kind": "anthropic-models-api", "url": ANTHROPIC_MODELS_URL})
+            except Exception as exc:  # noqa: BLE001 - fallback cache is intentional here.
+                sources.append({"kind": "anthropic-models-api", "error": str(exc)})
     elif env == "opencode":
         models.extend(run_opencode_models())
         if models:
@@ -543,7 +1048,7 @@ def build_catalog(env: str) -> dict:
                 sources.append({"kind": "models.dev", "error": str(exc)})
 
     if not models:
-        models = ENV_SEEDS.get(env, ENV_SEEDS["unknown"])
+        models = copy.deepcopy(ENV_SEEDS.get(env, ENV_SEEDS["unknown"]))
         sources.append({"kind": "seed", "value": env})
 
     generated = time.time()
@@ -610,7 +1115,11 @@ def rank_models(catalog: dict, task: str | None, top: int) -> list[dict]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--env", default="auto", help="codex, cursor, claude, opencode, unknown, or auto")
+    parser.add_argument(
+        "--env",
+        default="auto",
+        help="codex, cursor, claude, opencode, openrouter, unknown, or auto",
+    )
     parser.add_argument("--refresh-if-stale", action="store_true")
     parser.add_argument("--force-refresh", action="store_true")
     parser.add_argument("--task", default=None)
