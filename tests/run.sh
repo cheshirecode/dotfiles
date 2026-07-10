@@ -232,6 +232,22 @@ assert flagged("+ next_action from people/oss/active/foo.md", ["README.md"])
 PY
   then ok "ship-hygiene skill PR leak exception"; else fail "ship-hygiene skill PR leak exception"; fi
 
+  if python3 - <<'PY'
+import pathlib
+
+text = pathlib.Path("skills/ship-hygiene/SKILL.md").read_text()
+checks = {
+    "plain checkpoint default": '`"$WORKLOG_BIN/checkpoint.sh" <slug>`' in text,
+    "force marked exceptional": "explicit, stated-reason override" in text,
+    "no forced checkpoint default": "`WORKLOG_CHECKPOINT_FORCE=1 bin/checkpoint.sh <slug>`" not in text,
+}
+missing = [name for name, ok in checks.items() if not ok]
+if missing:
+    print("ship-hygiene checkpoint guard drift: " + ", ".join(missing))
+    raise SystemExit(1)
+PY
+  then ok "ship-hygiene checkpoint guard contract"; else fail "ship-hygiene checkpoint guard contract"; fi
+
   local quiet_home quiet_out
   quiet_home=$(mktemp -d)
   quiet_out=$(HOME="$quiet_home" USER=test-agent DOTFILES_QUIET=1 bash -lc '. ./.shell_common; printf command-output')
