@@ -505,12 +505,14 @@ assert payload["recommendations"][0]["id"] == "claude-haiku-4-5-20251001"
 PY
   then ok "which-model claude catalog enriches Models-API metadata"; else fail "which-model claude catalog enriches Models-API metadata"; fi
 
+  # No injected source and no network: the docs snapshot builds a real catalog with
+  # no Anthropic API key required (WHICH_MODEL_OFFLINE proves no network dependency).
   catalog_json=$(
-    WHICH_MODEL_CACHE_HOME="$catalog_home/cache-claude-offline" \
+    WHICH_MODEL_CACHE_HOME="$catalog_home/cache-claude-snapshot" \
     WHICH_MODEL_OFFLINE=1 \
     skills/which-model/bin/model-catalog --env claude --force-refresh --task routine_coding --top 3
   )
-  if python3 - "$catalog_home/cache-claude-offline/catalog.claude.json" "$catalog_json" <<'PY'
+  if ANTHROPIC_API_KEY="" ANTHROPIC_AUTH_TOKEN="" python3 - "$catalog_home/cache-claude-snapshot/catalog.claude.json" "$catalog_json" <<'PY'
 import json
 import pathlib
 import sys
@@ -518,14 +520,25 @@ import sys
 cache_path = pathlib.Path(sys.argv[1])
 payload = json.loads(sys.argv[2])
 catalog = payload["catalog"]
-assert cache_path.is_file(), "offline claude cache not written"
+assert cache_path.is_file(), "claude snapshot cache not written"
 assert catalog["environment"] == "claude"
-assert any(source.get("kind") == "seed" for source in catalog["sources"])
-assert not any(source.get("kind") == "anthropic-models-api" and "url" in source for source in catalog["sources"])
+# Snapshot source used; no key-based API fetch, no seed fallback.
+assert any(source.get("kind") == "anthropic-docs-snapshot" for source in catalog["sources"])
+assert not any(source.get("kind") == "seed" for source in catalog["sources"])
+by_id = {model["id"]: model for model in catalog["models"]}
+assert "claude-haiku-4-5" in by_id and "claude-opus-4-1" in by_id
+haiku = by_id["claude-haiku-4-5"]
+# Real enriched pricing from the docs snapshot, not null seed placeholders.
+assert haiku["input_price_per_mtok"] == 1.0, haiku["input_price_per_mtok"]
+assert haiku["output_price_per_mtok"] == 5.0, haiku["output_price_per_mtok"]
+assert haiku["provider"] == "anthropic"
 for model in catalog["models"]:
-    assert model["confidence"] == "seeded"
+    assert model["confidence"] == "snapshot"
+    assert any("docs snapshot" in c for c in model["caveats"])
+# Cheapest fitting lane ranks first (Haiku 3 at 0.25/1.25 undercuts newer Haikus).
+assert payload["recommendations"][0]["id"] == "claude-3-haiku-20240307"
 PY
-  then ok "which-model claude offline falls back to seeded catalog"; else fail "which-model claude offline falls back to seeded catalog"; fi
+  then ok "which-model claude builds key-free docs snapshot"; else fail "which-model claude builds key-free docs snapshot"; fi
 
   local cursor_fixture
   cursor_fixture="$catalog_home/cursor.json"
