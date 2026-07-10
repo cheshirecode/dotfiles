@@ -391,6 +391,32 @@ test_worklog_skill() {
     fail "context current Next + unique slug fixture"
   fi
 
+  if WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap CODEX_SKILL_PATH="$skill/SKILL.md" bash "$sb/codex-surface-check.sh" >/dev/null 2>&1; then
+    ok "codex-surface-check accepts Codex-native skill"
+  else
+    fail "codex-surface-check rejected Codex-native skill"
+  fi
+
+  local bad_codex_skill bad_init_mode
+  bad_codex_skill="$(mktemp)"
+  cp "$skill/SKILL.md" "$bad_codex_skill"
+  printf '\nNon-Claude agents don'\''t invoke this skill.\n' >> "$bad_codex_skill"
+  if WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap CODEX_SKILL_PATH="$bad_codex_skill" bash "$sb/codex-surface-check.sh" >/dev/null 2>&1; then
+    fail "codex-surface-check accepted self-excluding Codex skill"
+  else
+    ok "codex-surface-check rejects self-excluding Codex skill"
+  fi
+  rm -f "$bad_codex_skill"
+
+  bad_init_mode="$(mktemp)"
+  printf '# missing Codex hydration contract\n' > "$bad_init_mode"
+  if WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap CODEX_SKILL_PATH="$skill/SKILL.md" MODE_INIT_PATH="$bad_init_mode" bash "$sb/codex-surface-check.sh" >/dev/null 2>&1; then
+    fail "codex-surface-check accepted init without update_plan contract"
+  else
+    ok "codex-surface-check rejects init without update_plan contract"
+  fi
+  rm -f "$bad_init_mode"
+
   rm -rf "$(dirname "$vault")"
 }
 
