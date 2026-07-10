@@ -87,9 +87,9 @@ and normalized `task_fit` tags. Prefer official or harness-native sources: OpenC
 model surface and Models.dev for OpenCode, OpenAI model docs/API surfaces for Codex/OpenAI,
 the Anthropic Models API (`https://api.anthropic.com/v1/models`, needs `ANTHROPIC_API_KEY`) for
 `claude` availability enriched with a dated Anthropic pricing/limits docs snapshot, the OpenRouter
-models API (`https://openrouter.ai/api/v1/models`) for the `openrouter` env, and Cursor-local or
-curated data for Cursor. Label prices or availability as unverified when the source cannot prove
-them.
+models API (`https://openrouter.ai/api/v1/models`) for the `openrouter` env, and Cursor local
+`state.vscdb` reactive storage (`availableDefaultModels2`) for the `cursor` env. Label prices or
+availability as unverified when the source cannot prove them.
 
 ## Routing heuristics
 
