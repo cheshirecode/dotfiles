@@ -321,6 +321,211 @@ if missing:
     raise SystemExit("missing codex seed models: " + ", ".join(missing))
 PY
   then ok "which-model codex seed covers older lanes"; else fail "which-model codex seed covers older lanes"; fi
+
+  local openrouter_fixture
+  openrouter_fixture="$catalog_home/openrouter.json"
+  cat >"$openrouter_fixture" <<'EOF'
+{
+  "data": [
+    {
+      "id": "anthropic/claude-cheap",
+      "name": "Claude Cheap",
+      "context_length": 200000,
+      "architecture": {"input_modalities": ["text", "image"], "output_modalities": ["text"]},
+      "pricing": {"prompt": "0.000001", "completion": "0.000005"},
+      "top_provider": {"context_length": 180000, "max_completion_tokens": 8192, "is_moderated": true},
+      "supported_parameters": ["tools", "tool_choice", "reasoning", "structured_outputs", "response_format"],
+      "reasoning": {"mandatory": false, "default_enabled": true},
+      "expiration_date": null
+    },
+    {
+      "id": "openai/gpt-router-pro",
+      "name": "GPT Router Pro",
+      "context_length": 1000000,
+      "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]},
+      "pricing": {"prompt": "0.000005", "completion": "0.000015"},
+      "top_provider": {"context_length": 1000000, "max_completion_tokens": 32768, "is_moderated": false},
+      "supported_parameters": ["tools"],
+      "reasoning": {"mandatory": true, "default_enabled": true}
+    },
+    {
+      "id": "openrouter/dynamic-price",
+      "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]},
+      "pricing": {"prompt": "-1", "completion": "-1"},
+      "top_provider": {"max_completion_tokens": 4096, "is_moderated": false},
+      "supported_parameters": [],
+      "expiration_date": "2026-12-01"
+    },
+    {
+      "id": null,
+      "name": "skip-me"
+    }
+  ]
+}
+EOF
+  catalog_json=$(
+    WHICH_MODEL_CACHE_HOME="$catalog_home/cache" \
+    WHICH_MODEL_CATALOG_SOURCE="$openrouter_fixture" \
+    skills/which-model/bin/model-catalog --env openrouter --refresh-if-stale --task routine_coding --top 3
+  )
+  if python3 - "$catalog_home/cache/catalog.openrouter.json" "$catalog_json" <<'PY'
+import json
+import pathlib
+import sys
+
+cache_path = pathlib.Path(sys.argv[1])
+payload = json.loads(sys.argv[2])
+catalog = payload["catalog"]
+assert cache_path.is_file(), "openrouter cache not written"
+assert catalog["environment"] == "openrouter"
+assert catalog["schema_version"] == 1
+assert any(source.get("kind") == "override" for source in catalog["sources"])
+by_id = {model["id"]: model for model in catalog["models"]}
+assert set(by_id) == {
+    "anthropic/claude-cheap",
+    "openai/gpt-router-pro",
+    "openrouter/dynamic-price",
+}
+cheap = by_id["anthropic/claude-cheap"]
+# per-token USD strings must scale to per-million-token floats.
+assert cheap["input_price_per_mtok"] == 1.0, cheap["input_price_per_mtok"]
+assert cheap["output_price_per_mtok"] == 5.0, cheap["output_price_per_mtok"]
+assert cheap["provider"] == "anthropic"
+# Prefer routed/top_provider context over advertised context_length.
+assert cheap["context_window"] == 180000, cheap["context_window"]
+assert cheap["max_output"] == 8192
+assert cheap["availability"] == "selectable_here"
+assert "image_input" in cheap["capabilities"]
+assert "tools" in cheap["capabilities"]
+assert "reasoning" in cheap["capabilities"]
+assert "structured_output" in cheap["capabilities"]
+assert any("moderated" in c for c in cheap["caveats"])
+assert any("context" in c.lower() and ("mismatch" in c.lower() or "differs" in c.lower()) for c in cheap["caveats"]), cheap["caveats"]
+assert cheap["confidence"] == "fixture"
+pro = by_id["openai/gpt-router-pro"]
+assert any("mandatory" in c.lower() and "reasoning" in c.lower() for c in pro["caveats"]), pro["caveats"]
+dynamic = by_id["openrouter/dynamic-price"]
+assert dynamic["display_name"] == "openrouter/dynamic-price"
+assert dynamic["provider"] == "openrouter"
+assert dynamic["input_price_per_mtok"] is None
+assert dynamic["output_price_per_mtok"] is None
+assert dynamic["context_window"] is None
+assert any("pricing" in c.lower() for c in dynamic["caveats"]), dynamic["caveats"]
+assert any("routed context" in c.lower() for c in dynamic["caveats"]), dynamic["caveats"]
+assert any("expir" in c.lower() for c in dynamic["caveats"]), dynamic["caveats"]
+# cheapest fitting lane ranks first for routine_coding.
+assert payload["recommendations"][0]["id"] == "anthropic/claude-cheap"
+PY
+  then ok "which-model openrouter catalog parses live-shaped metadata"; else fail "which-model openrouter catalog parses live-shaped metadata"; fi
+
+  catalog_json=$(
+    WHICH_MODEL_CACHE_HOME="$catalog_home/cache-offline" \
+    WHICH_MODEL_OFFLINE=1 \
+    skills/which-model/bin/model-catalog --env openrouter --force-refresh --task routine_coding --top 3
+  )
+  if python3 - "$catalog_home/cache-offline/catalog.openrouter.json" "$catalog_json" <<'PY'
+import json
+import pathlib
+import sys
+
+cache_path = pathlib.Path(sys.argv[1])
+payload = json.loads(sys.argv[2])
+catalog = payload["catalog"]
+assert cache_path.is_file(), "offline openrouter cache not written"
+assert catalog["environment"] == "openrouter"
+assert any(source.get("kind") == "seed" for source in catalog["sources"])
+assert not any(source.get("kind") == "openrouter" and "url" in source for source in catalog["sources"])
+for model in catalog["models"]:
+    assert model["confidence"] == "seeded"
+    assert model["availability"] == "requires_harness_check"
+    assert model["input_price_per_mtok"] is None
+    assert model["output_price_per_mtok"] is None
+assert any(model["id"] == "openrouter/auto" for model in catalog["models"])
+PY
+  then ok "which-model openrouter offline falls back to seeded catalog"; else fail "which-model openrouter offline falls back to seeded catalog"; fi
+
+  local claude_fixture
+  claude_fixture="$catalog_home/claude.json"
+  cat >"$claude_fixture" <<'EOF'
+{
+  "data": [
+    {"type": "model", "id": "claude-haiku-4-5-20251001", "display_name": "Claude Haiku 4.5", "created_at": "2025-10-01T00:00:00Z"},
+    {"type": "model", "id": "claude-opus-4-1-20250805", "display_name": "Claude Opus 4.1", "created_at": "2025-08-05T00:00:00Z"},
+    {"type": "model", "id": "claude-future-unknown-1", "display_name": "Claude Future Unknown", "created_at": "2026-01-01T00:00:00Z"}
+  ],
+  "has_more": false
+}
+EOF
+  catalog_json=$(
+    WHICH_MODEL_CACHE_HOME="$catalog_home/cache-claude" \
+    WHICH_MODEL_CATALOG_SOURCE="$claude_fixture" \
+    skills/which-model/bin/model-catalog --env claude --refresh-if-stale --task routine_coding --top 3
+  )
+  if python3 - "$catalog_home/cache-claude/catalog.claude.json" "$catalog_json" <<'PY'
+import json
+import pathlib
+import sys
+
+cache_path = pathlib.Path(sys.argv[1])
+payload = json.loads(sys.argv[2])
+catalog = payload["catalog"]
+assert cache_path.is_file(), "claude cache not written"
+assert catalog["environment"] == "claude"
+assert catalog["schema_version"] == 1
+by_id = {model["id"]: model for model in catalog["models"]}
+assert set(by_id) == {
+    "claude-haiku-4-5-20251001",
+    "claude-opus-4-1-20250805",
+    "claude-future-unknown-1",
+}
+haiku = by_id["claude-haiku-4-5-20251001"]
+# Models API supplies id/display_name; docs snapshot fills price/limits/capabilities.
+assert haiku["display_name"] == "Claude Haiku 4.5"
+assert haiku["provider"] == "anthropic"
+assert haiku["availability"] == "selectable_if_configured"
+assert haiku["input_price_per_mtok"] == 1.0, haiku["input_price_per_mtok"]
+assert haiku["output_price_per_mtok"] == 5.0, haiku["output_price_per_mtok"]
+assert haiku["context_window"] == 200000
+assert haiku["max_output"] == 64000
+assert "image_input" in haiku["capabilities"]
+assert "reasoning" in haiku["capabilities"]
+assert haiku["confidence"] == "fixture"
+assert any("docs snapshot" in c for c in haiku["caveats"])
+opus = by_id["claude-opus-4-1-20250805"]
+assert opus["input_price_per_mtok"] == 15.0
+assert opus["output_price_per_mtok"] == 75.0
+assert opus["max_output"] == 32000
+# Unmatched model id keeps prices null and flags the gap rather than inventing numbers.
+unknown = by_id["claude-future-unknown-1"]
+assert unknown["input_price_per_mtok"] is None
+assert unknown["output_price_per_mtok"] is None
+assert any("No pricing/limits metadata match" in c for c in unknown["caveats"])
+# Cheapest fitting lane ranks first for routine_coding.
+assert payload["recommendations"][0]["id"] == "claude-haiku-4-5-20251001"
+PY
+  then ok "which-model claude catalog enriches Models-API metadata"; else fail "which-model claude catalog enriches Models-API metadata"; fi
+
+  catalog_json=$(
+    WHICH_MODEL_CACHE_HOME="$catalog_home/cache-claude-offline" \
+    WHICH_MODEL_OFFLINE=1 \
+    skills/which-model/bin/model-catalog --env claude --force-refresh --task routine_coding --top 3
+  )
+  if python3 - "$catalog_home/cache-claude-offline/catalog.claude.json" "$catalog_json" <<'PY'
+import json
+import pathlib
+import sys
+
+cache_path = pathlib.Path(sys.argv[1])
+payload = json.loads(sys.argv[2])
+catalog = payload["catalog"]
+assert cache_path.is_file(), "offline claude cache not written"
+assert catalog["environment"] == "claude"
+assert any(source.get("kind") == "seed" for source in catalog["sources"])
+assert not any(source.get("kind") == "anthropic-models-api" and "url" in source for source in catalog["sources"])
+for model in catalog["models"]:
+    assert model["confidence"] == "seeded"
+PY
+  then ok "which-model claude offline falls back to seeded catalog"; else fail "which-model claude offline falls back to seeded catalog"; fi
   rm -rf "$catalog_home"
 
   local quiet_home quiet_out
