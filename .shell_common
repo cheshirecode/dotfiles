@@ -217,5 +217,7 @@ if [ -f "$HOME/.shell_common.local" ]; then
     . "$HOME/.shell_common.local"
 fi
 
-# Call welcome message
-welcome
+# Call welcome message unless an agent/script asks for clean shell output.
+if [ "${DOTFILES_QUIET:-0}" != "1" ]; then
+    welcome
+fi
