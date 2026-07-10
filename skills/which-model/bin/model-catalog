@@ -1019,6 +1019,12 @@ def build_catalog(env: str) -> dict:
                 env,
                 confidence=override_confidence(source_value),
             )
+        elif env == "cursor":
+            models = from_cursor(
+                source_payload,
+                env,
+                confidence=override_confidence(source_value),
+            )
         else:
             models = from_models_dev(source_payload, env)
         sources.append({"kind": "override", "value": source_value})
@@ -1036,6 +1042,12 @@ def build_catalog(env: str) -> dict:
                 sources.append({"kind": "anthropic-models-api", "url": ANTHROPIC_MODELS_URL})
             except Exception as exc:  # noqa: BLE001 - fallback cache is intentional here.
                 sources.append({"kind": "anthropic-models-api", "error": str(exc)})
+    elif env == "cursor":
+        if not os.environ.get("WHICH_MODEL_OFFLINE"):
+            cursor_payload, cursor_source = load_cursor_catalog_payload()
+            sources.append(cursor_source)
+            if cursor_payload is not None:
+                models.extend(from_cursor(cursor_payload, env, confidence="fresh"))
     elif env == "opencode":
         models.extend(run_opencode_models())
         if models:
