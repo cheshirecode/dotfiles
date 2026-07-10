@@ -42,7 +42,7 @@ Skip if: only one PR open, body is short, no recent worklog activity. Overhead n
     - worktree: `git worktree remove <path>`
     - branch: usually auto-deleted on squash-merge; otherwise `git push origin --delete <branch>` + `git branch -D <branch>`
    If a `[POST-MERGE-CLEANUP]` note for this PR already exists, refresh it rather than duplicating.
-11. **Checkpoint** the worklog body change(s): `WORKLOG_CHECKPOINT_FORCE=1 bin/checkpoint.sh <slug>`. Don't bundle unrelated working-tree changes.
+11. **Checkpoint** the worklog body change(s): `"$WORKLOG_BIN/checkpoint.sh" <slug>`. Don't bundle unrelated working-tree changes. Use `WORKLOG_CHECKPOINT_FORCE=1` only as an explicit, stated-reason override when intentionally checkpointing extra paths; default ship-hygiene must preserve the staged-scope guard.
 
 ## Output format
 
