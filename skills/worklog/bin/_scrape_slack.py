@@ -484,7 +484,6 @@ def apply_writes(proposals: list[dict[str, Any]], ldap: str) -> list[dict[str, A
         summary = proposal["proposed"]["summary"]
         path = Path(path_str)
         text = path.read_text(encoding="utf-8")
-        original = text
 
         text, refs_changed = merge_external_refs(text, permalink, summary)
         text, notes_changed = merge_notes_section(text, permalink, summary)
