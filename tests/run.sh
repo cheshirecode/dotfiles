@@ -248,7 +248,100 @@ if missing:
 PY
   then ok "ship-hygiene checkpoint guard contract"; else fail "ship-hygiene checkpoint guard contract"; fi
 
-  local catalog_home catalog_fixture catalog_json
+  local catalog_home catalog_fixture catalog_json unknown_provider_output detection_home detected_path ancestry_dir
+  local -a clean_env=(
+    env
+    -u WHICH_MODEL_ENV
+    -u CODEX_SANDBOX
+    -u CLAUDE_CODE_SESSION_ID
+    -u CURSOR_SESSION_ID
+    -u CURSOR_TRACE_ID
+    -u OPENCODE
+    -u OPENCODE_SESSION_ID
+  )
+
+  if python3 - <<'PY'
+import runpy
+
+namespace = runpy.run_path("skills/which-model/bin/model-catalog")
+subprocess_module = namespace["subprocess"]
+original_run = subprocess_module.run
+
+class Result:
+    returncode = 0
+    stdout = "1 /tmp/opencode --child\n"
+
+try:
+    subprocess_module.run = lambda *args, **kwargs: Result()
+    assert namespace["detect_process_env"]() == "opencode"
+finally:
+    subprocess_module.run = original_run
+
+calls = []
+
+def fake_run(command, **kwargs):
+    calls.append(command)
+    if len(calls) > 17:
+        return type("Result", (), {"returncode": 1, "stdout": ""})()
+    pid = int(command[-1])
+    return type("Result", (), {"returncode": 0, "stdout": f"{pid + 1} /usr/bin/python3 worker.py\n"})()
+
+try:
+    subprocess_module.run = fake_run
+    assert namespace["detect_process_env"]() is None
+    assert len(calls) <= 16, len(calls)
+finally:
+    subprocess_module.run = original_run
+PY
+  then ok "which-model parses bounded process argv ancestry"; else fail "which-model parses bounded process argv ancestry"; fi
+
+  detection_home=$(mktemp -d)
+  mkdir -p "$detection_home/work/.claude" "$detection_home/work/.cursor"
+  detected_path=$(
+    cd "$detection_home/work" && \
+      "${clean_env[@]}" \
+        CODEX_HOME="$detection_home/codex" \
+        OPENROUTER_API_KEY=test \
+        OPENCODE_SESSION_ID=dogfood \
+        WHICH_MODEL_CACHE_HOME="$detection_home/cache" \
+        "$REPO_ROOT/skills/which-model/bin/model-catalog" --print-path
+  )
+  if [[ "$(basename "$detected_path")" == "catalog.opencode.json" ]]; then
+    ok "which-model active OpenCode session outranks passive detection"
+  else
+    fail "which-model active OpenCode session misdetected (path=$detected_path)"
+  fi
+
+  detected_path=$(
+    "${clean_env[@]}" \
+      WHICH_MODEL_ENV=claude \
+      OPENCODE_SESSION_ID=dogfood \
+      WHICH_MODEL_CACHE_HOME="$detection_home/cache" \
+      skills/which-model/bin/model-catalog --print-path
+  )
+  if [[ "$(basename "$detected_path")" == "catalog.claude.json" ]]; then
+    ok "which-model explicit env outranks active session evidence"
+  else
+    fail "which-model explicit env precedence drifted (path=$detected_path)"
+  fi
+
+  ancestry_dir=$(mktemp -d)
+  ln -s /bin/sh "$ancestry_dir/opencode"
+  detected_path=$(
+    cd "$detection_home/work" && \
+      "${clean_env[@]}" \
+        CODEX_HOME="$detection_home/codex" \
+        OPENROUTER_API_KEY=test \
+        WHICH_MODEL_CACHE_HOME="$detection_home/cache" \
+        "$ancestry_dir/opencode" -c '"$1" --print-path; :' sh "$REPO_ROOT/skills/which-model/bin/model-catalog"
+  )
+  if [[ "$(basename "$detected_path")" == "catalog.opencode.json" ]]; then
+    ok "which-model process ancestry outranks passive detection"
+  else
+    fail "which-model process ancestry misdetected (path=$detected_path)"
+  fi
+  rm -rf "$detection_home" "$ancestry_dir"
+
   catalog_home=$(mktemp -d)
   catalog_fixture="$catalog_home/models.json"
   cat >"$catalog_fixture" <<'EOF'
@@ -292,7 +385,7 @@ assert catalog["schema_version"] == 1
 assert len(catalog["models"]) == 2
 assert payload["recommendations"][0]["id"] == "openai/reason-pro"
 PY
-  then ok "which-model catalog warms env cache"; else fail "which-model catalog warms env cache"; fi
+  then ok "which-model catalog warms legacy env cache"; else fail "which-model catalog warms legacy env cache"; fi
   catalog_json=$(
     WHICH_MODEL_CACHE_HOME="$catalog_home/cache" \
     WHICH_MODEL_OFFLINE=1 \
@@ -363,6 +456,39 @@ PY
   ]
 }
 EOF
+  catalog_json=$(
+    WHICH_MODEL_CACHE_HOME="$catalog_home/cache" \
+    WHICH_MODEL_CATALOG_SOURCE="$openrouter_fixture" \
+    skills/which-model/bin/model-catalog --env opencode --provider openrouter --force-refresh --task routine_coding --top 3
+  )
+  if python3 - "$catalog_home/cache/catalog.opencode.openrouter.json" "$catalog_json" <<'PY'
+import json
+import pathlib
+import sys
+
+cache_path = pathlib.Path(sys.argv[1])
+payload = json.loads(sys.argv[2])
+catalog = payload["catalog"]
+assert cache_path.is_file(), "explicit provider cache not written"
+assert payload["path"] == str(cache_path)
+assert catalog["environment"] == "opencode"
+assert catalog["provider"] == "openrouter"
+by_id = {model["id"]: model for model in catalog["models"]}
+assert by_id["anthropic/claude-cheap"]["input_price_per_mtok"] == 1.0
+assert by_id["anthropic/claude-cheap"]["output_price_per_mtok"] == 5.0
+PY
+  then ok "which-model provider selects source independently from env"; else fail "which-model provider selects source independently from env"; fi
+
+  set +e
+  unknown_provider_output=$(skills/which-model/bin/model-catalog --env opencode --provider bogus 2>&1)
+  rc=$?
+  set -e
+  if [[ $rc -eq 2 && "$unknown_provider_output" == *"unknown provider 'bogus'"* ]]; then
+    ok "which-model rejects unknown explicit provider (exit=2)"
+  else
+    fail "which-model unknown provider error drifted (exit=$rc, output=${unknown_provider_output@Q})"
+  fi
+
   catalog_json=$(
     WHICH_MODEL_CACHE_HOME="$catalog_home/cache" \
     WHICH_MODEL_CATALOG_SOURCE="$openrouter_fixture" \
