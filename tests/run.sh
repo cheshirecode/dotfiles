@@ -293,6 +293,34 @@ assert len(catalog["models"]) == 2
 assert payload["recommendations"][0]["id"] == "openai/reason-pro"
 PY
   then ok "which-model catalog warms env cache"; else fail "which-model catalog warms env cache"; fi
+  catalog_json=$(
+    WHICH_MODEL_CACHE_HOME="$catalog_home/cache" \
+    WHICH_MODEL_OFFLINE=1 \
+    skills/which-model/bin/model-catalog --env codex --force-refresh --task routine_coding --top 3
+  )
+  if python3 - "$catalog_json" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+ids = {model["id"] for model in payload["catalog"]["models"]}
+required = {
+    "gpt-5.6-luna",
+    "gpt-5.6-terra",
+    "gpt-5.6-sol",
+    "gpt-5.5",
+    "gpt-5.5-pro",
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-5.4-nano",
+    "gpt-5.3-codex",
+    "gpt-5-codex",
+}
+missing = sorted(required - ids)
+if missing:
+    raise SystemExit("missing codex seed models: " + ", ".join(missing))
+PY
+  then ok "which-model codex seed covers older lanes"; else fail "which-model codex seed covers older lanes"; fi
   rm -rf "$catalog_home"
 
   local quiet_home quiet_out
