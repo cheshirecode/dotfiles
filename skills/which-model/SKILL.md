@@ -18,6 +18,10 @@ should be loaded into context. Do not fetch live pricing in no-argument mode.
 
 ### `/which-model <task prose or capability>`
 
+If the sequential-thinking MCP is available, call it first for non-trivial tasks to decompose the
+job into capability requirements, constraints, and risk gates. Use the result to choose models; do
+not expose chain-of-thought. Skip this for obvious one-lane asks.
+
 Return up to 1-3 recommendations, ordered best-value first, then fallback, then premium/escalation
 only when useful. Keep the answer compact:
 
@@ -96,3 +100,4 @@ first-party, or explicitly approved open-weight routes.
   "mid multimodal model", "frontier synthesis model".
 - State when the current harness cannot actually select a recommended model.
 - Give a one-line rationale tied to the task: capability + cost + caveat.
+- Summarize reasoning as decision factors only; do not print private chain-of-thought.
