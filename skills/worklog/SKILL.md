@@ -161,4 +161,6 @@ For per-task detail, use `"$WORKLOG_BIN/context.sh" <slug>` (its output ends in 
 
 ## Codex / Cursor / other agents
 
-Non-Claude agents don't invoke this skill. They read `README.md` and `AGENTS.md` directly. Subcommand hints for them live in `README.md` § Helpers — keep that list in sync with the menu above when modes change.
+Codex agents may invoke this skill directly. Hydrate live progress with Codex `update_plan` wherever this protocol says Claude Code should use `TaskCreate`; `modes/init.md`, `modes/context.md`, and `modes/sync.md` carry the mode-specific tracker rules.
+
+Cursor and other agents without this skill should read `README.md` and `AGENTS.md` directly. Subcommand hints for them live in `README.md` § Helpers — keep that list in sync with the menu above when modes change.

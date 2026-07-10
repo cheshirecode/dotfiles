@@ -17,6 +17,7 @@ cd "$REPO_ROOT"
 
 EXPECTED=(help init sync status context plan spawn export import lint project scrape-slack review)
 CODEX_SKILL_PATH="${CODEX_SKILL_PATH:-$HOME/.codex/skills/worklog/SKILL.md}"
+MODE_INIT_PATH="${MODE_INIT_PATH:-$SCRIPT_DIR/../modes/init.md}"
 
 case "${1:-}" in
   -h|--help)
@@ -61,6 +62,26 @@ done
 
 if (( missing )); then
   echo "codex-surface-check: command surface drift detected" >&2
+  exit 1
+fi
+
+if [[ -f "$CODEX_SKILL_PATH" ]]; then
+  if grep -Fq "Non-Claude agents don't invoke this skill" "$CODEX_SKILL_PATH"; then
+    echo "codex-surface-check: Codex skill still excludes its own invocation" >&2
+    exit 1
+  fi
+  if ! grep -Fq "Codex agents may invoke this skill directly" "$CODEX_SKILL_PATH"; then
+    echo "codex-surface-check: Codex skill missing explicit invocation contract" >&2
+    exit 1
+  fi
+fi
+
+if [[ ! -f "$MODE_INIT_PATH" ]]; then
+  echo "codex-surface-check: init mode not found at $MODE_INIT_PATH" >&2
+  exit 1
+fi
+if ! grep -Fq "OpenAI Codex CLI" "$MODE_INIT_PATH" || ! grep -Fq "update_plan" "$MODE_INIT_PATH"; then
+  echo "codex-surface-check: init mode missing Codex update_plan hydration contract" >&2
   exit 1
 fi
 
