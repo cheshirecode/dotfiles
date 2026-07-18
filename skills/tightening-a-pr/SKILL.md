@@ -85,6 +85,7 @@ Compress the decided iteration drama out of the task body (drop ToT/Reflexion sc
 - `ship-hygiene` — step 3 deslop + internal-ref purge (delegated, not duplicated).
 - `worklog` — step 4 checkpoint (`checkpoint.sh`); follow-up learnings become `next_action` items.
 - `karpathy-guidelines` — "don't refactor what isn't broken": most kept learnings are one-off tasks or drops, not new infra.
+- `example-led-instructions` — brittle outputs only; 0/1/few-shot gate, max 1-3 examples, skip if obvious.
 
 ## Output format
 

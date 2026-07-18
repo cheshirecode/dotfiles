@@ -160,6 +160,10 @@ For per-task detail, use `"$WORKLOG_BIN/context.sh" <slug>` (its output ends in 
 - Follow AGENTS.md checkpoint discipline after any mode completes.
 - Prefer `"$WORKLOG_BIN/checkpoint.sh"` and `"$WORKLOG_BIN/autosave.sh"` over hand-rolling commits. New helper needed → new single-purpose script.
 
+## Skill maintenance opt-in
+
+For brittle mode/template outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious. Do not invoke it for normal `/worklog` runtime.
+
 ## Codex / Cursor / other agents
 
 Codex agents may invoke this skill directly. Hydrate live progress with Codex `update_plan` wherever this protocol says Claude Code should use `TaskCreate`; `modes/init.md`, `modes/context.md`, and `modes/sync.md` carry the mode-specific tracker rules.

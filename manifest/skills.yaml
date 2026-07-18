@@ -63,6 +63,14 @@ skills:
       path: skills/karpathy-guidelines
     install_to: ~/.claude/skills/karpathy-guidelines
 
+  - name: example-led-instructions
+    description: Compact zero/one/few-shot gate for brittle agent instructions.
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/example-led-instructions
+    install_to: ~/.claude/skills/example-led-instructions
+
   - name: tightening-a-pr
     description: Single-PR post-completion close-out — distill learnings (council) → codify → deslop (ship-hygiene) → checkpoint.
     source:
