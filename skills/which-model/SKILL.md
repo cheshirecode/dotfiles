@@ -101,9 +101,10 @@ prices or availability as unverified when the source cannot prove them.
 - **Mechanical search/inventory/status checks**: pick the cheapest reliable model with enough
   context and tool access. DeepSeek/Qwen/MiniMax/MiMo-class lanes are first-class candidates.
 - **Routine coding or targeted patching**: pick the cheapest model that reliably follows repo
-  patterns and tests. Prefer `kimi-k3` as the current Kimi/Moonshot coding lane when it is
-  selectable, especially for long-horizon work or large codebases; use `kimi-k2.7-code-highspeed`
-  only when faster output matters more. Qwen coder, GLM/Z.ai, OpenAI mid, Anthropic Sonnet-class,
+  patterns and tests. Within Kimi/Moonshot recommendations, use `kimi-k3` as the current coding
+  candidate when it is selectable, especially for long-horizon work or large codebases; use
+  `kimi-k2.7-code-highspeed` only when faster output matters more. Do not infer cross-provider
+  superiority from model-name task tags. Qwen coder, GLM/Z.ai, OpenAI mid, Anthropic Sonnet-class,
   or local code models can still win depending on harness and repo fit.
 - **Long-context review**: prefer models with large context and low input cost, then require
   evidence-shaped output: file refs, commands, pass/fail status, and uncertainty.

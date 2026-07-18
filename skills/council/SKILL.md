@@ -132,9 +132,11 @@ Read only what is needed for this angle. Return:
    - A<angle_i>-i1: <concrete, testable item>
      - Falsifier or strongest counterexample: <observation that would defeat or materially qualify it>
      - Verification recipe: <cheapest safe check and expected discriminating result>
+     - Verification evidence: <PLANNED|EXECUTED-PASS|EXECUTED-FAIL|UNAVAILABLE> — <artifact pointer or reason>
    - A<angle_i>-i2: <concrete, testable item>
      - Falsifier or strongest counterexample: <observation that would defeat or materially qualify it>
      - Verification recipe: <cheapest safe check and expected discriminating result>
+     - Verification evidence: <PLANNED|EXECUTED-PASS|EXECUTED-FAIL|UNAVAILABLE> — <artifact pointer or reason>
 No file edits.
 ```
 
@@ -144,7 +146,7 @@ No file edits.
 You are the Stage 3 discussion agent. Read all Stage 2 findings below.
 Flag agreements, disagreements, gaps, and contradictions.
 You may propose additional candidate items only when they are surfaced by cross-angle gaps.
-For every candidate, assess its strongest counterexample from the supplied evidence. Run a cheap, safe, in-scope verification recipe only when needed; otherwise leave it unresolved rather than guessing.
+For every candidate, assess its strongest counterexample from the supplied evidence. Run a cheap, safe, in-scope verification recipe only when needed; otherwise leave it unresolved rather than guessing. Never present a planned check as an executed result; preserve its evidence state and artifact pointer.
 
 Output:
 ## Stage 3 discussion
@@ -157,6 +159,7 @@ Additional candidate items surfaced by cross-angle gaps:
 - D-i1: <concrete, testable item>
   - Falsifier or strongest counterexample: <observation>
   - Verification recipe: <check and expected result>
+  - Verification evidence: <state and artifact pointer or reason>
 ```
 
 ### Stage 4 candidate collation
@@ -171,14 +174,16 @@ Output:
 1. <item> [proposed-by: A1-i2, D-i1]
    - Falsifier or strongest counterexample: <preserved from upstream>
    - Verification recipe: <preserved from upstream>
+   - Verification evidence: <preserved state and artifact pointer>
    - Counterexample survival status: <Stage 3 status>
 2. <item> [proposed-by: A2-i3]
    - Falsifier or strongest counterexample: <preserved from upstream>
    - Verification recipe: <preserved from upstream>
+   - Verification evidence: <preserved state and artifact pointer>
    - Counterexample survival status: <Stage 3 status>
 
 Collator: 0 items invented; X items deduped.
-Items without exact upstream proposer IDs, a falsifier/counterexample, a verification recipe, or a Stage 3 survival status will be dropped before voting.
+Items without exact upstream proposer IDs, a falsifier/counterexample, a verification recipe, verification evidence state, or a Stage 3 survival status will be dropped before voting.
 ```
 
 ### Stage 5 voting
@@ -204,7 +209,7 @@ Voter <n>:
 ## Recipe
 
 1. **Decompose the topic.** State the question. Pick 3-5 research angles that do not overlap.
-2. **Spawn research sub-agents** (Stage 1). Each prompt must use the Stage 1 template and include the exact no-cross-angle sentence. Each agent output must include `Candidate items proposed by this angle:` plus the required falsifier/counterexample and verification recipe for every item.
+2. **Spawn research sub-agents** (Stage 1). Each prompt must use the Stage 1 template and include the exact no-cross-angle sentence. Each agent output must include `Candidate items proposed by this angle:` plus the required falsifier/counterexample, verification recipe, and evidence state for every item.
 3. **Collect findings** (Stage 2). Read each return; quote-tag key claims; extract candidate IDs and their evidence fields per angle.
 4. **Run discussion** (Stage 3). Use the Stage 3 template, assign every candidate a counterexample survival status, and record additional `D-iN` candidates only when tied to a cross-angle gap.
 5. **Run candidate collation** (Stage 4). Use the Stage 4 template. Drop collator-invented, untagged, or evidence-incomplete items before voting.
