@@ -318,7 +318,12 @@ PY
 
   local optin_tmp optin_output
   optin_tmp=$(mktemp -d)
-  mkdir -p "$optin_tmp/skills/example-led-instructions" "$optin_tmp/skills/bad" "$optin_tmp/skills/worklog"
+  mkdir -p \
+    "$optin_tmp/skills/example-led-instructions" \
+    "$optin_tmp/skills/bad" \
+    "$optin_tmp/skills/duplicate" \
+    "$optin_tmp/skills/fenced" \
+    "$optin_tmp/skills/worklog"
   cp skills/example-led-instructions/SKILL.md "$optin_tmp/skills/example-led-instructions/SKILL.md"
   cat >"$optin_tmp/skills/bad/SKILL.md" <<'EOF'
 ---
@@ -327,6 +332,25 @@ description: bad fixture
 ---
 
 Always invoke $example-led-instructions for every output.
+EOF
+  cat >"$optin_tmp/skills/duplicate/SKILL.md" <<'EOF'
+---
+name: duplicate
+description: bad fixture
+---
+
+For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
+For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
+EOF
+  cat >"$optin_tmp/skills/fenced/SKILL.md" <<'EOF'
+---
+name: fenced
+description: bad fixture
+---
+
+```text
+For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
+```
 EOF
   cat >"$optin_tmp/skills/worklog/SKILL.md" <<'EOF'
 ---
@@ -340,7 +364,11 @@ EOF
   optin_output=$(python3 tools/check-skill-opt-ins.py --root "$optin_tmp" 2>&1)
   rc=$?
   set -e
-  if [[ $rc -eq 1 && "$optin_output" == *"must use the exact compact opt-in preamble"* && "$optin_output" == *"needs runtime guard"* ]]; then
+  if [[ $rc -eq 1 \
+    && "$optin_output" == *"must use the exact compact opt-in preamble"* \
+    && "$optin_output" == *"duplicate \$example-led-instructions opt-in"* \
+    && "$optin_output" == *"opt-in is inside a code fence"* \
+    && "$optin_output" == *"needs runtime guard"* ]]; then
     ok "check-skill-opt-ins rejects sloppy opt-ins"
   else
     fail "check-skill-opt-ins red path drifted (exit=$rc, output=${optin_output@Q})"
