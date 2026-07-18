@@ -75,8 +75,6 @@ skills/which-model/bin/model-catalog --env opencode --refresh-if-stale --task ro
 skills/which-model/bin/model-catalog --env opencode --provider openrouter --refresh-if-stale
 ```
 
-Provider-specific catalog implementation handoff lives in `docs/provider-handover.md`.
-
 Refresh rules:
 
 - Missing cache: build a catalog before answering.
@@ -103,8 +101,10 @@ prices or availability as unverified when the source cannot prove them.
 - **Mechanical search/inventory/status checks**: pick the cheapest reliable model with enough
   context and tool access. DeepSeek/Qwen/MiniMax/MiMo-class lanes are first-class candidates.
 - **Routine coding or targeted patching**: pick the cheapest model that reliably follows repo
-  patterns and tests. Qwen coder, Kimi/Moonshot code, GLM/Z.ai, OpenAI mid, Anthropic Sonnet-class,
-  or local code models can all win depending on harness and repo fit.
+  patterns and tests. Prefer `kimi-k3` as the current Kimi/Moonshot coding lane when it is
+  selectable, especially for long-horizon work or large codebases; use `kimi-k2.7-code-highspeed`
+  only when faster output matters more. Qwen coder, GLM/Z.ai, OpenAI mid, Anthropic Sonnet-class,
+  or local code models can still win depending on harness and repo fit.
 - **Long-context review**: prefer models with large context and low input cost, then require
   evidence-shaped output: file refs, commands, pass/fail status, and uncertainty.
 - **Voting/adversarial review**: use mid-tier judgment models. Use 3 voters by default; use 5 only
