@@ -79,6 +79,8 @@ checks = {
     "approve counterexample gate": "must not cast `APPROVE`" in text,
     "verification evidence states": "PLANNED|EXECUTED-PASS|EXECUTED-FAIL|UNAVAILABLE" in text,
     "planned is not executed": "Never present a planned check as an executed result" in text,
+    "executable ballot validator": "bin/validate-ballot.py" in text,
+    "absence claims verified": "Verify absence claims before voters see them" in text,
 }
 headings = [
     "## Outcome",
@@ -110,6 +112,8 @@ checks = {
     "stop mutations": "Stop further mutations" in text,
     "invalidate plan": "invalidate the affected remaining steps" in text,
     "original reproduction": "original reproduction" in text,
+    "trusted vantage blocker check": "trusted vantage point" in text,
+    "blocker classifier threshold": "three independent incidents" in text,
 }
 missing = [name for name, ok in checks.items() if not ok]
 if missing:
@@ -136,6 +140,37 @@ PY
   else
     fail "worklog PR reconciliation fixtures"
   fi
+
+  if python3 - <<'PY'
+import pathlib
+import subprocess
+import tempfile
+
+validator = pathlib.Path("skills/council/bin/validate-ballot.py")
+good = """## Stage 5 ballots
+Voter 1:
+  item 1: APPROVE
+  item 2: QUALIFY: run the missing fixture
+  item 3: REJECT: SOLVES-EXTANT-PAIN, no observed failure
+"""
+bad = good.replace("item 2: QUALIFY: run the missing fixture", "item 2: APPROVE")
+with tempfile.TemporaryDirectory() as directory:
+    ballot = pathlib.Path(directory) / "ballot.md"
+    ballot.write_text(good)
+    assert subprocess.run(
+        ["python3", str(validator), "--items", "3", "--unresolved", "2", str(ballot)],
+        capture_output=True,
+    ).returncode == 0
+    ballot.write_text(bad)
+    result = subprocess.run(
+        ["python3", str(validator), "--items", "3", "--unresolved", "2", str(ballot)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "APPROVE conflicts with UNRESOLVED MATERIAL" in result.stderr
+PY
+  then ok "council ballot validator rejects contradictory approval"; else fail "council ballot validator rejects contradictory approval"; fi
 
   # --- #6: check-manifest.sh subpath+repo HARD FAIL ---
   local bad_manifest tmpdir
@@ -301,6 +336,33 @@ original_run = subprocess_module.run
 
 kimi_tags = set(namespace["infer_task_fit"]("moonshotai/kimi-k3", ["text", "image_input", "code", "tools", "reasoning"]))
 assert {"routine_coding", "large_refactor", "agentic_workflow", "planning"} <= kimi_tags
+for model_id in ("moonshotai/kimi-k30", "vendor/not-kimi-k3-preview"):
+    tags = set(namespace["infer_task_fit"](model_id, ["text", "code"]))
+    assert not {"large_refactor", "agentic_workflow", "planning"} & tags
+
+ranked = namespace["rank_models"](
+    {
+        "models": [
+            {
+                "id": "unavailable-specialist",
+                "availability": "requires_harness_check",
+                "task_fit": ["routine_coding"],
+                "input_price_per_mtok": 0.1,
+                "output_price_per_mtok": 0.1,
+            },
+            {
+                "id": "available-generalist",
+                "availability": "selectable_here",
+                "task_fit": [],
+                "input_price_per_mtok": 10,
+                "output_price_per_mtok": 10,
+            },
+        ]
+    },
+    "routine_coding",
+    2,
+)
+assert ranked[0]["id"] == "available-generalist"
 
 class Result:
     returncode = 0

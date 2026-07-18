@@ -783,7 +783,7 @@ def infer_task_fit(model_id: str, capabilities: list[str]) -> list[str]:
         )
     ):
         tags.add("routine_coding")
-    if "kimi-k3" in lowered:
+    if lowered.strip().rstrip("/").rsplit("/", 1)[-1] == "kimi-k3":
         tags.update({"agentic_workflow", "large_refactor", "planning"})
     if any(token in lowered for token in ("pro", "opus", "sonnet", "sol", "reason", "fable")):
         tags.add("planning")
@@ -1166,12 +1166,12 @@ def price_score(model: dict) -> float:
 def rank_models(catalog: dict, task: str | None, top: int) -> list[dict]:
     tag = normalize_task(task)
 
-    def score(model: dict) -> tuple[int, float, str]:
+    def score(model: dict) -> tuple[int, int, float, str]:
         fits = set(model.get("task_fit") or [])
         availability = model.get("availability")
         fit_penalty = 0 if tag and tag in fits else 1
         availability_penalty = 0 if availability in {"selectable_here", "selectable_if_configured"} else 1
-        return (fit_penalty + availability_penalty, price_score(model), model.get("id", ""))
+        return (availability_penalty, fit_penalty, price_score(model), model.get("id", ""))
 
     return sorted(catalog.get("models", []), key=score)[:top]
 
