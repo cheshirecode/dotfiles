@@ -21,8 +21,9 @@ EXPECTED_GITHUB_STATES = {
   "blocked": ["OPEN"],
   "in-review": ["OPEN"],
   "shipping": ["MERGED"],
-  "archived": ["MERGED"],
 }
+
+NON_SHIPPING_ARCHIVE_REASONS = {"abandoned", "declined"}
 
 
 def fail(message: str, code: int = 2) -> None:
@@ -30,7 +31,7 @@ def fail(message: str, code: int = 2) -> None:
   raise SystemExit(code)
 
 
-def read_task(repo: pathlib.Path, slug: str) -> tuple[pathlib.Path, dict[str, Any], dict[int, list[str]]]:
+def read_task(repo: pathlib.Path, slug: str) -> tuple[pathlib.Path, dict[str, Any], dict[int, list[str]], str | None]:
   matches = sorted(repo.glob(f"people/*/active/{slug}.md"))
   matches += sorted(repo.glob(f"people/*/archive/{slug}.md"))
   if not matches:
@@ -44,13 +45,23 @@ def read_task(repo: pathlib.Path, slug: str) -> tuple[pathlib.Path, dict[str, An
   frontmatter = yaml.safe_load(match.group(1)) or {}
   if not isinstance(frontmatter, dict):
     fail(f"task '{slug}' frontmatter is not a mapping")
+  reason_match = re.search(r"^Archived \d{4}-\d{2}-\d{2}: ([^:\n]+):", text, re.MULTILINE)
+  archive_reason = reason_match.group(1).strip().lower() if reason_match else None
   body_pr_repos: dict[int, list[str]] = {}
   for linked_repo, number in re.findall(r"https://github\.com/([^/\s]+/[^/\s]+)/pull/(\d+)", text):
     pr = int(number)
     body_pr_repos.setdefault(pr, [])
     if linked_repo not in body_pr_repos[pr]:
       body_pr_repos[pr].append(linked_repo)
-  return matches[0], frontmatter, body_pr_repos
+  return matches[0], frontmatter, body_pr_repos, archive_reason
+
+
+def expected_github_states(status: str, archive_reason: str | None) -> list[str]:
+  if status != "archived":
+    return EXPECTED_GITHUB_STATES.get(status, ["OPEN"])
+  if archive_reason in NON_SHIPPING_ARCHIVE_REASONS:
+    return ["CLOSED", "MERGED"]
+  return ["MERGED"]
 
 
 def authoritative_prs(repo: pathlib.Path, slug: str) -> list[int]:
@@ -184,13 +195,13 @@ def main(argv: list[str]) -> None:
 
   repo = pathlib.Path(argv[0]).resolve()
   slug = argv[1]
-  _task_path, frontmatter, body_pr_repos = read_task(repo, slug)
+  _task_path, frontmatter, body_pr_repos, archive_reason = read_task(repo, slug)
   prs = authoritative_prs(repo, slug)
   if not prs:
     fail(f"no authoritative Worklog-PR trailer for '{slug}'")
 
   worklog_status = str(frontmatter.get("status") or "unknown")
-  expected_states = EXPECTED_GITHUB_STATES.get(worklog_status, ["OPEN"])
+  expected_states = expected_github_states(worklog_status, archive_reason)
   observed = [fetch_unique_pr(resolve_repos(frontmatter, body_pr_repos, pr), pr) for pr in prs]
   mismatches = [
     {

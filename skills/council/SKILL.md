@@ -81,6 +81,7 @@ The full ballot per item is one of:
 
 Before tallying, validate every ballot:
 
+- Save each returned ballot verbatim and run `python3 bin/validate-ballot.py --items <N> --unresolved <comma-separated item numbers> <ballot-file>` from this skill directory. Treat a non-zero exit as malformed and retry once; do not tally an unvalidated ballot.
 - Invalid criterion name, missing item, or malformed vote -> retry that voter once.
 - `APPROVE` on an `UNRESOLVED MATERIAL` candidate is malformed -> retry that voter once.
 - Still invalid after retry -> mark that item ballot `INVALID`, exclude it from support/reject counts, keep the full odd `M_returned` denominator, and mark the item `UNVERIFIED` if fewer than 3 valid item ballots remain.
@@ -290,6 +291,7 @@ Put full Stage 5 ballots here, after the outcome and vote tables.
 
 - **Token budget line before fanout.** Before spawning N sub-agents, emit a one-line estimate. Refuse >20k tokens of simultaneous research without explicit user OK.
 - **Voter ballot isolation.** Stage 5 voters receive only the Stage 4 candidate list, Stage 2 findings, Stage 3 discussion, criteria table, and original user request.
+- **Verify absence claims before voters see them.** Any "verified fact" of absence fed to voters (zero callers, zero tests, unused) must be orchestrator-verified with a concrete search first — one angle's absence claim can be contradicted by another angle's findings, and a REJECT veto resting on an unverified absence claim is invalid. If a veto's factual basis turns out false at tally time, mark the item UNVERIFIED and state the correction rather than honoring the veto.
 - **Collator has no creative authority.** If the collator outputs an untagged or coarse-tagged item, drop it before Stage 5 and note the violation.
 - **Fresh-agent invocations per stage.** Siblings in the same stage share no parent context beyond their prompt. Across stages, pass only the explicit deliverable.
 - **Worklog default.** `worklog plan` is an optional pairing. If the user says no worklog tracking, do not invoke `/worklog plan` or write task notes for that council.

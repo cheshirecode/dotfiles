@@ -79,4 +79,6 @@ If observed evidence contradicts a load-bearing assumption or a planned expected
 3. Revise the hypothesis and plan before continuing.
 4. Rerun the original reproduction plus affected regression checks.
 
+For an apparent blocker, replay it from a trusted vantage point and use a cause-specific discriminating check before stopping. Do not generalize a shared blocker classifier until three independent incidents exhibit the same machine-detectable cause.
+
 Do not require this three-field block for trivial, single-path tasks with no meaningful uncertainty.

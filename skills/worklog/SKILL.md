@@ -104,7 +104,7 @@ For per-task detail, use `"$WORKLOG_BIN/context.sh" <slug>` (its output ends in 
 - Linear: `draft → in-progress → in-review → shipping → archived`.
 - Side: `blocked` — `next_action` MUST start with `Waiting on`.
 - Flip via `"$WORKLOG_BIN/checkpoint.sh" <slug> --status=X`. Never edit frontmatter `status:` alongside a separate `Worklog-Status:` trailer.
-- `--status=archived` is rejected by checkpoint — use `"$WORKLOG_BIN/archive.sh" <slug> --reason=<shipped|superseded|abandoned|merged|obsolete>`.
+- `--status=archived` is rejected by checkpoint — use `"$WORKLOG_BIN/archive.sh" <slug> --reason=<shipped|declined|superseded|abandoned|merged|obsolete>`.
 
 ### Editing rules
 - Edit only `$WORKLOG_REPO/people/$LDAP/`. Other namespaces read-only.
@@ -117,7 +117,7 @@ For per-task detail, use `"$WORKLOG_BIN/context.sh" <slug>` (its output ends in 
 - Safety: `"$WORKLOG_BIN/autosave.sh"` (slugless snapshot). Hooks wired by `"$WORKLOG_BIN/install-hooks.sh" --write`.
 - Standup: `"$WORKLOG_BIN/status.sh" [--since=… --project=… --slug=…]`.
 - Per-task pack: `"$WORKLOG_BIN/context.sh" <slug> [--for=resume|review|compact]`.
-- PR reconciliation: `"$WORKLOG_BIN/reconcile-pr.sh" <slug>` compares authoritative `Worklog-PR:` trailers with live GitHub state and emits read-only JSON; repository resolution uses `pr_repos`, exact GitHub PR URLs in the task body, known repos, or local clone remotes.
+- PR reconciliation: `"$WORKLOG_BIN/reconcile-pr.sh" <slug>` compares authoritative `Worklog-PR:` trailers with live GitHub state and emits read-only JSON; repository resolution uses `pr_repos`, exact GitHub PR URLs in the task body, known repos, or local clone remotes. Keep it read-only and limited to explicit task links; do not infer stale work from direct-to-main changes or missing PR linkage.
 - Slug lookup: `"$WORKLOG_BIN/slug.sh" <fragment>`.
 - Search: `"$WORKLOG_BIN/search.sh" <pattern> [--active|--archive] [--kind= --status= --project= --linear= --pr= --repo= --ldap=]`; `--list` (slugs only), `--json`, `--semantic [--top=N]`.
 - Graph viewer: `"$WORKLOG_BIN/worklog-manager" graph --repo "$WORKLOG_REPO" --format html --output /tmp/worklog-graph.html [--project=slug] [--match=text]`.
