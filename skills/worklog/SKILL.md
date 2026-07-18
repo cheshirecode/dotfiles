@@ -117,7 +117,7 @@ For per-task detail, use `"$WORKLOG_BIN/context.sh" <slug>` (its output ends in 
 - Safety: `"$WORKLOG_BIN/autosave.sh"` (slugless snapshot). Hooks wired by `"$WORKLOG_BIN/install-hooks.sh" --write`.
 - Standup: `"$WORKLOG_BIN/status.sh" [--since=… --project=… --slug=…]`.
 - Per-task pack: `"$WORKLOG_BIN/context.sh" <slug> [--for=resume|review|compact]`.
-- PR reconciliation: `"$WORKLOG_BIN/reconcile-pr.sh" <slug>` compares authoritative `Worklog-PR:` trailers with live GitHub state and emits read-only JSON; repository resolution uses `pr_repos`, known repos, or the local clone remote.
+- PR reconciliation: `"$WORKLOG_BIN/reconcile-pr.sh" <slug>` compares authoritative `Worklog-PR:` trailers with live GitHub state and emits read-only JSON; repository resolution uses `pr_repos`, exact GitHub PR URLs in the task body, known repos, or local clone remotes.
 - Slug lookup: `"$WORKLOG_BIN/slug.sh" <fragment>`.
 - Search: `"$WORKLOG_BIN/search.sh" <pattern> [--active|--archive] [--kind= --status= --project= --linear= --pr= --repo= --ldap=]`; `--list` (slugs only), `--json`, `--semantic [--top=N]`.
 - Graph viewer: `"$WORKLOG_BIN/worklog-manager" graph --repo "$WORKLOG_REPO" --format html --output /tmp/worklog-graph.html [--project=slug] [--match=text]`.
