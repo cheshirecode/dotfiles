@@ -323,6 +323,7 @@ PY
     "$optin_tmp/skills/bad" \
     "$optin_tmp/skills/duplicate" \
     "$optin_tmp/skills/fenced" \
+    "$optin_tmp/skills/tilde" \
     "$optin_tmp/skills/worklog"
   cp skills/example-led-instructions/SKILL.md "$optin_tmp/skills/example-led-instructions/SKILL.md"
   cat >"$optin_tmp/skills/bad/SKILL.md" <<'EOF'
@@ -352,6 +353,16 @@ description: bad fixture
 For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
 ```
 EOF
+  cat >"$optin_tmp/skills/tilde/SKILL.md" <<'EOF'
+---
+name: tilde
+description: bad fixture
+---
+
+~~~text
+For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
+~~~
+EOF
   cat >"$optin_tmp/skills/worklog/SKILL.md" <<'EOF'
 ---
 name: worklog
@@ -360,9 +371,9 @@ description: bad fixture
 
 For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
 
-```text
+~~~text
 Do not invoke it for normal `/worklog` runtime.
-```
+~~~
 EOF
   set +e
   optin_output=$(python3 tools/check-skill-opt-ins.py --root "$optin_tmp" 2>&1)
@@ -372,6 +383,7 @@ EOF
     && "$optin_output" == *"must use the exact compact opt-in preamble"* \
     && "$optin_output" == *"duplicate \$example-led-instructions opt-in"* \
     && "$optin_output" == *"opt-in is inside a code fence"* \
+    && "$optin_output" == *"skills/tilde/SKILL.md"* \
     && "$optin_output" == *"needs unfenced runtime guard"* ]]; then
     ok "check-skill-opt-ins rejects sloppy opt-ins"
   else

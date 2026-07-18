@@ -24,7 +24,7 @@ OUTPUT_FIELDS = (
     "acceptance_test:",
 )
 WORKLOG_RUNTIME_GUARD = "Do not invoke it for normal `/worklog` runtime."
-FENCE_MARKER = "```"
+FENCE_MARKERS = ("```", "~~~")
 
 
 def parse_args() -> argparse.Namespace:
@@ -68,10 +68,10 @@ def find_mentions(lines: list[str], term: str) -> list[tuple[int, str, bool]]:
     in_fence = False
     for index, line in enumerate(lines, start=1):
         stripped = line.strip()
-        line_in_fence = in_fence or stripped.startswith(FENCE_MARKER)
+        line_in_fence = in_fence or stripped.startswith(FENCE_MARKERS)
         if term in line:
             mentions.append((index, line, line_in_fence))
-        if stripped.startswith(FENCE_MARKER):
+        if stripped.startswith(FENCE_MARKERS):
             in_fence = not in_fence
     return mentions
 
