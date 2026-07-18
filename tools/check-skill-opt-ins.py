@@ -24,6 +24,7 @@ OUTPUT_FIELDS = (
     "acceptance_test:",
 )
 WORKLOG_RUNTIME_GUARD = "Do not invoke it for normal `/worklog` runtime."
+FENCE_MARKER = "```"
 
 
 def parse_args() -> argparse.Namespace:
@@ -62,6 +63,19 @@ def strip_bullet(line: str) -> str:
     return stripped[2:].strip() if stripped.startswith("- ") else stripped
 
 
+def find_mentions(lines: list[str], term: str) -> list[tuple[int, str, bool]]:
+    mentions = []
+    in_fence = False
+    for index, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        line_in_fence = in_fence or stripped.startswith(FENCE_MARKER)
+        if term in line:
+            mentions.append((index, line, line_in_fence))
+        if stripped.startswith(FENCE_MARKER):
+            in_fence = not in_fence
+    return mentions
+
+
 def validate_reference_line(
     root: pathlib.Path,
     path: pathlib.Path,
@@ -95,13 +109,7 @@ def validate_consumers(root: pathlib.Path, problems: list[str]) -> None:
             continue
 
         lines = path.read_text().splitlines()
-        references = []
-        in_fence = False
-        for index, line in enumerate(lines, start=1):
-            if line.strip().startswith("```"):
-                in_fence = not in_fence
-            if SKILL_NAME in line or f"${SKILL_NAME}" in line:
-                references.append((index, line, in_fence))
+        references = find_mentions(lines, SKILL_NAME)
 
         if len(references) > 1:
             problems.append(
@@ -111,9 +119,14 @@ def validate_consumers(root: pathlib.Path, problems: list[str]) -> None:
             validate_reference_line(root, path, line_number, line, line_in_fence, problems)
 
         if path == root / "skills" / "worklog" / "SKILL.md" and references:
-            if not any(WORKLOG_RUNTIME_GUARD in line for line in lines):
+            runtime_guards = find_mentions(lines, WORKLOG_RUNTIME_GUARD)
+            has_unfenced_runtime_guard = any(
+                not in_fence and line.strip() == WORKLOG_RUNTIME_GUARD
+                for _, line, in_fence in runtime_guards
+            )
+            if not has_unfenced_runtime_guard:
                 problems.append(
-                    f"{relative(path, root)}: example-led opt-in needs runtime guard: "
+                    f"{relative(path, root)}: example-led opt-in needs unfenced runtime guard: "
                     f"{WORKLOG_RUNTIME_GUARD}"
                 )
 

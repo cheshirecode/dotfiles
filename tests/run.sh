@@ -359,6 +359,10 @@ description: bad fixture
 ---
 
 For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
+
+```text
+Do not invoke it for normal `/worklog` runtime.
+```
 EOF
   set +e
   optin_output=$(python3 tools/check-skill-opt-ins.py --root "$optin_tmp" 2>&1)
@@ -368,7 +372,7 @@ EOF
     && "$optin_output" == *"must use the exact compact opt-in preamble"* \
     && "$optin_output" == *"duplicate \$example-led-instructions opt-in"* \
     && "$optin_output" == *"opt-in is inside a code fence"* \
-    && "$optin_output" == *"needs runtime guard"* ]]; then
+    && "$optin_output" == *"needs unfenced runtime guard"* ]]; then
     ok "check-skill-opt-ins rejects sloppy opt-ins"
   else
     fail "check-skill-opt-ins red path drifted (exit=$rc, output=${optin_output@Q})"
