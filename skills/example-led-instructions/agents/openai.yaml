@@ -1,0 +1,4 @@
+interface:
+  display_name: "Example-Led Instructions"
+  short_description: "Design compact examples for brittle prompts"
+  default_prompt: "Use $example-led-instructions to tighten this skill prompt with a zero/one/few-shot gate."
