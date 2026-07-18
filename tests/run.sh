@@ -297,6 +297,9 @@ namespace = runpy.run_path("skills/which-model/bin/model-catalog")
 subprocess_module = namespace["subprocess"]
 original_run = subprocess_module.run
 
+kimi_tags = set(namespace["infer_task_fit"]("moonshotai/kimi-k3", ["text", "image_input", "code", "tools", "reasoning"]))
+assert {"routine_coding", "large_refactor", "agentic_workflow", "planning"} <= kimi_tags
+
 class Result:
     returncode = 0
     stdout = "1 /tmp/opencode --child\n"
