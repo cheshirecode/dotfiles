@@ -1,6 +1,6 @@
 ---
 name: worklog
-description: One skill for the shared `_worklog` repo. Twelve modes — `init`, `sync`, `status`, `context`, `plan`, `spawn`, `export`, `import`, `lint`, `project`, `scrape-slack`, `review`. Invoke as `/worklog <mode> [args]`. Bare `/worklog` or `/worklog help` prints the subcommand menu and stops. Unknown arg → show menu.
+description: One skill for the shared `_worklog` repo. Twelve modes — `init`, `sync`, `status`, `context`, `plan`, `spawn`, `export`, `import`, `lint`, `project`, `scrape-slack`, `review`. Invoke as `/worklog MODE [args]`. Bare `/worklog` or `/worklog help` prints the subcommand menu and stops. Unknown arg → show menu.
 ---
 
 # worklog
@@ -117,6 +117,7 @@ For per-task detail, use `"$WORKLOG_BIN/context.sh" <slug>` (its output ends in 
 - Safety: `"$WORKLOG_BIN/autosave.sh"` (slugless snapshot). Hooks wired by `"$WORKLOG_BIN/install-hooks.sh" --write`.
 - Standup: `"$WORKLOG_BIN/status.sh" [--since=… --project=… --slug=…]`.
 - Per-task pack: `"$WORKLOG_BIN/context.sh" <slug> [--for=resume|review|compact]`.
+- PR reconciliation: `"$WORKLOG_BIN/reconcile-pr.sh" <slug>` compares authoritative `Worklog-PR:` trailers with live GitHub state and emits read-only JSON; repository resolution uses `pr_repos`, known repos, or the local clone remote.
 - Slug lookup: `"$WORKLOG_BIN/slug.sh" <fragment>`.
 - Search: `"$WORKLOG_BIN/search.sh" <pattern> [--active|--archive] [--kind= --status= --project= --linear= --pr= --repo= --ldap=]`; `--list` (slugs only), `--json`, `--semantic [--top=N]`.
 - Graph viewer: `"$WORKLOG_BIN/worklog-manager" graph --repo "$WORKLOG_REPO" --format html --output /tmp/worklog-graph.html [--project=slug] [--match=text]`.

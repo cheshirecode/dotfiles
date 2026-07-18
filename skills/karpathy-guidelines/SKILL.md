@@ -65,3 +65,18 @@ For multi-step tasks, state a brief plan:
 ```
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+For uncertain multi-step work, make the load-bearing model falsifiable before editing:
+
+- `Hypothesis:` the assumption that makes the planned approach valid.
+- `Falsifier:` the observation that would disprove or materially change it.
+- `Replay check:` the original reproduction or narrow command to rerun after revision.
+
+If observed evidence contradicts a load-bearing assumption or a planned expected result:
+
+1. Stop further mutations.
+2. Record the contradiction and invalidate the affected remaining steps; unaffected verified steps may stand.
+3. Revise the hypothesis and plan before continuing.
+4. Rerun the original reproduction plus affected regression checks.
+
+Do not require this three-field block for trivial, single-path tasks with no meaningful uncertainty.
