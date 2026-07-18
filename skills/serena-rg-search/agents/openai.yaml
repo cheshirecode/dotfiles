@@ -1,0 +1,4 @@
+interface:
+  display_name: "Serena vs rg"
+  short_description: "Choose Serena or ripgrep for code search"
+  default_prompt: "Use $serena-rg-search to choose the best code-search workflow for this task."
