@@ -77,6 +77,8 @@ checks = {
     "material counterexample definition": "A material counterexample" in text,
     "stage 3 survival status": "counterexample survival status" in text,
     "approve counterexample gate": "must not cast `APPROVE`" in text,
+    "verification evidence states": "PLANNED|EXECUTED-PASS|EXECUTED-FAIL|UNAVAILABLE" in text,
+    "planned is not executed": "Never present a planned check as an executed result" in text,
 }
 headings = [
     "## Outcome",
