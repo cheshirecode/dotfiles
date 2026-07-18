@@ -59,6 +59,7 @@ The user can override with `/council --bg X` or `/council --fg X`.
 - **NO STAGE-6 CONCLUSION WITHOUT ENOUGH VALID VOTES.** For each item, compute support from valid ballots for that item against the full odd `M_returned` threshold. If an item has fewer than 3 valid item ballots after one retry, mark that item `UNVERIFIED`. If most items are `UNVERIFIED`, mark the whole council `UNVERIFIED`.
 - **NO CROSS-ANGLE READS IN STAGE 1.** Every research prompt must start with `You are research angle <angle_i> of <angle_count>. Do not Read, Grep, or Monitor outputs of other angles. Do not coordinate.`
 - **NO CROSS-VOTER READS IN STAGE 5.** Voters receive only the Stage 4 candidate list, Stage 2 findings, Stage 3 discussion, the council voting criteria, and the original request. No voter sees another voter's ballot.
+- **NO APPROVE OVER AN UNRESOLVED MATERIAL COUNTEREXAMPLE.** A voter must not cast `APPROVE` when Stage 3 marks the candidate's counterexample survival status `UNRESOLVED MATERIAL`; use `QUALIFY` with the resolving check or `REJECT` with a voting criterion. A material counterexample is evidence that would change the candidate's Stage 6 keep/reject outcome or invalidate its claimed mechanism. Minor uncertainty stays under the normal voting criteria.
 
 ## Council voting criteria
 
@@ -81,6 +82,7 @@ The full ballot per item is one of:
 Before tallying, validate every ballot:
 
 - Invalid criterion name, missing item, or malformed vote -> retry that voter once.
+- `APPROVE` on an `UNRESOLVED MATERIAL` candidate is malformed -> retry that voter once.
 - Still invalid after retry -> mark that item ballot `INVALID`, exclude it from support/reject counts, keep the full odd `M_returned` denominator, and mark the item `UNVERIFIED` if fewer than 3 valid item ballots remain.
 - QUALIFY condition resolved before conclusion -> count as 0.5 support and state the resolution.
 - QUALIFY condition not resolved -> count that ballot as non-support and mark the item `UNVERIFIED` if unresolved conditions determine the outcome. Do not silently count unresolved conditions.
@@ -128,7 +130,11 @@ Read only what is needed for this angle. Return:
 1. Top findings with file/line references or source citations when possible.
 2. Candidate items proposed by this angle:
    - A<angle_i>-i1: <concrete, testable item>
+     - Falsifier or strongest counterexample: <observation that would defeat or materially qualify it>
+     - Verification recipe: <cheapest safe check and expected discriminating result>
    - A<angle_i>-i2: <concrete, testable item>
+     - Falsifier or strongest counterexample: <observation that would defeat or materially qualify it>
+     - Verification recipe: <cheapest safe check and expected discriminating result>
 No file edits.
 ```
 
@@ -138,14 +144,19 @@ No file edits.
 You are the Stage 3 discussion agent. Read all Stage 2 findings below.
 Flag agreements, disagreements, gaps, and contradictions.
 You may propose additional candidate items only when they are surfaced by cross-angle gaps.
+For every candidate, assess its strongest counterexample from the supplied evidence. Run a cheap, safe, in-scope verification recipe only when needed; otherwise leave it unresolved rather than guessing.
 
 Output:
 ## Stage 3 discussion
 Agreements:
 Disagreements:
 Gaps:
+Counterexample survival status:
+- A1-i1: <SURVIVES|REFUTED|UNRESOLVED MATERIAL|UNRESOLVED MINOR> — <evidence or missing check>
 Additional candidate items surfaced by cross-angle gaps:
 - D-i1: <concrete, testable item>
+  - Falsifier or strongest counterexample: <observation>
+  - Verification recipe: <check and expected result>
 ```
 
 ### Stage 4 candidate collation
@@ -158,10 +169,16 @@ You may not add new items.
 Output:
 ## Stage 4 candidate list
 1. <item> [proposed-by: A1-i2, D-i1]
+   - Falsifier or strongest counterexample: <preserved from upstream>
+   - Verification recipe: <preserved from upstream>
+   - Counterexample survival status: <Stage 3 status>
 2. <item> [proposed-by: A2-i3]
+   - Falsifier or strongest counterexample: <preserved from upstream>
+   - Verification recipe: <preserved from upstream>
+   - Counterexample survival status: <Stage 3 status>
 
 Collator: 0 items invented; X items deduped.
-Items without exact upstream proposer IDs will be dropped before voting.
+Items without exact upstream proposer IDs, a falsifier/counterexample, a verification recipe, or a Stage 3 survival status will be dropped before voting.
 ```
 
 ### Stage 5 voting
@@ -169,6 +186,7 @@ Items without exact upstream proposer IDs will be dropped before voting.
 ```
 You are an independent Stage 5 voter. You may not see other voters' ballots.
 Use only the Stage 4 candidate list, Stage 2 findings, Stage 3 discussion, the council voting criteria, and the original request.
+You must not cast `APPROVE` for a candidate marked `UNRESOLVED MATERIAL`; cast `QUALIFY` with the resolving check or `REJECT` with a named criterion. `UNRESOLVED MINOR` remains eligible for normal voting.
 
 For each item, cast exactly one ballot:
 - APPROVE
@@ -186,11 +204,11 @@ Voter <n>:
 ## Recipe
 
 1. **Decompose the topic.** State the question. Pick 3-5 research angles that do not overlap.
-2. **Spawn research sub-agents** (Stage 1). Each prompt must use the Stage 1 template and include the exact no-cross-angle sentence. Each agent output must include `Candidate items proposed by this angle:`.
-3. **Collect findings** (Stage 2). Read each return; quote-tag key claims; extract candidate IDs per angle.
-4. **Run discussion** (Stage 3). Use the Stage 3 template. Record additional `D-iN` candidates only when tied to a cross-angle gap.
-5. **Run candidate collation** (Stage 4). Use the Stage 4 template. Drop collator-invented or untagged items before voting.
-6. **Run voting** (Stage 5). Use at least 3 odd-count independent voters. Use the Stage 5 template. Retry malformed voters once.
+2. **Spawn research sub-agents** (Stage 1). Each prompt must use the Stage 1 template and include the exact no-cross-angle sentence. Each agent output must include `Candidate items proposed by this angle:` plus the required falsifier/counterexample and verification recipe for every item.
+3. **Collect findings** (Stage 2). Read each return; quote-tag key claims; extract candidate IDs and their evidence fields per angle.
+4. **Run discussion** (Stage 3). Use the Stage 3 template, assign every candidate a counterexample survival status, and record additional `D-iN` candidates only when tied to a cross-angle gap.
+5. **Run candidate collation** (Stage 4). Use the Stage 4 template. Drop collator-invented, untagged, or evidence-incomplete items before voting.
+6. **Run voting** (Stage 5). Use at least 3 odd-count independent voters. Use the Stage 5 template. Retry malformed voters, including forbidden approvals over unresolved material counterexamples, once.
 7. **Tally + conclude** (Stage 6). Validate ballots per item, resolve QUALIFY conditions, enforce majority-plus-one support, apply hard-reject vetoes, and produce the final report.
 
 ## Run-until-completion behavior
@@ -283,6 +301,7 @@ Put full Stage 5 ballots here, after the outcome and vote tables.
 - Do not keep an item with fewer than 3 valid item ballots.
 - Do not count unresolved QUALIFY conditions as support.
 - Do not trust specific post-cutoff claims without a verification pass.
+- Do not downgrade a material counterexample to minor merely to keep an item voteable.
 - Do not run a council on a one-shot question.
 
 ## Pairings

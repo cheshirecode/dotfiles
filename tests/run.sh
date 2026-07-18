@@ -72,6 +72,11 @@ checks = {
     "worklog opt-in": "If the user says no worklog tracking" in text,
     "background rule": "background only if total estimate >10min" in text,
     "close after quorum": "close them without changing Stage 2 findings" in text,
+    "candidate falsifier": "Falsifier or strongest counterexample" in text,
+    "candidate verification recipe": "Verification recipe" in text,
+    "material counterexample definition": "A material counterexample" in text,
+    "stage 3 survival status": "counterexample survival status" in text,
+    "approve counterexample gate": "must not cast `APPROVE`" in text,
 }
 headings = [
     "## Outcome",
@@ -91,6 +96,25 @@ if missing:
     raise SystemExit(1)
 PY
   then ok "council voting threshold contract"; else fail "council voting threshold contract"; fi
+  if python3 - <<'PY'
+import pathlib
+
+text = pathlib.Path("skills/karpathy-guidelines/SKILL.md").read_text()
+checks = {
+    "uncertain multi-step scope": "uncertain multi-step work" in text,
+    "hypothesis field": "Hypothesis:" in text,
+    "falsifier field": "Falsifier:" in text,
+    "replay field": "Replay check:" in text,
+    "stop mutations": "Stop further mutations" in text,
+    "invalidate plan": "invalidate the affected remaining steps" in text,
+    "original reproduction": "original reproduction" in text,
+}
+missing = [name for name, ok in checks.items() if not ok]
+if missing:
+    print("missing Karpathy invalidation contract: " + ", ".join(missing))
+    raise SystemExit(1)
+PY
+  then ok "Karpathy contradiction invalidation contract"; else fail "Karpathy contradiction invalidation contract"; fi
 }
 
 # Council items #1, #6: fixture-driven red-path tests for guardrails.
@@ -104,6 +128,12 @@ import yaml
 print(pathlib.Path(yaml.__file__).resolve().parents[1])
 PY
 )
+
+  if skills/worklog/tests/reconcile_pr/test_reconcile_pr.sh >/dev/null; then
+    ok "worklog PR reconciliation fixtures"
+  else
+    fail "worklog PR reconciliation fixtures"
+  fi
 
   # --- #6: check-manifest.sh subpath+repo HARD FAIL ---
   local bad_manifest tmpdir
