@@ -110,6 +110,9 @@ next_action: "Verify both linked PRs"
 
 Multi-repository fixture.
 
+- https://github.com/acme/demo/pull/42
+- https://github.com/acme/ui/pull/99
+
 ## Next
 
 - [ ] Verify.
@@ -131,7 +134,16 @@ assert [(item["repo"], item["pr"]) for item in data["observed"]] == [
 assert data["mismatches"] == []
 PY
 
-if WORKLOG_KNOWN_REPOS_OVERRIDE="acme/demo,acme/ui" run_helper multi-task >"$SCRATCH/ambiguous.out" 2>"$SCRATCH/ambiguous.err"; then
+python3 - "$WORKLOG_FIXTURE/people/test/active/multi-task.md" "$WORKLOG_FIXTURE/people/test/active/ambiguous-task.md" <<'PY'
+import pathlib, sys
+source = pathlib.Path(sys.argv[1]).read_text()
+source = source.replace("multi-task", "ambiguous-task")
+source = "\n".join(line for line in source.splitlines() if "github.com" not in line) + "\n"
+pathlib.Path(sys.argv[2]).write_text(source)
+PY
+git -C "$WORKLOG_FIXTURE" add .
+git -C "$WORKLOG_FIXTURE" commit -q -m "ambiguous-task: create" -m $'Worklog-Slug: ambiguous-task\nWorklog-PR: 42'
+if WORKLOG_KNOWN_REPOS_OVERRIDE="acme/demo,acme/ui" run_helper ambiguous-task >"$SCRATCH/ambiguous.out" 2>"$SCRATCH/ambiguous.err"; then
   echo "expected ambiguous repository failure" >&2
   exit 1
 fi
