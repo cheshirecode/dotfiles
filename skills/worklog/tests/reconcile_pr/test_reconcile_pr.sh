@@ -18,8 +18,16 @@ cat > "$FAKE_BIN/gh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ "${GH_FIXTURE_FAIL:-0}" == "1" ]] && exit 1
-printf '{"number":%s,"state":"%s","url":"https://github.com/acme/demo/pull/%s","isDraft":false,"mergedAt":%s}\n' \
-  "${GH_FIXTURE_PR:-42}" "${GH_FIXTURE_STATE:-OPEN}" "${GH_FIXTURE_PR:-42}" "${GH_FIXTURE_MERGED_AT:-null}"
+pr="$3"
+repo="$5"
+if [[ "${GH_FIXTURE_ROUTING:-0}" == "1" ]]; then
+  case "$repo#$pr" in
+    acme/demo#42|acme/ui#99) ;;
+    *) exit 1 ;;
+  esac
+fi
+printf '{"number":%s,"state":"%s","url":"https://github.com/%s/pull/%s","isDraft":false,"mergedAt":%s}\n' \
+  "$pr" "${GH_FIXTURE_STATE:-OPEN}" "$repo" "$pr" "${GH_FIXTURE_MERGED_AT:-null}"
 EOF
 chmod +x "$FAKE_BIN/gh"
 
@@ -52,7 +60,7 @@ run_helper() {
   local slug="${1:-demo-task}"
   PATH="$FAKE_BIN:$PATH" \
     WORKLOG_REPO="$WORKLOG_FIXTURE" \
-    WORKLOG_KNOWN_REPOS="acme/demo" \
+    WORKLOG_KNOWN_REPOS="${WORKLOG_KNOWN_REPOS_OVERRIDE:-acme/demo}" \
     "$HELPER" "$slug"
 }
 
@@ -86,6 +94,49 @@ data = json.loads(sys.argv[1])
 assert data["observed"][0]["state"] == "CLOSED"
 assert data["mismatches"] == [{"pr": 42, "repo": "acme/demo", "expected": ["MERGED"], "observed": "CLOSED"}]
 PY
+
+cat > "$WORKLOG_FIXTURE/people/test/active/multi-task.md" <<'EOF'
+---
+slug: multi-task
+status: in-review
+kind: impl
+repos: [demo, ui]
+project: none
+last_updated: 2026-07-18
+next_action: "Verify both linked PRs"
+---
+
+## Context
+
+Multi-repository fixture.
+
+## Next
+
+- [ ] Verify.
+EOF
+git -C "$WORKLOG_FIXTURE" add .
+git -C "$WORKLOG_FIXTURE" commit -q -m "multi-task: create" -m $'Worklog-Slug: multi-task\nWorklog-PR: 42\nWorklog-PR: 99'
+multi_json="$(
+  GH_FIXTURE_ROUTING=1 \
+  WORKLOG_KNOWN_REPOS_OVERRIDE="acme/demo,acme/ui" \
+  run_helper multi-task
+)"
+python3 - "$multi_json" <<'PY'
+import json, sys
+data = json.loads(sys.argv[1])
+assert [(item["repo"], item["pr"]) for item in data["observed"]] == [
+    ("acme/demo", 42),
+    ("acme/ui", 99),
+]
+assert data["mismatches"] == []
+PY
+
+if WORKLOG_KNOWN_REPOS_OVERRIDE="acme/demo,acme/ui" run_helper multi-task >"$SCRATCH/ambiguous.out" 2>"$SCRATCH/ambiguous.err"; then
+  echo "expected ambiguous repository failure" >&2
+  exit 1
+fi
+test ! -s "$SCRATCH/ambiguous.out"
+grep -q "resolves in multiple repositories" "$SCRATCH/ambiguous.err"
 
 if GH_FIXTURE_FAIL=1 run_helper >"$SCRATCH/fetch.out" 2>"$SCRATCH/fetch.err"; then
   echo "expected GitHub fetch failure" >&2
