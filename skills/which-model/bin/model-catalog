@@ -783,6 +783,8 @@ def infer_task_fit(model_id: str, capabilities: list[str]) -> list[str]:
         )
     ):
         tags.add("routine_coding")
+    if "kimi-k3" in lowered:
+        tags.update({"agentic_workflow", "large_refactor", "planning"})
     if any(token in lowered for token in ("pro", "opus", "sonnet", "sol", "reason", "fable")):
         tags.add("planning")
         tags.add("final_synthesis")
