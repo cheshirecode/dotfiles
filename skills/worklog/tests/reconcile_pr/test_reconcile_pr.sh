@@ -174,4 +174,53 @@ grep -q "no authoritative Worklog-PR" "$SCRATCH/missing.err" || {
   exit 1
 }
 
+write_archived_task() {
+  local reason="$1"
+  rm -f "$WORKLOG_FIXTURE/people/test/active/demo-task.md"
+  mkdir -p "$WORKLOG_FIXTURE/people/test/archive"
+  cat > "$WORKLOG_FIXTURE/people/test/archive/demo-task.md" <<EOF
+---
+slug: demo-task
+status: archived
+kind: impl
+repos: [demo]
+project: none
+last_updated: 2026-07-18
+next_action: ""
+---
+
+## Context
+
+Archived 2026-07-18: $reason: fixture archive.
+EOF
+  git -C "$WORKLOG_FIXTURE" add -A
+  git -C "$WORKLOG_FIXTURE" commit -q -m "demo-task: archive ($reason)" -m $'Worklog-Slug: demo-task\nWorklog-PR: 42'
+}
+
+write_archived_task shipped
+archived_shipped_json="$(GH_FIXTURE_STATE=OPEN GH_FIXTURE_MERGED_AT='"2026-07-18T12:00:00Z"' run_helper)"
+python3 - "$archived_shipped_json" <<'PY'
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["expected"]["github_states"] == ["MERGED"]
+assert data["mismatches"] == []
+PY
+
+write_archived_task abandoned
+archived_abandoned_json="$(GH_FIXTURE_STATE=CLOSED GH_FIXTURE_MERGED_AT=null run_helper)"
+python3 - "$archived_abandoned_json" <<'PY'
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["expected"]["github_states"] == ["CLOSED", "MERGED"]
+assert data["mismatches"] == []
+PY
+
+write_archived_task shipped
+archived_closed_json="$(GH_FIXTURE_STATE=CLOSED GH_FIXTURE_MERGED_AT=null run_helper)"
+python3 - "$archived_closed_json" <<'PY'
+import json, sys
+data = json.loads(sys.argv[1])
+assert data["mismatches"] == [{"pr": 42, "repo": "acme/demo", "expected": ["MERGED"], "observed": "CLOSED"}]
+PY
+
 echo "reconcile-pr: fixtures passed"
