@@ -56,6 +56,8 @@ Council gates whether a *learning* is kept — not its *destination*. Before wri
 
 Apply `ship-hygiene`'s PR-title/body audit and **internal-reference purge** to this one PR, then the same purge on the tracking worklog task's public-facing fields. `ship-hygiene` **owns** the authoritative leak-token list and the two leak greps (title/body + the diff's added comments) — run them from there rather than keeping a second copy in sync here. Rewrite product-first (what changed for users + why) unless it's pure engineering/infra; skill command names are a leak *unless* the PR changes skill files, where they're product surface.
 
+Before calling the PR ready, record the current head SHA, the focused validation commands with pass/fail results, and the green CI run or check set in the PR body or a final PR comment. Keep "evidence complete" distinct from "ready for review": a draft PR is not ready until it is explicitly marked ready after those facts are current.
+
 ### 4. Compress + checkpoint the worklog
 
 Compress the decided iteration drama out of the task body (drop ToT/Reflexion scaffolding, verified "Assumptions", multi-row iteration tables — git log is the audit trail; keep the decision rationale, lessons, re-runnable commands, `next_action`), then checkpoint it **on its own**: `"$WORKLOG_BIN/checkpoint.sh" <slug>`. Use the plain command — its staged-scope guard *refuses* any staged path outside the task file, which is exactly what enforces the single-concern commit; do **not** pass `WORKLOG_CHECKPOINT_FORCE=1` (that bypasses the guard) unless you have a stated reason. Keep this separate from the step-2 codify commits — up to three concerns, up to three commits, never one bundle.
