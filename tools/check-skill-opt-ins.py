@@ -63,10 +63,23 @@ def strip_bullet(line: str) -> str:
     return stripped[2:].strip() if stripped.startswith("- ") else stripped
 
 
+def leading_indent_columns(line: str) -> int:
+    columns = 0
+    for char in line:
+        if char == " ":
+            columns += 1
+        elif char == "\t":
+            columns += 4 - (columns % 4)
+        else:
+            break
+    return columns
+
+
 def fence_marker(line: str) -> tuple[str, int, str] | None:
-    stripped = line.lstrip(" ")
-    leading_spaces = len(line) - len(stripped)
-    if leading_spaces > 3 or not stripped:
+    if leading_indent_columns(line) > 3:
+        return None
+    stripped = line.lstrip(" \t")
+    if not stripped:
         return None
 
     marker = stripped[0]
@@ -80,7 +93,7 @@ def fence_marker(line: str) -> tuple[str, int, str] | None:
 
 
 def is_indented_code(line: str) -> bool:
-    return line.startswith("    ") or line.startswith("\t")
+    return leading_indent_columns(line) >= 4
 
 
 def find_mentions(lines: list[str], term: str) -> list[tuple[int, str, bool]]:
