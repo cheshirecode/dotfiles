@@ -27,6 +27,7 @@ test_static() {
     say SKIP "shellcheck not installed"
   fi
   if ./tools/check-manifest.sh >/dev/null 2>&1; then ok "check-manifest.sh"; else fail "check-manifest.sh"; fi
+  if python3 ./tools/check-skill-opt-ins.py >/dev/null 2>&1; then ok "check-skill-opt-ins.py"; else fail "check-skill-opt-ins.py"; fi
   if python3 - <<'PY'
 import pathlib
 import re
@@ -314,6 +315,37 @@ if missing:
     raise SystemExit(1)
 PY
   then ok "ship-hygiene checkpoint guard contract"; else fail "ship-hygiene checkpoint guard contract"; fi
+
+  local optin_tmp optin_output
+  optin_tmp=$(mktemp -d)
+  mkdir -p "$optin_tmp/skills/example-led-instructions" "$optin_tmp/skills/bad" "$optin_tmp/skills/worklog"
+  cp skills/example-led-instructions/SKILL.md "$optin_tmp/skills/example-led-instructions/SKILL.md"
+  cat >"$optin_tmp/skills/bad/SKILL.md" <<'EOF'
+---
+name: bad
+description: bad fixture
+---
+
+Always invoke $example-led-instructions for every output.
+EOF
+  cat >"$optin_tmp/skills/worklog/SKILL.md" <<'EOF'
+---
+name: worklog
+description: bad fixture
+---
+
+For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
+EOF
+  set +e
+  optin_output=$(python3 tools/check-skill-opt-ins.py --root "$optin_tmp" 2>&1)
+  rc=$?
+  set -e
+  if [[ $rc -eq 1 && "$optin_output" == *"must use the exact compact opt-in preamble"* && "$optin_output" == *"needs runtime guard"* ]]; then
+    ok "check-skill-opt-ins rejects sloppy opt-ins"
+  else
+    fail "check-skill-opt-ins red path drifted (exit=$rc, output=${optin_output@Q})"
+  fi
+  rm -rf "$optin_tmp"
 
   local catalog_home catalog_fixture catalog_json unknown_provider_output detection_home detected_path ancestry_dir
   local -a clean_env=(
