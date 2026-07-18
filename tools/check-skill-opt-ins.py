@@ -24,7 +24,7 @@ OUTPUT_FIELDS = (
     "acceptance_test:",
 )
 WORKLOG_RUNTIME_GUARD = "Do not invoke it for normal `/worklog` runtime."
-FENCE_MARKERS = ("```", "~~~")
+FENCE_CHARS = ("`", "~")
 
 
 def parse_args() -> argparse.Namespace:
@@ -63,16 +63,45 @@ def strip_bullet(line: str) -> str:
     return stripped[2:].strip() if stripped.startswith("- ") else stripped
 
 
+def fence_marker(line: str) -> tuple[str, int, str] | None:
+    stripped = line.lstrip(" ")
+    leading_spaces = len(line) - len(stripped)
+    if leading_spaces > 3 or not stripped:
+        return None
+
+    marker = stripped[0]
+    if marker not in FENCE_CHARS:
+        return None
+
+    marker_len = len(stripped) - len(stripped.lstrip(marker))
+    if marker_len < 3:
+        return None
+    return marker, marker_len, stripped[marker_len:]
+
+
+def is_indented_code(line: str) -> bool:
+    return line.startswith("    ") or line.startswith("\t")
+
+
 def find_mentions(lines: list[str], term: str) -> list[tuple[int, str, bool]]:
     mentions = []
-    in_fence = False
+    active_fence: tuple[str, int] | None = None
     for index, line in enumerate(lines, start=1):
-        stripped = line.strip()
-        line_in_fence = in_fence or stripped.startswith(FENCE_MARKERS)
+        marker = fence_marker(line)
+        line_in_fence = active_fence is not None or marker is not None or is_indented_code(line)
         if term in line:
             mentions.append((index, line, line_in_fence))
-        if stripped.startswith(FENCE_MARKERS):
-            in_fence = not in_fence
+        if marker is None:
+            continue
+        marker_char, marker_len, marker_suffix = marker
+        if active_fence is None:
+            active_fence = (marker_char, marker_len)
+        elif (
+            marker_char == active_fence[0]
+            and marker_len >= active_fence[1]
+            and not marker_suffix.strip()
+        ):
+            active_fence = None
     return mentions
 
 
