@@ -111,6 +111,22 @@ For per-task detail, use `"$WORKLOG_BIN/context.sh" <slug>` (its output ends in 
 - Never `git rebase` / `git pull --rebase` / force-push during normal sync. Maintenance ops (`$WORKLOG_BIN/log-compact.sh`, `$WORKLOG_BIN/cache-purge.sh`) are the carve-out — see AGENTS.md.
 - Prior-art grep before infra surfaces: `"$WORKLOG_BIN/related-search.sh" <keyword>`.
 
+### Search ladder (cold discoverability)
+`search.sh` is **line-level rg**, not NL Q&A. Climb only as far as needed:
+1. **Planted phrase** — maps use `Lookup alias for **…**`; try the human phrase first (`"mini-apps integration"`, `"worklog manager"`).
+2. **Keyword / slug fragment** — tokens in filename or body (`integration-map`, `worklog-manager`).
+3. **`--project=<slug>`** — list cluster members when the project slug is known.
+4. **`--list` / `--json`** — narrow, then `"$WORKLOG_BIN/context.sh" <slug>`.
+5. Dual-LDAP sweeps: **omit `--ldap`** (and don't pin `WORKLOG_LDAP` for that call) so all `people/*` show; pin LDAP only for writes/checkpoints.
+
+### Integration maps (`kind: runbook`, slug `*-integration-map`)
+- **Mandatory** when a project has **≥3** distinct repos and cross-repo lookup is load-bearing.
+- **Advisory** when **≥2** repos and NL search (step 1) fails dogfood.
+- **Exempt:** single-repo projects.
+- Every map's `## Context` MUST start with `Lookup alias for **<phrase>**`.
+- No Cursor canvases / `file://` in `external_refs` (lint errors) — in-repo runbooks only.
+- Deferred (do not create yet): capability-manifest map; sandwich map (oss LDAP).
+
 ### Tooling shortlist
 - Save: `"$WORKLOG_BIN/checkpoint.sh" <slug>` (single) · `"$WORKLOG_BIN/checkpoint-batch.sh" < json` (atomic multi).
 - Archive: `"$WORKLOG_BIN/archive.sh" <slug> --reason=<…>`.
