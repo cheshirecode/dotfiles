@@ -481,9 +481,32 @@ def _lint_file(
       elif "auto-added" in str(item.get("note", "")) and "refine note" in str(item.get("note", "")):
         warnings.append(f"related[{i}].note is the auto-generated placeholder — replace with a one-line *why* (relation purpose, not a body-mention rephrase)")
 
+  # Hard ban: off-repo file:// and Cursor canvas paths in external_refs — not greppable
+  # via search.sh and fail cold resume. Prefer an in-repo kind:runbook (*-integration-map).
+  ext_refs = fm.get("external_refs", []) or []
+  if isinstance(ext_refs, list):
+    for i, ref in enumerate(ext_refs):
+      blob = ""
+      platform = ""
+      if isinstance(ref, dict):
+        platform = str(ref.get("platform") or "").lower()
+        blob = " ".join(str(v) for v in ref.values())
+      else:
+        blob = str(ref)
+      lower = blob.lower()
+      if "file://" in lower:
+        errors.append(
+          f"external_refs[{i}]: file:// URLs are forbidden — copy durable content into an "
+          "in-repo task/runbook (e.g. *-integration-map) instead of off-repo paths"
+        )
+      if platform in {"cursor-canvas", "cursor_canvas"} or "/canvases/" in lower or "cursor-canvas" in lower:
+        errors.append(
+          f"external_refs[{i}]: Cursor canvas refs are forbidden — migrate to an in-repo "
+          "kind:runbook and link via related[] / [[slug]]"
+        )
+
   # Advisory: notion.so URL in external_refs: but no notion: field — init --full won't match it.
   if state == "active" and not fm.get("notion"):
-    ext_refs = fm.get("external_refs", []) or []
     if isinstance(ext_refs, list):
       if any("notion.so" in str(r) for r in ext_refs):
         warnings.append("external_refs: contains a notion.so URL but notion: field is absent — add 'notion: <page-id>' so init --full can match this task")

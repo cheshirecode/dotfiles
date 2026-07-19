@@ -4,12 +4,19 @@
 
 ```bash
 gh repo clone ideogram-ai/_worklog ~/Documents/projects/_worklog
-cd ~/Documents/projects/_worklog
-WORKLOG_BIN="${WORKLOG_BIN:-$HOME/Documents/oss/dotfiles/skills/worklog/bin}"
+# or: ~/Documents/oss/_worklog — match your machine layout
+export WORKLOG_REPO="${WORKLOG_REPO:-$HOME/Documents/oss/_worklog}"
+export WORKLOG_BIN="${WORKLOG_BIN:-$HOME/Documents/oss/dotfiles/skills/worklog/bin}"
+# Optional but recommended for writes; omit --ldap on search sweeps to see all namespaces:
+# export WORKLOG_LDAP=fredtran
+cd "$WORKLOG_REPO"
+# Prefer direnv if the clone has .envrc: direnv allow && direnv exec "$WORKLOG_REPO" …
 "$WORKLOG_BIN/install-hooks.sh" --write
 ```
 
 Then in a fresh Claude Code session: `/worklog init`.
+Helpers and no-preamble modes (`plan` / `spawn` / `lint` / `export` / `import`) still need
+`WORKLOG_BIN` + `WORKLOG_REPO` in the shell — empty env is the common cold-session miss.
 
 ---
 
@@ -116,10 +123,14 @@ Set up ideogram-ai/_worklog as a sibling of the current repo. If the clone is
 missing, clone it into the parent of the current repo (or ~/Documents/projects /
 ~/projects / ~/code — else ask). Then:
 
-  cd _worklog
+  export WORKLOG_BIN="${WORKLOG_BIN:-$HOME/Documents/oss/dotfiles/skills/worklog/bin}"
+  export WORKLOG_REPO="<resolved-_worklog-path>"
+  # export WORKLOG_LDAP=<ldap>   # pin for writes; omit --ldap on discovery sweeps
+  cd "$WORKLOG_REPO"
   git config pull.rebase false && git config pull.ff true
   git pull --no-rebase --autostash
   read AGENTS.md and follow it
+  # Prefer: direnv exec "$WORKLOG_REPO" "$WORKLOG_BIN/<helper>.sh" …
 
 Resolve LDAP using the AGENTS.md order (gcloud account -> git email -> $USER)
 and echo it. Treat these cold-start cases as normal:

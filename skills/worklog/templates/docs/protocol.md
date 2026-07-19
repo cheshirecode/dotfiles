@@ -39,6 +39,8 @@ external_refs:
 
 Required per entry: `platform` (lowercase kebab), `url`. Optional: `note` (one line). No other keys — push extra context into the body.
 
+**Forbidden in `external_refs`:** `file://` URLs and Cursor canvas paths (`platform: cursor-canvas`, `/canvases/` under `.cursor/projects/`). Lint errors these. Durable lookup content belongs in an in-repo `kind: runbook` (convention: `*-integration-map`) linked via `related[]` / `[[slug]]`.
+
 **Recognized platform values** (canonical shapes — keep `url` exact so pipelines can join):
 
 | `platform`   | `url` shape                                                            | Notes                                                                                       |
@@ -570,6 +572,7 @@ Errors (exit 1):
 - Relations (`parent_slug`, `supersedes`, `superseded_by`, `reopens`, each `related[].slug`) resolve to a real task file under `people/*/{active,archive}/`.
 - Every `related[]` entry has a `note` (one-line *why*; required to prevent link rot).
 - A file under `active/` must not have `status: archived`.
+- `external_refs` must not contain `file://` URLs or Cursor canvas refs — migrate to an in-repo runbook.
 
 Warnings (exit 0):
 

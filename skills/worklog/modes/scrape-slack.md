@@ -7,6 +7,8 @@ access. It must not assume an Ideogram Slack tenant.
 
 ## Preamble
 
+**Env prerequisite:** this mode still needs `WORKLOG_BIN` + `WORKLOG_REPO` (and usually a resolved LDAP) even when the skill table marks scrape as no AGENTS read. Empty env is a cold-session miss.
+
 Run the target clone environment first:
 
 ```bash

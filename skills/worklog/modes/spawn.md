@@ -4,6 +4,8 @@ Emit a self-contained handoff prompt for a fresh Claude Code session. The spawne
 
 **Does not run the preamble.** No LDAP resolution, no `_worklog` pull, no repo writes. Pure prompt generator.
 
+**Env prerequisite (no-preamble mode):** helpers still need a shell with `WORKLOG_BIN` / `WORKLOG_REPO` (and usually `WORKLOG_LDAP`) set. Prefer `direnv exec "$WORKLOG_REPO" …`. Bake the exports into the handoff prompt below so the cold session does not invent empty env.
+
 ## Steps
 
 1. Parse the free-form task from the argument verbatim. Everything after `spawn` is the task description.
@@ -21,8 +23,14 @@ Relevant repos:
   - <$PROJECTS_DIR>/<repo-a>
   - <$PROJECTS_DIR>/<repo-b>
 
+Worklog env (required before any $WORKLOG_BIN helper):
+  export WORKLOG_BIN="${WORKLOG_BIN:-$HOME/Documents/oss/dotfiles/skills/worklog/bin}"
+  export WORKLOG_REPO="${WORKLOG_REPO:-<$PROJECTS_DIR>/_worklog}"
+  export WORKLOG_LDAP=<ldap-for-this-task>   # e.g. fredtran — omit --ldap on search sweeps to see all namespaces
+  # Prefer: direnv exec "$WORKLOG_REPO" env WORKLOG_LDAP=<ldap> "$WORKLOG_BIN/<helper>.sh" …
+
 Read these first (in order):
-  - <$PROJECTS_DIR>/_worklog/AGENTS.md          # worklog protocol
+  - $WORKLOG_REPO/AGENTS.md          # worklog protocol
   - <$PROJECTS_DIR>/<repo>/AGENTS.md            # repo conventions (if the task touches code)
   - <path to any skill SKILL.md that governs the work>
   - <path to the active worklog task file, if one exists>
