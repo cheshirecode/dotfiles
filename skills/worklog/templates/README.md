@@ -3,14 +3,15 @@
 ## Quickstart (fresh machine)
 
 ```bash
-gh repo clone ideogram-ai/_worklog ~/Documents/projects/_worklog
-# or: ~/Documents/oss/_worklog — match your machine layout
+# OSS machine:  ~/Documents/oss/_worklog
+# Work machine: ~/Documents/projects/_worklog
+gh repo clone ideogram-ai/_worklog ~/Documents/oss/_worklog   # or projects path
 export WORKLOG_REPO="${WORKLOG_REPO:-$HOME/Documents/oss/_worklog}"
 export WORKLOG_BIN="${WORKLOG_BIN:-$HOME/Documents/oss/dotfiles/skills/worklog/bin}"
 # Optional but recommended for writes; omit --ldap on search sweeps to see all namespaces:
 # export WORKLOG_LDAP=fredtran
-cd "$WORKLOG_REPO"
-# Prefer direnv if the clone has .envrc: direnv allow && direnv exec "$WORKLOG_REPO" …
+cd "$WORKLOG_REPO" && cp -n .envrc.example .envrc && direnv allow
+# Prefer: direnv exec "$WORKLOG_REPO" "$WORKLOG_BIN/<helper>.sh" …
 "$WORKLOG_BIN/install-hooks.sh" --write
 ```
 

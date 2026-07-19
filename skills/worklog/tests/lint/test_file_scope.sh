@@ -6,6 +6,10 @@ WORKLOG_BIN="$ROOT/bin"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+# Isolate from the developer's live WORKLOG_REPO (lint.sh resolves via env).
+unset WORKLOG_REPO WORKLOG_LDAP || true
+export WORKLOG_REPO="$TMP"
+
 cd "$TMP"
 git init -q
 git config user.email tester@example.com
