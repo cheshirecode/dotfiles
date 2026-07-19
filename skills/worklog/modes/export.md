@@ -8,6 +8,8 @@ Output lands at `/tmp/worklog-setup-<YYYYMMDD-HHMMSS>.txt`.
 **Does not run the preamble.** No LDAP resolution, no repo pull, no
 checkpoints. Pure export.
 
+**Env prerequisite (no-preamble mode):** `export-setup.sh` needs `WORKLOG_BIN` + a readable `WORKLOG_REPO` (or cwd clone). Prefer `direnv exec "$WORKLOG_REPO" "$WORKLOG_BIN/export-setup.sh"`.
+
 ## Steps
 
 1. Run `"$WORKLOG_BIN/export-setup.sh"` (no args). It collects `AGENTS.md`,

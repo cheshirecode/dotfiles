@@ -2,6 +2,8 @@
 
 Pure dispatch. Read-only (except `--fix-related`).
 
+**Env prerequisite (no-preamble mode):** requires `WORKLOG_REPO` (cwd or env) and `WORKLOG_BIN`. Prefer `direnv exec "$WORKLOG_REPO" "$WORKLOG_BIN/lint.sh" …`.
+
 ```bash
 cd "$WORKLOG_REPO" && "$WORKLOG_BIN/lint.sh" "$@"
 ```

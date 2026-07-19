@@ -139,6 +139,26 @@ Six states, one terminal. Full FSM diagram + transition rules: [docs/protocol.md
 
 Proposal tasks (`kind: proposal` + `status: draft`) have their own 3-exit lifecycle — see [docs/protocol.md](./docs/protocol.md#proposal-tasks-unrealized-follow-ons).
 
+## Integration maps (cross-repo lookup)
+
+When a project spans multiple code repos, put the as-is join story in a
+`kind: runbook` slug ending in `-integration-map` (example:
+`mini-apps-integration-map`, `worklog-manager-integration-map`).
+
+- **Mandatory** if active tasks under the project cite **≥3** distinct `repos:`.
+- **Advisory** if **≥2** repos and natural-language `"$WORKLOG_BIN/search.sh"`
+  misses the cluster (search is line-level rg — plant a phrase).
+- **Exempt:** single-repo projects.
+- First line of `## Context` must be:
+  `Lookup alias for **<human phrase>** …` so cold search hits.
+- Wire the map from the project hub via `related[]` / `[[slug]]`.
+- **Never** stash the map in a Cursor canvas or `file://` `external_refs`
+  (lint errors). Deferred maps: capability-manifest; sandwich (oss LDAP).
+
+Search ladder: planted phrase → keyword/slug → `--project=` → `context.sh`.
+Dual-LDAP discovery sweeps: omit `--ldap` so all `people/*` namespaces show;
+pin `WORKLOG_LDAP` only for writes.
+
 ## Editing rules
 
 0. **Prior-art grep before editing infrastructure surfaces.** Before changing config that other tasks may have already settled — `gsutil` upload commands, nginx config, `proxy_pass` rules, terraform cache rules, image/video pipeline scripts, any `Cache-Control` decision — run `"$WORKLOG_BIN/related-search.sh" <surface-keyword>` over active + recent-archive task bodies and skim the hits. Design tasks specify these decisions in prose; a code edit that flips them silently is the same class of error as inventing a conflicting decision in a new task (worklog-prior-art-check § Problem miss #4). The grep takes 5 seconds; reverting a wrong flip after PR review costs minutes-to-days. Companion to the [new]-task grep step in sync mode.

@@ -8,6 +8,8 @@ bootstrap case (no prior worklog setup → every file is "new, write").
 **Does not run the preamble.** No `_worklog` pull. Operates on local
 files directly.
 
+**Env prerequisite (no-preamble mode):** know `WORKLOG_BIN` / `WORKLOG_REPO` paths before merging skill or docs files so post-import helpers resolve.
+
 ## Input format
 
 Artifact files are sentinel-delimited multipart (not markdown fences,

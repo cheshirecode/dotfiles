@@ -4,6 +4,8 @@ Structured upfront plan for a new task. Three reasoning passes — Chain-of-Thou
 
 **Does not run the preamble.** Pure generator — no LDAP, no pull, no writes.
 
+**Env prerequisite (no-preamble mode):** if a pass shells out to `"$WORKLOG_BIN/search.sh"` / `related-search.sh`, set `WORKLOG_BIN` + `WORKLOG_REPO` first (prefer `direnv exec "$WORKLOG_REPO" …`). Empty env is the common cold-session miss.
+
 ## When to use
 
 - Non-trivial task (>1h) about to start, no task file yet.
