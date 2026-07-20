@@ -8,6 +8,7 @@ This repository contains:
 - **Shell configurations**: Bash, Zsh, and common shell utilities
 - **Git configuration**: Global git settings and helpers
 - **Claude Code integration**: Comprehensive development guidelines and MCP server configurations
+- **OpenCode integration**: Portable global config with model routing and quantization preferences
 - **Development tools**: Prettier, Stylelint, and other code quality tools
 
 ## Quick Start
@@ -26,6 +27,14 @@ source ~/.dotfiles/.zshrc   # For Zsh
 ### For Claude Code
 
 See **[SETUP-CLAUDE.md](SETUP-CLAUDE.md)** for complete setup instructions.
+
+## OpenCode
+
+`bin/install.sh` links `.config/opencode/opencode.jsonc` to
+`~/.config/opencode/opencode.jsonc`. The committed config contains global
+model defaults, OpenRouter provider ordering, quantization preferences, MCP
+servers, and agent defaults. API keys and other credentials stay in environment
+variables or OpenCode's local auth store and are not exported here.
 
 **Quick links**:
 - 📖 **[CLAUDE.md](CLAUDE.md)** - Comprehensive development guidelines
