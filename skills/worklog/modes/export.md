@@ -14,7 +14,7 @@ checkpoints. Pure export.
 
 1. Run `"$WORKLOG_BIN/export-setup.sh"` (no args). It collects `AGENTS.md`,
    `README.md`, `docs/*.md`, `bin/*` (scripts only), both local worklog
-   skill files, and the advisory agent settings/config surfaces
+   skill roots plus their `modes/*.md` and `references/*.md`, and the advisory agent settings/config surfaces
    (`~/.claude/settings*.json`, `~/.codex/config.toml`). Secrets get
    masked; org strings (`cheshirecode`, `@cheshirecode.ai`, known repos, LDAP,
    `/Users/<name>/`) get replaced with `<your-*>` placeholders.
@@ -42,7 +42,7 @@ checkpoints. Pure export.
      `AKIA…{16}`) → 0 hits.
    - Section headers 1–4 + post-setup checklist all present.
    - If Codex is in use on the source machine, the artifact includes
-     `~/.codex/skills/worklog/SKILL.md`.
+     `~/.codex/skills/worklog/SKILL.md` and its routed mode/reference files.
 
 4. Report to user: path + one-line summary (file count, byte size, any
    memory distillation actions taken). Do **not** dump the prompt

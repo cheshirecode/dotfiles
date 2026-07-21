@@ -171,10 +171,18 @@ PREAMBLE
     [[ -f "$f" ]] || continue
     emit_file "~/.claude/skills/worklog/modes/$(basename "$f")" "$f"
   done
+  for f in "$HOME"/.claude/skills/worklog/references/*.md; do
+    [[ -f "$f" ]] || continue
+    emit_file "~/.claude/skills/worklog/references/$(basename "$f")" "$f"
+  done
   emit_file "~/.codex/skills/worklog/SKILL.md"  "$CODEX_SKILL_SRC"
   for f in "$HOME"/.codex/skills/worklog/modes/*.md; do
     [[ -f "$f" ]] || continue
     emit_file "~/.codex/skills/worklog/modes/$(basename "$f")" "$f"
+  done
+  for f in "$HOME"/.codex/skills/worklog/references/*.md; do
+    [[ -f "$f" ]] || continue
+    emit_file "~/.codex/skills/worklog/references/$(basename "$f")" "$f"
   done
 
   printf '\n## Section 3 — agent settings/config (advisory, do not clobber)\n'
