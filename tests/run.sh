@@ -52,6 +52,41 @@ PY
   then ok "skill SKILL.md frontmatter"; else fail "skill SKILL.md frontmatter"; fi
   if python3 - <<'PY'
 import pathlib
+
+skill = pathlib.Path("skills/worklog")
+root = (skill / "SKILL.md").read_text()
+protocol = (skill / "references/protocol.md").read_text()
+sync = (skill / "modes/sync.md").read_text()
+export_setup = (skill / "bin/export-setup.sh").read_text()
+import_mode = (skill / "modes/import.md").read_text()
+
+required_modes = {
+    "init", "sync", "status", "context", "plan", "spawn", "export",
+    "import", "lint", "project", "scrape-slack", "review",
+}
+missing_modes = sorted(mode for mode in required_modes if not (skill / "modes" / f"{mode}.md").is_file())
+checks = {
+    "thin root": len(root.splitlines()) <= 120,
+    "protocol route": "read `references/protocol.md` only when the table says so" in root.lower(),
+    "no eager references": "Do not preload other mode or reference files" in root,
+    "sync conditional route": "only when creating or hand-editing a task" in root,
+    "sync reads protocol before task writes": "Read `references/protocol.md`" in sync,
+    "ownership boundary moved": "Edit only `$WORKLOG_REPO/people/$LDAP/`" in protocol,
+    "ownership boundary not duplicated": "Edit only `$WORKLOG_REPO/people/$LDAP/`" not in root,
+    "export carries references": export_setup.count("worklog/references/*.md") == 2,
+    "import merges references": "`references/*.md`" in import_mode,
+    "all mode files exist": not missing_modes,
+}
+missing = [name for name, passed in checks.items() if not passed]
+if missing_modes:
+    missing.append("missing mode files: " + ", ".join(missing_modes))
+if missing:
+    print("worklog lazy-loading contract failed: " + "; ".join(missing))
+    raise SystemExit(1)
+PY
+  then ok "worklog lazy-loading contract"; else fail "worklog lazy-loading contract"; fi
+  if python3 - <<'PY'
+import pathlib
 import re
 
 text = pathlib.Path("skills/council/SKILL.md").read_text()
