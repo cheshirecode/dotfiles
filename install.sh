@@ -22,6 +22,7 @@ for src in "$REPO_DIR"/.*; do
   case "$name" in
     .|..|.git|.github|.gitignore) continue ;;
     .cursor) continue ;; # handled below
+    .config) continue ;; # handled below — repo lives under ~/.config, symlinking it wholesale creates a self-referential loop
     .gitconfig.cheshireCode) continue ;; # referenced by absolute path from .gitconfig
     .envrc.github) continue ;; # gitignored secret holder, sourced explicitly
   esac
@@ -33,6 +34,24 @@ for src in "$REPO_DIR"/.*; do
   echo "Symlinking $src to $target..."
   ln -s "$src" "$target"
 done
+
+# .config: link children individually. Coder clones this repo into
+# ~/.config/coderv2/dotfiles, so symlinking ~/.config at the top level would
+# point the directory into itself ("Too many levels of symbolic links").
+if [ -d "$REPO_DIR/.config" ]; then
+  mkdir -p "$DEST/.config"
+  for entry in "$REPO_DIR"/.config/*; do
+    [ -e "$entry" ] || continue
+    ename="$(basename "$entry")"
+    etarget="$DEST/.config/$ename"
+    if [ -L "$etarget" ] && [ "$(readlink "$etarget")" = "$entry" ]; then
+      continue
+    fi
+    backup "$etarget"
+    echo "Symlinking $entry to $etarget..."
+    ln -s "$entry" "$etarget"
+  done
+fi
 
 # .cursor: copy contents instead of symlinking. ~/.cursor is a mountpoint;
 # replacing it with a symlink fails with "file exists".
