@@ -29,6 +29,7 @@ If `$CLAUDE_HOOK` is set or stdin is not a TTY, skip conversation-WIP detection 
    **Report and wait for confirmation** before writing. Never silently create task files.
 
    On confirmation:
+   - Read `references/protocol.md` from the skill root before creating or hand-editing a task. Do not read it for an existing-slug checkpoint that only invokes a helper.
    - For `[new]`: **prior-art grep first.** Before writing the task body for any new task that locks decisions on a shared surface (GCS paths, nginx config patterns, skill-flow conventions, worklog protocol changes), run `"$WORKLOG_BIN/related-search.sh" <surface-keyword>...` and `"$WORKLOG_BIN/related-search.sh" --projects`. Declare matches in `related[]`; reuse an existing `project:` value if one fits. A 5-second grep here prevents minutes-to-days of unwinding a wrong-by-disagreement decision later. Then write `people/$LDAP/active/<slug>.md` per AGENTS.md template; commit `<slug>: create (backfilled)`. Slug per the grammar in AGENTS.md (`eng-<N>-<desc>` if Linear ID known, else bare `<desc>`; no `wip-` prefix).
    - For `[existing]`: `"$WORKLOG_BIN/checkpoint.sh" <slug> [--status=X] [--next="..."]`.
    - For `[proposal]`: create with `kind: proposal`, `status: draft`, Context opening `Follow-on from <parent-slug>.`; append a `## Notes from cheshirecode` pointer to the parent if active.

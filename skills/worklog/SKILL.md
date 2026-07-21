@@ -5,7 +5,7 @@ description: One skill for the shared `_worklog` repo. Twelve modes — `init`, 
 
 # worklog
 
-Single entry point for the shared `_worklog` protocol. Canonical protocol lives in `_worklog/AGENTS.md`. This file is a **router** + **quickref**. Mode detail lives in `modes/<name>.md` and is loaded on-demand.
+Single entry point for the shared `_worklog` protocol. Canonical protocol lives in `_worklog/AGENTS.md`. This file is a thin router. Mode detail lives in `modes/<name>.md`; the compact protocol reference lives in `references/protocol.md`. Load both only when routed below.
 
 ## Routing — first thing, before anything else
 
@@ -31,24 +31,24 @@ Parse the first argument. If empty, `help`, `-h`, `--help`, or unknown, print th
 flags detail: see modes/<name>.md
 ```
 
-Once a known mode is parsed: run preamble (per table), read `modes/<mode>.md`, follow it.
+Once a known mode is parsed: run preamble (per table), read `modes/<mode>.md`, follow it. Read `references/protocol.md` only when the table says so or the selected mode explicitly directs it. Do not preload other mode or reference files.
 
 ## Mode → preamble requirement
 
-| Mode    | Preamble | Reads AGENTS.md? | lessons.md? |
-|---------|----------|------------------|-------------|
-| init    | `--full` | yes              | quickref (limit=15) |
-| sync    | `--full` | only if writing a new/existing task | no |
-| status  | `--minimal` | no            | no |
-| context | `--minimal` | no            | no |
-| plan    | none     | no               | no |
-| spawn   | none     | no               | no |
-| export  | none     | no               | no |
-| import  | none     | no               | no |
-| lint    | none     | no               | no |
-| project | `--minimal` (read-only subs); `--full` (mutating) | no | no |
-| scrape-slack | none | no              | no |
-| review  | `--full` | yes              | full |
+| Mode    | Preamble | `references/protocol.md` | Reads AGENTS.md? | lessons.md? |
+|---------|----------|--------------------------|------------------|-------------|
+| init    | `--full` | no                       | yes              | quickref (limit=15) |
+| sync    | `--full` | only when creating or hand-editing a task | only for an edge case the reference does not answer | no |
+| status  | `--minimal` | no                    | no               | no |
+| context | `--minimal` | no                    | no               | no |
+| plan    | none     | no                       | no               | no |
+| spawn   | none     | no                       | no               | no |
+| export  | none     | no                       | no               | no |
+| import  | none     | no                       | no               | no |
+| lint    | none     | no                       | no               | no |
+| project | `--minimal` (read-only subs); `--full` (mutating) | no | no | no |
+| scrape-slack | none | no                      | no               | no |
+| review  | `--full` | no                       | yes              | full |
 
 ## Paths — single source of truth
 
@@ -88,87 +88,12 @@ If the roster gave you enough orientation, skip hydration. If you need the full 
 
 For per-task detail, use `"$WORKLOG_BIN/context.sh" <slug>` (its output ends in a `Tracker-ready snippet` block formatted for parallel `TaskCreate`).
 
-### AGENTS.md / cheatsheet / lessons.md
+### AGENTS.md / protocol reference / lessons.md
 
-- `$WORKLOG_REPO/AGENTS.md`: read only when the mode table says yes, OR when this quickref doesn't answer a specific question (frontmatter schema edge case, FSM corner, rare relation field). Per-clone — each clone has its own copy seeded from `$WORKLOG_BIN/../templates/AGENTS.md`.
-- `$WORKLOG_BIN/../templates/docs/cheatsheet.md`: superseded by the Quickref section below for routine work. Open only for the long-tail (semantic search filter syntax, project subcommand flags, SQL helper details).
+- `$WORKLOG_REPO/AGENTS.md`: read only when the mode table says yes, OR when `references/protocol.md` does not answer a specific edge case. Per-clone — each clone has its own copy seeded from `$WORKLOG_BIN/../templates/AGENTS.md`.
+- `references/protocol.md`: read only when the mode table says yes. It is the compact task-writing and helper reference formerly embedded here.
+- `$WORKLOG_BIN/../templates/docs/cheatsheet.md`: open only for the long-tail (semantic search filter syntax, project subcommand flags, SQL helper details).
 - `$WORKLOG_BIN/../templates/docs/lessons.md`: high-recurrence lessons live in Claude memory (`feedback_lessons.md`) — no read needed for non-review modes.
-
-## Quickref — imperatives only (baked from cheatsheet)
-
-### Slugs
-- Grammar: `^(eng-\d+-)?[a-z0-9]+(-[a-z0-9]+)*$`. Linear ID known → `eng-<N>-<desc>`. Else bare `<desc>`. No `wip-`.
-- Rename: `"$WORKLOG_BIN/checkpoint.sh" <new> --rename=<old>`. Cross-task rewrites: `"$WORKLOG_BIN/refactor.sh" <new> --rename=<old>`.
-
-### Status FSM
-- Linear: `draft → in-progress → in-review → shipping → archived`.
-- Side: `blocked` — `next_action` MUST start with `Waiting on`.
-- Flip via `"$WORKLOG_BIN/checkpoint.sh" <slug> --status=X`. Never edit frontmatter `status:` alongside a separate `Worklog-Status:` trailer.
-- `--status=archived` is rejected by checkpoint — use `"$WORKLOG_BIN/archive.sh" <slug> --reason=<shipped|declined|superseded|abandoned|merged|obsolete>`.
-
-### Editing rules
-- Edit only `$WORKLOG_REPO/people/$LDAP/`. Other namespaces read-only.
-- Never `git rebase` / `git pull --rebase` / force-push during normal sync. Maintenance ops (`$WORKLOG_BIN/log-compact.sh`, `$WORKLOG_BIN/cache-purge.sh`) are the carve-out — see AGENTS.md.
-- Prior-art grep before infra surfaces: `"$WORKLOG_BIN/related-search.sh" <keyword>`.
-
-### Search ladder (cold discoverability)
-`search.sh` is **line-level rg**, not NL Q&A. Climb only as far as needed:
-1. **Planted phrase** — maps use `Lookup alias for **…**`; try the human phrase first (`"mini-apps integration"`, `"worklog manager"`).
-2. **Keyword / slug fragment** — tokens in filename or body (`integration-map`, `worklog-manager`).
-3. **`--project=<slug>`** — list cluster members when the project slug is known.
-4. **`--list` / `--json`** — narrow, then `"$WORKLOG_BIN/context.sh" <slug>`.
-5. Dual-LDAP sweeps: **omit `--ldap`** (and don't pin `WORKLOG_LDAP` for that call) so all `people/*` show; pin LDAP only for writes/checkpoints.
-
-### Integration maps (`kind: runbook`, slug `*-integration-map`)
-- **Mandatory** when a project has **≥3** distinct repos and cross-repo lookup is load-bearing.
-- **Advisory** when **≥2** repos and NL search (step 1) fails dogfood.
-- **Exempt:** single-repo projects.
-- Every map's `## Context` MUST start with `Lookup alias for **<phrase>**`.
-- No Cursor canvases / `file://` in `external_refs` (lint errors) — in-repo runbooks only.
-- Deferred (do not create yet): capability-manifest map; sandwich map (oss LDAP).
-
-### Tooling shortlist
-- Save: `"$WORKLOG_BIN/checkpoint.sh" <slug>` (single) · `"$WORKLOG_BIN/checkpoint-batch.sh" < json` (atomic multi).
-- Archive: `"$WORKLOG_BIN/archive.sh" <slug> --reason=<…>`.
-- Safety: `"$WORKLOG_BIN/autosave.sh"` (slugless snapshot). Hooks wired by `"$WORKLOG_BIN/install-hooks.sh" --write`.
-- Standup: `"$WORKLOG_BIN/status.sh" [--since=… --project=… --slug=…]`.
-- Per-task pack: `"$WORKLOG_BIN/context.sh" <slug> [--for=resume|review|compact]`.
-- PR reconciliation: `"$WORKLOG_BIN/reconcile-pr.sh" <slug>` compares authoritative `Worklog-PR:` trailers with live GitHub state and emits read-only JSON; repository resolution uses `pr_repos`, exact GitHub PR URLs in the task body, known repos, or local clone remotes. Keep it read-only and limited to explicit task links; do not infer stale work from direct-to-main changes or missing PR linkage.
-- Slug lookup: `"$WORKLOG_BIN/slug.sh" <fragment>`.
-- Search: `"$WORKLOG_BIN/search.sh" <pattern> [--active|--archive] [--kind= --status= --project= --linear= --pr= --repo= --ldap=]`; `--list` (slugs only), `--json`, `--semantic [--top=N]`.
-- Graph viewer: `"$WORKLOG_BIN/worklog-manager" graph --repo "$WORKLOG_REPO" --format html --output /tmp/worklog-graph.html [--project=slug] [--match=text]`.
-- Issue dispatch: `"$WORKLOG_BIN/worklog-manager" dispatch --config <instance.json> --issue <issue.json> --output /tmp/dispatch.json` writes local artifacts; `--execute` runs the planned sandbox argv only when instance config and `Worklog-Execute: sandbox` both approve it.
-- Issue poll dry-run: `"$WORKLOG_BIN/worklog-manager" poll --config <instance.json> --issue-url https://github.com/<owner>/<repo>/issues/<n> --output /tmp/poll.json` requires `poll.enabled=true`, fetches through `gh api`, updates local cursor/run artifacts, records ignored learning events under `.cache/<instance>/learning/`, and posts no GitHub comments unless `--post-status` is passed.
-- Watcher config audit: `"$WORKLOG_BIN/worklog-manager" validate-watchers --config <projects.json> --config <oss.json>` checks separate watcher instances for shared state/cache dirs and same-issue status-marker collisions before polling.
-- Slack context preview: `"$WORKLOG_BIN/scrape-slack.sh" [--input=slack-results.json] [--format=json]` matches captured Slack threads to tasks. Dry-run by default; workspace-agnostic by resolved clone identity; no-op when Slack is unavailable.
-- Multi-task project: `"$WORKLOG_BIN/project.sh" new|next|claim|release|reap|verify|list <slug>`.
-- Lint: `"$WORKLOG_BIN/lint.sh" [--cross-task]`. Boundary guard for split clones: `"$WORKLOG_BIN/boundary-lint.sh"`. Composite audit: `"$WORKLOG_BIN/audit.sh" [--section=boundary]`.
-- SQL: `"$WORKLOG_BIN/sql.sh" new|run|list|show <slug> <name>`.
-- New data repo: `"$WORKLOG_BIN/init-new-data-repo.sh" <path> [<ldap>]` (Phase 4 — not shipped yet).
-
-### Frontmatter
-- `kind` ∈ {bug, bugfix, cleanup, debug, design, impl, infra, investigation, ops, perf, plan, postmortem, program, project, proposal, review, runbook, spike, tooling}.
-- Notion page IDs → `notion: <id>` (no dashes), NOT `external_refs:`. `init --full` matches against `notion:`.
-
-### Body
-- Cite cross-task refs in `related[]`, not just prose.
-- Bare body slugs auto-wrap to `[[<slug>]]` via `"$WORKLOG_BIN/auto-slug-link.py"`. Frontmatter slugs stay bare.
-- Round-trip safe: `grep -l '<slug>' people/` matches both forms.
-
-### Commits
-- `Worklog-Slug:` trailer MUST resolve to an existing task file.
-- `Worklog-Status:` trailer MUST match frontmatter `status:` for that slug.
-- Both enforced by `"$WORKLOG_BIN/git-hooks/commit-msg"`. Hand-rolling status flips via trailer alone is rejected.
-
-### Hooks
-- Pre-commit blocks: lint errors on staged task files, scrubber regressions, ruff/shellcheck errors, secrets via `"$WORKLOG_BIN/pre-commit-scan.sh"`.
-- Commit-msg blocks: typo `Worklog-Slug:`, trailer-vs-frontmatter drift.
-- Post-commit advisory (TTL 1h): cross-task lint warnings, retro prompt on archive.
-- Bypass any hook (one-shot, last-resort): `WORKLOG_NO_HOOK=1 git commit …`.
-
-### Sessions
-- Multi-session collision warning on `checkpoint.sh` if another session touched same slug <5min ago. Advisory; never blocks.
-- Resume kernels live at `.cache/compact-kernels.{md,json}`. Preamble emits a top-15 roster from `.json`; only Read the `.md` (~95KB) on-demand for full detail.
 
 ## Slug & shared boundaries
 
