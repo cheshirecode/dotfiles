@@ -5,27 +5,21 @@ description: Choose the best-value model lane for a task by comparing capability
 
 # which-model
 
-Model choice is an engineering tradeoff, not a brand ladder. Treat OpenAI, Anthropic,
-Chinese models (DeepSeek, Qwen, GLM/Z.ai, Kimi/Moonshot, MiniMax/MiMo), and local/open-weight
-routes as first-class candidates. Pick by capability and cost for the job at hand.
+Choose by capability and cost for the job, not provider reputation. Treat OpenAI, Anthropic, Chinese models, and local/open-weight routes as first-class candidates.
 
-## Command modes
+## Route first
 
-### `/which-model`
+- No arguments: print `## Guideline` and `## Data policy gate`, then stop. Do not read references or fetch live pricing.
+- Task prose/capability: apply the data gate, read `references/routing.md`, and return 1-3 suggestions.
+- Exact model, availability, current/latest/live, pricing, billing, environment, provider, or harness request: also read `references/catalog.md` and run `bin/model-catalog` as directed there.
 
-Print the guideline below and stop. Use this once near session start when model-routing doctrine
-should be loaded into context. Do not fetch live pricing in no-argument mode.
+Do not preload references that the selected route does not require.
 
-### `/which-model <task prose or capability>`
+## Task requests
 
-If the sequential-thinking MCP is available, call it first for non-trivial tasks to decompose the
-job into capability requirements, constraints, and risk gates. In Claude-style tool namespaces this
-is typically `mcp__sequential-thinking__sequentialthinking`; other agents should use their
-equivalent sequential-thinking MCP tool. Use the result to choose models; do not expose
-chain-of-thought. Skip this for obvious one-lane asks.
+For a non-trivial task, use an available sequential-thinking MCP first to decompose capability requirements, constraints, and risk gates. In Claude-style namespaces this is typically `mcp__sequential-thinking__sequentialthinking`; other agents use their equivalent. Use the result to choose models without exposing chain-of-thought. Skip it for obvious one-lane asks.
 
-Return up to 1-3 recommendations, ordered best-value first, then fallback, then premium/escalation
-only when useful. Keep the answer compact:
+Return up to three recommendations: best value, fallback, then premium/escalation only when useful.
 
 ```markdown
 1. <model or lane> — <why it is best value for this task>
@@ -34,103 +28,24 @@ only when useful. Keep the answer compact:
    Availability: <selectable here | requires wrapper | not available in this harness>
 ```
 
-Include exact prices only when a fresh pricing snapshot is available or the user asks for current
-pricing. Otherwise compare qualitatively and label any dated calibration as approximate.
+Include exact prices only after reading `references/catalog.md` and obtaining a fresh enough snapshot. Otherwise compare qualitatively and label dated calibration as approximate.
 
 ## Guideline
 
-1. Identify the job: mechanical search, code edit, long-context review, visual judgment,
-   adversarial verification, planning, synthesis, or final decision.
-2. Filter by hard requirements: data policy, tool access, modality, context window, latency,
-   structured-output reliability, and whether the model can actually be selected in the current
-   harness.
-3. Compare remaining candidates by value for token: capability per dollar on the specific job,
-   not provider reputation.
-4. Spend cheap tokens to reduce expensive uncertainty: more search angles, negative evidence,
-   fixture checks, and compact proofs. Do not spend them on longer prose.
-5. Reserve frontier/premium tokens for cross-context synthesis, high-risk judgment, visual/design
-   calls when needed, and resolving contradictory evidence.
-
-## Model catalog freshness
-
-Cache an environment-specific model catalog, not only prices. "Available" depends on where this
-skill is running: Codex/OpenAI, Claude, Cursor, OpenCode, or an unknown harness can expose different
-models, tools, routing policies, and billing. `--env` selects the harness/session; optional
-`--provider` independently selects the catalog source and defaults to the resolved environment.
-Without `--env`, `WHICH_MODEL_ENV` wins; active session markers and process ancestry outrank passive
-home/config/credential evidence such as `CODEX_HOME`, cwd config directories, or provider API keys.
-
-Catalog paths:
-
-- omitted provider: `$XDG_CACHE_HOME/which-model/catalog.<env>.json`
-- explicit provider: `$XDG_CACHE_HOME/which-model/catalog.<env>.<provider>.json`
-- fallback root: `~/.cache/which-model/`
-- temporary/test root: `$WHICH_MODEL_CACHE_HOME/`
-
-Use `bin/model-catalog` before recommending exact models:
-
-```bash
-skills/which-model/bin/model-catalog --env auto --refresh-if-stale
-skills/which-model/bin/model-catalog --env opencode --refresh-if-stale --task routine_coding --top 3
-skills/which-model/bin/model-catalog --env opencode --provider openrouter --refresh-if-stale
-```
-
-Refresh rules:
-
-- Missing cache: build a catalog before answering.
-- `<3 days` old: use silently for routine routing.
-- `3-5 days` old: use for rough routing; refresh before exact dollar quotes or material billing
-  decisions.
-- `>5 days` old: refresh first; if refresh fails, use the stale catalog only with a warning.
-- Always refresh when the user asks for current/latest/live model availability or pricing.
-
-Catalog records should include model id, provider, availability in the current harness, input/output
-price per million tokens when known, context window, max output, capabilities, caveats, confidence,
-and normalized `task_fit` tags. Prefer official or harness-native sources that do not require the
-skill to hold provider API keys: OpenCode's configured model surface and Models.dev for OpenCode,
-OpenAI model docs/API surfaces for Codex/OpenAI, Cursor local `state.vscdb` reactive storage
-(`availableDefaultModels2`) for the `cursor` env, and the public OpenRouter models API
-(`https://openrouter.ai/api/v1/models`) for `openrouter`. For `claude`, the helper builds from a
-dated Anthropic docs snapshot (model IDs enriched with pricing/limits) with no API key and no
-network; when live availability matters the running session/agent lists models itself and injects
-that JSON via `WHICH_MODEL_CATALOG_SOURCE`—the skill must never hold an Anthropic API key. Label
-prices or availability as unverified when the source cannot prove them.
-
-## Routing heuristics
-
-- **Mechanical search/inventory/status checks**: pick the cheapest reliable model with enough
-  context and tool access. DeepSeek/Qwen/MiniMax/MiMo-class lanes are first-class candidates.
-- **Routine coding or targeted patching**: pick the cheapest model that reliably follows repo
-  patterns and tests. Within Kimi/Moonshot recommendations, use `kimi-k3` as the current coding
-  candidate when it is selectable, especially for long-horizon work or large codebases; use
-  `kimi-k2.7-code-highspeed` only when faster output matters more. Do not infer cross-provider
-  superiority from model-name task tags. Qwen coder, GLM/Z.ai, OpenAI mid, Anthropic Sonnet-class,
-  or local code models can still win depending on harness and repo fit.
-- **Long-context review**: prefer models with large context and low input cost, then require
-  evidence-shaped output: file refs, commands, pass/fail status, and uncertainty.
-- **Voting/adversarial review**: use mid-tier judgment models. Use 3 voters by default; use 5 only
-  when the decision is high-impact, close, and cheap enough.
-- **Visual/design judgment**: require multimodal capability. Text-only cheap models can support
-  surrounding search but cannot own the visual decision.
-- **Accessibility review**: separate screenshot judgment from semantic checks. Visual models can
-  inspect rendered state, but keyboard flow, focus order, ARIA, contrast math, and screen-reader
-  semantics need code inspection and/or deterministic a11y tooling.
-- **Final synthesis / conflict resolution**: use the strongest available model holding the whole
-  thread when the cost is justified.
+1. Identify the job: mechanical search, code edit, long-context review, visual judgment, adversarial verification, planning, synthesis, or final decision.
+2. Filter by hard requirements: data policy, tool access, modality, context window, latency, structured-output reliability, and actual selectability in the current harness.
+3. Compare remaining candidates by capability per dollar on the specific job.
+4. Spend cheap tokens on search angles, negative evidence, fixture checks, and compact proofs—not longer prose.
+5. Reserve frontier/premium tokens for cross-context synthesis, high-risk judgment, needed visual/design calls, and contradictory evidence.
 
 ## Data policy gate
 
-Do not route secrets, customer data, unreleased strategy, or private proprietary code through an
-unapproved provider route just because it is cheap. Approval must be explicit enough to cite:
-allowed data class, provider/route, retention/training terms, and whether the current harness can
-enforce the route. If approval cannot be verified, recommend local, self-hosted, approved
-first-party, or explicitly approved open-weight routes.
+Do not route secrets, customer data, unreleased strategy, or private proprietary code through an unapproved provider because it is cheap. Approval must be explicit enough to cite: allowed data class, provider/route, retention/training terms, and whether the current harness can enforce the route. If approval cannot be verified, recommend local, self-hosted, approved first-party, or explicitly approved open-weight routes.
 
 ## Output rules
 
-- Return at most 3 suggestions.
-- Prefer lanes when exact model availability is unknown: "cheap long-context code model",
-  "mid multimodal model", "frontier synthesis model".
-- State when the current harness cannot actually select a recommended model.
-- Give a one-line rationale tied to the task: capability + cost + caveat.
-- Summarize reasoning as decision factors only; do not print private chain-of-thought.
+- Return at most three suggestions.
+- Prefer lanes when exact availability is unknown: `cheap long-context code model`, `mid multimodal model`, or `frontier synthesis model`.
+- State when the current harness cannot actually select a recommendation.
+- Tie the rationale to task capability, cost, and caveat in one line.
+- Summarize decision factors only; do not print private chain-of-thought.

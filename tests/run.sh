@@ -87,6 +87,31 @@ PY
   then ok "worklog lazy-loading contract"; else fail "worklog lazy-loading contract"; fi
   if python3 - <<'PY'
 import pathlib
+
+skill = pathlib.Path("skills/which-model")
+root = (skill / "SKILL.md").read_text()
+routing = (skill / "references/routing.md").read_text()
+catalog = (skill / "references/catalog.md").read_text()
+reference_names = {path.name for path in (skill / "references").glob("*.md")}
+checks = {
+    "thin root": len(root.splitlines()) <= 80 and len(root.split()) <= 600,
+    "guideline-only route": "Do not read references or fetch live pricing" in root,
+    "task route": "read `references/routing.md`" in root,
+    "catalog route": "also read `references/catalog.md`" in root,
+    "no eager references": "Do not preload references" in root,
+    "data gate stays cold": "Do not route secrets, customer data" in root,
+    "Kimi detail deferred": "`kimi-k3`" in routing and "`kimi-k3`" not in root,
+    "catalog helper deferred": "bin/model-catalog --env auto" in catalog and "--refresh-if-stale" not in root,
+    "references one level deep": reference_names == {"routing.md", "catalog.md"},
+}
+missing = [name for name, passed in checks.items() if not passed]
+if missing:
+    print("which-model lazy-loading contract failed: " + "; ".join(missing))
+    raise SystemExit(1)
+PY
+  then ok "which-model lazy-loading contract"; else fail "which-model lazy-loading contract"; fi
+  if python3 - <<'PY'
+import pathlib
 import re
 
 text = pathlib.Path("skills/council/SKILL.md").read_text()
