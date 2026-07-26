@@ -148,8 +148,9 @@ git clone https://github.com/cheshirecode/dotfiles.git ~/.dotfiles
 cd ~/.dotfiles && bin/install.sh
 
 # bin/install.sh is the SUPPORTED install path: detects your OS, installs
-# runtime deps, runs the agent-skill installer (with the rmtree-safety
-# sentinel), wires hooks, runs bin/doctor.sh. Idempotent — re-run is safe.
+# runtime deps, installs every manifest skill for Claude Code, Codex, and
+# Cursor (with the rmtree-safety sentinel), wires hooks, and runs
+# bin/doctor.sh. Idempotent — re-run is safe.
 #
 # If you want manual symlinks instead, BACK UP FIRST. `ln -sf` will
 # silently overwrite an existing real ~/.bashrc / ~/.zshrc / ~/.gitconfig

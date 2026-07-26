@@ -112,6 +112,67 @@ PY
   then ok "which-model lazy-loading contract"; else fail "which-model lazy-loading contract"; fi
   if python3 - <<'PY'
 import pathlib
+
+skill = pathlib.Path("skills/evidence-gate")
+root = (skill / "SKILL.md").read_text()
+script = (skill / "scripts/evidence_gate.py").read_text()
+checks = {
+    "thin root": len(root.splitlines()) <= 70,
+    "standard frontmatter only": root.split("---", 2)[1].count("\n") == 3,
+    "script route": "scripts/evidence_gate.py init" in root,
+    "typed evidence": all(kind in root for kind in ("command", "artifact", "git", "github", "url")),
+    "digest contract": "SHA-256 digest" in root,
+    "no placeholder": "TODO" not in root,
+    "atomic gate write": "os.replace" in script,
+    "coverage check": '"status": status' in script and '"missing": missing' in script,
+}
+missing = [name for name, passed in checks.items() if not passed]
+if missing:
+    print("evidence-gate contract failed: " + "; ".join(missing))
+    raise SystemExit(1)
+PY
+  then ok "evidence-gate contract"; else fail "evidence-gate contract"; fi
+  if python3 - <<'PY'
+import pathlib
+
+skill = pathlib.Path("skills/loop-engineering")
+root = (skill / "SKILL.md").read_text()
+examples = (skill / "references/examples.md").read_text()
+hosts = (skill / "references/hosts.md").read_text()
+protocol = (skill / "references/protocol.md").read_text()
+state_script = (skill / "scripts/loop_state.py").read_text()
+references = {path.name for path in (skill / "references").glob("*.md")}
+checks = {
+    "thin portable root": len(root.splitlines()) <= 80,
+    "standard frontmatter only": root.split("---", 2)[1].count("\n") == 3,
+    "script-first route": "scripts/loop_state.py init" in root,
+    "no hand-edited state": "do not hand-edit its JSON" in root,
+    "worklog context route": "<slug> --for=resume" in protocol,
+    "tracker hydration route": "hydrate the host tracker from the" in protocol,
+    "worklog delegation route": "<slug> --for=compact" in protocol and "spawn <slug>" not in protocol,
+    "worklog creation gate": "slugless `sync`" in protocol,
+    "worklog checkpoint route": "persist arbitrary evidence or task-body changes" in protocol,
+    "terminal evidence rule": "model's prose claim is not evidence" in root,
+    "complete verification guard": "complete requires" in state_script and "--verification" in state_script,
+    "evidence-gate completion route": "$evidence-gate" in root and "evidence-gate verification value" in root,
+    "append-only correction": "def command_annotate" in state_script and "annotated" in state_script,
+    "atomic state write": "os.replace" in state_script,
+    "host differences deferred": references == {"examples.md", "hosts.md", "protocol.md"},
+    "no host-only injection": "!`" not in root and "allowed-tools:" not in root,
+    "three contrastive fixtures": examples.count("\n## ") == 4,
+    "Codex shared install": "~/.agents/skills/" in hosts,
+    "Claude personal install": "~/.claude/skills/" in hosts,
+    "Cursor shared install": ".agents/skills/" in hosts,
+    "Cursor native install": "~/.cursor/skills/" in hosts,
+}
+missing = [name for name, passed in checks.items() if not passed]
+if missing:
+    print("loop-engineering portability contract failed: " + "; ".join(missing))
+    raise SystemExit(1)
+PY
+  then ok "loop-engineering portability contract"; else fail "loop-engineering portability contract"; fi
+  if python3 - <<'PY'
+import pathlib
 import re
 
 text = pathlib.Path("skills/council/SKILL.md").read_text()
@@ -200,6 +261,18 @@ PY
     ok "worklog PR reconciliation fixtures"
   else
     fail "worklog PR reconciliation fixtures"
+  fi
+
+  if python3 -m unittest skills/loop-engineering/tests/test_loop_state.py >/dev/null; then
+    ok "loop-engineering state transition fixtures"
+  else
+    fail "loop-engineering state transition fixtures"
+  fi
+
+  if python3 -m unittest skills/evidence-gate/tests/test_evidence_gate.py >/dev/null; then
+    ok "evidence-gate coverage fixtures"
+  else
+    fail "evidence-gate coverage fixtures"
   fi
 
   if python3 - <<'PY'
@@ -304,7 +377,7 @@ PY
   fi
   rm -rf "$fake_home"
 
-  local skill_names skill_name skill_md
+  local skill_names skill_name skill_md shared_skill_md install_home canonical_skill installed_skill skills_root
   skill_names=$(python3 - <<'PY'
 import pathlib
 import yaml
@@ -329,13 +402,58 @@ PY
     rc=$?
     set -e
     skill_md="$fake_home/.claude/skills/$skill_name/SKILL.md"
-    if [[ $rc -eq 0 && -f "$skill_md" ]]; then
-      ok "install-skills installs $skill_name"
+    shared_skill_md="$fake_home/.agents/skills/$skill_name/SKILL.md"
+    if [[ $rc -eq 0 && -f "$skill_md" && -f "$shared_skill_md" && -f "$fake_home/.cursor/skills/$skill_name/SKILL.md" ]]; then
+      ok "install-skills installs $skill_name to all user roots"
     else
       fail "install-skills failed for $skill_name (rc=$rc)"
     fi
     rm -rf "$fake_home"
   done <<< "$skill_names"
+
+  install_home=$(mktemp -d)
+  if HOME="$install_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" ./bin/install-skills.sh >/dev/null 2>&1; then
+    rc=0
+    for canonical_skill in "$REPO_ROOT"/skills/*/SKILL.md; do
+      skill_name=$(basename "$(dirname "$canonical_skill")")
+      for skills_root in .agents/skills .claude/skills .cursor/skills; do
+        installed_skill="$install_home/$skills_root/$skill_name/SKILL.md"
+        if [[ ! -f "$installed_skill" || "$(realpath "$installed_skill")" != "$(realpath "$canonical_skill")" ]]; then
+          rc=1
+        fi
+      done
+    done
+  else
+    rc=1
+  fi
+  if [[ $rc -eq 0 ]]; then
+    ok "supported installer exposes every canonical skill to all user roots"
+  else
+    fail "supported installer cross-host all-skill exposure"
+  fi
+  rm -rf "$install_home"
+
+  install_home=$(mktemp -d)
+  if CODER_SYMLINK_DIR="$install_home" ./install.sh >/dev/null 2>&1; then
+    rc=0
+    for canonical_skill in "$REPO_ROOT"/skills/*/SKILL.md; do
+      skill_name=$(basename "$(dirname "$canonical_skill")")
+      for skills_root in .agents/skills .claude/skills .cursor/skills; do
+        installed_skill="$install_home/$skills_root/$skill_name/SKILL.md"
+        if [[ ! -f "$installed_skill" || "$(realpath "$installed_skill")" != "$(realpath "$canonical_skill")" ]]; then
+          rc=1
+        fi
+      done
+    done
+  else
+    rc=1
+  fi
+  if [[ $rc -eq 0 ]]; then
+    ok "install.sh exposes every canonical skill to all user roots"
+  else
+    fail "install.sh cross-host skill exposure"
+  fi
+  rm -rf "$install_home"
 
   if python3 - <<'PY'
 import re

@@ -1,0 +1,289 @@
+#!/usr/bin/env python3
+"""Manage the deterministic state boundary of a bounded agent loop."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import pathlib
+import sys
+import tempfile
+from datetime import datetime, timezone
+from typing import Any
+
+
+SCHEMA_VERSION = 1
+TERMINAL_STATUSES = {
+    "complete",
+    "blocked",
+    "needs_human",
+    "budget_exhausted",
+    "cancelled",
+    "continue_scheduled",
+}
+ALL_STATUSES = {"running", *TERMINAL_STATUSES}
+
+
+class StateError(ValueError):
+    """Raised when a requested transition violates the loop contract."""
+
+
+def now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def read_state(path: pathlib.Path) -> dict[str, Any]:
+    try:
+        state = json.loads(path.read_text())
+    except FileNotFoundError as exc:
+        raise StateError(f"state file does not exist: {path}") from exc
+    except json.JSONDecodeError as exc:
+        raise StateError(f"state file is not valid JSON: {path}: {exc}") from exc
+    validate_state(state)
+    return state
+
+
+def write_state(path: pathlib.Path, state: dict[str, Any]) -> None:
+    validate_state(state)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+    )
+    temporary_path = pathlib.Path(temporary_name)
+    try:
+        with os.fdopen(fd, "w") as handle:
+            json.dump(state, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+
+def validate_state(state: dict[str, Any]) -> None:
+    if state.get("schema_version") != SCHEMA_VERSION:
+        raise StateError(f"schema_version must be {SCHEMA_VERSION}")
+    for field in ("goal", "next_action", "terminal_status"):
+        if not isinstance(state.get(field), str):
+            raise StateError(f"{field} must be a string")
+    if not state["goal"].strip():
+        raise StateError("goal must not be empty")
+    if state["terminal_status"] not in ALL_STATUSES:
+        raise StateError(f"invalid terminal_status: {state['terminal_status']}")
+
+    evidence = state.get("progress_evidence")
+    if not isinstance(evidence, list) or not evidence:
+        raise StateError("progress_evidence must be a non-empty list")
+    if not all(isinstance(item, str) and item.strip() for item in evidence):
+        raise StateError("progress_evidence entries must be non-empty strings")
+
+    budget = state.get("budget")
+    if not isinstance(budget, dict):
+        raise StateError("budget must be an object")
+    if not isinstance(budget.get("unit"), str) or not budget["unit"].strip():
+        raise StateError("budget.unit must be a non-empty string")
+    limit = budget.get("limit")
+    used = budget.get("used")
+    if not isinstance(limit, int) or limit < 1:
+        raise StateError("budget.limit must be a positive integer")
+    if not isinstance(used, int) or used < 0 or used > limit:
+        raise StateError("budget.used must be between zero and budget.limit")
+
+    if state["terminal_status"] == "running" and used >= limit:
+        raise StateError("running state cannot have an exhausted budget")
+    verification = state.get("verification")
+    if state["terminal_status"] == "complete" and (
+        not isinstance(verification, str) or not verification.strip()
+    ):
+        raise StateError("complete state requires non-empty verification")
+    if not isinstance(state.get("history"), list):
+        raise StateError("history must be a list")
+
+
+def require_running(state: dict[str, Any]) -> None:
+    if state["terminal_status"] != "running":
+        raise StateError(
+            f"cannot transition terminal state: {state['terminal_status']}"
+        )
+
+
+def append_history(
+    state: dict[str, Any],
+    event: str,
+    evidence: list[str],
+    next_action: str,
+) -> None:
+    state["history"].append(
+        {
+            "at": now(),
+            "event": event,
+            "evidence": evidence,
+            "next_action": next_action,
+        }
+    )
+
+
+def command_init(args: argparse.Namespace) -> dict[str, Any]:
+    if args.state.exists() and not args.force:
+        raise StateError(f"refusing to overwrite existing state: {args.state}")
+    state: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "goal": args.goal,
+        "progress_evidence": args.evidence,
+        "budget": {
+            "unit": args.budget_unit,
+            "limit": args.budget_limit,
+            "used": 0,
+        },
+        "next_action": args.next_action,
+        "terminal_status": "running",
+        "allowed_effects": args.allowed_effect,
+        "approval_boundary": args.approval_boundary,
+        "verification": "",
+        "history": [],
+    }
+    append_history(state, "initialized", args.evidence, args.next_action)
+    write_state(args.state, state)
+    return state
+
+
+def command_advance(args: argparse.Namespace) -> dict[str, Any]:
+    state = read_state(args.state)
+    require_running(state)
+    remaining = state["budget"]["limit"] - state["budget"]["used"]
+    if args.consume > remaining:
+        raise StateError(
+            f"transition consumes {args.consume} {state['budget']['unit']}; "
+            f"only {remaining} remain"
+        )
+    state["progress_evidence"].extend(args.evidence)
+    state["budget"]["used"] += args.consume
+    state["next_action"] = args.next_action
+    if state["budget"]["used"] == state["budget"]["limit"]:
+        state["terminal_status"] = "budget_exhausted"
+    append_history(state, "advanced", args.evidence, args.next_action)
+    write_state(args.state, state)
+    return state
+
+
+def command_finish(args: argparse.Namespace) -> dict[str, Any]:
+    state = read_state(args.state)
+    require_running(state)
+    if args.status == "complete" and not args.verification:
+        raise StateError("complete requires --verification from a tool or artifact")
+    state["progress_evidence"].extend(args.evidence)
+    state["terminal_status"] = args.status
+    if args.next_action is not None:
+        state["next_action"] = args.next_action
+    state["verification"] = args.verification or ""
+    append_history(
+        state, f"finished:{args.status}", args.evidence, state["next_action"]
+    )
+    write_state(args.state, state)
+    return state
+
+
+def command_annotate(args: argparse.Namespace) -> dict[str, Any]:
+    state = read_state(args.state)
+    state["progress_evidence"].extend(args.evidence)
+    if args.next_action is not None:
+        state["next_action"] = args.next_action
+    append_history(state, "annotated", args.evidence, state["next_action"])
+    write_state(args.state, state)
+    return state
+
+
+def summary(state: dict[str, Any]) -> str:
+    budget = state["budget"]
+    return "\n".join(
+        [
+            f"goal: {state['goal']}",
+            f"progress_evidence: {state['progress_evidence'][-1]}",
+            f"budget: {budget['used']}/{budget['limit']} {budget['unit']}",
+            f"next_action: {state['next_action']}",
+            f"terminal_status: {state['terminal_status']}",
+        ]
+    )
+
+
+def add_state_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--state", type=pathlib.Path, required=True)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    initialize = subparsers.add_parser("init", help="initialize a bounded run")
+    add_state_argument(initialize)
+    initialize.add_argument("--goal", required=True)
+    initialize.add_argument("--evidence", action="append", required=True)
+    initialize.add_argument("--budget-unit", required=True)
+    initialize.add_argument("--budget-limit", type=int, required=True)
+    initialize.add_argument("--next-action", required=True)
+    initialize.add_argument("--allowed-effect", action="append", default=[])
+    initialize.add_argument("--approval-boundary", default="")
+    initialize.add_argument("--force", action="store_true")
+    initialize.set_defaults(handler=command_init)
+
+    advance = subparsers.add_parser(
+        "advance",
+        help="record a failed/nonterminal cycle and consume budget",
+    )
+    add_state_argument(advance)
+    advance.add_argument("--evidence", action="append", required=True)
+    advance.add_argument("--next-action", required=True)
+    advance.add_argument("--consume", type=int, default=1)
+    advance.set_defaults(handler=command_advance)
+
+    finish = subparsers.add_parser("finish", help="record a terminal outcome")
+    add_state_argument(finish)
+    finish.add_argument("--status", choices=sorted(TERMINAL_STATUSES), required=True)
+    finish.add_argument("--evidence", action="append", required=True)
+    finish.add_argument("--verification")
+    finish.add_argument("--next-action")
+    finish.set_defaults(handler=command_finish)
+
+    annotate = subparsers.add_parser(
+        "annotate",
+        help="append corrected evidence without changing status or budget",
+    )
+    add_state_argument(annotate)
+    annotate.add_argument("--evidence", action="append", required=True)
+    annotate.add_argument("--next-action")
+    annotate.set_defaults(handler=command_annotate)
+
+    validate = subparsers.add_parser("validate", help="validate an existing state")
+    add_state_argument(validate)
+    validate.set_defaults(handler=lambda args: read_state(args.state))
+
+    show = subparsers.add_parser("show", help="render the current contract")
+    add_state_argument(show)
+    show.add_argument("--json", action="store_true")
+    show.set_defaults(handler=lambda args: read_state(args.state))
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    if getattr(args, "consume", 1) < 1:
+        parser.error("--consume must be a positive integer")
+    try:
+        state = args.handler(args)
+    except StateError as exc:
+        print(f"loop-state: {exc}", file=sys.stderr)
+        return 2
+    if args.command == "show" and not args.json:
+        print(summary(state))
+    else:
+        print(json.dumps(state, indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

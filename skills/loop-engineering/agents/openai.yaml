@@ -1,0 +1,4 @@
+interface:
+  display_name: "Loop Engineering"
+  short_description: "Design bounded, evidence-driven agent loops"
+  default_prompt: "Use $loop-engineering to structure this repeated or resumable task as a bounded, evidence-driven loop."
