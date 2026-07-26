@@ -102,9 +102,14 @@ def _layout_issues(root: pathlib.Path) -> list[dict[str, Any]]:
     if not ldap_dir.is_dir():
       continue
     for state_dir in sorted(path for path in ldap_dir.iterdir() if path.is_dir()):
+      if state_dir.name in {"active", "archive"}:
+        task_paths.extend(sorted(state_dir.glob("*.md")))
+        continue
+      if state_dir.name == "transcripts":
+        continue
       markdown = sorted(state_dir.rglob("*.md"))
       task_paths.extend(markdown)
-      if state_dir.name not in {"active", "archive"} and markdown:
+      if markdown:
         rel = state_dir.relative_to(root)
         issues.append({
           "file": str(rel),
