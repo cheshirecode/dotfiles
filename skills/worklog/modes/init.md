@@ -56,8 +56,9 @@ ready — which task?
 ## Tracker hydration (after focus selection)
 
 The active-task list is orientation, not an instruction to materialize every
-durable task in an ephemeral tracker. Do not hydrate `TaskCreate` or
-`update_plan` before the user selects a task.
+durable task in an ephemeral tracker.
+
+Do not hydrate `TaskCreate` or `update_plan` before the user selects a task.
 
 After the user selects or resumes a slug, run
 `"$WORKLOG_BIN/context.sh" <slug>`. Its "Tracker-ready snippet" formats that
