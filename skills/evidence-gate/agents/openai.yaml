@@ -1,0 +1,4 @@
+interface:
+  display_name: "Evidence Gate"
+  short_description: "Require evidence for every completion criterion"
+  default_prompt: "Use $evidence-gate to verify that every completion criterion has tool or artifact evidence."

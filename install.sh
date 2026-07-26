@@ -61,20 +61,22 @@ if [ -d "$REPO_DIR/.cursor" ]; then
   cp -R "$REPO_DIR/.cursor/." "$DEST/.cursor/"
 fi
 
-# Symlink Claude Code skills shipped in this repo into ~/.claude/skills/.
-# Code (skill + bin) is version-controlled here; per-machine data/config
-# (e.g. worklog's WORKLOG_REPO) lives outside the repo via ~/.shell_common.local.
+# Symlink every skill shipped in this repo into the shared Agent Skills root,
+# Claude Code's personal skill root, and Cursor's native personal skill root.
+# Code stays version-controlled here; per-machine data/config lives outside.
 if [ -d "$REPO_DIR/skills" ]; then
-  mkdir -p "$DEST/.claude/skills"
-  for skill in "$REPO_DIR"/skills/*/; do
-    sname="$(basename "$skill")"
-    starget="$DEST/.claude/skills/$sname"
-    if [ -L "$starget" ] && [ "$(readlink "$starget")" = "${skill%/}" ]; then
-      continue
-    fi
-    backup "$starget"
-    echo "Symlinking skill $sname into $starget..."
-    ln -s "${skill%/}" "$starget"
+  for skills_root in "$DEST/.agents/skills" "$DEST/.claude/skills" "$DEST/.cursor/skills"; do
+    mkdir -p "$skills_root"
+    for skill in "$REPO_DIR"/skills/*/; do
+      sname="$(basename "$skill")"
+      starget="$skills_root/$sname"
+      if [ -L "$starget" ] && [ "$(readlink "$starget")" = "${skill%/}" ]; then
+        continue
+      fi
+      backup "$starget"
+      echo "Symlinking skill $sname into $starget..."
+      ln -s "${skill%/}" "$starget"
+    done
   done
 fi
 

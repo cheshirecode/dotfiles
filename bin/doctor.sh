@@ -5,7 +5,7 @@
 #   1. Runtime deps on PATH (python3, gh, git, rg, jq, direnv)
 #   2. Python ≥ 3.10 (worklog lint helpers depend on 3.10+ syntax)
 #   3. PyYAML importable (install-skills.sh uses it)
-#   4. Each manifest skill present as a SKILL.md under ~/.claude/skills/
+#   4. Each manifest skill present under Claude, shared-agent, and Cursor roots
 #   5. _worklog repo present and on a clean HEAD
 #   6. Hooks wired (.claude/settings.json mentions autosave)
 #   7. gh auth (warn-only — works for unauth'd public-repo flows)
@@ -21,7 +21,10 @@ warn() { say "WARN" "$1"; WARN=$((WARN+1)); }
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MANIFEST="$REPO_ROOT/manifest/skills.yaml"
-SKILLS_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
+CLAUDE_SKILLS_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
+AGENT_SKILLS_DIR="${AGENT_SKILLS_DIR:-$HOME/.agents/skills}"
+CURSOR_SKILLS_DIR="${CURSOR_SKILLS_DIR:-$HOME/.cursor/skills}"
+SKILL_ROOTS=("$CLAUDE_SKILLS_DIR" "$AGENT_SKILLS_DIR" "$CURSOR_SKILLS_DIR")
 PROJECTS_DIR="${PROJECTS_DIR:-$HOME/Documents/projects}"
 
 echo "doctor: runtime deps"
@@ -55,12 +58,14 @@ print('\n'.join(s['name'] for s in yaml.safe_load(open('$MANIFEST'))['skills']))
   rm -f "$skill_list_err"
   while IFS= read -r name; do
     [[ -z "$name" ]] && continue
-    skill_md="$SKILLS_DIR/$name/SKILL.md"
-    if [[ -f "$skill_md" ]]; then
-      ok "$name → $skill_md"
-    else
-      warn "$name SKILL.md missing (run bin/install-skills.sh)"
-    fi
+    for skill_root in "${SKILL_ROOTS[@]}"; do
+      skill_md="$skill_root/$name/SKILL.md"
+      if [[ -f "$skill_md" ]]; then
+        ok "$name → $skill_md"
+      else
+        warn "$name SKILL.md missing at $skill_root (run bin/install-skills.sh)"
+      fi
+    done
   done <<< "$skill_list"
 else
   fail "manifest/skills.yaml missing"
