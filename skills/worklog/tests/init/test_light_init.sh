@@ -11,6 +11,11 @@ trap 'rm -rf "$TMP"' EXIT
 grep -Fq 'default / `--light` → `--minimal`' "$SKILL_ROOT"
 grep -Fq 'explicit `--full` → `--full`' "$SKILL_ROOT"
 grep -Fq 'Default and `--light` use `preamble.sh --minimal`' "$INIT_MODE"
+grep -Fq 'Do not hydrate `TaskCreate` or `update_plan` before the user selects a task.' "$INIT_MODE"
+if grep -Fq 'for any active task with ≥3 unchecked items' "$INIT_MODE"; then
+  echo "FAIL: init still hydrates every multi-step active task"
+  exit 1
+fi
 
 mkdir -p "$TMP/people/tester/active" "$TMP/people/tester/archive" "$TMP/.cache"
 git -C "$TMP" init -q
