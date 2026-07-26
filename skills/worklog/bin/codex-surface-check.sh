@@ -15,9 +15,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(resolve_worklog_repo)" || exit 1
 cd "$REPO_ROOT"
 
-EXPECTED=(help init sync status context plan spawn export import lint project scrape-slack review)
 CODEX_SKILL_PATH="${CODEX_SKILL_PATH:-$HOME/.codex/skills/worklog/SKILL.md}"
 MODE_INIT_PATH="${MODE_INIT_PATH:-$SCRIPT_DIR/../modes/init.md}"
+MODE_REGISTRY_PATH="${MODE_REGISTRY_PATH:-$SCRIPT_DIR/../modes/registry.md}"
 
 case "${1:-}" in
   -h|--help)
@@ -29,6 +29,8 @@ the same worklog command names.
 
 Environment:
   CODEX_SKILL_PATH=/path/to/SKILL.md   override local Codex skill path
+  MODE_REGISTRY_PATH=/path/to/registry.md
+                                       override public mode registry
 EOF
     exit 0
     ;;
@@ -39,6 +41,24 @@ EOF
     exit 2
     ;;
 esac
+
+if [[ ! -f "$MODE_REGISTRY_PATH" ]]; then
+  echo "codex-surface-check: mode registry not found at $MODE_REGISTRY_PATH" >&2
+  exit 1
+fi
+
+EXPECTED=()
+while IFS= read -r cmd; do
+  [[ -n "$cmd" ]] && EXPECTED+=("$cmd")
+done < <(
+  sed -n '/MODE_REGISTRY_BEGIN/,/MODE_REGISTRY_END/ {
+    s/^- \([a-z0-9-][a-z0-9-]*\)$/\1/p
+  }' "$MODE_REGISTRY_PATH"
+)
+if [[ ${#EXPECTED[@]} -eq 0 ]]; then
+  echo "codex-surface-check: mode registry is empty or malformed" >&2
+  exit 1
+fi
 
 SURFACES=("README.md" "AGENTS.md")
 if [[ -f "$CODEX_SKILL_PATH" ]]; then

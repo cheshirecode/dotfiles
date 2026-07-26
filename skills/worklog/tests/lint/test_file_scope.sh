@@ -80,4 +80,54 @@ if "$WORKLOG_BIN/lint.sh" --file=people/tester/active/missing-task.md >/tmp/work
 fi
 grep -q 'is not a tracked task file' /tmp/worklog-lint-missing.out
 
-echo "ok: lint --file scope"
+mkdir -p people/tester/archived
+cat > people/tester/archived/good-task.md <<'EOF'
+---
+slug: good-task
+kind: impl
+status: archived
+project: sample
+last_updated: 2026-06-12
+next_action: —
+repos: [sample]
+---
+
+## Context
+Invisible duplicate in an unsupported state directory.
+
+## Next
+None.
+EOF
+
+# Transcripts are supported auxiliary Markdown and intentionally share task slugs.
+mkdir -p people/tester/transcripts
+cat > people/tester/transcripts/good-task.md <<'EOF'
+# Transcript
+
+Session evidence for good-task.
+EOF
+
+layout_json="$("$WORKLOG_BIN/lint.sh" --format=json 2>/dev/null || true)"
+printf '%s' "$layout_json" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+errors = [
+    error
+    for issue in d["issues"]
+    for error in issue["errors"]
+]
+assert any("unknown task state directory" in error and "archived" in error for error in errors), errors
+assert any("duplicate slug" in error and "good-task" in error for error in errors), errors
+assert not any("transcripts" in error for error in errors), errors
+'
+
+# File-scoped lint remains scoped to the requested canonical task.
+good_json="$("$WORKLOG_BIN/lint.sh" --file=people/tester/active/good-task.md --format=json)"
+printf '%s' "$good_json" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+assert d["total_files"] == 1, d
+assert d["total_errors"] == 0, d
+'
+
+echo "ok: lint --file scope and vault layout"

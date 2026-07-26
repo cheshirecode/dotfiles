@@ -1,5 +1,10 @@
 # Mode: `init`
 
+**Routing contract:** Default and `--light` use `preamble.sh --minimal`; only
+explicit `--full` uses `preamble.sh --full`. Select the preamble from the user
+flag before reading this mode. Light init must not pull, autosave, commit, push,
+or rebuild caches.
+
 Onboard a session. Light by default; escalates to a full external scan when drift is detected or the user explicitly asks.
 
 ## Detection — light vs. full
@@ -48,17 +53,25 @@ drift:
 ready — which task?
 ```
 
-## Tracker hydration (MUST, on every init)
+## Tracker hydration (after focus selection)
 
-After printing the active-task list and before asking "which task?", **hydrate the in-session tracker** for any active task with ≥3 unchecked items in its `## Next` section. Per AGENTS.md § In-session progress visibility:
+The active-task list is orientation, not an instruction to materialize every
+durable task in an ephemeral tracker.
 
-- **Claude Code:** invoke `TaskCreate` for each unchecked `- [ ]` item under `## Next`. Use the slug as the task's `metadata.slug` so the tracker entry maps back to its source task file.
-- **OpenAI Codex CLI:** emit an initial `update_plan` populated from the same `## Next` items.
-- **Cursor:** populate the canvas todo card / Plan Mode entries.
+Do not hydrate `TaskCreate` or `update_plan` before the user selects a task.
 
-Run `"$WORKLOG_BIN/context.sh" <slug>` for any focused task — its output's "Tracker-ready snippet" section formats each unchecked item ready to paste/exec.
+After the user selects or resumes a slug, run
+`"$WORKLOG_BIN/context.sh" <slug>`. Its "Tracker-ready snippet" formats that
+task's unchecked `## Next` items. Hydrate only that focused task:
 
-Skip hydration only when every active task is at ≤2 unchecked items (single-step or trivial). Don't wait for the user to ask. Drift evidence: 2026-04-27 review session ran ~30 multi-step commits with zero `TaskCreate` invocations despite the system reminder firing repeatedly (`docs/lessons.md` 2026-04 entry).
+- **Claude Code:** invoke `TaskCreate` for its unchecked items, using the slug
+  as `metadata.slug`.
+- **OpenAI Codex CLI:** emit `update_plan` for the same focused items.
+- **Cursor:** populate the focused canvas todo card / Plan Mode entries.
+
+Skip hydration when the selected task has at most two unchecked items. The
+durable task files remain the multi-task backlog; the tracker mirrors only the
+work this session intends to execute.
 
 ## Full path
 

@@ -37,7 +37,7 @@ Once a known mode is parsed: run preamble (per table), read `modes/<mode>.md`, f
 
 | Mode    | Preamble | `references/protocol.md` | Reads AGENTS.md? | lessons.md? |
 |---------|----------|--------------------------|------------------|-------------|
-| init    | `--full` | no                       | yes              | quickref (limit=15) |
+| init    | default / `--light` → `--minimal`; explicit `--full` → `--full` | no | yes | quickref (limit=15) |
 | sync    | `--full` | only when creating or hand-editing a task | only for an edge case the reference does not answer | no |
 | status  | `--minimal` | no                    | no               | no |
 | context | `--minimal` | no                    | no               | no |
@@ -76,7 +76,7 @@ Run helpers from a shell that has the target clone's environment loaded. Prefer 
 cd "$WORKLOG_REPO" && "$WORKLOG_BIN/preamble.sh" [--minimal|--full]
 ```
 
-Emits `LDAP=`, `PROJECTS_DIR=`, `NAMESPACE=`, `PULL=` key/value lines plus a `### roster` block (top 15 active tasks by `last_updated`, one tab-separated line each). Internally handles: LDAP resolve (24h cached), namespace bootstrap, rate-limited `git pull` (5-min stamp), `.gitconfig.lock` cleanup, autosave-if-dirty.
+Emits `LDAP=`, `PROJECTS_DIR=`, `NAMESPACE=`, `PULL=` key/value lines plus a `### roster` block (top 15 active tasks by `last_updated`, one tab-separated line each). Both paths resolve LDAP and inspect the namespace/roster. Full mode additionally handles the rate-limited pull and dirty-tree autosave.
 
 Skip re-invocation within the same session — preamble.sh is idempotent but the tool turns aren't free.
 

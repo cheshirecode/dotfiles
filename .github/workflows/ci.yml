@@ -66,11 +66,13 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y shellcheck jq
-          pip install --quiet ruff pyyaml
+          pip install --quiet 'ruff==0.15.12' pyyaml
       - name: set git identity for fixture vault commits
         run: |
           git config --global user.email "ci@cheshirecode.test"
           git config --global user.name "ci-fixture"
           git config --global init.defaultBranch main
       - name: run worklog-skill test mode
-        run: bash tests/run.sh worklog-skill
+        run: |
+          ruff --version
+          bash tests/run.sh worklog-skill
