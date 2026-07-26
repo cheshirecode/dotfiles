@@ -1,5 +1,10 @@
 # Mode: `init`
 
+**Routing contract:** Default and `--light` use `preamble.sh --minimal`; only
+explicit `--full` uses `preamble.sh --full`. Select the preamble from the user
+flag before reading this mode. Light init must not pull, autosave, commit, push,
+or rebuild caches.
+
 Onboard a session. Light by default; escalates to a full external scan when drift is detected or the user explicitly asks.
 
 ## Detection — light vs. full
