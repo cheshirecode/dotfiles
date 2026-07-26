@@ -4,8 +4,8 @@
 # addressed). Bump SHAs explicitly when upgrading; don't track moving branches.
 #
 # Targets:
-#   user-installed Claude Code skills under ~/.claude/skills/<name>/
-#   sourced from public GitHub repos.
+#   every manifest skill is installed under ~/.claude/skills/<name>/,
+#   ~/.agents/skills/<name>/, and ~/.cursor/skills/<name>/.
 #
 # Skills that ship with Claude Code itself (init, review, security-review,
 # claude-api, loop, schedule, statusline-setup, update-config, etc.) are
@@ -36,6 +36,14 @@ skills:
     # The worklog SKILL ships separately from the _worklog repo. This entry
     # installs the skill files; bin/install-worklog.sh clones the repo +
     # wires hooks.
+
+  - name: loop-engineering
+    description: Bounded, evidence-driven loops with worklog-backed context and handoffs.
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/loop-engineering
+    install_to: ~/.claude/skills/loop-engineering
 
   - name: ship-hygiene
     description: Pre-handoff sweep across worklog + PRs + CI.

@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Install agent skills from manifest/skills.yaml into ~/.claude/skills/.
+# Install agent skills from manifest/skills.yaml into all supported user roots:
+# ~/.claude/skills/ for Claude Code, ~/.agents/skills/ for Codex and shared
+# discovery, and ~/.cursor/skills/ for Cursor's native discovery surface.
 #
 # Two source types:
 #   - subpath:  copy a directory from this repo (vendored skill).
 #   - git:      clone a repo at a pinned SHA, then symlink (Mac/Linux) or
-#               copy (WSL fallback) into ~/.claude/skills/<name>/.
+#               copy (WSL fallback) into all three user skill roots.
 #
 # Mac/Linux uses symlinks (cheap, easy upgrade). WSL2 inherits Linux behavior.
 # Windows-native is unsupported — install.sh refuses earlier.
@@ -42,12 +44,14 @@ MANIFEST="$REPO_ROOT/manifest/skills.yaml"
 [[ -f "$MANIFEST" ]] || { echo "install-skills: manifest not found at $MANIFEST" >&2; exit 1; }
 
 SKILLS_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
-CACHE_DIR="${CLAUDE_AGENT_CACHE:-$HOME/.agents/skills}"
+SHARED_SKILLS_DIR="${AGENT_SKILLS_DIR:-$HOME/.agents/skills}"
+CURSOR_SKILLS_DIR="${CURSOR_SKILLS_DIR:-$HOME/.cursor/skills}"
+SOURCE_CACHE_DIR="${CLAUDE_AGENT_CACHE:-$HOME/.cache/dotfiles-agent-skills}"
 
-mkdir -p "$SKILLS_DIR" "$CACHE_DIR"
+mkdir -p "$SKILLS_DIR" "$SHARED_SKILLS_DIR" "$CURSOR_SKILLS_DIR" "$SOURCE_CACHE_DIR"
 
 # Parse manifest via Python (yaml is stdlib-adjacent; safer than awk on YAML).
-python3 - "$MANIFEST" "$SINGLE" "$DRY_RUN" "$SKILLS_DIR" "$CACHE_DIR" "$REPO_ROOT" <<'PY'
+python3 - "$MANIFEST" "$SINGLE" "$DRY_RUN" "$SKILLS_DIR" "$SHARED_SKILLS_DIR" "$CURSOR_SKILLS_DIR" "$SOURCE_CACHE_DIR" "$REPO_ROOT" <<'PY'
 import os, sys, shutil, subprocess, pathlib
 try:
     import yaml
@@ -55,10 +59,12 @@ except ImportError:
     sys.stderr.write("install-skills: PyYAML not installed. Run: pip3 install --user pyyaml\n")
     sys.exit(1)
 
-manifest_path, single, dry_run, skills_dir, cache_dir, repo_root = sys.argv[1:7]
+manifest_path, single, dry_run, skills_dir, shared_skills_dir, cursor_skills_dir, source_cache_dir, repo_root = sys.argv[1:9]
 dry = dry_run == "1"
 skills_dir = pathlib.Path(skills_dir).expanduser()
-cache_dir = pathlib.Path(cache_dir).expanduser()
+shared_skills_dir = pathlib.Path(shared_skills_dir).expanduser()
+cursor_skills_dir = pathlib.Path(cursor_skills_dir).expanduser()
+source_cache_dir = pathlib.Path(source_cache_dir).expanduser()
 repo_root = pathlib.Path(repo_root)
 
 m = yaml.safe_load(open(manifest_path))
@@ -122,9 +128,34 @@ def write_sentinel(dst, source_info):
     """Write a sentinel so future install-skills runs recognize this dir."""
     (dst / SENTINEL).write_text(source_info + "\n")
 
+def install_destinations(entry):
+    """Preserve the manifest destination and add shared and Cursor roots."""
+    destinations = [
+        pathlib.Path(entry["install_to"]).expanduser(),
+        shared_skills_dir / entry["name"],
+        cursor_skills_dir / entry["name"],
+    ]
+    return list(dict.fromkeys(destinations))
+
+def link_or_copy(src, dst, name, source_info):
+    if dst.is_symlink() or dst.exists():
+        print(f"  refresh {name}: {dst}")
+        if not dry:
+            if dst.is_symlink(): dst.unlink()
+            elif dst.is_dir():    shutil.rmtree(dst)
+            else:                  dst.unlink()
+    else:
+        print(f"  install {name}: {dst}")
+    if not dry:
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.symlink(src.resolve(), dst)
+        except OSError:
+            shutil.copytree(src, dst)
+            write_sentinel(dst, source_info)
+
 def install_subpath(entry):
     src = repo_root / entry["source"]["path"]
-    dst = pathlib.Path(entry["install_to"]).expanduser()
     if not src.exists():
         if entry.get("optional") is True:
             print(f"  SKIP optional {entry['name']}: source {src} not present")
@@ -141,23 +172,16 @@ def install_subpath(entry):
     if err:
         sys.stderr.write(f"install-skills: refusing {entry['name']}: {err}\n")
         sys.exit(3)
-    refuse_if_unowned(dst, entry["name"])
-    if dst.is_symlink() or dst.exists():
-        print(f"  refresh {entry['name']}: {dst}")
-        if not dry:
-            if dst.is_symlink(): dst.unlink()
-            elif dst.is_dir():    shutil.rmtree(dst)
-            else:                  dst.unlink()
-    else:
-        print(f"  install {entry['name']}: {dst}")
-    if not dry:
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            os.symlink(src.resolve(), dst)
-        except OSError:
-            # WSL or filesystems without symlink support — fall back to copy.
-            shutil.copytree(src, dst)
-            write_sentinel(dst, f"subpath:{entry['source']['path']}")
+    destinations = install_destinations(entry)
+    for dst in destinations:
+        refuse_if_unowned(dst, entry["name"])
+    for dst in destinations:
+        link_or_copy(
+            src,
+            dst,
+            entry["name"],
+            f"subpath:{entry['source']['path']}",
+        )
     return True
 
 def install_git(entry):
@@ -174,7 +198,7 @@ def install_git(entry):
             f"  Override with INSTALL_SKILLS_ALLOW_MOVING_REF=1 if you really mean it.\n"
         )
         sys.exit(3)
-    cache = cache_dir / name
+    cache = source_cache_dir / name
     # Council guardrail #10: atomic clone-or-swap on git operations.
     # Mid-fetch network failure must not leave the cache dir in a half-state.
     import tempfile as _tempfile
@@ -183,7 +207,7 @@ def install_git(entry):
         # there's no half-populated cache dir to confuse the next run.
         print(f"  clone {name}: {repo} → {cache}")
         if not dry:
-            staging = pathlib.Path(_tempfile.mkdtemp(prefix=f".{name}-staging-", dir=cache_dir))
+            staging = pathlib.Path(_tempfile.mkdtemp(prefix=f".{name}-staging-", dir=source_cache_dir))
             shutil.rmtree(staging)  # mkdtemp made it; git clone wants it absent
             try:
                 run(["git", "clone", "--quiet", f"https://github.com/{repo}.git", str(staging)])
@@ -201,20 +225,11 @@ def install_git(entry):
         print(f"  upgrade {name}: {cache} → {ref[:12]}")
         run(["git", "-C", str(cache), "fetch", "--quiet", "origin"])
         run(["git", "-C", str(cache), "checkout", "--quiet", ref])
-    dst = pathlib.Path(entry["install_to"]).expanduser()
-    refuse_if_unowned(dst, name)
-    if dst.is_symlink() or dst.exists():
-        if not dry:
-            if dst.is_symlink(): dst.unlink()
-            elif dst.is_dir():    shutil.rmtree(dst)
-            else:                  dst.unlink()
-    if not dry:
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            os.symlink(cache.resolve(), dst)
-        except OSError:
-            shutil.copytree(cache, dst)
-            write_sentinel(dst, f"git:{repo}@{ref}")
+    destinations = install_destinations(entry)
+    for dst in destinations:
+        refuse_if_unowned(dst, name)
+    for dst in destinations:
+        link_or_copy(cache, dst, name, f"git:{repo}@{ref}")
     return True
 
 installed = skipped = 0
