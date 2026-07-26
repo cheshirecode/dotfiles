@@ -42,11 +42,13 @@ manually and label the run as a non-deterministic fallback.
 2. Choose the smallest action that advances or falsifies the approach.
 3. Check effect scope; serialize writes unless isolation is proven.
 4. Execute and verify. A model's prose claim is not evidence.
-5. On verified success, run `finish --status complete --verification
-   "<tool output or artifact>" --evidence "<result>"`.
-6. Otherwise run `advance --evidence "<result>" --next-action "<next check>"`.
+5. On apparent success, invoke `$evidence-gate`. Map every observable goal
+   clause to typed evidence and require its `check` command to pass.
+6. Only then run `finish --status complete --verification
+   "<evidence-gate verification value>" --evidence "<result>"`.
+7. Otherwise run `advance --evidence "<result>" --next-action "<next check>"`.
    The script emits `budget_exhausted` when the declared ceiling is consumed.
-7. Run `show`; continue only while `terminal_status` is `running`.
+8. Run `show`; continue only while `terminal_status` is `running`.
 
 If later evidence contradicts a recorded fact, use `annotate --evidence
 "<correction>"`. Preserve the audit trail; do not reopen or hand-edit terminal

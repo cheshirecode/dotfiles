@@ -45,6 +45,14 @@ skills:
       path: skills/loop-engineering
     install_to: ~/.claude/skills/loop-engineering
 
+  - name: evidence-gate
+    description: Require typed evidence coverage for every completion criterion.
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/evidence-gate
+    install_to: ~/.claude/skills/evidence-gate
+
   - name: ship-hygiene
     description: Pre-handoff sweep across worklog + PRs + CI.
     source:
