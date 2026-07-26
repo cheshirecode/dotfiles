@@ -13,6 +13,8 @@ Called by bin/lint.sh. Checks:
   - `repos` is a list (or absent).
   - Relations (`parent_slug`, `related[].slug`, `supersedes`, `superseded_by`,
     `reopens`) resolve to real task files under people/*/{active,archive}/.
+  - Task Markdown lives only under people/*/{active,archive}/ and slugs are
+    globally unique across task-bearing state directories.
   - `related[]` entries have a `note`.
   - State/status consistency: files under archive/ should have
     `status: archived` (warn if not).
@@ -76,6 +78,59 @@ def _collect(root: pathlib.Path) -> list[tuple[pathlib.Path, str]]:
       for path in sorted((ldap_dir / state).glob("*.md")):
         out.append((path, state))
   return out
+
+
+def _task_slug(path: pathlib.Path) -> str:
+  text = path.read_text()
+  match = FRONTMATTER_RE.match(text)
+  if match:
+    try:
+      frontmatter = yaml.safe_load(match.group(1)) or {}
+    except yaml.YAMLError:
+      frontmatter = {}
+    if isinstance(frontmatter, dict) and frontmatter.get("slug"):
+      return str(frontmatter["slug"])
+  return path.stem
+
+
+def _layout_issues(root: pathlib.Path) -> list[dict[str, Any]]:
+  people = root / "people"
+  issues: list[dict[str, Any]] = []
+  task_paths: list[pathlib.Path] = []
+
+  for ldap_dir in sorted(people.glob("*")):
+    if not ldap_dir.is_dir():
+      continue
+    for state_dir in sorted(path for path in ldap_dir.iterdir() if path.is_dir()):
+      markdown = sorted(state_dir.rglob("*.md"))
+      task_paths.extend(markdown)
+      if state_dir.name not in {"active", "archive"} and markdown:
+        rel = state_dir.relative_to(root)
+        issues.append({
+          "file": str(rel),
+          "state": "layout",
+          "errors": [
+            f"unknown task state directory '{rel}' contains {len(markdown)} "
+            "Markdown task file(s); supported states: active, archive"
+          ],
+          "warnings": [],
+        })
+
+  paths_by_slug: dict[str, list[pathlib.Path]] = {}
+  for path in task_paths:
+    paths_by_slug.setdefault(_task_slug(path), []).append(path)
+  for slug, paths in sorted(paths_by_slug.items()):
+    if len(paths) < 2:
+      continue
+    rendered = ", ".join(str(path.relative_to(root)) for path in paths)
+    issues.append({
+      "file": "people",
+      "state": "layout",
+      "errors": [f"duplicate slug '{slug}' appears in: {rendered}"],
+      "warnings": [],
+    })
+
+  return issues
 
 
 def _strict_yaml(raw: str) -> tuple[dict[str, Any] | None, str | None]:
@@ -583,6 +638,7 @@ def main() -> None:
       sys.exit(2)
   else:
     files = all_files
+  layout_report = [] if single_file else _layout_issues(root)
   known_slugs: set[str] = set()
   for path, _ in all_files:
     text = path.read_text()
@@ -621,8 +677,8 @@ def main() -> None:
       if missing and _apply_fix_related(path, missing):
         fixed_files.append((str(path.relative_to(root)), missing))
 
-  report: list[dict[str, Any]] = []
-  total_errors = 0
+  report: list[dict[str, Any]] = list(layout_report)
+  total_errors = sum(len(issue["errors"]) for issue in layout_report)
   total_warnings = 0
   for path, state in files:
     errors, warnings = _lint_file(
