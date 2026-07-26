@@ -13,7 +13,6 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
-
 DEFAULT_INCLUDES = [
     "people/*/active/*.md",
     "people/*/archive/*.md",
