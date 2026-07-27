@@ -23,6 +23,21 @@ Run one discriminating check per hypothesis. Serialize edits and test after each
 one. End `complete` only with three passing runs; otherwise end
 `budget_exhausted` with failures and the safest next action.
 
+If a fresh check later contradicts evidence in a saved terminal run, append the
+correction and revalidate the state:
+
+```bash
+python3 <skill-dir>/scripts/loop_state.py annotate \
+  --state <state-file> \
+  --evidence "Correction: isolated rerun reproduced the timing failure"
+python3 <skill-dir>/scripts/loop_state.py validate --state <state-file>
+python3 <skill-dir>/scripts/loop_state.py show --state <state-file>
+```
+
+Confirm the terminal status and consumed budget remain unchanged. The earlier
+evidence remains in history. Start a new authorized state file for further work;
+do not reopen the terminal run.
+
 ## 2. Worklog-backed delegation
 
 INPUT
