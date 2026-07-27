@@ -20,8 +20,26 @@ terminal_status: running
 ```
 
 Run one discriminating check per hypothesis. Serialize edits and test after each
-one. End `complete` only with three passing runs; otherwise end
-`budget_exhausted` with failures and the safest next action.
+one. Continue immediately between hypotheses while state is `running`; do not
+return an intermediate handoff. End `complete` only with three passing runs;
+otherwise end `budget_exhausted` with failures and the safest next action.
+When the terminal run itself consumes a declared unit, use `finish --consume 1`;
+never also `advance` for that same unit.
+
+If a fresh check later contradicts evidence in a saved terminal run, append the
+correction and revalidate the state:
+
+```bash
+python3 <skill-dir>/scripts/loop_state.py annotate \
+  --state <state-file> \
+  --evidence "Correction: isolated rerun reproduced the timing failure"
+python3 <skill-dir>/scripts/loop_state.py validate --state <state-file>
+python3 <skill-dir>/scripts/loop_state.py show --state <state-file>
+```
+
+Confirm the terminal status and consumed budget remain unchanged. The earlier
+evidence remains in history. Start a new authorized state file for further work;
+do not reopen the terminal run.
 
 ## 2. Worklog-backed delegation
 
@@ -55,6 +73,11 @@ Read `references/hosts.md`. If the active host exposes an authorized recurrence
 primitive, schedule bounded checks and end each run `continue_scheduled` until
 CI evidence satisfies the goal. If no such primitive is available, end
 `needs_human` and name the missing capability.
+
+At each verified wakeup, use `resume` to create a successor bound to the prior
+`continue_scheduled` state, replay the CI check, and keep cycling. If a
+credential or authority blocker requires intervention, checkpoint, ask for that
+specific intervention, then resume a successor and replay the blocked check.
 
 Do not claim that a timer or stop hook exists merely because another host
 supports one.

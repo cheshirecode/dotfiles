@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import pathlib
@@ -20,6 +21,12 @@ TERMINAL_STATUSES = {
     "needs_human",
     "budget_exhausted",
     "cancelled",
+    "continue_scheduled",
+}
+RESUMABLE_STATUSES = {
+    "blocked",
+    "needs_human",
+    "budget_exhausted",
     "continue_scheduled",
 }
 ALL_STATUSES = {"running", *TERMINAL_STATUSES}
@@ -154,14 +161,8 @@ def command_init(args: argparse.Namespace) -> dict[str, Any]:
 def command_advance(args: argparse.Namespace) -> dict[str, Any]:
     state = read_state(args.state)
     require_running(state)
-    remaining = state["budget"]["limit"] - state["budget"]["used"]
-    if args.consume > remaining:
-        raise StateError(
-            f"transition consumes {args.consume} {state['budget']['unit']}; "
-            f"only {remaining} remain"
-        )
+    consume_budget(state, args.consume)
     state["progress_evidence"].extend(args.evidence)
-    state["budget"]["used"] += args.consume
     state["next_action"] = args.next_action
     if state["budget"]["used"] == state["budget"]["limit"]:
         state["terminal_status"] = "budget_exhausted"
@@ -170,11 +171,78 @@ def command_advance(args: argparse.Namespace) -> dict[str, Any]:
     return state
 
 
+def consume_budget(state: dict[str, Any], amount: int) -> None:
+    remaining = state["budget"]["limit"] - state["budget"]["used"]
+    if amount > remaining:
+        raise StateError(
+            f"transition consumes {amount} {state['budget']['unit']}; "
+            f"only {remaining} remain"
+        )
+    state["budget"]["used"] += amount
+
+
+def command_resume(args: argparse.Namespace) -> dict[str, Any]:
+    if args.new_state.exists():
+        raise StateError(f"refusing to overwrite existing state: {args.new_state}")
+    if args.state.resolve() == args.new_state.resolve():
+        raise StateError("resume requires a distinct --new-state path")
+    predecessor = read_state(args.state)
+    status = predecessor["terminal_status"]
+    if status not in RESUMABLE_STATUSES:
+        raise StateError(f"cannot resume state with status: {status}")
+    if (
+        predecessor["budget"]["used"] == predecessor["budget"]["limit"]
+        and args.extend_budget == 0
+    ):
+        raise StateError(
+            "resume requires --extend-budget when predecessor budget is exhausted"
+        )
+
+    digest = hashlib.sha256(args.state.read_bytes()).hexdigest()
+    predecessor_reference = {
+        "path": str(args.state.resolve()),
+        "sha256": digest,
+        "terminal_status": status,
+    }
+    resume_evidence = [
+        (f"Resumed from {predecessor_reference['path']} ({status}, sha256={digest})"),
+        *args.evidence,
+    ]
+    state: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "goal": predecessor["goal"],
+        "progress_evidence": resume_evidence,
+        "budget": {
+            "unit": predecessor["budget"]["unit"],
+            "limit": predecessor["budget"]["limit"] + args.extend_budget,
+            "used": predecessor["budget"]["used"],
+        },
+        "next_action": args.next_action,
+        "terminal_status": "running",
+        "allowed_effects": [
+            *predecessor.get("allowed_effects", []),
+            *args.allowed_effect,
+        ],
+        "approval_boundary": (
+            args.approval_boundary
+            if args.approval_boundary is not None
+            else predecessor.get("approval_boundary", "")
+        ),
+        "verification": "",
+        "predecessor": predecessor_reference,
+        "history": [],
+    }
+    append_history(state, f"resumed:{status}", resume_evidence, args.next_action)
+    write_state(args.new_state, state)
+    return state
+
+
 def command_finish(args: argparse.Namespace) -> dict[str, Any]:
     state = read_state(args.state)
     require_running(state)
     if args.status == "complete" and not args.verification:
         raise StateError("complete requires --verification from a tool or artifact")
+    consume_budget(state, args.consume)
     state["progress_evidence"].extend(args.evidence)
     state["terminal_status"] = args.status
     if args.next_action is not None:
@@ -240,12 +308,26 @@ def build_parser() -> argparse.ArgumentParser:
     advance.add_argument("--consume", type=int, default=1)
     advance.set_defaults(handler=command_advance)
 
+    resume = subparsers.add_parser(
+        "resume",
+        help="start a running successor from a resumable terminal state",
+    )
+    add_state_argument(resume)
+    resume.add_argument("--new-state", type=pathlib.Path, required=True)
+    resume.add_argument("--evidence", action="append", required=True)
+    resume.add_argument("--extend-budget", type=int, default=0)
+    resume.add_argument("--next-action", required=True)
+    resume.add_argument("--allowed-effect", action="append", default=[])
+    resume.add_argument("--approval-boundary")
+    resume.set_defaults(handler=command_resume)
+
     finish = subparsers.add_parser("finish", help="record a terminal outcome")
     add_state_argument(finish)
     finish.add_argument("--status", choices=sorted(TERMINAL_STATUSES), required=True)
     finish.add_argument("--evidence", action="append", required=True)
     finish.add_argument("--verification")
     finish.add_argument("--next-action")
+    finish.add_argument("--consume", type=int, default=0)
     finish.set_defaults(handler=command_finish)
 
     annotate = subparsers.add_parser(
@@ -271,13 +353,17 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-    if getattr(args, "consume", 1) < 1:
+    if args.command == "advance" and args.consume < 1:
         parser.error("--consume must be a positive integer")
+    if args.command == "finish" and args.consume < 0:
+        parser.error("--consume must be zero or a positive integer")
+    if args.command == "resume" and args.extend_budget < 0:
+        parser.error("--extend-budget must be zero or a positive integer")
     try:
         state = args.handler(args)
     except StateError as exc:
         print(f"loop-state: {exc}", file=sys.stderr)
-        return 2
+        return 3
     if args.command == "show" and not args.json:
         print(summary(state))
     else:
