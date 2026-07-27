@@ -36,9 +36,9 @@
     "paths": ["~/.agents/skills", "~/.dotfiles/skills", "~/.claude/skills/skillopt"]
   },
   "mcp": {
-    "sequential-thinking": { "type": "local", "command": ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking"], "enabled": true },
-    "context7": { "type": "local", "command": ["npx", "-y", "@upstash/context7-mcp"], "enabled": true },
-    "playwright": { "type": "local", "command": ["npx", "-y", "@playwright/mcp@latest"], "enabled": true },
+    "sequential-thinking": { "type": "local", "command": ["pnpm", "dlx", "@modelcontextprotocol/server-sequential-thinking"], "enabled": true },
+    "context7": { "type": "local", "command": ["pnpm", "dlx", "@upstash/context7-mcp"], "enabled": true },
+    "playwright": { "type": "local", "command": ["pnpm", "dlx", "@playwright/mcp@latest"], "enabled": true },
     "serena": { "type": "local", "command": ["serena", "start-mcp-server", "--context=claude-code", "--project-from-cwd"], "enabled": true }
   },
   "agent": {
