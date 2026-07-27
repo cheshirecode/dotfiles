@@ -82,7 +82,7 @@ class LoopStateTest(unittest.TestCase):
             "1",
             "--next-action",
             "stop",
-            expected_returncode=2,
+            expected_returncode=3,
         )
         self.assertIn("refusing to overwrite", result.stderr)
 
@@ -165,7 +165,7 @@ class LoopStateTest(unittest.TestCase):
             "no intervention occurred",
             "--next-action",
             "continue current run",
-            expected_returncode=2,
+            expected_returncode=3,
         )
         self.assertIn("cannot resume state with status: running", running_result.stderr)
         self.assertFalse(self.successor.exists())
@@ -191,7 +191,7 @@ class LoopStateTest(unittest.TestCase):
             "request to reopen completed work",
             "--next-action",
             "do not reopen",
-            expected_returncode=2,
+            expected_returncode=3,
         )
         self.assertIn(
             "cannot resume state with status: complete", complete_result.stderr
@@ -219,7 +219,7 @@ class LoopStateTest(unittest.TestCase):
             "no additional budget authorized",
             "--next-action",
             "remain exhausted",
-            expected_returncode=2,
+            expected_returncode=3,
         )
         self.assertIn("requires --extend-budget", rejected.stderr)
         self.assertFalse(self.successor.exists())
@@ -257,7 +257,7 @@ class LoopStateTest(unittest.TestCase):
             "complete",
             "--evidence",
             "agent says fixed",
-            expected_returncode=2,
+            expected_returncode=3,
         )
         self.assertIn("requires --verification", result.stderr)
         self.assertEqual(self.state.read_text(), before)
@@ -284,7 +284,7 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("pytest log", state["verification"])
         self.assertEqual(state["budget"]["used"], 1)
 
-    def test_finish_overconsumption_is_atomic(self) -> None:
+    def test_runtime_rejection_and_cli_misuse_are_distinct_and_atomic(self) -> None:
         self.initialize(limit=1)
         before = self.state.read_text()
         result = self.run_cli(
@@ -297,9 +297,25 @@ class LoopStateTest(unittest.TestCase):
             "two retries attempted",
             "--consume",
             "2",
-            expected_returncode=2,
+            expected_returncode=3,
         )
         self.assertIn("only 1 remain", result.stderr)
+        self.assertEqual(self.state.read_text(), before)
+
+        misuse = self.run_cli(
+            "advance",
+            "--state",
+            str(self.state),
+            "--evidence",
+            "invalid zero-unit transition",
+            "--next-action",
+            "fix invocation",
+            "--consume",
+            "0",
+            expected_returncode=2,
+        )
+        self.assertIn("usage:", misuse.stderr)
+        self.assertNotIn("loop-state:", misuse.stderr)
         self.assertEqual(self.state.read_text(), before)
 
     def test_annotate_corrects_terminal_evidence_without_reopening(self) -> None:

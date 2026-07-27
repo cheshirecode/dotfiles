@@ -23,6 +23,8 @@ Run one discriminating check per hypothesis. Serialize edits and test after each
 one. Continue immediately between hypotheses while state is `running`; do not
 return an intermediate handoff. End `complete` only with three passing runs;
 otherwise end `budget_exhausted` with failures and the safest next action.
+When the terminal run itself consumes a declared unit, use `finish --consume 1`;
+never also `advance` for that same unit.
 
 If a fresh check later contradicts evidence in a saved terminal run, append the
 correction and revalidate the state:

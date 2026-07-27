@@ -31,6 +31,8 @@ the JSON.
 - `show` prints the five-field contract; `--json` returns the full history.
 
 Every write is atomic. A failed transition leaves the previous state unchanged.
+Malformed CLI usage exits `2` with a `usage:` error. A well-formed command
+rejected by the state contract exits `3` with a `loop-state:` error.
 
 ## Continuous execution and intervention
 
