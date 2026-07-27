@@ -20,8 +20,9 @@ terminal_status: running
 ```
 
 Run one discriminating check per hypothesis. Serialize edits and test after each
-one. End `complete` only with three passing runs; otherwise end
-`budget_exhausted` with failures and the safest next action.
+one. Continue immediately between hypotheses while state is `running`; do not
+return an intermediate handoff. End `complete` only with three passing runs;
+otherwise end `budget_exhausted` with failures and the safest next action.
 
 If a fresh check later contradicts evidence in a saved terminal run, append the
 correction and revalidate the state:
@@ -70,6 +71,11 @@ Read `references/hosts.md`. If the active host exposes an authorized recurrence
 primitive, schedule bounded checks and end each run `continue_scheduled` until
 CI evidence satisfies the goal. If no such primitive is available, end
 `needs_human` and name the missing capability.
+
+At each verified wakeup, use `resume` to create a successor bound to the prior
+`continue_scheduled` state, replay the CI check, and keep cycling. If a
+credential or authority blocker requires intervention, checkpoint, ask for that
+specific intervention, then resume a successor and replay the blocked check.
 
 Do not claim that a timer or stop hook exists merely because another host
 supports one.

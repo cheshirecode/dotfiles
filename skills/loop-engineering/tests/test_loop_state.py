@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import pathlib
 import subprocess
@@ -19,6 +20,7 @@ class LoopStateTest(unittest.TestCase):
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary_directory.cleanup)
         self.state = pathlib.Path(self.temporary_directory.name) / "loop.json"
+        self.successor = pathlib.Path(self.temporary_directory.name) / "successor.json"
 
     def run_cli(
         self,
@@ -99,6 +101,149 @@ class LoopStateTest(unittest.TestCase):
         self.assertEqual(state["terminal_status"], "budget_exhausted")
         self.assertNotEqual(state["terminal_status"], "complete")
 
+    def test_resume_creates_bound_successor_without_reopening_blocker(self) -> None:
+        self.initialize()
+        self.run_cli(
+            "finish",
+            "--state",
+            str(self.state),
+            "--status",
+            "needs_human",
+            "--evidence",
+            "deployment credential requires intervention",
+            "--next-action",
+            "ask operator to refresh the credential",
+            "--consume",
+            "1",
+        )
+        predecessor_text = self.state.read_text()
+        result = self.run_cli(
+            "resume",
+            "--state",
+            str(self.state),
+            "--new-state",
+            str(self.successor),
+            "--evidence",
+            "operator refreshed the credential",
+            "--next-action",
+            "replay the deployment verification",
+            "--allowed-effect",
+            "run deployment verification",
+            "--approval-boundary",
+            "use only the refreshed credential",
+        )
+        successor = json.loads(result.stdout)
+
+        self.assertEqual(self.state.read_text(), predecessor_text)
+        self.assertEqual(successor["terminal_status"], "running")
+        self.assertEqual(successor["goal"], "targeted test passes")
+        self.assertEqual(
+            successor["budget"],
+            {"unit": "hypotheses", "limit": 2, "used": 1},
+        )
+        self.assertEqual(
+            successor["predecessor"]["terminal_status"],
+            "needs_human",
+        )
+        self.assertEqual(
+            successor["predecessor"]["sha256"],
+            hashlib.sha256(predecessor_text.encode()).hexdigest(),
+        )
+        self.assertEqual(successor["history"][-1]["event"], "resumed:needs_human")
+        self.assertIn("edit worktree", successor["allowed_effects"])
+        self.assertIn("run deployment verification", successor["allowed_effects"])
+
+    def test_resume_rejects_running_and_complete_predecessors(self) -> None:
+        self.initialize()
+        running_result = self.run_cli(
+            "resume",
+            "--state",
+            str(self.state),
+            "--new-state",
+            str(self.successor),
+            "--evidence",
+            "no intervention occurred",
+            "--next-action",
+            "continue current run",
+            expected_returncode=2,
+        )
+        self.assertIn("cannot resume state with status: running", running_result.stderr)
+        self.assertFalse(self.successor.exists())
+
+        self.run_cli(
+            "finish",
+            "--state",
+            str(self.state),
+            "--status",
+            "complete",
+            "--evidence",
+            "targeted test passed",
+            "--verification",
+            "test log",
+        )
+        complete_result = self.run_cli(
+            "resume",
+            "--state",
+            str(self.state),
+            "--new-state",
+            str(self.successor),
+            "--evidence",
+            "request to reopen completed work",
+            "--next-action",
+            "do not reopen",
+            expected_returncode=2,
+        )
+        self.assertIn(
+            "cannot resume state with status: complete", complete_result.stderr
+        )
+        self.assertFalse(self.successor.exists())
+
+    def test_exhausted_resume_requires_explicit_budget_extension(self) -> None:
+        self.initialize(limit=1)
+        self.run_cli(
+            "advance",
+            "--state",
+            str(self.state),
+            "--evidence",
+            "initial hypothesis falsified",
+            "--next-action",
+            "request authority for another hypothesis",
+        )
+        rejected = self.run_cli(
+            "resume",
+            "--state",
+            str(self.state),
+            "--new-state",
+            str(self.successor),
+            "--evidence",
+            "no additional budget authorized",
+            "--next-action",
+            "remain exhausted",
+            expected_returncode=2,
+        )
+        self.assertIn("requires --extend-budget", rejected.stderr)
+        self.assertFalse(self.successor.exists())
+
+        resumed = json.loads(
+            self.run_cli(
+                "resume",
+                "--state",
+                str(self.state),
+                "--new-state",
+                str(self.successor),
+                "--evidence",
+                "operator authorized two more hypotheses",
+                "--extend-budget",
+                "2",
+                "--next-action",
+                "test the next hypothesis",
+            ).stdout
+        )
+        self.assertEqual(
+            resumed["budget"],
+            {"unit": "hypotheses", "limit": 3, "used": 1},
+        )
+
     def test_complete_requires_verification_and_failed_transition_is_atomic(
         self,
     ) -> None:
@@ -131,10 +276,31 @@ class LoopStateTest(unittest.TestCase):
             "pytest log artifact: /tmp/targeted-test.log",
             "--next-action",
             "checkpoint worklog",
+            "--consume",
+            "1",
         )
         state = json.loads(result.stdout)
         self.assertEqual(state["terminal_status"], "complete")
         self.assertIn("pytest log", state["verification"])
+        self.assertEqual(state["budget"]["used"], 1)
+
+    def test_finish_overconsumption_is_atomic(self) -> None:
+        self.initialize(limit=1)
+        before = self.state.read_text()
+        result = self.run_cli(
+            "finish",
+            "--state",
+            str(self.state),
+            "--status",
+            "blocked",
+            "--evidence",
+            "two retries attempted",
+            "--consume",
+            "2",
+            expected_returncode=2,
+        )
+        self.assertIn("only 1 remain", result.stderr)
+        self.assertEqual(self.state.read_text(), before)
 
     def test_annotate_corrects_terminal_evidence_without_reopening(self) -> None:
         self.initialize(limit=1)
