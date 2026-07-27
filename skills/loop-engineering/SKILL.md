@@ -50,6 +50,11 @@ manually and label the run as a non-deterministic fallback.
    The script emits `budget_exhausted` when the declared ceiling is consumed.
 8. Run `show`; continue only while `terminal_status` is `running`.
 
+While state is `running` and the next action is authorized, begin the next cycle
+immediately in the same invocation. Do not yield an intermediate result or ask
+again. Yield only for a terminal outcome, user interruption, or real runtime
+boundary.
+
 If later evidence contradicts a recorded fact, use `annotate --evidence
 "<correction>"`. Preserve the audit trail; do not reopen or hand-edit terminal
 state.
@@ -57,6 +62,10 @@ state.
 Use `finish` for `blocked`, `needs_human`, `cancelled`, or
 `continue_scheduled`. Never translate those states or `budget_exhausted` into
 `complete`.
+
+After intervention clears a resumable terminal condition, use `resume` to
+create a bound successor state, replay the blocked check, and continue while
+the successor is `running`. Never reopen the predecessor.
 
 ## Preserve durable context
 

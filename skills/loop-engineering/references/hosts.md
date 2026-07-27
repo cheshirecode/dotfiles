@@ -9,26 +9,39 @@ tracking.
 - Use only standard `name` and `description` frontmatter in `SKILL.md`.
 - Discover capabilities before invoking them.
 - Preserve the same run contract and terminal statuses on every host.
+- During an active invocation, keep cycling while state is `running`; progress
+  updates are not pause points.
+- Across invocations, continue only through a verified host recurrence
+  primitive. A prompt cannot manufacture background execution.
+- After intervention or a scheduled wakeup, the agent creates a successor state
+  bound to the terminal predecessor and replays the stopping check before
+  continuing. Treat supplied intervention as pending until that check passes.
 
 ## Codex
 
 - Discover shared skills from `~/.agents/skills/`.
 - Use the current task plan and available subagent tools for in-session tracking
   and bounded delegation.
+- Keep issuing tool calls in the current task while state is `running`; do not
+  yield merely because one cycle ended.
 - Invoke the installed `worklog` skill for durable context and checkpoints.
 - For recurrence, use an available Codex automation or `loop-orchestrator`; if
-  neither is callable, end `needs_human`.
+  neither is callable, end `needs_human`. Each heartbeat wakes the agent, which
+  resumes from the prior `continue_scheduled` state instead of reopening it.
 
 ## Claude Code
 
 - Discover personal skills from `~/.claude/skills/`.
 - Use the available task tracker and Agent tool for in-session tracking and
   bounded delegation.
+- Continue the current tool/agent sequence while state is `running`; do not end
+  the response between authorized cycles.
 - Invoke `/worklog context <slug> --for=compact` before cold delegation and
   pass the returned pack directly. Use `/worklog sync` for the protocol's
   confirmation/checkpoint boundary.
 - Use Claude's real `/loop`, scheduled task, or hook capability only when exposed
-  and authorized. Otherwise end `needs_human`.
+  and authorized. Each recurrence wakes the agent to resume a bound successor.
+  Otherwise end `needs_human`.
 
 ## Cursor
 
@@ -36,11 +49,14 @@ tracking.
   `~/.cursor/skills/`; project-local alternatives may use `.agents/skills/` or
   `.cursor/skills/`.
 - Use Cursor todos and subagents when exposed.
+- Continue the active agent run while state is `running`; a todo update alone
+  is not a reason to pause.
 - Invoke the installed worklog skill or its documented helper commands for
   durable context. If unavailable, use one durable project tracker and label the
   fallback.
 - Use a configured Cursor automation or hook only after verifying it exists and
-  has a bounded stop rule. Otherwise end `needs_human`.
+  has a bounded stop rule. Each recurrence wakes the agent to resume a bound
+  successor. Otherwise end `needs_human`.
 
 ## Compatibility rule
 

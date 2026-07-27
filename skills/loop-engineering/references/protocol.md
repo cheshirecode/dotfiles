@@ -9,16 +9,47 @@ Use `scripts/loop_state.py`; do not reimplement its state machine or hand-edit
 the JSON.
 
 - `init` creates a `running` state and refuses overwrite unless `--force`.
-- `advance` records a failed or nonterminal cycle, consumes positive budget,
-  and atomically changes the state to `budget_exhausted` at the ceiling.
+- `advance` records a failed or nonterminal cycle, consumes one budget unit by
+  default, and atomically changes the state to `budget_exhausted` at the
+  ceiling. Use `--consume N` only when one recorded cycle represents `N`
+  declared units; it cannot exceed the remaining budget.
+- `resume --state <terminal> --new-state <successor>` starts a fresh running
+  state after `blocked`, `needs_human`, `budget_exhausted`, or
+  `continue_scheduled`. It inherits the goal and cumulative budget, requires a
+  next action, and binds the successor to the predecessor path, status, and
+  SHA-256. Use `--extend-budget N` only with explicit authorization; exhausted
+  predecessors require an extension. It rejects `running`, `complete`, and
+  `cancelled`.
 - `finish` records exactly one terminal outcome. `complete` requires
-  `--verification` naming tool output or an artifact.
+  `--verification` naming tool output or an artifact. It leaves budget
+  unchanged by default; use `--consume N` when the terminal cycle spent `N`
+  declared units. Every executed cycle must be accounted exactly once by
+  `advance` or `finish`.
 - `annotate` appends corrected evidence without reopening terminal state or
   changing the consumed budget.
 - `validate` checks the schema and transition invariants.
 - `show` prints the five-field contract; `--json` returns the full history.
 
 Every write is atomic. A failed transition leaves the previous state unchanged.
+Malformed CLI usage exits `2` with a `usage:` error. A well-formed command
+rejected by the state contract exits `3` with a `loop-state:` error.
+
+## Continuous execution and intervention
+
+- While state is `running`, execute the next authorized cycle immediately. Do
+  not stop at an intermediate progress update or ask for permission already
+  granted by the effect boundary.
+- On `blocked` or `needs_human`, checkpoint durable context and ask for the
+  smallest specific intervention. Include the predecessor state path and the
+  exact check that will prove the blocker cleared.
+- After intervention, create a successor with `resume`, record the intervention
+  as supplied but pending verification, replay that check, append verified
+  clearing evidence, and keep iterating while the successor remains `running`.
+- On `continue_scheduled`, a verified scheduler wakes the agent; the agent
+  creates the successor and replays the stopping check. Active-turn
+  continuation and background recurrence are distinct.
+- A user may authorize a successor after `budget_exhausted`; do not silently
+  grant more budget. Never resume `complete` or `cancelled`.
 
 ## Effect boundary
 
