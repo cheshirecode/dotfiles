@@ -173,6 +173,12 @@ checks = {
             "terminal status and consumed budget remain unchanged",
         )
     ),
+    "terminal cycle accounting": "finish --consume" in examples,
+    "distinct rejection exit": (
+        "return 3" in state_script
+        and "Malformed CLI usage exits `2`" in protocol
+        and "state contract exits `3`" in protocol
+    ),
     "atomic state write": "os.replace" in state_script,
     "host differences deferred": references == {"examples.md", "hosts.md", "protocol.md"},
     "cross-host continuation": (

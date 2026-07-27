@@ -363,7 +363,7 @@ def main() -> int:
         state = args.handler(args)
     except StateError as exc:
         print(f"loop-state: {exc}", file=sys.stderr)
-        return 2
+        return 3
     if args.command == "show" and not args.json:
         print(summary(state))
     else:
