@@ -153,11 +153,40 @@ checks = {
     "worklog creation gate": "slugless `sync`" in protocol,
     "worklog checkpoint route": "persist arbitrary evidence or task-body changes" in protocol,
     "terminal evidence rule": "model's prose claim is not evidence" in root,
+    "continuous active run": (
+        "While state is `running`" in root
+        and "Do not yield an intermediate result" in root
+    ),
     "complete verification guard": "complete requires" in state_script and "--verification" in state_script,
     "evidence-gate completion route": "$evidence-gate" in root and "evidence-gate verification value" in root,
     "append-only correction": "def command_annotate" in state_script and "annotated" in state_script,
+    "bound successor resume": (
+        "def command_resume" in state_script
+        and '"predecessor": predecessor_reference' in state_script
+        and "resume --state <terminal> --new-state <successor>" in protocol
+    ),
+    "live contradiction fixture": all(
+        text in examples
+        for text in (
+            "loop_state.py annotate",
+            "loop_state.py validate",
+            "terminal status and consumed budget remain unchanged",
+        )
+    ),
+    "terminal cycle accounting": "finish --consume" in examples,
+    "distinct rejection exit": (
+        "return 3" in state_script
+        and "Malformed CLI usage exits `2`" in protocol
+        and "state contract exits `3`" in protocol
+    ),
     "atomic state write": "os.replace" in state_script,
     "host differences deferred": references == {"examples.md", "hosts.md", "protocol.md"},
+    "cross-host continuation": (
+        hosts.count("while state is `running`") >= 3
+        and "A prompt cannot manufacture background execution" in hosts
+        and hosts.count("wakes the agent") >= 3
+        and "Treat supplied intervention as pending" in hosts
+    ),
     "no host-only injection": "!`" not in root and "allowed-tools:" not in root,
     "three contrastive fixtures": examples.count("\n## ") == 4,
     "Codex shared install": "~/.agents/skills/" in hosts,
