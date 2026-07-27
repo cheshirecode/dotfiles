@@ -156,6 +156,14 @@ checks = {
     "complete verification guard": "complete requires" in state_script and "--verification" in state_script,
     "evidence-gate completion route": "$evidence-gate" in root and "evidence-gate verification value" in root,
     "append-only correction": "def command_annotate" in state_script and "annotated" in state_script,
+    "live contradiction fixture": all(
+        text in examples
+        for text in (
+            "loop_state.py annotate",
+            "loop_state.py validate",
+            "terminal status and consumed budget remain unchanged",
+        )
+    ),
     "atomic state write": "os.replace" in state_script,
     "host differences deferred": references == {"examples.md", "hosts.md", "protocol.md"},
     "no host-only injection": "!`" not in root and "allowed-tools:" not in root,

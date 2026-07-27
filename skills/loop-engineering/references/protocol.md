@@ -9,8 +9,10 @@ Use `scripts/loop_state.py`; do not reimplement its state machine or hand-edit
 the JSON.
 
 - `init` creates a `running` state and refuses overwrite unless `--force`.
-- `advance` records a failed or nonterminal cycle, consumes positive budget,
-  and atomically changes the state to `budget_exhausted` at the ceiling.
+- `advance` records a failed or nonterminal cycle, consumes one budget unit by
+  default, and atomically changes the state to `budget_exhausted` at the
+  ceiling. Use `--consume N` only when one recorded cycle represents `N`
+  declared units; it cannot exceed the remaining budget.
 - `finish` records exactly one terminal outcome. `complete` requires
   `--verification` naming tool output or an artifact.
 - `annotate` appends corrected evidence without reopening terminal state or
