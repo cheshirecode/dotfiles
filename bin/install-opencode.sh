@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Link the portable OpenCode configuration into its global config location.
+# Link portable OpenCode agents into the global agent directory.
 
 set -euo pipefail
 
@@ -18,38 +18,8 @@ EOF
 esac
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SOURCE="$REPO_ROOT/.config/opencode/opencode.jsonc"
-TARGET="$HOME/.config/opencode/opencode.jsonc"
 AGENT_SOURCE_DIR="$REPO_ROOT/.config/opencode/agents"
 AGENT_TARGET_DIR="$HOME/.config/opencode/agents"
-
-[[ -f "$SOURCE" ]] || { echo "install-opencode: source missing: $SOURCE" >&2; exit 1; }
-
-if [[ -L "$TARGET" && "$(readlink "$TARGET")" == "$SOURCE" ]]; then
-  echo "  OpenCode config already linked: $TARGET"
-  exit 0
-fi
-
-if [[ -e "$TARGET" || -L "$TARGET" ]]; then
-  backup="$TARGET.pre-dotfiles"
-  if [[ -e "$backup" || -L "$backup" ]]; then
-    echo "install-opencode: refusing to overwrite existing backup: $backup" >&2
-    exit 1
-  fi
-  if [[ $DRY_RUN -eq 1 ]]; then
-    echo "  [dry-run] move $TARGET to $backup"
-  else
-    mv "$TARGET" "$backup"
-  fi
-fi
-
-if [[ $DRY_RUN -eq 1 ]]; then
-  echo "  [dry-run] link $SOURCE to $TARGET"
-else
-  mkdir -p "$(dirname "$TARGET")"
-  ln -s "$SOURCE" "$TARGET"
-  echo "  linked OpenCode config: $TARGET"
-fi
 
 if [[ $DRY_RUN -eq 0 ]]; then
   mkdir -p "$AGENT_TARGET_DIR"
