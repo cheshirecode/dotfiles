@@ -35,8 +35,12 @@ If a fresh check later contradicts evidence in a saved terminal run, append the
 correction and revalidate the state:
 
 ```bash
+python3 <skill-dir>/scripts/loop_state.py fingerprint \
+  --state <state-file>
+# Pass the exact printed value from the expected snapshot.
 python3 <skill-dir>/scripts/loop_state.py annotate \
   --state <state-file> \
+  --expect-sha256 <printed-sha256> \
   --evidence "Correction: isolated rerun reproduced the timing failure"
 python3 <skill-dir>/scripts/loop_state.py validate --state <state-file>
 python3 <skill-dir>/scripts/loop_state.py show --state <state-file>
