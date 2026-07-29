@@ -3,7 +3,7 @@
 #   1. install-runtime-deps.sh  — python/gh/git/rg/jq/direnv
 #   2. install-skills.sh        — symlink/copy agent skills from manifest
 #   3. install-worklog.sh       — clone _worklog repo + wire hooks
-#   4. install-opencode.sh      — link OpenCode config
+#   4. install-opencode.sh      — link OpenCode agents
 #   5. doctor.sh                — verify
 #
 # Refuses Windows-native. WSL2 is the supported Windows path.
@@ -126,7 +126,7 @@ else
 fi
 
 echo
-echo "=== 4/5 OpenCode config ==="
+echo "=== 4/5 OpenCode agents ==="
 if [[ $DRY_RUN -eq 1 ]]; then
   echo "  [dry-run] would run: bin/install-opencode.sh"
 else
