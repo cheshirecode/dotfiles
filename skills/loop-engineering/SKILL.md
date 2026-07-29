@@ -56,9 +56,9 @@ immediately in the same invocation. Do not yield an intermediate result or ask
 again. Yield only for a terminal outcome, user interruption, or real runtime
 boundary.
 
-If later evidence contradicts a recorded fact, use `annotate --evidence
-"<correction>"`. Preserve the audit trail; do not reopen or hand-edit terminal
-state.
+If later evidence contradicts a recorded fact, capture `fingerprint --state
+<state-file>`, then use `annotate --expect-sha256 <fingerprint> --evidence
+"<correction>"`. Preserve the audit trail; do not reopen terminal state.
 
 Use `finish` for `blocked`, `needs_human`, `cancelled`, or
 `continue_scheduled`. Never translate those states or `budget_exhausted` into
