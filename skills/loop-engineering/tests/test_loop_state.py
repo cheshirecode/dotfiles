@@ -146,6 +146,10 @@ class LoopStateTest(unittest.TestCase):
             "needs_human",
         )
         self.assertEqual(
+            json.loads(predecessor_text)["next_action"],
+            "ask operator to refresh the credential",
+        )
+        self.assertEqual(
             successor["predecessor"]["sha256"],
             hashlib.sha256(predecessor_text.encode()).hexdigest(),
         )
@@ -274,8 +278,6 @@ class LoopStateTest(unittest.TestCase):
             "three consecutive passes",
             "--verification",
             "pytest log artifact: /tmp/targeted-test.log",
-            "--next-action",
-            "checkpoint worklog",
             "--consume",
             "1",
         )
@@ -283,6 +285,87 @@ class LoopStateTest(unittest.TestCase):
         self.assertEqual(state["terminal_status"], "complete")
         self.assertIn("pytest log", state["verification"])
         self.assertEqual(state["budget"]["used"], 1)
+        self.assertEqual(state["next_action"], "")
+        self.assertEqual(state["history"][-1]["next_action"], "")
+
+    def test_non_resumable_finish_rejects_explicit_next_action_atomically(
+        self,
+    ) -> None:
+        self.initialize()
+        before = self.state.read_text()
+        result = self.run_cli(
+            "finish",
+            "--state",
+            str(self.state),
+            "--status",
+            "complete",
+            "--evidence",
+            "targeted test passed",
+            "--verification",
+            "pytest log",
+            "--next-action",
+            "stale follow-up",
+            expected_returncode=3,
+        )
+        self.assertIn("complete does not accept --next-action", result.stderr)
+        self.assertEqual(self.state.read_text(), before)
+
+    def test_resumable_finish_requires_actionable_next_step(self) -> None:
+        self.initialize()
+        before = self.state.read_text()
+        result = self.run_cli(
+            "finish",
+            "--state",
+            str(self.state),
+            "--status",
+            "blocked",
+            "--evidence",
+            "credential unavailable",
+            expected_returncode=3,
+        )
+        self.assertIn("blocked requires --next-action", result.stderr)
+        self.assertEqual(self.state.read_text(), before)
+
+    def test_cancelled_finish_clears_running_next_action(self) -> None:
+        self.initialize()
+        state = json.loads(
+            self.run_cli(
+                "finish",
+                "--state",
+                str(self.state),
+                "--status",
+                "cancelled",
+                "--evidence",
+                "operator cancelled the run",
+            ).stdout
+        )
+        self.assertEqual(state["terminal_status"], "cancelled")
+        self.assertEqual(state["next_action"], "")
+
+    def test_annotate_rejects_next_action_for_non_resumable_terminal(self) -> None:
+        self.initialize()
+        self.run_cli(
+            "finish",
+            "--state",
+            str(self.state),
+            "--status",
+            "cancelled",
+            "--evidence",
+            "operator cancelled the run",
+        )
+        before = self.state.read_text()
+        result = self.run_cli(
+            "annotate",
+            "--state",
+            str(self.state),
+            "--evidence",
+            "correction: cancellation was explicit",
+            "--next-action",
+            "reopen the cancelled run",
+            expected_returncode=3,
+        )
+        self.assertIn("cancelled does not accept --next-action", result.stderr)
+        self.assertEqual(self.state.read_text(), before)
 
     def test_runtime_rejection_and_cli_misuse_are_distinct_and_atomic(self) -> None:
         self.initialize(limit=1)
@@ -295,6 +378,8 @@ class LoopStateTest(unittest.TestCase):
             "blocked",
             "--evidence",
             "two retries attempted",
+            "--next-action",
+            "request another retry",
             "--consume",
             "2",
             expected_returncode=3,

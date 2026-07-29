@@ -23,10 +23,12 @@ the JSON.
 - `finish` records exactly one terminal outcome. `complete` requires
   `--verification` naming tool output or an artifact. It leaves budget
   unchanged by default; use `--consume N` when the terminal cycle spent `N`
-  declared units. Every executed cycle must be accounted exactly once by
-  `advance` or `finish`.
+  declared units. Resumable outcomes require `--next-action`; `complete` and
+  `cancelled` reject that flag and clear the prior running action. Every
+  executed cycle must be accounted exactly once by `advance` or `finish`.
 - `annotate` appends corrected evidence without reopening terminal state or
-  changing the consumed budget.
+  changing the consumed budget. It cannot add a next action to `complete` or
+  `cancelled`.
 - `validate` checks the schema and transition invariants.
 - `show` prints the five-field contract; `--json` returns the full history.
 
