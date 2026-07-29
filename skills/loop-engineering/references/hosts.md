@@ -16,6 +16,9 @@ tracking.
 - After intervention or a scheduled wakeup, the agent creates a successor state
   bound to the terminal predecessor and replays the stopping check before
   continuing. Treat supplied intervention as pending until that check passes.
+- For duplicate installations, run `scripts/install_audit.py --canonical
+  <skill-dir>`. `--link-identical` replaces only byte-identical directories;
+  any divergent root fails the whole preflight before writes.
 
 ## Codex
 
