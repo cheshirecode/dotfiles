@@ -26,9 +26,12 @@ the JSON.
   declared units. Resumable outcomes require `--next-action`; `complete` and
   `cancelled` reject that flag and clear the prior running action. Every
   executed cycle must be accounted exactly once by `advance` or `finish`.
-- `annotate` appends corrected evidence without reopening terminal state or
-  changing the consumed budget. It cannot add a next action to `complete` or
-  `cancelled`.
+- `fingerprint` validates a state and prints the SHA-256 of its exact bytes.
+- `annotate --expect-sha256 <fingerprint>` appends corrected evidence without
+  reopening terminal state or changing the consumed budget. Capture the
+  fingerprint after the last successful transition. A mismatch rejects the
+  write; verify state ownership instead of refreshing an unexpected mismatch.
+  Annotation cannot add a next action to `complete` or `cancelled`.
 - `validate` checks the schema and transition invariants.
 - `show` prints the five-field contract; `--json` returns the full history.
 
