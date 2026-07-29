@@ -12,8 +12,9 @@ not a loop design.
 
 1. Skip this skill when one action plus one check is sufficient.
 2. For interactive, resumable, or delegated loops, use the state script below.
-3. For scheduled loops, also read [references/hosts.md](references/hosts.md) and
-   require a real, authorized recurrence primitive.
+3. For scheduled loops or installation drift, also read
+   [references/hosts.md](references/hosts.md); require a real recurrence
+   primitive for scheduling and use its audit command for duplicate copies.
 4. For exact transition, effect, worklog, or handoff rules, read
    [references/protocol.md](references/protocol.md).
 

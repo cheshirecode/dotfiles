@@ -141,6 +141,7 @@ examples = (skill / "references/examples.md").read_text()
 hosts = (skill / "references/hosts.md").read_text()
 protocol = (skill / "references/protocol.md").read_text()
 state_script = (skill / "scripts/loop_state.py").read_text()
+install_script = (skill / "scripts/install_audit.py").read_text()
 references = {path.name for path in (skill / "references").glob("*.md")}
 checks = {
     "thin portable root": len(root.splitlines()) <= 80,
@@ -178,6 +179,12 @@ checks = {
         "return 3" in state_script
         and "Malformed CLI usage exits `2`" in protocol
         and "state contract exits `3`" in protocol
+    ),
+    "fail-closed installation consolidation": (
+        "install_audit.py --canonical" in hosts
+        and "--link-identical" in hosts
+        and "refusing all writes" in install_script
+        and "divergent-copy" in install_script
     ),
     "atomic state write": "os.replace" in state_script,
     "host differences deferred": references == {"examples.md", "hosts.md", "protocol.md"},
@@ -292,7 +299,9 @@ PY
     fail "worklog PR reconciliation fixtures"
   fi
 
-  if python3 -m unittest skills/loop-engineering/tests/test_loop_state.py >/dev/null; then
+  if python3 -m unittest \
+    skills/loop-engineering/tests/test_loop_state.py \
+    skills/loop-engineering/tests/test_install_audit.py >/dev/null; then
     ok "loop-engineering state transition fixtures"
   else
     fail "loop-engineering state transition fixtures"
