@@ -26,6 +26,11 @@ otherwise end `budget_exhausted` with failures and the safest next action.
 When the terminal run itself consumes a declared unit, use `finish --consume 1`;
 never also `advance` for that same unit.
 
+For `blocked`, `needs_human`, `budget_exhausted`, or `continue_scheduled`, pass
+the exact replay or intervention check through `finish --next-action`. For
+`complete` or `cancelled`, omit that flag; the script clears the prior running
+action so the terminal state cannot advertise obsolete work.
+
 If a fresh check later contradicts evidence in a saved terminal run, append the
 correction and revalidate the state:
 

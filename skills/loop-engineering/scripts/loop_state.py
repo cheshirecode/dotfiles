@@ -29,6 +29,7 @@ RESUMABLE_STATUSES = {
     "budget_exhausted",
     "continue_scheduled",
 }
+NON_RESUMABLE_STATUSES = TERMINAL_STATUSES - RESUMABLE_STATUSES
 ALL_STATUSES = {"running", *TERMINAL_STATUSES}
 
 
@@ -242,11 +243,18 @@ def command_finish(args: argparse.Namespace) -> dict[str, Any]:
     require_running(state)
     if args.status == "complete" and not args.verification:
         raise StateError("complete requires --verification from a tool or artifact")
+    if args.status in RESUMABLE_STATUSES:
+        if args.next_action is None or not args.next_action.strip():
+            raise StateError(f"{args.status} requires --next-action")
+        next_action = args.next_action
+    else:
+        if args.next_action is not None:
+            raise StateError(f"{args.status} does not accept --next-action")
+        next_action = ""
     consume_budget(state, args.consume)
     state["progress_evidence"].extend(args.evidence)
     state["terminal_status"] = args.status
-    if args.next_action is not None:
-        state["next_action"] = args.next_action
+    state["next_action"] = next_action
     state["verification"] = args.verification or ""
     append_history(
         state, f"finished:{args.status}", args.evidence, state["next_action"]
@@ -257,6 +265,11 @@ def command_finish(args: argparse.Namespace) -> dict[str, Any]:
 
 def command_annotate(args: argparse.Namespace) -> dict[str, Any]:
     state = read_state(args.state)
+    if (
+        state["terminal_status"] in NON_RESUMABLE_STATUSES
+        and args.next_action is not None
+    ):
+        raise StateError(f"{state['terminal_status']} does not accept --next-action")
     state["progress_evidence"].extend(args.evidence)
     if args.next_action is not None:
         state["next_action"] = args.next_action
