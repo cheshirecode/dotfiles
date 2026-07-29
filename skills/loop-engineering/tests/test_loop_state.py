@@ -60,6 +60,13 @@ class LoopStateTest(unittest.TestCase):
         )
         return json.loads(result.stdout)
 
+    def fingerprint(self) -> str:
+        return self.run_cli(
+            "fingerprint",
+            "--state",
+            str(self.state),
+        ).stdout.strip()
+
     def test_init_and_validate(self) -> None:
         state = self.initialize()
         self.assertEqual(state["terminal_status"], "running")
@@ -353,11 +360,14 @@ class LoopStateTest(unittest.TestCase):
             "--evidence",
             "operator cancelled the run",
         )
+        expected_sha256 = self.fingerprint()
         before = self.state.read_text()
         result = self.run_cli(
             "annotate",
             "--state",
             str(self.state),
+            "--expect-sha256",
+            expected_sha256,
             "--evidence",
             "correction: cancellation was explicit",
             "--next-action",
@@ -416,11 +426,14 @@ class LoopStateTest(unittest.TestCase):
                 "obtain target repository",
             ).stdout
         )
+        expected_sha256 = self.fingerprint()
         corrected = json.loads(
             self.run_cli(
                 "annotate",
                 "--state",
                 str(self.state),
+                "--expect-sha256",
+                expected_sha256,
                 "--evidence",
                 "correction: cwd has .git but is not the target repository",
             ).stdout
@@ -428,6 +441,42 @@ class LoopStateTest(unittest.TestCase):
         self.assertEqual(corrected["terminal_status"], "budget_exhausted")
         self.assertEqual(corrected["budget"], exhausted["budget"])
         self.assertEqual(corrected["history"][-1]["event"], "annotated")
+
+    def test_fingerprint_matches_exact_state_bytes(self) -> None:
+        self.initialize()
+
+        self.assertEqual(
+            self.fingerprint(),
+            hashlib.sha256(self.state.read_bytes()).hexdigest(),
+        )
+
+    def test_annotate_rejects_stale_fingerprint_atomically(self) -> None:
+        self.initialize()
+        stale_sha256 = self.fingerprint()
+        self.run_cli(
+            "advance",
+            "--state",
+            str(self.state),
+            "--evidence",
+            "another session advanced the run",
+            "--next-action",
+            "continue from the newer snapshot",
+        )
+        before = self.state.read_text()
+
+        result = self.run_cli(
+            "annotate",
+            "--state",
+            str(self.state),
+            "--expect-sha256",
+            stale_sha256,
+            "--evidence",
+            "stale session correction",
+            expected_returncode=3,
+        )
+
+        self.assertIn("state fingerprint changed", result.stderr)
+        self.assertEqual(self.state.read_text(), before)
 
 
 if __name__ == "__main__":

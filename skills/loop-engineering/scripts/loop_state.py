@@ -41,18 +41,29 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def read_state(path: pathlib.Path) -> dict[str, Any]:
+def read_state_snapshot(path: pathlib.Path) -> tuple[dict[str, Any], bytes]:
     try:
-        state = json.loads(path.read_text())
+        raw_state = path.read_bytes()
     except FileNotFoundError as exc:
         raise StateError(f"state file does not exist: {path}") from exc
+    try:
+        state = json.loads(raw_state)
     except json.JSONDecodeError as exc:
         raise StateError(f"state file is not valid JSON: {path}: {exc}") from exc
     validate_state(state)
-    return state
+    return state, raw_state
 
 
-def write_state(path: pathlib.Path, state: dict[str, Any]) -> None:
+def read_state(path: pathlib.Path) -> dict[str, Any]:
+    return read_state_snapshot(path)[0]
+
+
+def write_state(
+    path: pathlib.Path,
+    state: dict[str, Any],
+    *,
+    expect_sha256: str | None = None,
+) -> None:
     validate_state(state)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary_name = tempfile.mkstemp(
@@ -67,6 +78,15 @@ def write_state(path: pathlib.Path, state: dict[str, Any]) -> None:
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
+        if expect_sha256 is not None:
+            try:
+                actual_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+            except FileNotFoundError as exc:
+                raise StateError("state disappeared before guarded write") from exc
+            if actual_sha256 != expect_sha256:
+                raise StateError(
+                    "state fingerprint changed during annotation; refusing write"
+                )
         os.replace(temporary_path, path)
     finally:
         temporary_path.unlink(missing_ok=True)
@@ -264,7 +284,13 @@ def command_finish(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def command_annotate(args: argparse.Namespace) -> dict[str, Any]:
-    state = read_state(args.state)
+    state, raw_state = read_state_snapshot(args.state)
+    actual_sha256 = hashlib.sha256(raw_state).hexdigest()
+    if args.expect_sha256 != actual_sha256:
+        raise StateError(
+            "state fingerprint changed; refusing annotation "
+            f"(expected {args.expect_sha256}, actual {actual_sha256})"
+        )
     if (
         state["terminal_status"] in NON_RESUMABLE_STATUSES
         and args.next_action is not None
@@ -274,8 +300,13 @@ def command_annotate(args: argparse.Namespace) -> dict[str, Any]:
     if args.next_action is not None:
         state["next_action"] = args.next_action
     append_history(state, "annotated", args.evidence, state["next_action"])
-    write_state(args.state, state)
+    write_state(args.state, state, expect_sha256=actual_sha256)
     return state
+
+
+def command_fingerprint(args: argparse.Namespace) -> str:
+    _, raw_state = read_state_snapshot(args.state)
+    return hashlib.sha256(raw_state).hexdigest()
 
 
 def summary(state: dict[str, Any]) -> str:
@@ -348,9 +379,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="append corrected evidence without changing status or budget",
     )
     add_state_argument(annotate)
+    annotate.add_argument("--expect-sha256", required=True)
     annotate.add_argument("--evidence", action="append", required=True)
     annotate.add_argument("--next-action")
     annotate.set_defaults(handler=command_annotate)
+
+    fingerprint = subparsers.add_parser(
+        "fingerprint",
+        help="print the SHA-256 of a validated state snapshot",
+    )
+    add_state_argument(fingerprint)
+    fingerprint.set_defaults(handler=command_fingerprint)
 
     validate = subparsers.add_parser("validate", help="validate an existing state")
     add_state_argument(validate)
@@ -377,7 +416,9 @@ def main() -> int:
     except StateError as exc:
         print(f"loop-state: {exc}", file=sys.stderr)
         return 3
-    if args.command == "show" and not args.json:
+    if args.command == "fingerprint":
+        print(state)
+    elif args.command == "show" and not args.json:
         print(summary(state))
     else:
         print(json.dumps(state, indent=2, sort_keys=True))

@@ -187,6 +187,12 @@ checks = {
         and "divergent-copy" in install_script
     ),
     "atomic state write": "os.replace" in state_script,
+    "fingerprint-guarded correction": (
+        "fingerprint --state" in root
+        and "--expect-sha256" in root
+        and "state fingerprint changed" in state_script
+        and "verify state ownership" in protocol
+    ),
     "host differences deferred": references == {"examples.md", "hosts.md", "protocol.md"},
     "cross-host continuation": (
         hosts.count("while state is `running`") >= 3
