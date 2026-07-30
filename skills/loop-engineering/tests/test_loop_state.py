@@ -93,6 +93,29 @@ class LoopStateTest(unittest.TestCase):
         )
         self.assertIn("refusing to overwrite", result.stderr)
 
+    def test_init_force_overwrites_existing_state(self) -> None:
+        self.initialize()
+        before = self.state.read_text()
+        self.run_cli(
+            "init",
+            "--state",
+            str(self.state),
+            "--goal",
+            "replacement goal",
+            "--evidence",
+            "forced overwrite",
+            "--budget-unit",
+            "cycles",
+            "--budget-limit",
+            "5",
+            "--next-action",
+            "replaced",
+            "--force",
+        )
+        after = json.loads(self.state.read_text())
+        self.assertEqual(after["goal"], "replacement goal")
+        self.assertNotEqual(self.state.read_text(), before)
+
     def test_advance_exhausts_budget_without_claiming_complete(self) -> None:
         self.initialize(limit=1)
         result = self.run_cli(
