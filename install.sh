@@ -5,7 +5,7 @@
 # on this workspace template (symlink-over-mountpoint fails).
 set -eu
 
-REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 DEST="${CODER_SYMLINK_DIR:-$HOME}"
 
 backup() {
