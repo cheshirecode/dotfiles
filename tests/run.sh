@@ -421,6 +421,23 @@ PY
   fi
   rm -rf "$fake_home"
 
+  # --- #1: install-skills accepts duplicate-identical unowned copy ---
+  fake_home=$(mktemp -d)
+  unowned_dst="$fake_home/.claude/skills/council"
+  mkdir -p "$unowned_dst"
+  cp -R "$REPO_ROOT/skills/council/." "$unowned_dst/"
+  # No sentinel — full tree copy should be accepted as duplicate-identical
+  set +e
+  HOME="$fake_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" ./bin/install-skills.sh council >/dev/null 2>&1
+  rc=$?
+  set -e
+  if [[ $rc -eq 0 ]]; then
+    ok "install-skills accepts duplicate-identical unowned copy (exit=0)"
+  else
+    fail "install-skills rejected duplicate-identical unowned copy (got exit=$rc, expected 0)"
+  fi
+  rm -rf "$fake_home"
+
   local skill_names skill_name skill_md shared_skill_md install_home canonical_skill installed_skill skills_root
   skill_names=$(python3 - <<'PY'
 import pathlib
