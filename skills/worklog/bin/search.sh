@@ -192,9 +192,13 @@ if [ -z "$PATTERN" ]; then
 fi
 
 # Stage candidate files for rg via xargs (rg lacks a --files-from flag; pipe paths in).
+if command -v rg >/dev/null; then
+  SEARCH_CMD="rg ${RG_EXTRA[*]+"${RG_EXTRA[*]}"} --no-heading --color=never --line-number --with-filename"
+else
+  SEARCH_CMD="grep -rn --color=never"
+fi
 RG_OUT=$(printf '%s\n' "$CANDIDATE_FILES" | \
-  xargs rg ${RG_EXTRA[@]+"${RG_EXTRA[@]}"} --no-heading --color=never --line-number --with-filename \
-    -e "$PATTERN" 2>/dev/null || true)
+  xargs $SEARCH_CMD -e "$PATTERN" 2>/dev/null || true)
 
 if [ -z "$RG_OUT" ]; then
   echo "(no hits for /$PATTERN/)" >&2
