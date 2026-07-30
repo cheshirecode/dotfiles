@@ -30,7 +30,7 @@ DRY_RUN=0
 
 TS="$(date +%Y%m%d-%H%M%S)"
 OUT="/tmp/worklog-setup-${TS}.txt"
-DRAFT="$(mktemp -t worklog-export.XXXXXX)"
+DRAFT="$(mktemp "${TMPDIR:-/tmp}/worklog-export.XXXXXX")"
 trap 'rm -f "$DRAFT"' EXIT
 
 CLAUDE_SKILL_SRC="$HOME/.claude/skills/worklog/SKILL.md"
