@@ -82,4 +82,7 @@ For `kind: runbook`, slug `*-integration-map`:
 ## Sessions
 
 - Multi-session collision warning on `checkpoint.sh` if another session touched the same slug <5min ago. Advisory; never blocks.
-- Resume kernels live at `.cache/compact-kernels.{md,json}`. Preamble emits a top-15 roster from `.json`; read the `.md` (~95KB) only on demand for full detail.
+- Resume kernels live at `.cache/compact-kernels.{md,json}`. Start with the
+  preamble's bounded top-15 roster; it uses fresh `.json` data or a read-only
+  raw Markdown fallback when the derived cache is unavailable. Read the `.md`
+  (~95KB) only on demand for full detail.

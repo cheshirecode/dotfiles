@@ -87,26 +87,42 @@ else
   printf 'PULL=skip (minimal)\n'
 fi
 
-# Roster (kernels JSON one-liner per active task). The health line is
-# intentionally separate so fresh agents can tell "no roster" from "no work".
+# Roster (fresh kernels JSON or a read-only raw Markdown fallback). The health
+# line is intentionally separate so fresh agents can tell degraded cache state
+# from "no work".
 printf '\n### roster\n'
 if [[ -f .cache/compact-kernels.json ]]; then
   kernel_mtime="$(stat -c %Y .cache/compact-kernels.json 2>/dev/null || stat -f %m .cache/compact-kernels.json 2>/dev/null || echo 0)"
   kernel_age=$(( $(date +%s) - kernel_mtime ))
-  kernel_count="$(python3 - <<'PY' 2>/dev/null || echo unknown
+  kernel_count="$(python3 - .cache/compact-kernels.json <<'PY' 2>/dev/null || echo invalid
 import json
-print(len(json.load(open(".cache/compact-kernels.json"))))
+import sys
+
+with open(sys.argv[1]) as fh:
+    value = json.load(fh)
+if not isinstance(value, list):
+    raise ValueError("kernel cache must be a list")
+print(len(value))
 PY
 )"
+  roster_mode="kernels"
   if [[ "$kernel_age" -gt 3600 ]]; then
     printf '# roster-health: stale age=%ss active_namespace=%s active_total=%s\n' "$kernel_age" "${active_namespace:-0}" "${active_total:-0}"
+    roster_mode="raw"
+  elif [[ "$kernel_count" == "invalid" ]]; then
+    printf '# roster-health: invalid kernels active_namespace=%s active_total=%s\n' "${active_namespace:-0}" "${active_total:-0}"
+    roster_mode="raw"
   elif [[ "$kernel_count" != "${active_namespace:-0}" ]]; then
     printf '# roster-health: mismatch kernels=%s active_namespace=%s active_total=%s\n' "$kernel_count" "${active_namespace:-0}" "${active_total:-0}"
   else
     printf '# roster-health: fresh kernels=%s active_namespace=%s active_total=%s\n' "$kernel_count" "${active_namespace:-0}" "${active_total:-0}"
   fi
-  bash "$SCRIPT_DIR/kernels-roster.sh"
+  if [[ "$roster_mode" == "raw" ]]; then
+    bash "$SCRIPT_DIR/kernels-roster.sh" --raw
+  else
+    bash "$SCRIPT_DIR/kernels-roster.sh"
+  fi
 else
   printf '# roster-health: missing active_namespace=%s active_total=%s\n' "${active_namespace:-0}" "${active_total:-0}"
-  printf '# roster: kernels missing — run %s/compact-kernels.sh\n' "$SCRIPT_DIR"
+  bash "$SCRIPT_DIR/kernels-roster.sh" --raw
 fi
