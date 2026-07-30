@@ -71,10 +71,12 @@ xterm* | rxvt*)
 esac
 
 parse_git_branch() {
-    if which git &>/dev/null && git rev-parse --is-inside-work-tree &>/dev/null; then
-        local BR=$(git rev-parse --symbolic-full-name --abbrev-ref HEAD 2>/dev/null)
+    if which git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        local BR
+        BR=$(git rev-parse --symbolic-full-name --abbrev-ref HEAD 2>/dev/null)
         if [ "$BR" == HEAD ]; then
-            local NM=$(git name-rev --name-only HEAD 2>/dev/null)
+            local NM
+            NM=$(git name-rev --name-only HEAD 2>/dev/null)
             if [ "$NM" != undefined ]; then
                 echo -n "@$NM"
             else
@@ -146,7 +148,7 @@ fi
 alias reload='source ~/.bashrc'
 
 # Show most popular commands (bash-specific syntax)
-alias top-commands='history | awk "{print $2}" | awk "{print $1}" |sort|uniq -c | sort -rn | head -10'
+top-commands() { history | awk "{print \$2}" | awk "{print \$1}" | sort | uniq -c | sort -rn | head -10; }
 . ~/.super-autocomplete.bash
 unset KUBERNETES_SERVICE_PORT
 unset KUBERNETES_SERVICE_HOST
