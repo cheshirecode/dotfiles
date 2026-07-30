@@ -35,9 +35,11 @@ the JSON.
 - `validate` checks the schema and transition invariants.
 - `show` prints the five-field contract; `--json` returns the full history.
 
-Every write is atomic. A failed transition leaves the previous state unchanged.
-Malformed CLI usage exits `2` with a `usage:` error. A well-formed command
-rejected by the state contract exits `3` with a `loop-state:` error.
+Every write is atomic. Mutating commands also hold an adjacent process lock
+across the full read-modify-write transition, so concurrent CLI processes apply
+their transitions serially. A failed transition leaves the previous state
+unchanged. Malformed CLI usage exits `2` with a `usage:` error. A well-formed
+command rejected by the state contract exits `3` with a `loop-state:` error.
 
 ## Continuous execution and intervention
 
