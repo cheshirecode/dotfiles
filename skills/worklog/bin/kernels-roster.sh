@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Print a one-line-per-active-task roster from .cache/compact-kernels.json.
+# Print a one-line-per-active-task roster from .cache/compact-kernels.json or
+# directly from active task Markdown when the derived view is unavailable.
 #
 # Why: the preamble used to Read .cache/compact-kernels.md (~95KB / ~23k
 # tokens) unconditionally. This emits the same data shape at ~1-3k tokens:
@@ -15,14 +16,17 @@
 # Flags:
 #   --limit=N     show top N by last_updated (default: 15)
 #   --all         no cap (used when caller wants the full list)
+#   --raw         read active task Markdown without touching the cache
 
 set -euo pipefail
 
 LIMIT=15
+RAW=0
 for arg in "$@"; do
   case "$arg" in
     --limit=*) LIMIT="${arg#--limit=}" ;;
     --all)     LIMIT=99999 ;;
+    --raw)     RAW=1 ;;
     *) echo "kernels-roster: unknown arg '$arg'" >&2; exit 2 ;;
   esac
 done
@@ -32,6 +36,50 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/_lib.sh"
 REPO_ROOT="$(resolve_worklog_repo)" || exit 1
 cd "$REPO_ROOT"
+
+if (( RAW == 1 )); then
+  LDAP="$(resolve_ldap)"
+  ACTIVE_DIR="people/$LDAP/active"
+  python3 - "$ACTIVE_DIR" "$LIMIT" <<'PY'
+import pathlib
+import re
+import sys
+
+active_dir = pathlib.Path(sys.argv[1])
+limit = int(sys.argv[2])
+records = []
+
+for path in sorted(active_dir.glob("*.md")):
+    text = path.read_text(errors="replace")
+    match = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
+    if not match:
+        continue
+    fields = {}
+    for line in match.group(1).splitlines():
+        field = re.match(r"^([a-z_]+):\s*(.*)$", line)
+        if field:
+            fields[field.group(1)] = field.group(2).strip().strip('"')
+    slug = fields.get("slug")
+    if not slug:
+        continue
+    records.append(
+        (
+            fields.get("last_updated", ""),
+            slug,
+            fields.get("status", "-") or "-",
+            fields.get("next_action", "-") or "-",
+        )
+    )
+
+records.sort(key=lambda record: (record[0], record[1]), reverse=True)
+shown = min(limit, len(records))
+print(f"# roster: raw fallback shown {shown}/{len(records)} tasks")
+for _, slug, status, next_action in records[:limit]:
+    print(f"{slug}\t{status}\t{next_action[:120]}")
+PY
+  exit 0
+fi
+
 JSON="$REPO_ROOT/.cache/compact-kernels.json"
 
 if [[ ! -f "$JSON" ]]; then

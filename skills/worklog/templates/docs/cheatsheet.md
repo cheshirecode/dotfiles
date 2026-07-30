@@ -63,4 +63,7 @@ Derived view of `AGENTS.md`. Imperatives only; no rationale. Consult `AGENTS.md`
 ## Sessions
 
 - Multi-session collision warning fires on `bin/checkpoint.sh` when another session touched the same slug <5min ago. Advisory; never blocks.
-- Resume kernels: `.cache/compact-kernels.{md,json}`. Read the `.json` first; dedupe `TaskList` against existing subjects before `TaskCreate`.
+- Resume kernels: `.cache/compact-kernels.{md,json}`. Run the minimal preamble
+  first; it emits a bounded roster from fresh `.json` data or a read-only raw
+  fallback. Read `.md` only for full detail, then dedupe `TaskList` against
+  existing subjects before `TaskCreate`.
