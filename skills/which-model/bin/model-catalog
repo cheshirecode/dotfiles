@@ -1084,6 +1084,7 @@ def build_catalog(env: str, provider: str) -> dict:
                 models.extend(from_openrouter(load_json_url(OPENROUTER_MODELS_URL), env, confidence="fresh"))
                 sources.append({"kind": "openrouter", "url": OPENROUTER_MODELS_URL})
             except Exception as exc:  # noqa: BLE001 - fallback cache is intentional here.
+                sys.stderr.write(f"model-catalog: openrouter fetch failed: {exc}\n")
                 sources.append({"kind": "openrouter", "error": str(exc)})
     elif provider == "claude":
         # The running LLM session — not this skill — is what can list live models; it
@@ -1106,6 +1107,7 @@ def build_catalog(env: str, provider: str) -> dict:
                 models.extend(from_models_dev(load_json_url("https://models.dev/catalog.json"), env))
                 sources.append({"kind": "models.dev", "url": "https://models.dev/catalog.json"})
             except Exception as exc:  # noqa: BLE001 - fallback cache is intentional here.
+                sys.stderr.write(f"model-catalog: models.dev fetch failed: {exc}\n")
                 sources.append({"kind": "models.dev", "error": str(exc)})
 
     if not models:
