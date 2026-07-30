@@ -154,6 +154,23 @@ class EvidenceGateTest(unittest.TestCase):
             expected_returncode=2,
         )
 
+    def test_init_force_overwrites_existing_gate(self) -> None:
+        self.initialize()
+        before = self.gate.read_text()
+        self.run_cli(
+            "init",
+            "--gate",
+            str(self.gate),
+            "--goal",
+            "replacement goal",
+            "--criterion",
+            "replace=replaces",
+            "--force",
+        )
+        after = json.loads(self.gate.read_text())
+        self.assertEqual(after["goal"], "replacement goal")
+        self.assertNotEqual(self.gate.read_text(), before)
+
 
 if __name__ == "__main__":
     unittest.main()
