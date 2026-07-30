@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import pathlib
 import subprocess
@@ -13,6 +14,10 @@ import unittest
 
 
 SCRIPT = pathlib.Path(__file__).parents[1] / "scripts" / "loop_state.py"
+SPEC = importlib.util.spec_from_file_location("loop_state_under_test", SCRIPT)
+assert SPEC and SPEC.loader
+LOOP_STATE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(LOOP_STATE)
 
 
 class LoopStateTest(unittest.TestCase):
@@ -130,6 +135,68 @@ class LoopStateTest(unittest.TestCase):
         state = json.loads(result.stdout)
         self.assertEqual(state["terminal_status"], "budget_exhausted")
         self.assertNotEqual(state["terminal_status"], "complete")
+
+    def test_advance_waits_for_state_lock(self) -> None:
+        self.initialize()
+        command = [
+            sys.executable,
+            str(SCRIPT),
+            "advance",
+            "--state",
+            str(self.state),
+            "--evidence",
+            "serialized transition",
+            "--next-action",
+            "verify lock",
+        ]
+        with LOOP_STATE.state_lock(self.state):
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            with self.assertRaises(subprocess.TimeoutExpired):
+                process.communicate(timeout=0.2)
+
+        stdout, stderr = process.communicate(timeout=5)
+        self.assertEqual(process.returncode, 0, msg=f"stdout:\n{stdout}\nstderr:\n{stderr}")
+        state = json.loads(self.state.read_text())
+        self.assertIn("serialized transition", state["progress_evidence"])
+
+    def test_concurrent_advances_preserve_every_transition(self) -> None:
+        self.initialize(limit=8)
+        processes = [
+            subprocess.Popen(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "advance",
+                    "--state",
+                    str(self.state),
+                    "--evidence",
+                    f"writer-{index}",
+                    "--next-action",
+                    "continue",
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            for index in range(8)
+        ]
+        results = [process.communicate(timeout=10) for process in processes]
+        for process, (stdout, stderr) in zip(processes, results):
+            self.assertEqual(
+                process.returncode,
+                0,
+                msg=f"stdout:\n{stdout}\nstderr:\n{stderr}",
+            )
+
+        state = json.loads(self.state.read_text())
+        self.assertEqual(state["budget"]["used"], 8)
+        for index in range(8):
+            self.assertIn(f"writer-{index}", state["progress_evidence"])
 
     def test_resume_creates_bound_successor_without_reopening_blocker(self) -> None:
         self.initialize()

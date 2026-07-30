@@ -187,6 +187,12 @@ checks = {
         and "divergent-copy" in install_script
     ),
     "atomic state write": "os.replace" in state_script,
+    "serialized state mutation": (
+        "def state_lock" in state_script
+        and '@serialized_state_paths("state")' in state_script
+        and '@serialized_state_paths("state", "new_state")' in state_script
+        and "concurrent CLI processes apply" in protocol
+    ),
     "fingerprint-guarded correction": (
         "fingerprint --state" in root
         and "--expect-sha256" in root
@@ -213,6 +219,25 @@ if missing:
     raise SystemExit(1)
 PY
   then ok "loop-engineering portability contract"; else fail "loop-engineering portability contract"; fi
+  if python3 - <<'PY'
+import pathlib
+
+setup = pathlib.Path("skills/serena-rg-search/references/mcp-setup.md").read_text()
+checks = {
+    "Serena install": "uv tool install -p 3.13 serena-agent" in setup,
+    "Claude setup": "serena setup claude-code" in setup,
+    "Claude launch command": "claude mcp add serena -- serena start-mcp-server" in setup,
+    "Cursor command": ".cursor/mcp.json" in setup and '"command": "serena"' in setup,
+    "OpenCode 1 schema": "OpenCode 1.x:" in setup and '"enabled": true' in setup,
+    "OpenCode 2 schema": "OpenCode 2.x:" in setup and '"servers": {' in setup,
+    "verification commands": "/mcp" in setup and "opencode mcp list" in setup,
+}
+missing = [name for name, passed in checks.items() if not passed]
+if missing:
+    print("Serena MCP setup contract failed: " + "; ".join(missing))
+    raise SystemExit(1)
+PY
+  then ok "Serena MCP setup contract"; else fail "Serena MCP setup contract"; fi
   if python3 - <<'PY'
 import pathlib
 import re
@@ -1429,6 +1454,36 @@ test_worklog_skill() {
     ok "codex-surface-check rejects init without update_plan contract"
   fi
   rm -f "$bad_init_mode"
+
+  mkdir -p "$vault/people/test-ldap/active"
+  cat >"$vault/people/test-ldap/active/search-fixture.md" <<'EOF'
+---
+title: Search fallback fixture
+status: in-progress
+kind: task
+project: search-fallback
+repos: []
+---
+
+Borrow Schema fallback evidence.
+EOF
+  WORKLOG_REPO="$vault" bash "$sb/index.sh" >/dev/null
+  out=$(PATH=/usr/bin:/bin WORKLOG_REPO="$vault" bash "$sb/search.sh" 'Borrow|Schema' --active 2>&1)
+  if echo "$out" | grep -q 'Borrow Schema fallback evidence'; then
+    ok "search.sh grep fallback preserves common regex alternation"
+  else
+    fail "search.sh grep fallback lost common regex semantics (got: $out)"
+  fi
+
+  set +e
+  out=$(PATH=/usr/bin:/bin WORKLOG_REPO="$vault" bash "$sb/search.sh" 'BORROW SCHEMA' --active -- -i 2>&1)
+  rc=$?
+  set -e
+  if [[ $rc -eq 2 && "$out" == *"extra rg arguments require ripgrep"* ]]; then
+    ok "search.sh grep fallback rejects unsupported rg arguments"
+  else
+    fail "search.sh grep fallback silently ignored rg arguments (rc=$rc, output=$out)"
+  fi
 
   rm -rf "$(dirname "$vault")"
 }
