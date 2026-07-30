@@ -69,8 +69,9 @@ preamble="$(
     "$WORKLOG_BIN/preamble.sh" --minimal
 )"
 grep -q 'roster-health: stale' <<< "$preamble"
-if grep -q 'Use the updated raw task state' <<< "$preamble"; then
-  echo "FAIL: stale kernel content leaked into the preamble roster"
+grep -q 'raw fallback shown 1/1 tasks' <<< "$preamble"
+if ! grep -q $'cache-task\tin-progress\tUse the updated raw task state' <<< "$preamble"; then
+  echo "FAIL: stale kernels did not fall back to current raw task state"
   exit 1
 fi
 
@@ -79,5 +80,27 @@ context="$(
     "$WORKLOG_BIN/context.sh" cache-task
 )"
 grep -q 'Use the updated raw task state' <<< "$context"
+
+printf '{not-json\n' > "$TMP/.cache/compact-kernels.json"
+before_invalid_status="$(git -C "$TMP" status --porcelain)"
+before_invalid_mtime="$(stat -c %Y "$TMP/.cache/compact-kernels.json" 2>/dev/null || stat -f %m "$TMP/.cache/compact-kernels.json")"
+invalid_preamble="$(
+  WORKLOG_REPO="$TMP" WORKLOG_LDAP=tester \
+    "$WORKLOG_BIN/preamble.sh" --minimal
+)"
+grep -q 'roster-health: invalid' <<< "$invalid_preamble"
+grep -q $'cache-task\tin-progress\tUse the updated raw task state' <<< "$invalid_preamble"
+after_invalid_status="$(git -C "$TMP" status --porcelain)"
+after_invalid_mtime="$(stat -c %Y "$TMP/.cache/compact-kernels.json" 2>/dev/null || stat -f %m "$TMP/.cache/compact-kernels.json")"
+[[ "$after_invalid_status" == "$before_invalid_status" ]]
+[[ "$after_invalid_mtime" == "$before_invalid_mtime" ]]
+
+rm "$TMP/.cache/compact-kernels.json"
+missing_preamble="$(
+  WORKLOG_REPO="$TMP" WORKLOG_LDAP=tester \
+    "$WORKLOG_BIN/preamble.sh" --minimal
+)"
+grep -q 'roster-health: missing' <<< "$missing_preamble"
+grep -q $'cache-task\tin-progress\tUse the updated raw task state' <<< "$missing_preamble"
 
 echo "ok: stale index rebuilds and stale kernels fall through to raw context"
