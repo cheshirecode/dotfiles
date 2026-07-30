@@ -10,7 +10,10 @@ import os
 import pathlib
 import sys
 import tempfile
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager
 from datetime import datetime, timezone
+from functools import wraps
 from typing import Any
 
 
@@ -58,7 +61,78 @@ def read_state(path: pathlib.Path) -> dict[str, Any]:
     return read_state_snapshot(path)[0]
 
 
-def write_state(
+@contextmanager
+def state_lock(path: pathlib.Path) -> Iterator[None]:
+    """Serialize mutations of one state path across agent processes."""
+    resolved_path = path.resolve(strict=False)
+    resolved_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = resolved_path.with_name(f".{resolved_path.name}.lock")
+    handle = lock_path.open("a+b")
+    locked = False
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0, os.SEEK_END)
+            if handle.tell() == 0:
+                handle.write(b"\0")
+                handle.flush()
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        locked = True
+        yield
+    finally:
+        if locked and os.name == "nt":
+            import msvcrt
+
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        elif locked:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        handle.close()
+
+
+@contextmanager
+def state_locks(*paths: pathlib.Path) -> Iterator[None]:
+    """Acquire multiple state locks in stable order to avoid deadlocks."""
+    ordered_paths = sorted(
+        {path.resolve(strict=False) for path in paths},
+        key=lambda path: str(path),
+    )
+    with ExitStack() as stack:
+        for path in ordered_paths:
+            stack.enter_context(state_lock(path))
+        yield
+
+
+def serialized_state_paths(
+    *attribute_names: str,
+) -> Callable[
+    [Callable[[argparse.Namespace], dict[str, Any]]],
+    Callable[[argparse.Namespace], dict[str, Any]],
+]:
+    """Lock argparse path attributes for the duration of a state transition."""
+
+    def decorate(
+        handler: Callable[[argparse.Namespace], dict[str, Any]],
+    ) -> Callable[[argparse.Namespace], dict[str, Any]]:
+        @wraps(handler)
+        def locked_handler(args: argparse.Namespace) -> dict[str, Any]:
+            with state_locks(*(getattr(args, name) for name in attribute_names)):
+                return handler(args)
+
+        return locked_handler
+
+    return decorate
+
+
+def write_state_unlocked(
     path: pathlib.Path,
     state: dict[str, Any],
     *,
@@ -85,7 +159,7 @@ def write_state(
                 raise StateError("state disappeared before guarded write") from exc
             if actual_sha256 != expect_sha256:
                 raise StateError(
-                    "state fingerprint changed during annotation; refusing write"
+                    "state fingerprint changed during guarded write; refusing write"
                 )
         os.replace(temporary_path, path)
     finally:
@@ -155,6 +229,7 @@ def append_history(
     )
 
 
+@serialized_state_paths("state")
 def command_init(args: argparse.Namespace) -> dict[str, Any]:
     if args.state.exists() and not args.force:
         raise StateError(f"refusing to overwrite existing state: {args.state}")
@@ -175,10 +250,11 @@ def command_init(args: argparse.Namespace) -> dict[str, Any]:
         "history": [],
     }
     append_history(state, "initialized", args.evidence, args.next_action)
-    write_state(args.state, state)
+    write_state_unlocked(args.state, state)
     return state
 
 
+@serialized_state_paths("state")
 def command_advance(args: argparse.Namespace) -> dict[str, Any]:
     state, raw_state = read_state_snapshot(args.state)
     expect_sha256 = hashlib.sha256(raw_state).hexdigest()
@@ -189,7 +265,7 @@ def command_advance(args: argparse.Namespace) -> dict[str, Any]:
     if state["budget"]["used"] == state["budget"]["limit"]:
         state["terminal_status"] = "budget_exhausted"
     append_history(state, "advanced", args.evidence, args.next_action)
-    write_state(args.state, state, expect_sha256=expect_sha256)
+    write_state_unlocked(args.state, state, expect_sha256=expect_sha256)
     return state
 
 
@@ -203,12 +279,13 @@ def consume_budget(state: dict[str, Any], amount: int) -> None:
     state["budget"]["used"] += amount
 
 
+@serialized_state_paths("state", "new_state")
 def command_resume(args: argparse.Namespace) -> dict[str, Any]:
-    if args.new_state.exists():
-        raise StateError(f"refusing to overwrite existing state: {args.new_state}")
     if args.state.resolve() == args.new_state.resolve():
         raise StateError("resume requires a distinct --new-state path")
-    predecessor = read_state(args.state)
+    if args.new_state.exists():
+        raise StateError(f"refusing to overwrite existing state: {args.new_state}")
+    predecessor, raw_predecessor = read_state_snapshot(args.state)
     status = predecessor["terminal_status"]
     if status not in RESUMABLE_STATUSES:
         raise StateError(f"cannot resume state with status: {status}")
@@ -220,7 +297,7 @@ def command_resume(args: argparse.Namespace) -> dict[str, Any]:
             "resume requires --extend-budget when predecessor budget is exhausted"
         )
 
-    digest = hashlib.sha256(args.state.read_bytes()).hexdigest()
+    digest = hashlib.sha256(raw_predecessor).hexdigest()
     predecessor_reference = {
         "path": str(args.state.resolve()),
         "sha256": digest,
@@ -255,10 +332,11 @@ def command_resume(args: argparse.Namespace) -> dict[str, Any]:
         "history": [],
     }
     append_history(state, f"resumed:{status}", resume_evidence, args.next_action)
-    write_state(args.new_state, state)
+    write_state_unlocked(args.new_state, state)
     return state
 
 
+@serialized_state_paths("state")
 def command_finish(args: argparse.Namespace) -> dict[str, Any]:
     state, raw_state = read_state_snapshot(args.state)
     expect_sha256 = hashlib.sha256(raw_state).hexdigest()
@@ -281,10 +359,11 @@ def command_finish(args: argparse.Namespace) -> dict[str, Any]:
     append_history(
         state, f"finished:{args.status}", args.evidence, state["next_action"]
     )
-    write_state(args.state, state, expect_sha256=expect_sha256)
+    write_state_unlocked(args.state, state, expect_sha256=expect_sha256)
     return state
 
 
+@serialized_state_paths("state")
 def command_annotate(args: argparse.Namespace) -> dict[str, Any]:
     state, raw_state = read_state_snapshot(args.state)
     actual_sha256 = hashlib.sha256(raw_state).hexdigest()
@@ -302,7 +381,7 @@ def command_annotate(args: argparse.Namespace) -> dict[str, Any]:
     if args.next_action is not None:
         state["next_action"] = args.next_action
     append_history(state, "annotated", args.evidence, state["next_action"])
-    write_state(args.state, state, expect_sha256=actual_sha256)
+    write_state_unlocked(args.state, state, expect_sha256=actual_sha256)
     return state
 
 
