@@ -516,6 +516,22 @@ PY
   fi
   rm -rf "$install_home"
 
+  # --- Red fixture: install.sh path resolution mismatch ---
+  # bin/install-skills.sh resolves /tmp→/private/tmp (Python Path.resolve).
+  # install.sh derives REPO_DIR via pwd which may not resolve /tmp.
+  # If the comparison fails, install.sh backs up existing symlinks to .bak.
+  local resolve_home
+  resolve_home=$(mktemp -d)
+  HOME="$resolve_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" ./bin/install-skills.sh >/dev/null 2>&1
+  CODER_SYMLINK_DIR="$resolve_home" ./install.sh >/dev/null 2>&1
+  bak_count=$(find "$resolve_home" -name "*.bak" 2>/dev/null | wc -l)
+  if [[ $bak_count -eq 0 ]]; then
+    ok "install.sh preserves existing skill symlinks (no .bak accumulation)"
+  else
+    fail "install.sh created $bak_count .bak items (path resolution mismatch)"
+  fi
+  rm -rf "$resolve_home"
+
   if python3 - <<'PY'
 import re
 

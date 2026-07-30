@@ -59,7 +59,7 @@ For `kind: runbook`, slug `*-integration-map`:
 - Multi-task project: `"$WORKLOG_BIN/project.sh" new|next|claim|release|reap|verify|list <slug>`.
 - Lint: `"$WORKLOG_BIN/lint.sh" [--cross-task]`. Boundary guard for split clones: `"$WORKLOG_BIN/boundary-lint.sh"`. Composite audit: `"$WORKLOG_BIN/audit.sh" [--section=boundary]`.
 - SQL: `"$WORKLOG_BIN/sql.sh" new|run|list|show <slug> <name>`.
-- New data repo: `"$WORKLOG_BIN/init-new-data-repo.sh" <path> [<ldap>]` (Phase 4 — not shipped yet).
+- New data repo: `"$WORKLOG_BIN/init-new-data-repo.sh" <path> [<ldap>]`.
 
 ## Task format
 
