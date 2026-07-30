@@ -180,7 +180,8 @@ def command_init(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def command_advance(args: argparse.Namespace) -> dict[str, Any]:
-    state = read_state(args.state)
+    state, raw_state = read_state_snapshot(args.state)
+    expect_sha256 = hashlib.sha256(raw_state).hexdigest()
     require_running(state)
     consume_budget(state, args.consume)
     state["progress_evidence"].extend(args.evidence)
@@ -188,7 +189,7 @@ def command_advance(args: argparse.Namespace) -> dict[str, Any]:
     if state["budget"]["used"] == state["budget"]["limit"]:
         state["terminal_status"] = "budget_exhausted"
     append_history(state, "advanced", args.evidence, args.next_action)
-    write_state(args.state, state)
+    write_state(args.state, state, expect_sha256=expect_sha256)
     return state
 
 
@@ -259,7 +260,8 @@ def command_resume(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def command_finish(args: argparse.Namespace) -> dict[str, Any]:
-    state = read_state(args.state)
+    state, raw_state = read_state_snapshot(args.state)
+    expect_sha256 = hashlib.sha256(raw_state).hexdigest()
     require_running(state)
     if args.status == "complete" and not args.verification:
         raise StateError("complete requires --verification from a tool or artifact")
@@ -279,7 +281,7 @@ def command_finish(args: argparse.Namespace) -> dict[str, Any]:
     append_history(
         state, f"finished:{args.status}", args.evidence, state["next_action"]
     )
-    write_state(args.state, state)
+    write_state(args.state, state, expect_sha256=expect_sha256)
     return state
 
 
