@@ -1,33 +1,112 @@
 # Serena MCP Setup
 
-This skill routes to Serena MCP tools (`find_symbol`, `find_referencing_symbols`,
-`get_symbols_overview`, `search_for_pattern`). These tools are provided by an
-MCP server — they are not built into the CLI agent.
+Serena provides the symbol-aware tools used by this skill. Install and initialize
+the current Serena CLI first:
 
-## Per-project configuration
+```bash
+uv tool install -p 3.13 serena-agent
+serena init
+```
 
-Add the Serena MCP server to your project's `.mcp.json` or equivalent:
+If an agent cannot find `serena`, replace `serena` in its configuration with the
+absolute path printed by `command -v serena`.
 
-```jsonc
+## Claude Code
+
+Use Serena's supported setup command:
+
+```bash
+serena setup claude-code
+```
+
+For a project-only manual setup, run this from the project root:
+
+```bash
+claude mcp add serena -- serena start-mcp-server \
+  --context claude-code \
+  --project "$(pwd)"
+```
+
+Run `/mcp` in Claude Code and confirm that `serena` is connected.
+
+## Cursor
+
+Create `.cursor/mcp.json` in the project. Replace the placeholder with the
+project's absolute path:
+
+```json
 {
   "mcpServers": {
     "serena": {
-      // The Serena MCP server provides find_symbol, find_referencing_symbols,
-      // get_symbols_overview, and search_for_pattern. Install and configure
-      // the package per its documentation.
+      "command": "serena",
+      "args": [
+        "start-mcp-server",
+        "--context=ide",
+        "--project",
+        "/absolute/path/to/project"
+      ]
     }
   }
 }
 ```
 
-## Per-agent configuration
+Open Cursor's MCP settings and confirm that Serena is running and its tools are
+listed.
 
-- **Claude Code**: `~/.claude/settings.json` → `mcpServers.serena`
-- **Cursor**: `~/.cursor/mcp.json` → `mcpServers.serena`
-- **OpenCode**: `~/.config/opencode/opencode.jsonc` → `mcpServers.serena`
+## OpenCode
 
-## Fallback
+OpenCode has two active configuration schemas. Check `opencode --version` and
+use the matching form in `opencode.jsonc`.
 
-If Serena is not activated, the skill falls back to `rg` — see line 22 of
-`SKILL.md`. The skill remains usable without Serena; it just loses the
-symbol-aware search pathway.
+OpenCode 1.x:
+
+```json
+{
+  "mcp": {
+    "serena": {
+      "type": "local",
+      "command": [
+        "serena",
+        "start-mcp-server",
+        "--context=ide",
+        "--project-from-cwd"
+      ],
+      "enabled": true
+    }
+  }
+}
+```
+
+OpenCode 2.x:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "serena": {
+        "type": "local",
+        "command": [
+          "serena",
+          "start-mcp-server",
+          "--context=ide",
+          "--project-from-cwd"
+        ]
+      }
+    }
+  }
+}
+```
+
+Run `opencode mcp list` (1.x) or `opencode2 mcp list` (2.x) and confirm that
+`serena` is connected.
+
+## Fallback and sources
+
+If Serena is unavailable, continue with `rg`; the skill remains usable without
+symbol-aware search.
+
+Configuration sources:
+
+- [Serena installation and client setup](https://oraios.github.io/serena/02-usage/030_clients.html)
+- [Cursor MCP configuration](https://docs.cursor.com/context/model-context-protocol)
+- [OpenCode 2 MCP configuration](https://opencode.ai/v2/docs/mcp-servers)

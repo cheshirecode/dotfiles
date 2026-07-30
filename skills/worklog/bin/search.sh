@@ -191,14 +191,20 @@ if [ -z "$PATTERN" ]; then
   exit 2
 fi
 
-# Stage candidate files for rg via xargs (rg lacks a --files-from flag; pipe paths in).
+# Stage candidate files via xargs (rg lacks a --files-from flag; pipe paths in).
+declare -a SEARCH_CMD=()
 if command -v rg >/dev/null; then
-  SEARCH_CMD="rg ${RG_EXTRA[*]+"${RG_EXTRA[*]}"} --no-heading --color=never --line-number --with-filename"
+  SEARCH_CMD=(rg "${RG_EXTRA[@]}" --no-heading --color=never --line-number --with-filename)
 else
-  SEARCH_CMD="grep -rn --color=never"
+  if [[ ${#RG_EXTRA[@]} -gt 0 ]]; then
+    echo "search.sh: extra rg arguments require ripgrep; install rg or remove arguments after --" >&2
+    exit 2
+  fi
+  # ripgrep's default regex syntax includes common ERE operators such as `|`.
+  SEARCH_CMD=(grep -EnH)
 fi
 RG_OUT=$(printf '%s\n' "$CANDIDATE_FILES" | \
-  xargs $SEARCH_CMD -e "$PATTERN" 2>/dev/null || true)
+  xargs "${SEARCH_CMD[@]}" -e "$PATTERN" 2>/dev/null || true)
 
 if [ -z "$RG_OUT" ]; then
   echo "(no hits for /$PATTERN/)" >&2
