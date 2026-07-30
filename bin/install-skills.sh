@@ -83,6 +83,20 @@ def run(cmd, check=True):
 
 SENTINEL = ".installed_from"
 import re as _re
+import hashlib as _hashlib
+
+def tree_digest(root):
+    digest = _hashlib.sha256()
+    for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
+        relative = path.relative_to(root).as_posix().encode()
+        if path.is_symlink():
+            digest.update(b"L\0" + relative + b"\0" + os.readlink(path).encode() + b"\0")
+        elif path.is_file():
+            digest.update(b"F\0" + relative + b"\0")
+            digest.update(_hashlib.sha256(path.read_bytes()).digest())
+        elif path.is_dir():
+            digest.update(b"D\0" + relative + b"\0")
+    return digest.hexdigest()
 
 def validate_frontmatter(skill_dir, expected_name):
     """Council item #3: validate SKILL.md frontmatter at install time, not at
@@ -111,10 +125,14 @@ def has_our_sentinel(dst):
     sentinel = dst / SENTINEL
     return sentinel.is_file()
 
-def refuse_if_unowned(dst, name):
+def refuse_if_unowned(dst, name, src):
     """Council guardrail #8: never rmtree a user-edited skill dir.
-    If dst exists and we don't recognize it as ours, refuse + prompt."""
+    If dst exists and we don't recognize it as ours, check if it's a
+    byte-identical copy. If identical, allow replacement. If divergent, refuse."""
     if (dst.is_symlink() or dst.exists()) and not has_our_sentinel(dst):
+        if dst.is_dir() and not dst.is_symlink():
+            if src and src.is_dir() and tree_digest(dst) == tree_digest(src):
+                return
         sys.stderr.write(
             f"install-skills: refusing to replace {dst}\n"
             f"  '{name}' has a directory there but no '{SENTINEL}' sentinel.\n"
@@ -174,7 +192,7 @@ def install_subpath(entry):
         sys.exit(3)
     destinations = install_destinations(entry)
     for dst in destinations:
-        refuse_if_unowned(dst, entry["name"])
+        refuse_if_unowned(dst, entry["name"], src)
     for dst in destinations:
         link_or_copy(
             src,
@@ -227,7 +245,7 @@ def install_git(entry):
         run(["git", "-C", str(cache), "checkout", "--quiet", ref])
     destinations = install_destinations(entry)
     for dst in destinations:
-        refuse_if_unowned(dst, name)
+        refuse_if_unowned(dst, name, cache)
     for dst in destinations:
         link_or_copy(cache, dst, name, f"git:{repo}@{ref}")
     return True
