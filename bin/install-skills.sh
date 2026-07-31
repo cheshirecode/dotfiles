@@ -117,11 +117,17 @@ def validate_frontmatter(skill_dir, expected_name):
         return f"{skill_md}: frontmatter name='{actual}' but manifest says '{expected_name}'"
     return None
 
-def has_our_sentinel(dst):
-    """True if dst is one of ours (safe to replace). Either a symlink we
-    created (Mac/Linux happy path) or a copy with our sentinel file."""
+def has_our_sentinel(dst, src):
+    """True if dst is one of ours (safe to replace).
+
+    A symlink is ours only when it resolves to the current source. Any other
+    symlink may be a user-owned link and must remain fail-closed.
+    """
     if dst.is_symlink():
-        return True
+        try:
+            return dst.resolve(strict=True) == src.resolve(strict=True)
+        except FileNotFoundError:
+            return False
     sentinel = dst / SENTINEL
     return sentinel.is_file()
 
@@ -129,15 +135,20 @@ def refuse_if_unowned(dst, name, src):
     """Council guardrail #8: never rmtree a user-edited skill dir.
     If dst exists and we don't recognize it as ours, check if it's a
     byte-identical copy. If identical, allow replacement. If divergent, refuse."""
-    if (dst.is_symlink() or dst.exists()) and not has_our_sentinel(dst):
+    if (dst.is_symlink() or dst.exists()) and not has_our_sentinel(dst, src):
         if dst.is_dir() and not dst.is_symlink():
             if src and src.is_dir() and tree_digest(dst) == tree_digest(src):
                 return
+        ownership_reason = (
+            f"its symlink target does not match the current source {src}"
+            if dst.is_symlink()
+            else f"it has no '{SENTINEL}' sentinel"
+        )
         sys.stderr.write(
             f"install-skills: refusing to replace {dst}\n"
-            f"  '{name}' has a directory there but no '{SENTINEL}' sentinel.\n"
+            f"  '{name}' is unowned because {ownership_reason}.\n"
             f"  Either we didn't install it, or a previous install predates the\n"
-            f"  sentinel. To proceed: rm -rf {dst} (you'll lose any local edits),\n"
+            f"  sentinel. To proceed, inspect it and remove it manually if safe,\n"
             f"  then re-run install-skills.sh.\n"
         )
         sys.exit(3)
