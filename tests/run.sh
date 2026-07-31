@@ -526,6 +526,29 @@ PY
   fi
   rm -rf "$fake_home"
 
+  # --- #1: uninstall preserves an unowned skill directory ---
+  fake_home=$(mktemp -d)
+  local uninstall_target
+  uninstall_target="$fake_home/.claude/skills/council"
+  mkdir -p "$uninstall_target"
+  echo "user-owned content" > "$uninstall_target/SKILL.md"
+  set +e
+  HOME="$fake_home" \
+    CLAUDE_SKILLS_DIR="$fake_home/.claude/skills" \
+    CLAUDE_AGENT_CACHE="$fake_home/.agents/skills" \
+    PROJECTS_DIR="$fake_home/projects" \
+    PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" \
+    ./bin/uninstall.sh >/dev/null 2>&1
+  rc=$?
+  set -e
+  if [[ $rc -eq 0 ]] && [[ -f "$uninstall_target/SKILL.md" ]] &&
+     grep -q "user-owned content" "$uninstall_target/SKILL.md"; then
+    ok "uninstall preserves unowned skill directory"
+  else
+    fail "uninstall removed unowned skill directory (got exit=$rc)"
+  fi
+  rm -rf "$fake_home"
+
   local skill_names skill_name skill_md shared_skill_md install_home canonical_skill installed_skill skills_root
   skill_names=$(python3 - <<'PY'
 import pathlib
