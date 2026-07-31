@@ -453,7 +453,7 @@ PY
   fake_home=$(mktemp -d)
   unowned_dst="$fake_home/.claude/skills/council"
   mkdir -p "$unowned_dst"
-  cp "$REPO_ROOT/skills/council/SKILL.md" "$unowned_dst/SKILL.md"
+  cp -R "$REPO_ROOT/skills/council/." "$unowned_dst/"
   echo "subpath:skills/council" > "$unowned_dst/.installed_from"
   set +e
   HOME="$fake_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" ./bin/install-skills.sh council >/dev/null 2>&1
@@ -463,6 +463,24 @@ PY
     ok "install-skills accepts sentineled dst (exit=0)"
   else
     fail "install-skills rejected sentineled dst (got exit=$rc, expected 0)"
+  fi
+  rm -rf "$fake_home"
+
+  # --- #1: install-skills refuses an edited sentineled copy ---
+  fake_home=$(mktemp -d)
+  unowned_dst="$fake_home/.claude/skills/council"
+  mkdir -p "$unowned_dst"
+  cp -R "$REPO_ROOT/skills/council/." "$unowned_dst/"
+  echo "subpath:skills/council" > "$unowned_dst/.installed_from"
+  echo "user-edited content" >> "$unowned_dst/SKILL.md"
+  set +e
+  HOME="$fake_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" ./bin/install-skills.sh council >/dev/null 2>&1
+  rc=$?
+  set -e
+  if [[ $rc -eq 3 ]] && grep -q "user-edited content" "$unowned_dst/SKILL.md"; then
+    ok "install-skills refuses edited sentineled copy (exit=3)"
+  else
+    fail "install-skills replaced edited sentineled copy (got exit=$rc)"
   fi
   rm -rf "$fake_home"
 

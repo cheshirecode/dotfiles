@@ -88,7 +88,10 @@ import hashlib as _hashlib
 def tree_digest(root):
     digest = _hashlib.sha256()
     for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
-        relative = path.relative_to(root).as_posix().encode()
+        relative_path = path.relative_to(root).as_posix()
+        if relative_path == SENTINEL:
+            continue
+        relative = relative_path.encode()
         if path.is_symlink():
             digest.update(b"L\0" + relative + b"\0" + os.readlink(path).encode() + b"\0")
         elif path.is_file():
@@ -117,11 +120,12 @@ def validate_frontmatter(skill_dir, expected_name):
         return f"{skill_md}: frontmatter name='{actual}' but manifest says '{expected_name}'"
     return None
 
-def has_our_sentinel(dst, src):
+def has_our_sentinel(dst, src, source_info):
     """True if dst is one of ours (safe to replace).
 
     A symlink is ours only when it resolves to the current source. Any other
-    symlink may be a user-owned link and must remain fail-closed.
+    symlink may be a user-owned link and must remain fail-closed. Copies carry
+    a content digest so local edits are not mistaken for installer state.
     """
     if dst.is_symlink():
         try:
@@ -129,33 +133,52 @@ def has_our_sentinel(dst, src):
         except FileNotFoundError:
             return False
     sentinel = dst / SENTINEL
-    return sentinel.is_file()
+    if not sentinel.is_file():
+        return False
+    try:
+        lines = sentinel.read_text().splitlines()
+    except OSError:
+        return False
+    if not lines or lines[0] != source_info:
+        return False
+    digest_lines = [line for line in lines[1:] if line.startswith("content-sha256:")]
+    if digest_lines:
+        return digest_lines[-1].split(":", 1)[1] == tree_digest(dst)
+    # Legacy sentinels remain safe only when the installed copy still matches
+    # the current source exactly; otherwise ownership is ambiguous.
+    return tree_digest(dst) == tree_digest(src)
 
-def refuse_if_unowned(dst, name, src):
+def refuse_if_unowned(dst, name, src, source_info):
     """Council guardrail #8: never rmtree a user-edited skill dir.
     If dst exists and we don't recognize it as ours, check if it's a
     byte-identical copy. If identical, allow replacement. If divergent, refuse."""
-    if (dst.is_symlink() or dst.exists()) and not has_our_sentinel(dst, src):
+    if (dst.is_symlink() or dst.exists()) and not has_our_sentinel(dst, src, source_info):
         if dst.is_dir() and not dst.is_symlink():
             if src and src.is_dir() and tree_digest(dst) == tree_digest(src):
                 return
         ownership_reason = (
             f"its symlink target does not match the current source {src}"
             if dst.is_symlink()
-            else f"it has no '{SENTINEL}' sentinel"
+            else (
+                f"it has no '{SENTINEL}' sentinel"
+                if not (dst / SENTINEL).is_file()
+                else f"its '{SENTINEL}' content does not match the installed copy"
+            )
         )
         sys.stderr.write(
             f"install-skills: refusing to replace {dst}\n"
             f"  '{name}' is unowned because {ownership_reason}.\n"
-            f"  Either we didn't install it, or a previous install predates the\n"
-            f"  sentinel. To proceed, inspect it and remove it manually if safe,\n"
+            f"  It may contain local edits or use an older ownership format.\n"
+            f"  Inspect it and remove it manually if safe,\n"
             f"  then re-run install-skills.sh.\n"
         )
         sys.exit(3)
 
-def write_sentinel(dst, source_info):
+def write_sentinel(dst, source_info, src):
     """Write a sentinel so future install-skills runs recognize this dir."""
-    (dst / SENTINEL).write_text(source_info + "\n")
+    (dst / SENTINEL).write_text(
+        f"{source_info}\ncontent-sha256:{tree_digest(src)}\n"
+    )
 
 def install_destinations(entry):
     """Preserve the manifest destination and add shared and Cursor roots."""
@@ -181,7 +204,7 @@ def link_or_copy(src, dst, name, source_info):
             os.symlink(src.resolve(), dst)
         except OSError:
             shutil.copytree(src, dst)
-            write_sentinel(dst, source_info)
+            write_sentinel(dst, source_info, src)
 
 def install_subpath(entry):
     src = repo_root / entry["source"]["path"]
@@ -201,15 +224,16 @@ def install_subpath(entry):
     if err:
         sys.stderr.write(f"install-skills: refusing {entry['name']}: {err}\n")
         sys.exit(3)
+    source_info = f"subpath:{entry['source']['path']}"
     destinations = install_destinations(entry)
     for dst in destinations:
-        refuse_if_unowned(dst, entry["name"], src)
+        refuse_if_unowned(dst, entry["name"], src, source_info)
     for dst in destinations:
         link_or_copy(
             src,
             dst,
             entry["name"],
-            f"subpath:{entry['source']['path']}",
+            source_info,
         )
     return True
 
@@ -254,11 +278,12 @@ def install_git(entry):
         print(f"  upgrade {name}: {cache} → {ref[:12]}")
         run(["git", "-C", str(cache), "fetch", "--quiet", "origin"])
         run(["git", "-C", str(cache), "checkout", "--quiet", ref])
+    source_info = f"git:{repo}@{ref}"
     destinations = install_destinations(entry)
     for dst in destinations:
-        refuse_if_unowned(dst, name, cache)
+        refuse_if_unowned(dst, name, cache, source_info)
     for dst in destinations:
-        link_or_copy(cache, dst, name, f"git:{repo}@{ref}")
+        link_or_copy(cache, dst, name, source_info)
     return True
 
 installed = skipped = 0
