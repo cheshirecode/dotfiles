@@ -36,19 +36,77 @@ SKILLS_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
 CACHE_DIR="${CLAUDE_AGENT_CACHE:-$HOME/.agents/skills}"
 PROJECTS_DIR="${PROJECTS_DIR:-$HOME/Documents/projects}"
 
+is_owned_skill_install() {
+  local target="$1" source="$2"
+  python3 - "$target" "$source" <<'PY'
+import hashlib
+import pathlib
+import sys
+
+SENTINEL = ".installed_from"
+target = pathlib.Path(sys.argv[1])
+source = pathlib.Path(sys.argv[2])
+
+def tree_digest(root: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
+        relative_path = path.relative_to(root).as_posix()
+        if relative_path == SENTINEL:
+            continue
+        relative = relative_path.encode()
+        if path.is_symlink():
+            digest.update(b"L\0" + relative + b"\0" + path.readlink().as_posix().encode() + b"\0")
+        elif path.is_file():
+            digest.update(b"F\0" + relative + b"\0")
+            digest.update(hashlib.sha256(path.read_bytes()).digest())
+        elif path.is_dir():
+            digest.update(b"D\0" + relative + b"\0")
+    return digest.hexdigest()
+
+if target.is_symlink():
+    try:
+        raise SystemExit(0 if target.resolve(strict=True) == source.resolve(strict=True) else 1)
+    except FileNotFoundError:
+        raise SystemExit(1)
+
+if not target.is_dir():
+    raise SystemExit(1)
+sentinel = target / SENTINEL
+if not sentinel.is_file():
+    raise SystemExit(1)
+try:
+    lines = sentinel.read_text().splitlines()
+except OSError:
+    raise SystemExit(1)
+if not lines:
+    raise SystemExit(1)
+digest_lines = [line for line in lines[1:] if line.startswith("content-sha256:")]
+if digest_lines:
+    raise SystemExit(0 if digest_lines[-1].split(":", 1)[1] == tree_digest(target) else 1)
+raise SystemExit(0 if tree_digest(target) == tree_digest(source) else 1)
+PY
+}
+
 echo "uninstall: removing skill installs from $SKILLS_DIR"
 if [[ -f "$MANIFEST" ]]; then
   while IFS= read -r name; do
     [[ -z "$name" ]] && continue
     target="$SKILLS_DIR/$name"
-    if [[ -L "$target" ]]; then
-      echo "  unlink $target"; rm "$target"
-    elif [[ -d "$target" ]]; then
-      echo "  rmdir  $target"; rm -rf "$target"
+    source="$REPO_ROOT/skills/$name"
+    if is_owned_skill_install "$target" "$source"; then
+      if [[ -L "$target" ]]; then
+        echo "  unlink $target"; rm "$target"
+      elif [[ -d "$target" ]]; then
+        echo "  rmdir  $target"; rm -rf "$target"
+      fi
+    elif [[ -e "$target" || -L "$target" ]]; then
+      echo "  preserve unowned skill install: $target" >&2
     fi
     cache="$CACHE_DIR/$name"
-    if [[ -d "$cache" ]]; then
+    if is_owned_skill_install "$cache" "$source"; then
       echo "  rmdir  $cache"; rm -rf "$cache"
+    elif [[ -e "$cache" || -L "$cache" ]]; then
+      echo "  preserve unowned skill cache: $cache" >&2
     fi
   done < <(python3 -c "import yaml; print('\n'.join(s['name'] for s in yaml.safe_load(open('$MANIFEST'))['skills']))" 2>/dev/null)
 fi
