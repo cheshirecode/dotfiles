@@ -501,6 +501,31 @@ PY
   fi
   rm -rf "$fake_home"
 
+  # --- #1: install-skills dry-run does not create destination directories ---
+  fake_home=$(mktemp -d)
+  local dry_shared dry_cursor dry_cache
+  dry_shared="$fake_home/shared-skills"
+  dry_cursor="$fake_home/cursor-skills"
+  dry_cache="$fake_home/source-cache"
+  set +e
+  HOME="$fake_home" \
+    CLAUDE_SKILLS_DIR="$fake_home/claude-skills" \
+    AGENT_SKILLS_DIR="$dry_shared" \
+    CURSOR_SKILLS_DIR="$dry_cursor" \
+    CLAUDE_AGENT_CACHE="$dry_cache" \
+    PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" \
+    ./bin/install-skills.sh council --dry-run >/dev/null 2>&1
+  rc=$?
+  set -e
+  if [[ $rc -eq 0 ]] && [[ ! -e "$fake_home/claude-skills" ]] &&
+     [[ ! -e "$dry_shared" ]] && [[ ! -e "$dry_cursor" ]] &&
+     [[ ! -e "$dry_cache" ]]; then
+    ok "install-skills dry-run leaves destinations untouched"
+  else
+    fail "install-skills dry-run created destination state (got exit=$rc)"
+  fi
+  rm -rf "$fake_home"
+
   local skill_names skill_name skill_md shared_skill_md install_home canonical_skill installed_skill skills_root
   skill_names=$(python3 - <<'PY'
 import pathlib
