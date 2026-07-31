@@ -95,6 +95,34 @@ after_invalid_mtime="$(stat -c %Y "$TMP/.cache/compact-kernels.json" 2>/dev/null
 [[ "$after_invalid_status" == "$before_invalid_status" ]]
 [[ "$after_invalid_mtime" == "$before_invalid_mtime" ]]
 
+cat > "$TMP/people/tester/active/raw-only-task.md" <<'EOF'
+---
+slug: raw-only-task
+kind: investigation
+status: draft
+project: sample
+last_updated: 2026-07-26
+next_action: Read the raw-only task
+repos: [sample]
+---
+
+## Context
+Fresh mismatch fixture.
+
+## Next
+- [ ] Read the raw-only task
+EOF
+
+printf '[{}]\n' > "$TMP/.cache/compact-kernels.json"
+mismatch_preamble="$(
+  WORKLOG_REPO="$TMP" WORKLOG_LDAP=tester \
+    "$WORKLOG_BIN/preamble.sh" --minimal
+)"
+grep -q 'roster-health: mismatch kernels=1 active_namespace=2 active_total=2' <<< "$mismatch_preamble"
+grep -q 'raw fallback shown 2/2 tasks' <<< "$mismatch_preamble"
+grep -q $'cache-task\tin-progress\tUse the updated raw task state' <<< "$mismatch_preamble"
+grep -q $'raw-only-task\tdraft\tRead the raw-only task' <<< "$mismatch_preamble"
+
 rm "$TMP/.cache/compact-kernels.json"
 missing_preamble="$(
   WORKLOG_REPO="$TMP" WORKLOG_LDAP=tester \
