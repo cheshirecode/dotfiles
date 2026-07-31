@@ -114,6 +114,7 @@ PY
     roster_mode="raw"
   elif [[ "$kernel_count" != "${active_namespace:-0}" ]]; then
     printf '# roster-health: mismatch kernels=%s active_namespace=%s active_total=%s\n' "$kernel_count" "${active_namespace:-0}" "${active_total:-0}"
+    roster_mode="raw"
   else
     printf '# roster-health: fresh kernels=%s active_namespace=%s active_total=%s\n' "$kernel_count" "${active_namespace:-0}" "${active_total:-0}"
   fi
