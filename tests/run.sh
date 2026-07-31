@@ -549,6 +549,30 @@ PY
   fi
   rm -rf "$fake_home"
 
+  # --- #1: uninstall removes an owned Cursor skill installation ---
+  fake_home=$(mktemp -d)
+  local cursor_target
+  cursor_target="$fake_home/.cursor/skills/council"
+  mkdir -p "${cursor_target%/*}"
+  ln -s "$REPO_ROOT/skills/council" "$cursor_target"
+  set +e
+  HOME="$fake_home" \
+    CLAUDE_SKILLS_DIR="$fake_home/.claude/skills" \
+    AGENT_SKILLS_DIR="$fake_home/.agents/skills" \
+    CURSOR_SKILLS_DIR="$fake_home/.cursor/skills" \
+    CLAUDE_AGENT_CACHE="$fake_home/.agents/skills" \
+    PROJECTS_DIR="$fake_home/projects" \
+    PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" \
+    ./bin/uninstall.sh >/dev/null 2>&1
+  rc=$?
+  set -e
+  if [[ $rc -eq 0 ]] && [[ ! -e "$cursor_target" ]] && [[ ! -L "$cursor_target" ]]; then
+    ok "uninstall removes owned Cursor skill installation"
+  else
+    fail "uninstall left owned Cursor skill installation (got exit=$rc)"
+  fi
+  rm -rf "$fake_home"
+
   local skill_names skill_name skill_md shared_skill_md install_home canonical_skill installed_skill skills_root
   skill_names=$(python3 - <<'PY'
 import pathlib

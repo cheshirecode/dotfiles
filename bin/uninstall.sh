@@ -33,8 +33,11 @@ done
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MANIFEST="$REPO_ROOT/manifest/skills.yaml"
 SKILLS_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
+AGENT_SKILLS_DIR="${AGENT_SKILLS_DIR:-$HOME/.agents/skills}"
+CURSOR_SKILLS_DIR="${CURSOR_SKILLS_DIR:-$HOME/.cursor/skills}"
 CACHE_DIR="${CLAUDE_AGENT_CACHE:-$HOME/.agents/skills}"
 PROJECTS_DIR="${PROJECTS_DIR:-$HOME/Documents/projects}"
+SKILL_ROOTS=("$SKILLS_DIR" "$AGENT_SKILLS_DIR" "$CURSOR_SKILLS_DIR" "$CACHE_DIR")
 
 is_owned_skill_install() {
   local target="$1" source="$2"
@@ -87,27 +90,23 @@ raise SystemExit(0 if tree_digest(target) == tree_digest(source) else 1)
 PY
 }
 
-echo "uninstall: removing skill installs from $SKILLS_DIR"
+echo "uninstall: removing verified skill installs"
 if [[ -f "$MANIFEST" ]]; then
   while IFS= read -r name; do
     [[ -z "$name" ]] && continue
-    target="$SKILLS_DIR/$name"
     source="$REPO_ROOT/skills/$name"
-    if is_owned_skill_install "$target" "$source"; then
-      if [[ -L "$target" ]]; then
-        echo "  unlink $target"; rm "$target"
-      elif [[ -d "$target" ]]; then
-        echo "  rmdir  $target"; rm -rf "$target"
+    for skill_root in "${SKILL_ROOTS[@]}"; do
+      target="$skill_root/$name"
+      if is_owned_skill_install "$target" "$source"; then
+        if [[ -L "$target" ]]; then
+          echo "  unlink $target"; rm "$target"
+        elif [[ -d "$target" ]]; then
+          echo "  rmdir  $target"; rm -rf "$target"
+        fi
+      elif [[ -e "$target" || -L "$target" ]]; then
+        echo "  preserve unowned skill install: $target" >&2
       fi
-    elif [[ -e "$target" || -L "$target" ]]; then
-      echo "  preserve unowned skill install: $target" >&2
-    fi
-    cache="$CACHE_DIR/$name"
-    if is_owned_skill_install "$cache" "$source"; then
-      echo "  rmdir  $cache"; rm -rf "$cache"
-    elif [[ -e "$cache" || -L "$cache" ]]; then
-      echo "  preserve unowned skill cache: $cache" >&2
-    fi
+    done
   done < <(python3 -c "import yaml; print('\n'.join(s['name'] for s in yaml.safe_load(open('$MANIFEST'))['skills']))" 2>/dev/null)
 fi
 
