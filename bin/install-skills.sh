@@ -48,7 +48,9 @@ SHARED_SKILLS_DIR="${AGENT_SKILLS_DIR:-$HOME/.agents/skills}"
 CURSOR_SKILLS_DIR="${CURSOR_SKILLS_DIR:-$HOME/.cursor/skills}"
 SOURCE_CACHE_DIR="${CLAUDE_AGENT_CACHE:-$HOME/.cache/dotfiles-agent-skills}"
 
-mkdir -p "$SKILLS_DIR" "$SHARED_SKILLS_DIR" "$CURSOR_SKILLS_DIR" "$SOURCE_CACHE_DIR"
+if [[ $DRY_RUN -eq 0 ]]; then
+  mkdir -p "$SKILLS_DIR" "$SHARED_SKILLS_DIR" "$CURSOR_SKILLS_DIR" "$SOURCE_CACHE_DIR"
+fi
 
 # Parse manifest via Python (yaml is stdlib-adjacent; safer than awk on YAML).
 python3 - "$MANIFEST" "$SINGLE" "$DRY_RUN" "$SKILLS_DIR" "$SHARED_SKILLS_DIR" "$CURSOR_SKILLS_DIR" "$SOURCE_CACHE_DIR" "$REPO_ROOT" <<'PY'
