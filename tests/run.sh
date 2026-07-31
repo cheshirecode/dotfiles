@@ -429,6 +429,26 @@ PY
   fi
   rm -rf "$fake_home"
 
+  # --- #1: install-skills refuses an unowned divergent symlink ---
+  fake_home=$(mktemp -d)
+  local symlink_target
+  symlink_target="$fake_home/user-owned-skill"
+  mkdir -p "$symlink_target"
+  echo "user-edited content" > "$symlink_target/SKILL.md"
+  unowned_dst="$fake_home/.claude/skills/council"
+  mkdir -p "${unowned_dst%/*}"
+  ln -s "$symlink_target" "$unowned_dst"
+  set +e
+  HOME="$fake_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" ./bin/install-skills.sh council >/dev/null 2>&1
+  rc=$?
+  set -e
+  if [[ $rc -eq 3 ]] && [[ "$(readlink "$unowned_dst")" == "$symlink_target" ]]; then
+    ok "install-skills refuses unowned divergent symlink (exit=3)"
+  else
+    fail "install-skills replaced unowned divergent symlink (got exit=$rc)"
+  fi
+  rm -rf "$fake_home"
+
   # --- #1: install-skills accepts sentineled dst ---
   fake_home=$(mktemp -d)
   unowned_dst="$fake_home/.claude/skills/council"
