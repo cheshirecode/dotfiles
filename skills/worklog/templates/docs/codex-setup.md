@@ -26,7 +26,11 @@ cd $PROJECTS_DIR/_worklog
 "$WORKLOG_BIN/compact-kernels.sh"     # dump per-active-task resume kernels
 ```
 
-On **session start** (Codex): read `_worklog/.cache/compact-kernels.md` first if it exists and is <1 hour old — one pass through ~7 lines per active task orients you across everything in flight. Then re-read the specific `people/<ldap>/active/<slug>.md` you're resuming. The task file is authoritative; the kernel is a signpost.
+On **session start** (Codex), run the minimal preamble first. Its bounded
+roster uses fresh kernel JSON or a read-only raw Markdown fallback. Read
+`_worklog/.cache/compact-kernels.md` only when full detail is needed, then
+re-read the specific `people/<ldap>/active/<slug>.md` you're resuming. The task
+file is authoritative; the kernel is a signpost.
 
 ## Codex surface drift check
 
