@@ -309,10 +309,13 @@ Compact proactively, not reactively — around 60% context, not when the warning
 1. Run `/worklog sync` (or `"$WORKLOG_BIN/checkpoint.sh" <slug>`) so the file holds current state, not the conversation.
 2. Pass the worklog-aware instruction: `/compact $(cat docs/compact-instruction.md)` — it tells the model to anchor on slug + `next_action:` + last pushed SHA + mid-debug state, and to drop tool transcripts.
 
-After `/compact` (or any session resume): **first check `_worklog/.cache/compact-kernels.md`** with a mtime gate:
+After `/compact` (or any session resume), run the minimal preamble first. It
+emits a bounded roster from fresh kernel JSON or a read-only raw Markdown
+fallback. Only inspect `_worklog/.cache/compact-kernels.md` on demand for
+full detail, using this mtime gate:
 ```bash
 [ -f .cache/compact-kernels.md ] && \
-  [ $(( $(date +%s) - $(stat -f %m .cache/compact-kernels.md 2>/dev/null || stat -c %Y .cache/compact-kernels.md) )) -lt 3600 ]
+  [ $(( $(date +%s) - $(stat -c %Y .cache/compact-kernels.md 2>/dev/null || stat -f %m .cache/compact-kernels.md) )) -lt 3600 ]
 ```
 If the gate passes, read it once for all-active-tasks orientation (~7 lines per task). The file also carries a `# Stale after: <ISO>` header as a secondary cue. If stale or absent, skip and fall through to per-task reads. Then **re-read `people/<ldap>/active/<slug>.md` before your first action**, and state the slug + `next_action:` back to the user as a verification check. If the compact summary and the file disagree, the file wins.
 
