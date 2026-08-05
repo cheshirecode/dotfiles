@@ -47,15 +47,15 @@ git -C "$TMP" commit -qm "fixture"
 printf '\ndirty\n' >> "$TMP/people/tester/active/light-init.md"
 
 before_status="$(git -C "$TMP" status --porcelain)"
-before_kernel_mtime="$(stat -f %m "$TMP/.cache/compact-kernels.json" 2>/dev/null || stat -c %Y "$TMP/.cache/compact-kernels.json")"
-before_pull_mtime="$(stat -f %m "$TMP/.cache/preamble-pull-stamp" 2>/dev/null || stat -c %Y "$TMP/.cache/preamble-pull-stamp")"
+before_kernel_mtime="$(stat -c %Y "$TMP/.cache/compact-kernels.json" 2>/dev/null || stat -f %m "$TMP/.cache/compact-kernels.json")"
+before_pull_mtime="$(stat -c %Y "$TMP/.cache/preamble-pull-stamp" 2>/dev/null || stat -f %m "$TMP/.cache/preamble-pull-stamp")"
 
 WORKLOG_REPO="$TMP" WORKLOG_LDAP=tester \
   "$WORKLOG_BIN/preamble.sh" --minimal >/dev/null
 
 after_status="$(git -C "$TMP" status --porcelain)"
-after_kernel_mtime="$(stat -f %m "$TMP/.cache/compact-kernels.json" 2>/dev/null || stat -c %Y "$TMP/.cache/compact-kernels.json")"
-after_pull_mtime="$(stat -f %m "$TMP/.cache/preamble-pull-stamp" 2>/dev/null || stat -c %Y "$TMP/.cache/preamble-pull-stamp")"
+after_kernel_mtime="$(stat -c %Y "$TMP/.cache/compact-kernels.json" 2>/dev/null || stat -f %m "$TMP/.cache/compact-kernels.json")"
+after_pull_mtime="$(stat -c %Y "$TMP/.cache/preamble-pull-stamp" 2>/dev/null || stat -f %m "$TMP/.cache/preamble-pull-stamp")"
 
 [[ "$after_status" == "$before_status" ]]
 [[ "$after_kernel_mtime" == "$before_kernel_mtime" ]]
