@@ -82,9 +82,7 @@ Skip if: only one PR open, body is short, no recent worklog activity. Overhead n
 
 ## Pairings
 
-- `budget-mode` — apply during the worklog compress step. Terse prose, code untouched.
 - `karpathy-guidelines` — apply during the PR title/body audit step. "Don't refactor what isn't broken" — most PRs need nothing.
-- `systematic-debugging` — apply when CI red is per-PR (not systemic) to actually root-cause each failure.
 - For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
 
 ## Examples

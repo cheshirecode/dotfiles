@@ -91,7 +91,6 @@ STATUS_COUNT="$(printf '%s' "$STATUSES" | grep -c .)" || true
 [[ "$SLUG_COUNT" -ne "$STATUS_COUNT" ]] && exit 0
 [[ -z "$STATUSES" ]] && exit 0
 
-DRIFT=0
 paste <(printf '%s\n' "$SLUGS") <(printf '%s\n' "$STATUSES") | \
 while IFS=$'\t' read -r slug trailer_status; do
   [[ -z "$slug" || -z "$trailer_status" ]] && continue

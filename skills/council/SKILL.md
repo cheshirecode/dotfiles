@@ -81,7 +81,7 @@ The full ballot per item is one of:
 
 Before tallying, validate every ballot:
 
-- Save each returned ballot verbatim and run `python3 bin/validate-ballot.py --items <N> --unresolved <comma-separated item numbers> <ballot-file>` from this skill directory. Treat a non-zero exit as malformed and retry once; do not tally an unvalidated ballot.
+- Save each returned ballot verbatim and run `python3 <skill-dir>/bin/validate-ballot.py --items <N> --unresolved <comma-separated item numbers> <ballot-file>` from this skill directory. Treat a non-zero exit as malformed and retry once; do not tally an unvalidated ballot.
 - Invalid criterion name, missing item, or malformed vote -> retry that voter once.
 - `APPROVE` on an `UNRESOLVED MATERIAL` candidate is malformed -> retry that voter once.
 - Still invalid after retry -> mark that item ballot `INVALID`, exclude it from support/reject counts, keep the full odd `M_returned` denominator, and mark the item `UNVERIFIED` if fewer than 3 valid item ballots remain.
@@ -215,7 +215,8 @@ Voter <n>:
 4. **Run discussion** (Stage 3). Use the Stage 3 template, assign every candidate a counterexample survival status, and record additional `D-iN` candidates only when tied to a cross-angle gap.
 5. **Run candidate collation** (Stage 4). Use the Stage 4 template. Drop collator-invented, untagged, or evidence-incomplete items before voting.
 6. **Run voting** (Stage 5). Use at least 3 odd-count independent voters. Use the Stage 5 template. Retry malformed voters, including forbidden approvals over unresolved material counterexamples, once.
-7. **Tally + conclude** (Stage 6). Validate ballots per item, resolve QUALIFY conditions, enforce majority-plus-one support, apply hard-reject vetoes, and produce the final report.
+6a. **Save ballots to files.** For each returned voter, write its ballot output to a temp file (e.g. `/tmp/council-ballot-<voter_n>.txt`).
+7. **Tally + conclude** (Stage 6). Validate each ballot file with `python3 <skill-dir>/bin/validate-ballot.py`, resolve QUALIFY conditions, enforce majority-plus-one support, apply hard-reject vetoes, and produce the final report.
 
 ## Run-until-completion behavior
 
