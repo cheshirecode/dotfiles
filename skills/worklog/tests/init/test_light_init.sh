@@ -82,3 +82,10 @@ after_pull_mtime="$(stat -c %Y "$TMP/.cache/preamble-pull-stamp" 2>/dev/null || 
 [[ "$after_pull_mtime" == "$before_pull_mtime" ]]
 
 echo "ok: --light accepted and behaves identically to --minimal"
+
+# Adversarial: unknown flags must be rejected.
+if "$WORKLOG_BIN/preamble.sh" --bogus >/dev/null 2>&1; then
+  echo "FAIL: --bogus should have been rejected"
+  exit 1
+fi
+echo "ok: --bogus rejected (exit != 0)"
