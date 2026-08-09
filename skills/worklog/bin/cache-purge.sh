@@ -59,7 +59,7 @@ if [[ -z "$HITS" ]]; then
 fi
 
 echo "Files ever under .cache/ in history:"
-printf '  %s\n' $HITS
+printf '%s\n' "$HITS" | sed 's/^/  /'
 echo ""
 echo "Commits that touch .cache/: $COMMITS"
 echo ""
