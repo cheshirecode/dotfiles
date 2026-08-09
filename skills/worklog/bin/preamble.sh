@@ -22,9 +22,10 @@ set -euo pipefail
 
 mode="${1:---full}"
 case "$mode" in
-  --minimal|--full) ;;
-  *) echo "usage: $0 [--minimal|--full]" >&2; exit 2 ;;
+  --minimal|--light|--full) ;;
+  *) echo "usage: $0 [--minimal|--light|--full]" >&2; exit 2 ;;
 esac
+[[ "$mode" == "--light" ]] && mode="--minimal"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_lib.sh
