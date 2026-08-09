@@ -22,9 +22,10 @@ set -euo pipefail
 
 mode="${1:---full}"
 case "$mode" in
-  --minimal|--full) ;;
-  *) echo "usage: $0 [--minimal|--full]" >&2; exit 2 ;;
+  --minimal|--light|--full) ;;
+  *) echo "usage: $0 [--minimal|--light|--full]" >&2; exit 2 ;;
 esac
+[[ "$mode" == "--light" ]] && mode="--minimal"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_lib.sh
@@ -86,6 +87,10 @@ if [[ "$mode" == "--full" ]]; then
 else
   printf 'PULL=skip (minimal)\n'
 fi
+
+# Re-compute counts after pull so roster-health comparison uses current state.
+active_total="$(find people -path '*/active/*.md' -type f 2>/dev/null | wc -l | tr -d '[:space:]')"
+active_namespace="$(find "people/$LDAP/active" -maxdepth 1 -name '*.md' -type f 2>/dev/null | wc -l | tr -d '[:space:]')"
 
 # Roster (fresh kernels JSON or a read-only raw Markdown fallback). The health
 # line is intentionally separate so fresh agents can tell degraded cache state

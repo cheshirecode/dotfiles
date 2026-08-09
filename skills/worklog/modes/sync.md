@@ -4,7 +4,7 @@ One command handles every save path. Pick the first applicable in order; stop th
 
 ## Non-interactive guard
 
-If `$CLAUDE_HOOK` is set or stdin is not a TTY, skip conversation-WIP detection (it requires judgment). Fall through to autosave only.
+If `$CLAUDE_CODE_SESSION_ID`, `$CODEX_SESSION_ID`, `$CURSOR_SESSION_ID`, or `$OPENAI_SESSION_ID` is set — or stdin is not a TTY — skip conversation-WIP detection (it requires judgment). Fall through to autosave only.
 
 ## Precedence
 
