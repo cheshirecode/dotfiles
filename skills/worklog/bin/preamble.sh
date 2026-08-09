@@ -88,6 +88,10 @@ else
   printf 'PULL=skip (minimal)\n'
 fi
 
+# Re-compute counts after pull so roster-health comparison uses current state.
+active_total="$(find people -path '*/active/*.md' -type f 2>/dev/null | wc -l | tr -d '[:space:]')"
+active_namespace="$(find "people/$LDAP/active" -maxdepth 1 -name '*.md' -type f 2>/dev/null | wc -l | tr -d '[:space:]')"
+
 # Roster (fresh kernels JSON or a read-only raw Markdown fallback). The health
 # line is intentionally separate so fresh agents can tell degraded cache state
 # from "no work".
