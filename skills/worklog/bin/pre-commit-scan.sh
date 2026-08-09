@@ -61,7 +61,7 @@ HITS="$(printf '%s\n' "$ADDED" | perl -ne '
 [[ -z "$HITS" ]] && exit 0
 
 echo "pre-commit-scan: typed-prefix secret patterns found in staged additions:" >&2
-printf '  %s\n' $HITS >&2
+printf '%s\n' "$HITS" | sed 's/^/  /' >&2
 echo "" >&2
 echo "  If false positive, redact / move out of the staged content. Bypass:" >&2
 echo "    WORKLOG_NO_SCAN=1 git commit ...    # one-shot" >&2

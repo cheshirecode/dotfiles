@@ -365,7 +365,7 @@ cmd_reap() {
   local f
   for f in people/*/active/*.md; do
     [[ -f "$f" ]] || continue
-    local INFO SID HB
+    local INFO SID
     INFO="$(python3 "$SCRIPT_DIR/_claim.py" read "$f" 2>/dev/null)" || continue
     SID="$(echo "$INFO" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("session_id") or "")')"
     [[ -z "$SID" ]] && continue

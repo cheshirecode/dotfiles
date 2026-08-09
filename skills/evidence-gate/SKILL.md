@@ -45,7 +45,7 @@ state, non-empty diff, and merged target before recording it.
 
 ## Gate completion
 
-Run `check --gate <gate-file>`. Exit `1` means criteria remain uncovered; do not
+Run `python3 <skill-dir>/scripts/evidence_gate.py check --gate <gate-file>`. Exit `1` means criteria remain uncovered; do not
 claim completion. Exit `0` returns a `verification` value containing the
 gate-file path and SHA-256 digest. Pass that value to the parent workflow's
 completion record.
