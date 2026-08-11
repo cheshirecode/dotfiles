@@ -146,6 +146,8 @@ def load_tasks(repo: Path) -> list[Task]:
 def read_input(path: str | None, token: str | None) -> tuple[str, dict[str, Any] | None]:
     if path:
         raw = sys.stdin.read() if path == "-" else Path(path).read_text(encoding="utf-8")
+        if not raw.strip():
+            return "mock", None
         return "mock", json.loads(raw)
     if token:
         return "env", None
