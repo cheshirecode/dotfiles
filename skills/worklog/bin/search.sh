@@ -203,8 +203,13 @@ else
   # ripgrep's default regex syntax includes common ERE operators such as `|`.
   SEARCH_CMD=(grep -EnH)
 fi
+RG_ERR=$(mktemp) || true
 RG_OUT=$(printf '%s\n' "$CANDIDATE_FILES" | \
-  xargs "${SEARCH_CMD[@]}" -e "$PATTERN" 2>/dev/null || true)
+  xargs "${SEARCH_CMD[@]}" -e "$PATTERN" 2>"$RG_ERR" || true)
+if [[ -s "$RG_ERR" ]]; then
+  cat "$RG_ERR" >&2
+fi
+rm -f "$RG_ERR"
 
 if [ -z "$RG_OUT" ]; then
   echo "(no hits for /$PATTERN/)" >&2
