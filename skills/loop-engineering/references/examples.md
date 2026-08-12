@@ -103,13 +103,18 @@ OUTPUT (agent decomposes, creates project, cycles through tasks)
 [sequential-thinking: 3 tasks identified — lint-all-skills, fix-sh-preamble, fix-py-errors]
 [budget: 999 (safety net; real limit is queue emptiness)]
 [project new: shellcheck-audit with 3 children]
-[cycle 1: claim lint-all-skills → delegate → verify → archive → advance]
+[cycle 1: claim lint-all-skills → context --for=compact → delegate → archive → advance]
+[         advance evidence: "lint-all-skills: archived"]
 [cycle 2: claim fix-sh-preamble → in-band → archive → advance]
+[         advance evidence: "fix-sh-preamble: archived"]
 [cycle 3: claim fix-py-errors → delegate → archive → advance]
+[         advance evidence: "fix-py-errors: archived"]
 [project next exits 1 → finish complete]
 ```
 
-No manual JSON creation. No separate setup turn.
+No manual JSON creation. No separate setup turn. Loop state is ~1KB even at
+100+ cycles because evidence is one line per task — all detail lives in
+worklog commits.
 
 Same prompt in natural language:
 

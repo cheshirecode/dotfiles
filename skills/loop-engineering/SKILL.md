@@ -85,6 +85,23 @@ Use when a high-level goal decomposes into 3+ independent tasks managed across
 sub-agents. The agent acts as project manager: decompose, dispatch, verify,
 track.
 
+**Token efficiency is critical.** This mode is designed for sessions that run
+days or weeks. Every token the orchestrator spends on per-task detail is a
+token it cannot spend on dispatch. Follow these rules:
+
+- **Evidence in loop_state is one line per cycle.** Just
+  `<slug>: claimed → archived`. Per-task evidence lives in worklog task files
+  (committed by the sub-agent), not in the orchestrator's memory.
+- **Never re-read sub-agent output.** Check that the sub-agent completed
+  (`archive.sh` pushed successfully) and move on. The worklog commit is the
+  evidence, not the orchestrator's recollection.
+- **Sub-agents own verification.** The sub-agent runs verification, writes
+  results to the task file, checkpoints, and returns. The orchestrator only
+  confirms the task is archived.
+- **Compaction-friendly.** The orchestrator's history is a repeating pattern:
+  `claim X → archive X → advance`. No diffs, no results, no analysis. This
+  compresses cleanly.
+
 ### Natural language invocation
 
 To invoke this mode, give the agent this prompt:
@@ -94,8 +111,6 @@ To invoke this mode, give the agent this prompt:
 The agent resolves the rest from the documentation below. No flags, no syntax,
 no setup instructions needed. The loop runs until the project queue is empty
 (`project next` exits 1), not until a fixed turn count.
-
-### 1. Decompose & budget
 
 ### 1. Decompose & budget
 
@@ -125,6 +140,10 @@ emptiness, not turn count).
 
 ### 3. Each cycle
 
+Token rule: **one line of evidence per cycle.** The orchestrator's advance
+call is just `<slug>: archived`. No diff, no findings, no analysis — that
+lives in the worklog task file.
+
 ```bash
 # Pull next eligible task from queue
 "$WORKLOG_BIN/project.sh" next <program-slug>
@@ -138,21 +157,26 @@ emptiness, not turn count).
 
 Then either:
 - **Delegate** to a sub-agent via `task` tool — pass the compact context pack
-  directly; do not pass the parent transcript.
+  directly; do not pass the parent transcript. Instruct the sub-agent to
+  commit its own results to the worklog task file and call `archive.sh`.
 - **Execute in-band** — do the work yourself if it is small and well-scoped.
+  Write evidence to the task file, checkpoint, and archive.
 
-Verify the result, then:
+Either way, the sub-agent or in-band execution must call `archive.sh` to
+release the claim and push evidence to the worklog. The orchestrator then
+only confirms the task is no longer in the active directory:
 
 ```bash
-# Archive (releases the claim, marks complete)
-"$WORKLOG_BIN/archive.sh" <child-slug> --reason=shipped
-
-# Record cycle in program loop
+# Record cycle — one line, no details
 python3 <skill-dir>/scripts/loop_state.py advance \
   --state <state-file> \
-  --evidence "<slug>: claimed → archived. <diff stat or result>." \
+  --evidence "<slug>: archived" \
   --next-action "Claim next project task"
 ```
+
+That's it. The diff, the findings, the verification — all in the worklog
+commit, not in the orchestrator's loop state. This keeps the orchestrator's
+context footprint at ~1KB even after 100+ cycles.
 
 ### 4. Terminal
 
