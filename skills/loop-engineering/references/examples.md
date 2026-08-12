@@ -109,7 +109,7 @@ OUTPUT (agent decomposes, creates project, cycles through tasks)
 [         advance evidence: "fix-sh-preamble: archived"]
 [cycle 3: claim fix-py-errors → delegate → archive → advance]
 [         advance evidence: "fix-py-errors: archived"]
-[project next exits 1 → finish complete]
+[project next exits 1 → finish complete with verification]
 ```
 
 No manual JSON creation. No separate setup turn. Loop state is ~1KB even at
