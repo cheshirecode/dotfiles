@@ -91,7 +91,25 @@ specific intervention, then resume a successor and replay the blocked check.
 Do not claim that a timer or stop hook exists merely because another host
 supports one.
 
-## Example-led review contract
+## 4. Multi-task orchestrator program
+
+INPUT
+
+> Audit all skills for shellcheck regressions. Budget 5 turns.
+
+OUTPUT (agent decomposes, creates project, cycles through tasks)
+
+```text
+[sequential-thinking: 3 tasks identified — lint-all-skills, fix-sh-preamble, fix-py-errors]
+[budget: 5 = 3 tasks + 2 buffer]
+[project new: shellcheck-audit with 3 children]
+[cycle 1: claim lint-all-skills → delegate → verify → archive → advance]
+[cycle 2: claim fix-sh-preamble → in-band → archive → advance]
+[cycle 3: claim fix-py-errors → delegate → archive → advance]
+[cycle 4: verify all projects green → finish complete]
+```
+
+No manual JSON creation. No separate setup turn.
 
 ```text
 shot_count: few

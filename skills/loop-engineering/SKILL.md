@@ -78,3 +78,72 @@ parent transcript or imply that `spawn` enriches the pack.
 
 For brittle state classification or handoff sequencing, read
 [references/examples.md](references/examples.md). Otherwise stay zero-shot.
+
+## Orchestrator mode (multi-task program)
+
+Use when a high-level goal decomposes into 3+ independent tasks managed across
+sub-agents. The agent acts as project manager: decompose, dispatch, verify,
+track.
+
+### 1. Decompose & budget
+
+Run `$sequential-thinking` first to decompose the goal into discrete tasks and
+estimate the number of cycles. Tasks are independent unless `depends_on` is set.
+
+If decomposition uncertainty is high (ambiguous scope, unclear dependencies,
+novel domain), run `$council` to debate the task breakdown before writing.
+
+### 2. Create project
+
+Derive the project slug from the program name, then auto-create child tasks:
+
+```bash
+echo '<tasks-json>' | "$WORKLOG_BIN/project.sh" new <slug> \
+  --goal="<goal>" --objective="<objective>" --repos=<repo>
+```
+
+The tasks-json is the sequential-thinking output mapped to `{slug, kind, depends_on}`.
+Each task is one cycle. Budget = task count + 2 (setup + teardown buffer).
+
+### 3. Each cycle
+
+```bash
+# Pull next eligible task from queue
+"$WORKLOG_BIN/project.sh" next <program-slug>
+
+# Claim (advisory mutex — releases after stale_after if session dies)
+"$WORKLOG_BIN/project.sh" claim <child-slug>
+
+# Get compact context for dispatch
+"$WORKLOG_BIN/context.sh" <child-slug> --for=compact
+```
+
+Then either:
+- **Delegate** to a sub-agent via `task` tool — pass the compact context pack
+  directly; do not pass the parent transcript.
+- **Execute in-band** — do the work yourself if it is small and well-scoped.
+
+Verify the result, then:
+
+```bash
+# Archive (releases the claim, marks complete)
+"$WORKLOG_BIN/archive.sh" <child-slug> --reason=shipped
+
+# Record cycle in program loop
+python3 <skill-dir>/scripts/loop_state.py advance \
+  --state <state-file> \
+  --evidence "<slug>: claimed → archived. <diff stat or result>." \
+  --next-action "Claim next project task"
+```
+
+### 4. Terminal
+
+When budget is consumed or the project queue is empty (`project next` exits 1):
+
+```bash
+python3 <skill-dir>/scripts/loop_state.py finish \
+  --state <state-file> --status complete
+```
+
+If the queue still has tasks but budget is exhausted, finish with
+`budget_exhausted` and the next eligible task slug.
