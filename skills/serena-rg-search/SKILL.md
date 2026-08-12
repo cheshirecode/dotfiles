@@ -3,7 +3,7 @@ name: serena-rg-search
 description: Pick the right tool for multi-faceted code search across symbols, text, JSON, git history, and logs. Use when finding definitions, references, files, strings, structured config, when-it-changed, or log events; or when planning a search workflow before reading code.
 ---
 
-# Serena Rg Search
+# serena-rg-search
 
 Use this skill to pick the fastest search approach for a coding task. Most real questions touch more than one facet — combine tools deliberately instead of reflexively reaching for `rg`.
 

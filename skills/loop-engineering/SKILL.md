@@ -3,7 +3,7 @@ name: loop-engineering
 description: Design and run bounded, evidence-driven loops for repeated, resumable, delegated, or scheduled engineering and research work. Use when an agent must iterate toward a verifiable condition, recover across context boundaries, coordinate subagents, or decide whether work belongs in a manual loop, worklog-backed handoff, or host-native scheduler. Skip trivial one-shot tasks.
 ---
 
-# Loop Engineering
+# loop-engineering
 
 Use deterministic state transitions around agent judgment. Repeated prompting is
 not a loop design.
