@@ -101,12 +101,12 @@ OUTPUT (agent decomposes, creates project, cycles through tasks)
 
 ```text
 [sequential-thinking: 3 tasks identified — lint-all-skills, fix-sh-preamble, fix-py-errors]
-[budget: 5 = 3 tasks + 2 buffer]
+[budget: 999 (safety net; real limit is queue emptiness)]
 [project new: shellcheck-audit with 3 children]
 [cycle 1: claim lint-all-skills → delegate → verify → archive → advance]
 [cycle 2: claim fix-sh-preamble → in-band → archive → advance]
 [cycle 3: claim fix-py-errors → delegate → archive → advance]
-[cycle 4: verify all projects green → finish complete]
+[project next exits 1 → finish complete]
 ```
 
 No manual JSON creation. No separate setup turn.
@@ -114,7 +114,7 @@ No manual JSON creation. No separate setup turn.
 Same prompt in natural language:
 
 > Use loop-engineering orchestrator mode. Goal: audit skills for shellcheck
-> regressions. Budget 5 turns.
+> regressions.
 
 ```text
 shot_count: few
