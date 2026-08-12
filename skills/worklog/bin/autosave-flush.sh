@@ -13,6 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(resolve_worklog_repo)" || exit 1
 cd "$REPO_ROOT"
 
+# shellcheck disable=SC1083  # @{u} is valid git rev-parse syntax
 upstream="$(git rev-parse --abbrev-ref @{u} 2>/dev/null || true)"
 if [[ -z "$upstream" ]]; then
   exit 0
