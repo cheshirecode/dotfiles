@@ -181,7 +181,6 @@ next_action: "test"
 T6 task.
 EOF
 git add -A && git commit -q -m "seed dump6" --no-verify
-BODY_BEFORE=$(sha1sum "people/$LDAP/active/dump6.md")
 "$WORKLOG_BIN/checkpoint.sh" dump6 --status=in-review >/dev/null 2>&1 || true
 [[ -f "people/$LDAP/transcripts/dump6.md" ]] \
   || { echo "FAIL T6: status-flip did not fire transcript dump"; exit 1; }

@@ -151,11 +151,9 @@ echo "  ✓ no kernel generation failures"
 
 echo ""
 echo "=== Run 2 — idempotent rewrite ==="
-PREV_HASH=$(sha256sum "$OUT" | awk '{print $1}')
 sleep 1  # ensure timestamp changes if regenerated
 "$WORKLOG_BIN/compact-kernels.sh"
-NEW_HASH=$(sha256sum "$OUT" | awk '{print $1}')
-# Hashes will differ because of timestamp lines, but section count must match.
+# Timestamp lines change every run, but section count must match.
 NEW_SECTION_COUNT=$(grep -c '^### ' "$OUT")
 [[ "$NEW_SECTION_COUNT" -eq 3 ]] \
   || { echo "FAIL: idempotent run produced $NEW_SECTION_COUNT sections (expected 3)"; exit 1; }
