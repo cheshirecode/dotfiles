@@ -130,17 +130,17 @@ fi
 
 # 1. Rewrite references in other files (sed in-place; word-boundary match).
 if [[ "$COUNT" -gt 0 ]]; then
-  for f in "$ALL_HITS"; do
+  while IFS= read -r f; do
     # Use perl for portable word-boundary in-place edit (sed -i syntax differs
     # between BSD/Linux; perl behaves identically everywhere).
     perl -i -pe "s/\\b${OLD_SLUG}\\b/${NEW_SLUG}/g" "$f"
-  done
+  done <<< "$ALL_HITS"
 fi
 
 # 2. Rename the task file via checkpoint.sh (handles the Worklog-Previous-Slug
 #    trailer). Note: checkpoint only stages NEW_FILE; we stage the rewritten
 #    references too so they all land in one commit.
-git add "$ALL_HITS" 2>/dev/null || true
+printf '%s\n' "$ALL_HITS" | xargs git add 2>/dev/null || true
   "$SCRIPT_DIR/checkpoint.sh" "$NEW_SLUG" --rename="$OLD_SLUG" --next="Cross-task slug rename: $OLD_SLUG → $NEW_SLUG, $COUNT references rewritten."
 
 echo ""
