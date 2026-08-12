@@ -112,6 +112,13 @@ OUTPUT (agent decomposes, creates project, cycles through tasks)
 [project next exits 1 → finish complete with verification]
 ```
 
+Mid-run escalation is resumable, not terminal:
+
+```text
+[cycle 2: independent returns disagree → council foreground → verified verdict]
+[         replay check passes → archive fix-py-errors → advance once]
+```
+
 No manual JSON creation. No separate setup turn. Loop state is ~1KB even at
 100+ cycles because evidence is one line per task — all detail lives in
 worklog commits.

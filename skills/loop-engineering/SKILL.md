@@ -130,6 +130,23 @@ finishes when the queue is empty, not when budget is exhausted.
 If decomposition uncertainty is high (ambiguous scope, unclear dependencies,
 novel domain), run `$council` to debate the task breakdown before writing.
 
+### Mid-run council escalation
+
+An authorized orchestrator may invoke `$council` without a new user turn when a
+running program crosses a material uncertainty trigger: independent task
+returns disagree, a material counterexample appears, bounded retries fail, or
+the task graph or scope becomes ambiguous. Pause only the affected mutation,
+pass the council the original goal plus compact context and evidence, and do
+not pass the full parent transcript.
+
+Council is an advisory subloop, not success evidence. A verified council result
+must be written to Worklog, followed by the discriminating replay check, and
+then the normal claim → archive → advance sequence may resume. `UNVERIFIED`
+results become `blocked` or `needs_human` with the exact replay check; never
+archive or finish `complete` from a council verdict alone. Do not call
+`advance` twice for one cycle; include escalation in that cycle unless it was
+explicitly budgeted separately.
+
 ### 2. Create project
 
 Derive the project slug from the program name, then auto-create child tasks:

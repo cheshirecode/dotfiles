@@ -96,6 +96,14 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("discards any", orchestrator)
         self.assertIn("prose", orchestrator)
 
+    def test_orchestrator_can_escalate_council_mid_run_without_archiving(self) -> None:
+        skill_text = SKILL.read_text()
+        orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
+        self.assertIn("without a new user turn", orchestrator)
+        self.assertIn("material uncertainty trigger", orchestrator)
+        self.assertIn("replay check", orchestrator)
+        self.assertIn("never\narchive or finish `complete`", orchestrator)
+
     def test_init_refuses_to_overwrite_existing_state(self) -> None:
         self.initialize()
         result = self.run_cli(
