@@ -111,6 +111,11 @@ OUTPUT (agent decomposes, creates project, cycles through tasks)
 
 No manual JSON creation. No separate setup turn.
 
+Same prompt in natural language:
+
+> Use loop-engineering orchestrator mode. Goal: audit skills for shellcheck
+> regressions. Budget 5 turns.
+
 ```text
 shot_count: few
 format: INPUT/OUTPUT
