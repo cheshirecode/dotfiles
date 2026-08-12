@@ -1,6 +1,6 @@
 ---
 name: worklog
-description: One skill for the shared `_worklog` repo. Twelve modes — `init`, `sync`, `status`, `context`, `plan`, `spawn`, `export`, `import`, `lint`, `project`, `scrape-slack`, `review`. Invoke as `/worklog MODE [args]`. Bare `/worklog` or `/worklog help` prints the subcommand menu and stops. Unknown arg → show menu.
+description: Manage the shared `_worklog` journal across machines and sessions. Twelve modes — `init`, `sync`, `status`, `context`, `plan`, `spawn`, `export`, `import`, `lint`, `project`, `scrape-slack`, `review`. Invoke as `/worklog MODE [args]`. Bare `/worklog` or `/worklog help` prints the subcommand menu and stops. Unknown arg → show menu.
 ---
 
 # worklog
