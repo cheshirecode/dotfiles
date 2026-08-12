@@ -86,6 +86,16 @@ class LoopStateTest(unittest.TestCase):
         )[1].split("If the queue still has tasks", 1)[0]
         self.assertIn('--verification "project next exited 1"', terminal_example)
 
+    def test_orchestrator_gates_optional_decomposition_and_delegate_output(self) -> None:
+        skill_text = SKILL.read_text()
+        orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
+        self.assertIn("regular loop", orchestrator)
+        self.assertIn("one or two tasks", orchestrator)
+        self.assertIn("only when the task graph is not already explicit", orchestrator)
+        self.assertIn("archived <child-slug> <worklog-commit>", orchestrator)
+        self.assertIn("discards any", orchestrator)
+        self.assertIn("prose", orchestrator)
+
     def test_init_refuses_to_overwrite_existing_state(self) -> None:
         self.initialize()
         result = self.run_cli(

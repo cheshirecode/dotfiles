@@ -101,6 +101,9 @@ token it cannot spend on dispatch. Follow these rules:
 - **Compaction-friendly.** The orchestrator's history is a repeating pattern:
   `claim X → archive X → advance`. No diffs, no results, no analysis. This
   compresses cleanly.
+- **Optional invocations are gated.** Invoke an optional skill only when its
+  trigger is met; do not preload or invoke it as ceremony. Use the regular loop
+  for one or two tasks instead of creating a project.
 
 ### Natural language invocation
 
@@ -114,8 +117,10 @@ no setup instructions needed. The loop runs until the project queue is empty
 
 ### 1. Decompose & budget
 
-Run `$sequential-thinking` first to decompose the goal into discrete tasks.
-Tasks are independent unless `depends_on` is set.
+Run `$sequential-thinking` only when the task graph is not already explicit or
+its dependencies are uncertain. If the user or Worklog already supplies a
+clear graph, construct the minimal tasks-json directly. Tasks are independent
+unless `depends_on` is set.
 
 Budget is a **safety net**, not a planning constraint. Set it to 999
 (effectively unlimited). The real stopping condition is the project queue
@@ -158,7 +163,11 @@ lives in the worklog task file.
 Then either:
 - **Delegate** to a sub-agent via `task` tool — pass the compact context pack
   directly; do not pass the parent transcript. Instruct the sub-agent to
-  commit its own results to the worklog task file and call `archive.sh`.
+  commit its evidence, uncertainty, and proposed next action to the worklog
+  task file and call `archive.sh`. After that, return exactly one status line:
+  `archived <child-slug> <worklog-commit>` (or `blocked|needs_human|failed
+  <child-slug> <reason>`); the orchestrator parses that line and discards any
+  prose.
 - **Execute in-band** — do the work yourself if it is small and well-scoped.
   Write evidence to the task file, checkpoint, and archive.
 
