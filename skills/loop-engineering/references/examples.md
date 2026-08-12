@@ -95,7 +95,7 @@ supports one.
 
 INPUT
 
-> Audit all skills for shellcheck regressions. Budget 5 turns.
+> Audit all skills for shellcheck regressions.
 
 OUTPUT (agent decomposes, creates project, cycles through tasks)
 
