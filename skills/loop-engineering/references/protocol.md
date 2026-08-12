@@ -95,6 +95,24 @@ project file. Label that fallback and do not claim a worklog checkpoint.
 - Require evidence, uncertainty, and one proposed next action.
 - Reconcile returns into the parent state before any write.
 
+## Dynamic council escalation
+
+- A running orchestrator may invoke the installed council skill without a new
+  user turn when the initialized approval boundary permits multi-agent
+  research and a material trigger appears: disagreement, a material
+  counterexample, bounded retry failure, or an ambiguous scope/dependency.
+- Pause only the affected mutation. Keep the loop state `running`, preserve
+  claims and unrelated task progress, and pass the original goal, compact task
+  context, trigger, evidence, constraints, and requested decision. Never pass
+  the full parent transcript.
+- A council result is advisory. On `verified`, persist its artifact, replay the
+  discriminating check, and only then resume normal task progression. On
+  `UNVERIFIED`, use `blocked` or `needs_human` with the exact replay check.
+  Council cannot archive a task or prove loop completion by itself.
+- Count escalation as part of the current declared cycle unless the state
+  budget explicitly declares it as a separate unit; never advance twice for
+  one cycle.
+
 ## Terminal outcomes
 
 - `complete`: external evidence proves the goal.
