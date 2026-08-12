@@ -184,7 +184,8 @@ When budget is consumed or the project queue is empty (`project next` exits 1):
 
 ```bash
 python3 <skill-dir>/scripts/loop_state.py finish \
-  --state <state-file> --status complete
+  --state <state-file> --status complete \
+  --evidence "project queue empty: project next exited 1"
 ```
 
 If the queue still has tasks but budget is exhausted, finish with
