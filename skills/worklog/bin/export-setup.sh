@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2088
 # Export the worklog setup (repo + local skills + agent settings advisory)
 # to a sanitized, self-contained LLM setup prompt at
 # /tmp/worklog-setup-<ts>.txt.
@@ -15,9 +16,6 @@
 set -euo pipefail
 
 # Note: emit_file PATH-header strings later in this file use literal `~/...`.
-# That's intentional (the artifact's display paths are for the receiver to
-# expand under their own $HOME). Run shellcheck with --severity=error to
-# skip the SC2088 warnings on those lines.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_lib.sh
