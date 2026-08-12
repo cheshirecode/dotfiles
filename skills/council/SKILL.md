@@ -1,6 +1,6 @@
 ---
 name: council
-description: "Run multi-angle, audited research with independent voting. Use when the user invokes `/council`, says \"run a council on X\", \"get multiple opinions on Y\", or asks for an audited research pass. Runs until completion; auto-selects foreground vs background dispatch by task scope."
+description: "Run multi-angle, audited research with independent voting. Use when the user invokes `/council`, says \"run a council on X\", \"get multiple opinions on Y\", asks for an audited research pass, or an authorized orchestrator escalates a live loop. Runs until completion; auto-selects foreground vs background dispatch by task scope."
 ---
 
 # council
@@ -10,6 +10,9 @@ description: "Run multi-angle, audited research with independent voting. Use whe
 - "Run a council on X" / "get multiple opinions on Y" / `/council <topic>`
 - Decisions or research tasks where **single-agent blind-spot risk** is real (architecture choices, library surveys, lessons-from-the-field, vendor comparisons, design critiques).
 - Tasks deep enough that **5+ minutes of research per angle** is justified.
+- An authorized parent orchestrator may invoke council mid-run when its
+  material-uncertainty trigger fires; this continues the original scope and is
+  not a new user request.
 
 Skip if: the question has a clear single right answer, you already know the trade-offs, or the scope is one-shot (just ask one agent).
 
