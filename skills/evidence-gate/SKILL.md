@@ -3,7 +3,7 @@ name: evidence-gate
 description: Gate completion claims by mapping every observable goal or acceptance criterion to typed command, artifact, Git, GitHub, or URL evidence. Use before marking a multi-clause task, agent loop, deployment, PR, or verification workflow complete, especially when tests passing does not prove delivery, merge, or user-visible success.
 ---
 
-# Evidence Gate
+# evidence-gate
 
 Require evidence coverage, not a persuasive completion summary. The script
 checks that every declared criterion has at least one typed evidence record; the
