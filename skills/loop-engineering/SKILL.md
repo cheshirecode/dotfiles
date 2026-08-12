@@ -1,6 +1,6 @@
 ---
 name: loop-engineering
-description: Design and run bounded, evidence-driven loops for repeated, resumable, delegated, or scheduled engineering and research work. Use when an agent must iterate toward a verifiable condition, recover across context boundaries, coordinate subagents, or decide whether work belongs in a manual loop, worklog-backed handoff, or host-native scheduler. Skip trivial one-shot tasks.
+description: Design and run bounded, evidence-driven loops for repeated, resumable, delegated, or scheduled engineering and research work. Use when an agent must iterate toward a verifiable condition, recover across context boundaries, coordinate subagents, or decide whether work belongs in a manual loop, worklog-backed handoff, or host-native scheduler. Skip trivial one-shot tasks. Orchestrator mode: use for multi-task programs with sub-agent dispatch.
 ---
 
 # loop-engineering
@@ -84,6 +84,15 @@ For brittle state classification or handoff sequencing, read
 Use when a high-level goal decomposes into 3+ independent tasks managed across
 sub-agents. The agent acts as project manager: decompose, dispatch, verify,
 track.
+
+### Natural language invocation
+
+To invoke this mode, give the agent this prompt:
+
+> Use loop-engineering orchestrator mode. Goal: <goal>. Budget N turns.
+
+The agent resolves the rest from the documentation below. No flags, no syntax,
+no setup instructions needed.
 
 ### 1. Decompose & budget
 
