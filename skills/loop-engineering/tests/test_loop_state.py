@@ -14,6 +14,7 @@ import unittest
 
 
 SCRIPT = pathlib.Path(__file__).parents[1] / "scripts" / "loop_state.py"
+SKILL = SCRIPT.parents[1] / "SKILL.md"
 SPEC = importlib.util.spec_from_file_location("loop_state_under_test", SCRIPT)
 assert SPEC and SPEC.loader
 LOOP_STATE = importlib.util.module_from_spec(SPEC)
@@ -77,6 +78,13 @@ class LoopStateTest(unittest.TestCase):
         self.assertEqual(state["terminal_status"], "running")
         self.assertEqual(state["budget"]["used"], 0)
         self.run_cli("validate", "--state", str(self.state))
+
+    def test_orchestrator_terminal_example_supplies_required_verification(self) -> None:
+        skill_text = SKILL.read_text()
+        terminal_example = skill_text.split(
+            "When budget is consumed or the project queue is empty", 1
+        )[1].split("If the queue still has tasks", 1)[0]
+        self.assertIn('--verification "project next exited 1"', terminal_example)
 
     def test_init_refuses_to_overwrite_existing_state(self) -> None:
         self.initialize()
