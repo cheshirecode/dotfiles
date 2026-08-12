@@ -89,15 +89,23 @@ track.
 
 To invoke this mode, give the agent this prompt:
 
-> Use loop-engineering orchestrator mode. Goal: <goal>. Budget N turns.
+> Use loop-engineering orchestrator mode. Goal: <goal>.
 
 The agent resolves the rest from the documentation below. No flags, no syntax,
-no setup instructions needed.
+no setup instructions needed. The loop runs until the project queue is empty
+(`project next` exits 1), not until a fixed turn count.
 
 ### 1. Decompose & budget
 
-Run `$sequential-thinking` first to decompose the goal into discrete tasks and
-estimate the number of cycles. Tasks are independent unless `depends_on` is set.
+### 1. Decompose & budget
+
+Run `$sequential-thinking` first to decompose the goal into discrete tasks.
+Tasks are independent unless `depends_on` is set.
+
+Budget is a **safety net**, not a planning constraint. Set it to 999
+(effectively unlimited). The real stopping condition is the project queue
+emptying: `project next` exits 1 when no eligible tasks remain. The loop
+finishes when the queue is empty, not when budget is exhausted.
 
 If decomposition uncertainty is high (ambiguous scope, unclear dependencies,
 novel domain), run `$council` to debate the task breakdown before writing.
@@ -112,7 +120,8 @@ echo '<tasks-json>' | "$WORKLOG_BIN/project.sh" new <slug> \
 ```
 
 The tasks-json is the sequential-thinking output mapped to `{slug, kind, depends_on}`.
-Each task is one cycle. Budget = task count + 2 (setup + teardown buffer).
+Each task is one cycle. Budget is set to 999 (safety net; real limit is queue
+emptiness, not turn count).
 
 ### 3. Each cycle
 
