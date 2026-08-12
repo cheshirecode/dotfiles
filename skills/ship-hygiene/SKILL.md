@@ -1,6 +1,6 @@
 ---
 name: ship-hygiene
-description: Pre-handoff sweep across surfaces that go stale together — worklog task bodies, open PR titles+bodies, PR stack CI/comments, post-merge cleanup notes. Triggers "tidy up before I ship", "PR hygiene", "clean my open PRs", "pre-handoff sweep", `/ship-hygiene`. Surfaces a dashboard, fixes only what's broken, never runs post-merge teardown pre-merge.
+description: Sweep surfaces that go stale together — worklog task bodies, open PR titles+bodies, PR stack CI/comments, post-merge cleanup notes. Triggers "tidy up before I ship", "PR hygiene", "clean my open PRs", "pre-handoff sweep", `/ship-hygiene`. Surfaces a dashboard, fixes only what's broken, never runs post-merge teardown pre-merge.
 ---
 
 # ship-hygiene
