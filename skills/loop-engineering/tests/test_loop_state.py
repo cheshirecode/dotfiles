@@ -141,6 +141,18 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("Do not pass the parent transcript", protocol)
         self.assertIn("`evidence`, `uncertainty`, and `next action`", protocol)
 
+    def test_model_routing_is_optional_and_policy_gated(self) -> None:
+        skill_text = SKILL.read_text()
+        routing = skill_text.split("### Optional model routing", 1)[1].split(
+            "## Run one bounded cycle", 1
+        )[0]
+        self.assertIn("$which-model", routing)
+        self.assertIn("current harness exposes it", routing)
+        self.assertIn("data-policy gate", routing)
+        self.assertIn("model lane, not an unverified exact", routing)
+        self.assertIn("model-routing: skipped", routing)
+        self.assertIn("do not spend a cycle", routing)
+
     def test_orchestrator_gates_optional_decomposition_and_delegate_output(self) -> None:
         skill_text = SKILL.read_text()
         orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
