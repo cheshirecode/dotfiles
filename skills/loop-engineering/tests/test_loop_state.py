@@ -153,6 +153,22 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("model-routing: skipped", routing)
         self.assertIn("do not spend a cycle", routing)
 
+    def test_protocol_checkpoint_has_replayable_handoff_fields(self) -> None:
+        protocol = (SKILL.parent / "references" / "protocol.md").read_text()
+        checkpoint = protocol.split("At compaction", 1)[1].split(
+            "## Delegation", 1
+        )[0]
+        for field in (
+            "`state path`",
+            "`state fingerprint`",
+            "`terminal\nstatus`",
+            "`next action`",
+            "`typed evidence reference`",
+            "`approval boundary`",
+        ):
+            self.assertIn(field, checkpoint)
+        self.assertIn("replay the recorded next action", checkpoint)
+
     def test_orchestrator_gates_optional_decomposition_and_delegate_output(self) -> None:
         skill_text = SKILL.read_text()
         orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
