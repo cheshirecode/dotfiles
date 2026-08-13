@@ -128,6 +128,19 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("one typed line", skill_text)
         self.assertIn("index, not a log", skill_text)
 
+    def test_protocol_bounds_cold_delegation_context_and_return(self) -> None:
+        protocol = (SKILL.parent / "references" / "protocol.md").read_text()
+        for heading in (
+            "`objective`",
+            "`known evidence`",
+            "`constraints`",
+            "`budget`",
+            "`requested return`",
+        ):
+            self.assertIn(heading, protocol)
+        self.assertIn("Do not pass the parent transcript", protocol)
+        self.assertIn("`evidence`, `uncertainty`, and `next action`", protocol)
+
     def test_orchestrator_gates_optional_decomposition_and_delegate_output(self) -> None:
         skill_text = SKILL.read_text()
         orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
