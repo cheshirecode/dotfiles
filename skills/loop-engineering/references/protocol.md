@@ -116,6 +116,12 @@ For work spanning sessions, compaction, retries, or agents:
 If worklog is unavailable, use the host tracker plus one authorized durable
 project file. Label that fallback and do not claim a worklog checkpoint.
 
+At compaction, delegation, retry exhaustion, scheduled handoff, or
+termination, checkpoint exactly: `state path`, `state fingerprint`, `terminal
+status`, `next action`, `typed evidence reference`, and `approval boundary`.
+The successor must validate the state and replay the recorded next action
+before making a new claim.
+
 ## Delegation
 
 - Delegate a bounded lookup, research, or verification question.
