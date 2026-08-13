@@ -171,6 +171,22 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("replay check", orchestrator)
         self.assertIn("never\narchive or finish `complete`", orchestrator)
 
+    def test_council_escalation_pack_is_minimal_and_replay_bound(self) -> None:
+        skill_text = SKILL.read_text()
+        escalation = skill_text.split("### Mid-run council escalation", 1)[1].split(
+            "### 2. Create project", 1
+        )[0]
+        for field in (
+            "`trigger`",
+            "`affected mutation`",
+            "`one decision\nquestion`",
+            "`evidence`",
+            "`replay check`",
+        ):
+            self.assertIn(field, escalation)
+        self.assertIn("Accept only `verified` or", escalation)
+        self.assertIn("before the task resumes", escalation)
+
     def test_init_refuses_to_overwrite_existing_state(self) -> None:
         self.initialize()
         result = self.run_cli(

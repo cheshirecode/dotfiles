@@ -161,6 +161,11 @@ the task graph or scope becomes ambiguous. Pause only the affected mutation,
 pass the council the original goal plus compact context and evidence, and do
 not pass the full parent transcript.
 
+Use the smallest escalation pack: `trigger`, `affected mutation`, `one decision
+question`, `evidence`, and `replay check`. Accept only `verified` or
+`UNVERIFIED` plus a decision; a verified result must pass the replay check
+before the task resumes.
+
 Council is an advisory subloop, not success evidence. A verified council result
 must be written to Worklog, followed by the discriminating replay check, and
 then the normal claim → archive → advance sequence may resume. `UNVERIFIED`
