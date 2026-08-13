@@ -80,6 +80,17 @@ advance with a narrower next action rather than claiming progress.
 - After a contradiction, stop affected mutations, revise the hypothesis, and
   replay the original discriminating check.
 
+Before every mutation, run this effect preflight:
+
+1. What exact path, provider, or person can this action affect?
+2. Is that target listed in `allowed_effects`?
+3. Does the action cross `approval_boundary` or require a new authority?
+4. What read-only check will prove that the intended target, and no adjacent
+   target, changed?
+
+If any answer is unknown, stop before the write and narrow the action or end
+`needs_human` with the missing authority named.
+
 The script records state; it never grants permission, executes the action,
 verifies external truth, delegates, or schedules a wakeup.
 
