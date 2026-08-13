@@ -100,6 +100,12 @@ class LoopStateTest(unittest.TestCase):
             self.assertIn(signal, route)
         self.assertIn("load only the needed rules", route)
 
+    def test_protocol_requires_discriminating_cycle_record(self) -> None:
+        protocol = (SKILL.parent / "references" / "protocol.md").read_text()
+        for field in ("hypothesis", "falsifier", "replay"):
+            self.assertIn(f"`{field}`", protocol)
+        self.assertIn("neither a confirmation nor a falsifier", protocol)
+
     def test_orchestrator_gates_optional_decomposition_and_delegate_output(self) -> None:
         skill_text = SKILL.read_text()
         orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
