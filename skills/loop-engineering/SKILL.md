@@ -46,6 +46,15 @@ Add `--allowed-effect` and `--approval-boundary` whenever writes or external
 effects are possible. If `python3` is unavailable, preserve the same five fields
 manually and label the run as a non-deterministic fallback.
 
+### Optional model routing
+
+For a non-trivial loop, invoke `$which-model` before dispatch only when the
+current harness exposes it and the task has materially different capability,
+context, privacy, or cost needs. Ask for a model lane, not an unverified exact
+model. Apply its data-policy gate before delegation. If the task is trivial or
+the skill is unavailable, skip routing and record `model-routing: skipped —
+<reason>` as one-line evidence; do not spend a cycle on selection ceremony.
+
 ## Run one bounded cycle
 
 1. Observe from tools or durable evidence.
