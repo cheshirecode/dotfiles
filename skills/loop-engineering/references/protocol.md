@@ -58,6 +58,19 @@ command rejected by the state contract exits `3` with a `loop-state:` error.
 - A user may authorize a successor after `budget_exhausted`; do not silently
   grant more budget. Never resume `complete` or `cancelled`.
 
+## Cycle decision record
+
+Before an action that can change the hypothesis, write a compact three-part
+record in the cycle evidence or durable task file:
+
+- `hypothesis`: the smallest claim the action tests.
+- `falsifier`: the observable result that would reject the claim.
+- `replay`: the exact check that must pass after a fix or intervention.
+
+Keep the record to one line in loop state; retain expanded reasoning only in a
+durable artifact. If the result is neither a confirmation nor a falsifier,
+advance with a narrower next action rather than claiming progress.
+
 ## Effect boundary
 
 - Declare allowed effects and the approval boundary at initialization when
