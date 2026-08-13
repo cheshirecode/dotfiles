@@ -123,6 +123,12 @@ project file. Label that fallback and do not claim a worklog checkpoint.
 - Require evidence, uncertainty, and one proposed next action.
 - Reconcile returns into the parent state before any write.
 
+For a cold delegate, pass a compact pack with exactly these headings:
+`objective`, `known evidence`, `constraints`, `budget`, and `requested return`.
+Do not pass the parent transcript. Require the delegate to return exactly
+`evidence`, `uncertainty`, and `next action`; discard prose outside that shape
+after checking the evidence against the parent goal.
+
 ## Dynamic council escalation
 
 - A running orchestrator may invoke the installed council skill without a new
