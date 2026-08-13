@@ -71,6 +71,10 @@ Keep the record to one line in loop state; retain expanded reasoning only in a
 durable artifact. If the result is neither a confirmation nor a falsifier,
 advance with a narrower next action rather than claiming progress.
 
+Evidence lines use the same compact shape: `kind: reference — result`. The
+allowed kinds are `command`, `artifact`, `git`, `github`, and `url`; a missing
+or untyped reference is an indexability failure, not completion evidence.
+
 ## Effect boundary
 
 - Declare allowed effects and the approval boundary at initialization when
