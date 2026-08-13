@@ -106,6 +106,19 @@ class LoopStateTest(unittest.TestCase):
             self.assertIn(f"`{field}`", protocol)
         self.assertIn("neither a confirmation nor a falsifier", protocol)
 
+    def test_protocol_requires_effect_preflight_before_mutation(self) -> None:
+        protocol = (SKILL.parent / "references" / "protocol.md").read_text()
+        preflight = protocol.split("Before every mutation", 1)[1]
+        for question in (
+            "What exact path, provider, or person",
+            "Is that target listed in `allowed_effects`",
+            "Does the action cross `approval_boundary`",
+            "What read-only check will prove",
+        ):
+            self.assertIn(question, preflight)
+        self.assertIn("needs_human", preflight)
+        self.assertIn("missing authority", preflight)
+
     def test_orchestrator_gates_optional_decomposition_and_delegate_output(self) -> None:
         skill_text = SKILL.read_text()
         orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
