@@ -60,6 +60,10 @@ manually and label the run as a non-deterministic fallback.
    The script emits `budget_exhausted` when the declared ceiling is consumed.
 8. Run `show`; continue only while `terminal_status` is `running`.
 
+Keep each evidence value to one typed line: `kind: reference — result`, where
+`kind` is `command`, `artifact`, `git`, `github`, or `url`. Store verbose
+output in the referenced artifact and keep loop state as an index, not a log.
+
 While state is `running` and the next action is authorized, begin the next cycle
 immediately in the same invocation. Do not yield an intermediate result or ask
 again. Yield only for a terminal outcome, user interruption, or real runtime
