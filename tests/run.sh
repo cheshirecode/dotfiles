@@ -144,9 +144,12 @@ state_script = (skill / "scripts/loop_state.py").read_text()
 install_script = (skill / "scripts/install_audit.py").read_text()
 references = {path.name for path in (skill / "references").glob("*.md")}
 checks = {
-    "thin portable root": len(root.splitlines()) <= 80,
+    # Orchestrator mode is intentionally portable in the root; keep a bounded
+    # size budget while testing its routing contracts directly.
+    "portable root budget": len(root.splitlines()) <= 260,
     "standard frontmatter only": root.split("---", 2)[1].count("\n") == 3,
     "script-first route": "scripts/loop_state.py init" in root,
+    "route matrix": "load only the needed rules" in root,
     "no hand-edited state": "do not hand-edit its JSON" in root,
     "worklog context route": "<slug> --for=resume" in protocol,
     "tracker hydration route": "hydrate the host tracker from the" in protocol,
@@ -154,6 +157,10 @@ checks = {
     "worklog creation gate": "slugless `sync`" in protocol,
     "worklog checkpoint route": "persist arbitrary evidence or task-body changes" in protocol,
     "terminal evidence rule": "model's prose claim is not evidence" in root,
+    "typed evidence rule": "one typed line" in root and "index, not a log" in root,
+    "optional model route": "$which-model" in root and "model-routing: skipped" in root,
+    "council replay pack": "affected mutation" in root and "one decision" in root and "replay check" in root,
+    "checkpoint handoff": "state fingerprint" in protocol and "typed evidence reference" in protocol,
     "continuous active run": (
         "While state is `running`" in root
         and "Do not yield an intermediate result" in root
