@@ -18,6 +18,15 @@ not a loop design.
 4. For exact transition, effect, worklog, or handoff rules, read
    [references/protocol.md](references/protocol.md).
 
+Use this compact route matrix before loading references:
+
+| Signal | Route | Additional context |
+| --- | --- | --- |
+| one action + one check | one-shot | no loop state |
+| repeated, resumable, or delegated work | state CLI | initialize a bounded run |
+| recurrence or installation drift | state CLI + hosts | verify host primitive or audit |
+| exact transition, effect, worklog, or handoff question | selected route + protocol | load only the needed rules |
+
 ## Initialize through the script
 
 Resolve `<skill-dir>` as this `SKILL.md` file's directory. Choose an explicit,

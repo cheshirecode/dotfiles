@@ -86,6 +86,20 @@ class LoopStateTest(unittest.TestCase):
         )[1].split("If the queue still has tasks", 1)[0]
         self.assertIn('--verification "project next exited 1"', terminal_example)
 
+    def test_root_route_matrix_selects_minimum_context(self) -> None:
+        skill_text = SKILL.read_text()
+        route = skill_text.split("## Route", 1)[1].split(
+            "## Initialize through the script", 1
+        )[0]
+        for signal in (
+            "one action + one check",
+            "repeated, resumable, or delegated work",
+            "recurrence or installation drift",
+            "exact transition, effect, worklog, or handoff question",
+        ):
+            self.assertIn(signal, route)
+        self.assertIn("load only the needed rules", route)
+
     def test_orchestrator_gates_optional_decomposition_and_delegate_output(self) -> None:
         skill_text = SKILL.read_text()
         orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
