@@ -119,6 +119,15 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("needs_human", preflight)
         self.assertIn("missing authority", preflight)
 
+    def test_evidence_contract_is_typed_and_compact(self) -> None:
+        skill_text = SKILL.read_text()
+        protocol = (SKILL.parent / "references" / "protocol.md").read_text()
+        for kind in ("command", "artifact", "git", "github", "url"):
+            self.assertIn(f"`{kind}`", skill_text)
+            self.assertIn(f"`{kind}`", protocol)
+        self.assertIn("one typed line", skill_text)
+        self.assertIn("index, not a log", skill_text)
+
     def test_orchestrator_gates_optional_decomposition_and_delegate_output(self) -> None:
         skill_text = SKILL.read_text()
         orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
