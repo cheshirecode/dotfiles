@@ -129,6 +129,32 @@ class LoopStateTest(unittest.TestCase):
             self.assertIn(signal, route)
         self.assertIn("load only the needed rules", route)
 
+    def test_compositional_route_declares_owner_trigger_handoff_and_skip(self) -> None:
+        skill_text = SKILL.read_text()
+        routing = skill_text.split("## Compose with installed skills", 1)[1].split(
+            "## Initialize through the script", 1
+        )[0]
+        for owner in (
+            "serena-rg-search",
+            "worklog",
+            "which-model",
+            "council",
+            "karpathy-guidelines",
+            "evidence-gate",
+            "example-led-instructions",
+            "ship-hygiene",
+            "tightening-a-pr",
+        ):
+            self.assertIn(f"`{owner}`", routing)
+        for heading in ("Trigger", "Owner", "Handoff and replay", "Skip when"):
+            self.assertIn(heading, routing)
+        self.assertIn("Do not preload", routing)
+        self.assertIn("duplicate an owner's rules", routing)
+        self.assertIn("optional-skill: skipped", routing)
+        self.assertIn("continue without spending", routing)
+        self.assertIn("no delegate surface", routing)
+        self.assertIn("Routing example:", routing)
+
     def test_protocol_requires_discriminating_cycle_record(self) -> None:
         protocol = (SKILL.parent / "references" / "protocol.md").read_text()
         for field in ("hypothesis", "falsifier", "replay"):
