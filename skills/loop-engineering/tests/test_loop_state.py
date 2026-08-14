@@ -84,7 +84,25 @@ class LoopStateTest(unittest.TestCase):
         terminal_example = skill_text.split(
             "When budget is consumed or the project queue is empty", 1
         )[1].split("If the queue still has tasks", 1)[0]
-        self.assertIn('--verification "project next exited 1"', terminal_example)
+        self.assertIn("project verify <slug>", terminal_example)
+        self.assertIn("project next reported all tasks archived", terminal_example)
+        self.assertIn("project queue empty: typed command output", terminal_example)
+        self.assertIn("if ! $WORKLOG_BIN/project.sh verify <program-slug>", terminal_example)
+
+    def test_orchestrator_does_not_treat_any_next_exit_one_as_success(self) -> None:
+        skill_text = SKILL.read_text()
+        terminal = skill_text.split("When budget is consumed or the project queue is empty", 1)[1]
+        self.assertIn("Exit 1 alone is\nnot proof of an empty queue", terminal)
+        self.assertIn("blocked or missing", terminal)
+
+    def test_orchestrator_preserves_explicit_budget_and_minimum(self) -> None:
+        skill_text = SKILL.read_text()
+        budgeting = skill_text.split("### 1. Decompose & budget", 1)[1].split(
+            "### Mid-run council escalation", 1
+        )[0]
+        self.assertIn("If the user gives a budget, use that exact limit", budgeting)
+        self.assertIn("never\nsilently replace it with 999", budgeting)
+        self.assertIn("do not finish before that minimum", budgeting)
 
     def test_root_route_matrix_selects_minimum_context(self) -> None:
         skill_text = SKILL.read_text()
@@ -106,6 +124,12 @@ class LoopStateTest(unittest.TestCase):
             self.assertIn(f"`{field}`", protocol)
         self.assertIn("neither a confirmation nor a falsifier", protocol)
 
+    def test_protocol_preserves_verifier_exit_status_when_summarizing(self) -> None:
+        protocol = (SKILL.parent / "references" / "protocol.md").read_text()
+        self.assertIn("set -o pipefail", protocol)
+        self.assertIn("capture the producer status", protocol)
+        self.assertIn("not evidence that the producer passed", protocol)
+
     def test_protocol_requires_effect_preflight_before_mutation(self) -> None:
         protocol = (SKILL.parent / "references" / "protocol.md").read_text()
         preflight = protocol.split("Before every mutation", 1)[1]
@@ -118,6 +142,15 @@ class LoopStateTest(unittest.TestCase):
             self.assertIn(question, preflight)
         self.assertIn("needs_human", preflight)
         self.assertIn("missing authority", preflight)
+
+    def test_root_cycle_requires_effect_preflight_before_writing(self) -> None:
+        skill_text = SKILL.read_text()
+        cycle = skill_text.split("## Run one bounded cycle", 1)[1].split(
+            "## Preserve durable context", 1
+        )[0]
+        self.assertIn("effect preflight for every mutation", cycle)
+        self.assertIn("stop before writing", cycle)
+        self.assertIn("Serialize writes", cycle)
 
     def test_evidence_contract_is_typed_and_compact(self) -> None:
         skill_text = SKILL.read_text()
@@ -150,6 +183,8 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("current harness exposes it", routing)
         self.assertIn("data-policy gate", routing)
         self.assertIn("model lane, not an unverified exact", routing)
+        self.assertIn("If there is no dispatch", routing)
+        self.assertIn("required supporting tool is unavailable", routing)
         self.assertIn("model-routing: skipped", routing)
         self.assertIn("do not spend a cycle", routing)
 
@@ -169,6 +204,16 @@ class LoopStateTest(unittest.TestCase):
             self.assertIn(field, checkpoint)
         self.assertIn("replay the recorded next action", checkpoint)
 
+    def test_skill_makes_worklog_resume_and_local_fallback_executable(self) -> None:
+        skill_text = SKILL.read_text()
+        durable = skill_text.split("## Preserve durable context", 1)[1].split(
+            "## Orchestrator mode", 1
+        )[0]
+        self.assertIn("context.sh <slug> --for=resume", durable)
+        self.assertIn("target clone's direnv", durable)
+        self.assertIn("context <slug> --for=compact", durable)
+        self.assertIn("worklog-checkpoint: unavailable", durable)
+
     def test_orchestrator_gates_optional_decomposition_and_delegate_output(self) -> None:
         skill_text = SKILL.read_text()
         orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
@@ -178,6 +223,14 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("archived <child-slug> <worklog-commit>", orchestrator)
         self.assertIn("discards any", orchestrator)
         self.assertIn("prose", orchestrator)
+
+    def test_orchestrator_checks_delegate_capability_before_dispatch(self) -> None:
+        skill_text = SKILL.read_text()
+        orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
+        self.assertIn("current harness exposes the", orchestrator)
+        self.assertIn("do not fabricate a delegate result", orchestrator)
+        self.assertIn("finish `needs_human`", orchestrator)
+        self.assertIn("model-routing: skipped — no delegate surface", orchestrator)
 
     def test_orchestrator_can_escalate_council_mid_run_without_archiving(self) -> None:
         skill_text = SKILL.read_text()

@@ -51,15 +51,18 @@ manually and label the run as a non-deterministic fallback.
 For a non-trivial loop, invoke `$which-model` before dispatch only when the
 current harness exposes it and the task has materially different capability,
 context, privacy, or cost needs. Ask for a model lane, not an unverified exact
-model. Apply its data-policy gate before delegation. If the task is trivial or
-the skill is unavailable, skip routing and record `model-routing: skipped —
-<reason>` as one-line evidence; do not spend a cycle on selection ceremony.
+model. Apply its data-policy gate before delegation. If there is no dispatch,
+the skill is unavailable, or a required supporting tool is unavailable, skip
+routing and record `model-routing: skipped — <reason>` as one-line evidence;
+do not spend a cycle on selection ceremony.
 
 ## Run one bounded cycle
 
 1. Observe from tools or durable evidence.
 2. Choose the smallest action that advances or falsifies the approach.
-3. Check effect scope; serialize writes unless isolation is proven.
+3. Run the protocol's effect preflight for every mutation; if target, authority,
+   or read-only proof is unknown, stop before writing. Serialize writes unless
+   isolation is proven.
 4. Execute and verify. A model's prose claim is not evidence.
 5. On apparent success, invoke `$evidence-gate`. Map every observable goal
    clause to typed evidence and require its `check` command to pass.
@@ -94,9 +97,13 @@ the successor is `running`. Never reopen the predecessor.
 
 When the installed `worklog` protocol is available, hydrate resume context
 before initialization and checkpoint verified state at compaction, delegation,
-retry exhaustion, scheduled handoff, or termination. Before cold delegation,
-pass the returned `context <slug> --for=compact` pack directly; do not pass the
-parent transcript or imply that `spawn` enriches the pack.
+retry exhaustion, scheduled handoff, or termination. For an existing task, run
+`$WORKLOG_BIN/context.sh <slug> --for=resume` from the target clone's direnv
+context before initializing state. Before cold delegation, pass the returned
+`context <slug> --for=compact` pack directly; do not pass the parent transcript
+or imply that `spawn` enriches the pack. If Worklog or its environment is not
+available, use the explicit state path plus one authorized artifact and label
+the run `worklog-checkpoint: unavailable — local fallback`.
 
 For brittle state classification or handoff sequencing, read
 [references/examples.md](references/examples.md). Otherwise stay zero-shot.
@@ -148,10 +155,13 @@ its dependencies are uncertain. If the user or Worklog already supplies a
 clear graph, construct the minimal tasks-json directly. Tasks are independent
 unless `depends_on` is set.
 
-Budget is a **safety net**, not a planning constraint. Set it to 999
-(effectively unlimited). The real stopping condition is the project queue
-emptying: `project next` exits 1 when no eligible tasks remain. The loop
-finishes when the queue is empty, not when budget is exhausted.
+Budget is a **safety net**, not a planning constraint, only when the user has
+not supplied a ceiling. If the user gives a budget, use that exact limit; never
+silently replace it with 999. If the user gives both a minimum cycle count and
+a ceiling, record the minimum in the goal and do not finish before that minimum
+is met, even if the queue empties. Otherwise, use 999 as the default safety net
+for a project whose real stopping condition is the queue emptying:
+`project next` exits 1 when no eligible tasks remain.
 
 If decomposition uncertainty is high (ambiguous scope, unclear dependencies,
 novel domain), run `$council` to debate the task breakdown before writing.
@@ -188,8 +198,9 @@ echo '<tasks-json>' | "$WORKLOG_BIN/project.sh" new <slug> \
 ```
 
 The tasks-json is the sequential-thinking output mapped to `{slug, kind, depends_on}`.
-Each task is one cycle. Budget is set to 999 (safety net; real limit is queue
-emptiness, not turn count).
+Each task is one cycle. Use the user-supplied budget when present; otherwise
+set 999 as a safety net (the real limit is queue emptiness, not budget
+exhaustion).
 
 ### 3. Each cycle
 
@@ -207,6 +218,13 @@ lives in the worklog task file.
 # Get compact context for dispatch
 "$WORKLOG_BIN/context.sh" <child-slug> --for=compact
 ```
+
+Before choosing a delegate, confirm that the current harness exposes the
+`task` surface and that the approval boundary permits the dispatch. If either
+check fails, do not fabricate a delegate result: execute the child in-band
+when it is safe, or finish `needs_human` with the missing capability and replay
+check. Record `model-routing: skipped — no delegate surface` when routing was
+not used.
 
 Then either:
 - **Delegate** to a sub-agent via `task` tool — pass the compact context pack
@@ -237,14 +255,29 @@ context footprint at ~1KB even after 100+ cycles.
 
 ### 4. Terminal
 
-When budget is consumed or the project queue is empty (`project next` exits 1):
+When budget is consumed or the project queue is empty, capture the complete
+`project next` result and verify the project before finishing. Exit 1 alone is
+not proof of an empty queue: it also covers blocked or missing children. Treat
+the queue as empty only when `project next` reports `all tasks ... are archived
+(nothing left)` and `project verify <slug>` exits 0:
 
 ```bash
+next_output="$($WORKLOG_BIN/project.sh next <program-slug> 2>&1)" || true
+if ! grep -Fq "all tasks for '<program-slug>' are archived (nothing left)" <<<"$next_output"; then
+  echo "$next_output" >&2
+  exit 1
+fi
+if ! $WORKLOG_BIN/project.sh verify <program-slug>; then
+  echo "project verification failed" >&2
+  exit 1
+fi
 python3 <skill-dir>/scripts/loop_state.py finish \
   --state <state-file> --status complete \
-  --verification "project next exited 1" \
-  --evidence "project queue empty: project next exited 1"
+  --verification "project next reported all tasks archived; project verify exited 0" \
+  --evidence "project queue empty: typed command output and project verification"
 ```
 
-If the queue still has tasks but budget is exhausted, finish with
-`budget_exhausted` and the next eligible task slug.
+If `next_output` reports blocked or missing work, keep the state running or
+finish `needs_human` with the exact replay check. If the queue still has tasks
+but budget is exhausted, finish with `budget_exhausted` and the next eligible
+task slug.
