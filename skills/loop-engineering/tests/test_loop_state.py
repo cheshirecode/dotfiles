@@ -225,6 +225,27 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("model-routing: skipped", routing)
         self.assertIn("do not spend a cycle", routing)
 
+    def test_pixel_transport_is_optional_dense_recoverable_and_byte_preserving(self) -> None:
+        skill_text = SKILL.read_text()
+        transport = skill_text.split("### Optional Pixel transport", 1)[1].split(
+            "## Run one bounded cycle", 1
+        )[0]
+        for requirement in (
+            "command -v caveman",
+            "pixel-transport: skipped",
+            "dense, long-line payloads",
+            "caveman wrap --pixel <agent>",
+            "Do not pixel sparse code",
+            "recoverable CCR",
+            "recovery handle",
+            "bytes unchanged",
+            "`inferred`",
+            "`verified`",
+            "Do not install Caveman",
+            "One compact example",
+        ):
+            self.assertIn(requirement, transport)
+
     def test_protocol_checkpoint_has_replayable_handoff_fields(self) -> None:
         protocol = (SKILL.parent / "references" / "protocol.md").read_text()
         checkpoint = protocol.split("At compaction", 1)[1].split(

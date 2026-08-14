@@ -89,6 +89,30 @@ the skill is unavailable, or a required supporting tool is unavailable, skip
 routing and record `model-routing: skipped — <reason>` as one-line evidence;
 do not spend a cycle on selection ceremony.
 
+### Optional Pixel transport
+
+At a provider boundary, optionally use [Caveman Pixel
+Mode](https://github.com/juliusbrussee/caveman#pixel-mode) to reduce transport
+for genuinely dense, long-line payloads such as minified JSON tool catalogs,
+long-line logs, or old history. This is a capability-gated transport choice,
+not a replacement for the loop state or evidence contract:
+
+1. Check `command -v caveman` and authorization before using it. If unavailable,
+   record `pixel-transport: skipped — <reason>` and pass the original bytes.
+2. Require a model legibility gate and a measured size win before using
+   `caveman wrap --pixel <agent>`. Do not pixel sparse code, normal Markdown,
+   loop state, evidence, diffs, or small payloads.
+3. Preserve the original bytes in Caveman's recoverable CCR store first; retain
+   the recovery handle and retrieve the original when parsing, storage, or
+   transport verification fails. Any decline or failure passes bytes unchanged.
+4. Label token/size estimates `inferred`; call them `verified` only after real
+   traffic and an evaluation gate. Do not install Caveman or change agent
+   configuration unless the effect boundary explicitly authorizes it.
+
+One compact example: `dense long-line log + authorized Pixel CLI + measured win`
+uses Pixel transport; `sparse code`, missing CLI, or no measured win records a
+skip and sends original bytes.
+
 ## Run one bounded cycle
 
 1. Observe from tools or durable evidence.
