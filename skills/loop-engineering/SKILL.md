@@ -27,6 +27,32 @@ Use this compact route matrix before loading references:
 | recurrence or installation drift | state CLI + hosts | verify host primitive or audit |
 | exact transition, effect, worklog, or handoff question | selected route + protocol | load only the needed rules |
 
+## Compose with installed skills
+
+Within a running loop, select the smallest installed owner whose trigger is
+true. The owner skill supplies its procedure; loop-engineering supplies the
+budget, effect boundary, one-line evidence, and replay check. Do not preload
+every skill or duplicate an owner's rules. Pass only a compact objective,
+known evidence, constraints, budget, and requested return; if no trigger is
+true, record `optional-skill: skipped — <reason>` and continue without spending
+a cycle.
+
+| Trigger | Owner | Handoff and replay | Skip when |
+| --- | --- | --- | --- |
+| multi-faceted search across symbols, text, JSON, history, or logs | `serena-rg-search` | search facet + candidate paths; replay the exact search/history command | one literal or known-file lookup |
+| resumability, cross-session context, or a durable handoff is needed | `worklog` | use `context`/checkpoint rules and return the task or state reference | one-shot work with no durable task |
+| actual delegation has materially different model, cost, context, or data-policy needs | `which-model` | return a model lane and policy gate before dispatch | no delegate surface, or in-band work is sufficient |
+| independent results disagree, a counterexample appears, retries fail, or scope/dependencies become ambiguous | `council` | pass the smallest escalation pack and replay its decision check | clear answer, known trade-offs, or one-shot scope |
+| code is written, reviewed, or refactored | `karpathy-guidelines` | state assumptions, make the smallest change, and replay goal-driven checks | read-only work |
+| completion has multiple observable clauses or providers | `evidence-gate` | map each clause to typed evidence and replay the gate command | one action with one sufficient check |
+| a reusable instruction has a brittle format or recurring classification error | `example-led-instructions` | apply the 0/1/few-shot gate and test the smallest example set | prose is obvious and examples add context cost |
+| multiple PRs or stale worklog/PR/CI surfaces need a pre-handoff sweep | `ship-hygiene` | audit only triggered surfaces and replay the hygiene checks | one short PR with no recent worklog activity |
+| one just-finished PR needs learning distillation before handoff | `tightening-a-pr` | pass the finished diff and task context; replay the handoff checks | implementation is unfinished or the change is trivial |
+
+Routing example: `multi-repo search with uncertain ownership` →
+`serena-rg-search` → compact candidate paths plus one replay command;
+`one known-file lookup` → `optional-skill: skipped — single literal lookup`.
+
 ## Initialize through the script
 
 Resolve `<skill-dir>` as this `SKILL.md` file's directory. Choose an explicit,
