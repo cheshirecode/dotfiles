@@ -130,7 +130,10 @@ if [ "${SKIP_SUPER_RULER:-0}" != "1" ]; then
       done
     fi
 
-    [ -x "$SUPER_RULER_DIR/install.sh" ] && "$SUPER_RULER_DIR/install.sh"
+    # super-ruler's installer writes to $HOME/.claude/commands unconditionally.
+    # Point HOME at $DEST so it agrees with the prune loop above, which a test
+    # harness or a template installing outside $HOME would otherwise split.
+    [ -x "$SUPER_RULER_DIR/install.sh" ] && HOME="$DEST" "$SUPER_RULER_DIR/install.sh"
   ) || echo "super-ruler: setup skipped (non-fatal)." >&2
 fi
 
