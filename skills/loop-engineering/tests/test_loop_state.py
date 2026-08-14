@@ -79,6 +79,17 @@ class LoopStateTest(unittest.TestCase):
         self.assertEqual(state["budget"]["used"], 0)
         self.run_cli("validate", "--state", str(self.state))
 
+    def test_skill_routes_transient_artifacts_to_system_temp(self) -> None:
+        skill_text = SKILL.read_text()
+        initialization = skill_text.split(
+            "## Initialize through the script", 1
+        )[1].split("### Optional model routing", 1)[0]
+        self.assertIn("Keep transient loop state", initialization)
+        self.assertIn("`/tmp`", initialization)
+        self.assertIn("`$TMPDIR`", initialization)
+        self.assertIn("evidence-gate JSON", initialization)
+        self.assertIn("do\nnot leave ad hoc run artifacts behind", initialization)
+
     def test_orchestrator_terminal_example_supplies_required_verification(self) -> None:
         skill_text = SKILL.read_text()
         terminal_example = skill_text.split(
