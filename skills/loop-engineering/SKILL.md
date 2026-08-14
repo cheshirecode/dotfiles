@@ -46,6 +46,13 @@ Add `--allowed-effect` and `--approval-boundary` whenever writes or external
 effects are possible. If `python3` is unavailable, preserve the same five fields
 manually and label the run as a non-deterministic fallback.
 
+Keep transient loop state and verbose evidence out of the skill or repository
+worktree. Use `/tmp`, `$TMPDIR`, or another host-provided system temporary
+directory for state files, evidence-gate JSON, logs, and snapshots (for example,
+create a directory with `mktemp -d`). Only intentional source, documentation,
+tests, and explicitly authorized durable artifacts belong in the worktree; do
+not leave ad hoc run artifacts behind.
+
 ### Optional model routing
 
 For a non-trivial loop, invoke `$which-model` before dispatch only when the
