@@ -71,6 +71,11 @@ Keep the record to one line in loop state; retain expanded reasoning only in a
 durable artifact. If the result is neither a confirmation nor a falsifier,
 advance with a narrower next action rather than claiming progress.
 
+Preserve verifier exit status when output is piped or truncated. Use
+`set -o pipefail`, capture the producer status, or write the full output to an
+artifact before summarizing it; a successful `tail`, formatter, or parser is
+not evidence that the producer passed.
+
 Evidence lines use the same compact shape: `kind: reference — result`. The
 allowed kinds are `command`, `artifact`, `git`, `github`, and `url`; a missing
 or untyped reference is an indexability failure, not completion evidence.
