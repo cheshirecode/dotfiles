@@ -114,6 +114,10 @@ token it cannot spend on dispatch. Follow these rules:
 - **Evidence in loop_state is one line per cycle.** Just
   `<slug>: claimed → archived`. Per-task evidence lives in worklog task files
   (committed by the sub-agent), not in the orchestrator's memory.
+- **Bulk generation offloading.** Never generate $\ge 3$ repetitive structured files
+  or template expansions in-band on frontier orchestrator tokens. Prepare a compact
+  spec pack and delegate generation to a low-cost sub-agent (`mechanical` / utility model)
+  to cut generation token costs by $>85\%$.
 - **Never re-read sub-agent output.** Check that the sub-agent completed
   (`archive.sh` pushed successfully) and move on. The worklog commit is the
   evidence, not the orchestrator's recollection.
