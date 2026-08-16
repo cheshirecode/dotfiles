@@ -1,4 +1,7 @@
 extends: default
+ignore: |
+  ~*
+  skills/*/agents/
 rules:
   line-length:
     max: 140
