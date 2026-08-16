@@ -1,7 +1,7 @@
 ---
 description: Orchestration, design docs, and investigation — planning, task breakdown, research, writing design documents, and multi-step coordination. Use when starting a complex feature, writing an RFC/ADR, investigating a bug across codebases, or breaking down work into parallel subagent tasks.
 mode: subagent
-model: openrouter/openai/gpt-5.6-luna-pro
+model: openrouter/google/gemini-3.7-flash
 textVerbosity: low
 temperature: 0.2
 permission:

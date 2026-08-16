@@ -1,7 +1,7 @@
 ---
 description: Cheap mechanical tasks — renames, formatting, docs hygiene, config dedup, dead-code/comment stripping, cache-bust URL versioning, gitignore tweaks, simple find-replace sweeps. Use for low-judgment high-volume edits where cost matters more than reasoning depth.
 mode: subagent
-model: openrouter/z-ai/glm-5.2
+model: openrouter/qwen/qwen3.7-flash
 textVerbosity: low
 temperature: 0
 permission:
