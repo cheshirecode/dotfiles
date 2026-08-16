@@ -17,6 +17,18 @@
       "/home/fred/.agents/skills"
     ]
   },
+  "mcp": {
+    "gdrive": {
+      "type": "local",
+      "command": ["npx", "-y", "@isaacphi/mcp-gdrive"],
+      "enabled": true,
+      "environment": {
+        "CLIENT_ID": "613313731108-qvpjs130js8lpoupm68knifbebvcec40.apps.googleusercontent.com",
+        "CLIENT_SECRET": "{env:GDRIVE_CLIENT_SECRET}",
+        "GDRIVE_CREDS_DIR": "/home/fred/.config/gdrive-mcp"
+      }
+    }
+  },
   "permission": {
     "read": "allow",
     "edit": "allow",
