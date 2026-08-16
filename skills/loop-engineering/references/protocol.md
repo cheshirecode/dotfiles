@@ -125,6 +125,7 @@ before making a new claim.
 ## Delegation
 
 - Delegate a bounded lookup, research, or verification question.
+- Delegate bulk file creation (>=3 files or repetitive templates) to a low-cost mechanical delegate rather than generating in-band on frontier orchestrator tokens.
 - Include the objective, evidence, constraints, budget, and requested return.
 - Require evidence, uncertainty, and one proposed next action.
 - Reconcile returns into the parent state before any write.
