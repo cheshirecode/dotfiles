@@ -28,3 +28,6 @@
 	last = log -1 HEAD --stat
 	cm = commit -m
 	rv = remote -v
+[user]
+	name = cheshirecode
+	email = cheshirecode@users.noreply.github.com
