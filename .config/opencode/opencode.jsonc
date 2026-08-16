@@ -1,4 +1,68 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "openrouter/google/gemini-3.7-flash"
+  "model": "openrouter/google/gemini-3.7-flash",
+  "small_model": "openrouter/qwen/qwen3.7-flash",
+  "shell": "/bin/zsh",
+  "tool_output": {
+    "max_lines": 300,
+    "max_bytes": 16384
+  },
+  "compaction": {
+    "auto": true,
+    "tail_turns": 10
+  },
+  "skills": {
+    "paths": [
+      "/home/fred/.claude/skills",
+      "/home/fred/.agents/skills"
+    ]
+  },
+  "permission": {
+    "read": "allow",
+    "edit": "allow",
+    "glob": "allow",
+    "grep": "allow",
+    "list": "allow",
+    "skill": "allow",
+    "todowrite": "allow",
+    "question": "allow",
+    "webfetch": "allow",
+    "task": "allow",
+    "external_directory": {
+      "~/secrets/**": "deny",
+      "~/.ssh/**": "deny",
+      "~/.gnupg/**": "deny",
+      "~/**": "allow",
+      "/tmp/**": "allow",
+      "*": "ask"
+    },
+    "bash": {
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "git branch*": "allow",
+      "git rev-parse*": "allow",
+      "git show*": "allow",
+      "rg *": "allow",
+      "grep *": "allow",
+      "ls *": "allow",
+      "find *": "allow",
+      "which *": "allow",
+      "cat *": "allow",
+      "pnpm test*": "allow",
+      "pnpm run test*": "allow",
+      "pnpm check*": "allow",
+      "pnpm format*": "allow",
+      "npm test*": "allow",
+      "npm run test*": "allow",
+      "pytest*": "allow",
+      "python3 *": "allow",
+      "node *": "allow",
+      "cargo test*": "allow",
+      "cargo check*": "allow",
+      "ruff *": "allow",
+      "prettier *": "allow",
+      "*": "ask"
+    }
+  }
 }
