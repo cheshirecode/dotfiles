@@ -344,6 +344,27 @@ def _verify_one(project_path: pathlib.Path) -> tuple[list[str], list[str]]:
 
   declared = {t["slug"] for t in tasks if isinstance(t, dict) and "slug" in t}
 
+  child_statuses: dict[str, str] = {}
+  for child_slug in declared:
+    child_path = find_task_path(child_slug)
+    if child_path is not None:
+      child_statuses[child_slug] = parse_frontmatter(child_path).get("status") or "draft"
+
+  next_action = str(fm.get("next_action") or "")
+  asks_for_project_next = bool(re.search(r"\bproject(?:\.sh)?\s+next\b", next_action, re.IGNORECASE))
+  asks_to_claim_child = bool(re.search(r"\bclaim\b", next_action, re.IGNORECASE)) and any(
+    child_slug in next_action for child_slug in declared
+  )
+  if (
+    project_path.parent.name == "active"
+    and declared
+    and all(child_statuses.get(child_slug) == "archived" for child_slug in declared)
+    and (asks_for_project_next or asks_to_claim_child)
+  ):
+    warnings.append(
+      f"{proj_slug}: all declared children are archived but next_action still requests child work"
+    )
+
   # Dep cycle check (Kahn-ish).
   graph: dict[str, list[str]] = {}
   for t in tasks:
