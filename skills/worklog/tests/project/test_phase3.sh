@@ -100,7 +100,25 @@ set -e
 echo "  ✓ verify reports parent_slug mismatch as warning (exit 1)"
 
 echo ""
-echo "=== 3.4: project list shows status rollup ==="
+echo "=== 3.4: finished project warns only for stale child-work next_action ==="
+FINISHED_TASKS='[{"slug":"v3-finished-child"}]'
+echo "$FINISHED_TASKS" | "$WORKLOG_BIN/project.sh" new v3-finished --goal "finished warning test" --objective "one archived child"
+"$WORKLOG_BIN/project.sh" claim v3-finished-child
+"$WORKLOG_BIN/archive.sh" v3-finished-child --reason=shipped --summary="Archived the only child. The active parent remains open for an external handoff."
+set +e
+FINISHED_OUT="$("$WORKLOG_BIN/project.sh" verify v3-finished 2>&1)"
+finished_rc=$?
+set -e
+[[ $finished_rc -eq 1 ]] || { echo "FAIL: expected stale next_action warning, got $finished_rc"; exit 1; }
+echo "$FINISHED_OUT" | grep -q "all declared children are archived but next_action still requests child work" || {
+  echo "FAIL: missing stale child-work warning"; exit 1;
+}
+"$WORKLOG_BIN/checkpoint.sh" v3-finished --next="Waiting on review and merge."
+"$WORKLOG_BIN/project.sh" verify v3-finished
+echo "  ✓ external-gate next_action remains clean"
+
+echo ""
+echo "=== 3.5: project list shows status rollup ==="
 OUT="$("$WORKLOG_BIN/project.sh" list)"
 echo "$OUT"
 echo "$OUT" | grep -q "v3-proj" || { echo "FAIL: list missing v3-proj"; exit 1; }
@@ -108,14 +126,14 @@ echo "$OUT" | grep -qE "2 tasks" || { echo "FAIL: list missing task count"; exit
 echo "  ✓ list shows project + rollup"
 
 echo ""
-echo "=== 3.5: Cursor session id env honored ==="
+echo "=== 3.6: Cursor session id env honored ==="
 sid="$(env -u CLAUDE_CODE_SESSION_ID -u CODEX_SESSION_ID -u OPENAI_SESSION_ID \
        CURSOR_SESSION_ID=cur-xyz bash -c '. "$WORKLOG_BIN/_lib.sh"; resolve_session_id')"
 [[ "$sid" == "cursor:cur-xyz" ]] || { echo "FAIL: expected cursor:cur-xyz, got '$sid'"; exit 1; }
 echo "  ✓ CURSOR_SESSION_ID resolves to 'cursor:<id>'"
 
 echo ""
-echo "=== 3.6: machine-UUID fallback when no session env set ==="
+echo "=== 3.7: machine-UUID fallback when no session env set ==="
 HOME_DIR="$SCRATCH_ROOT/home"
 mkdir -p "$HOME_DIR"
 sid="$(env -u CLAUDE_CODE_SESSION_ID -u CODEX_SESSION_ID -u OPENAI_SESSION_ID -u CURSOR_SESSION_ID \
@@ -130,7 +148,7 @@ sid2="$(env -u CLAUDE_CODE_SESSION_ID -u CODEX_SESSION_ID -u OPENAI_SESSION_ID -
 echo "  ✓ machine UUID fallback works + persists"
 
 echo ""
-echo "=== 3.7: LOCKED_BY dry-run surfaces host + started_at ==="
+echo "=== 3.8: LOCKED_BY dry-run surfaces host + started_at ==="
 TASKS='[{"slug":"p3-a"},{"slug":"p3-b"}]'
 echo "$TASKS" | "$WORKLOG_BIN/project.sh" new p3-proj --goal x --objective x --stale-after=1h
 env -u CODEX_SESSION_ID CLAUDE_CODE_SESSION_ID=fake-a "$WORKLOG_BIN/project.sh" claim p3-a --project=p3-proj >/dev/null
