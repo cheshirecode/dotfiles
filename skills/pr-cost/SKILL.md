@@ -9,6 +9,8 @@ Use this skill from harness-specific hook adapters after a successful `gh pr cre
 It is dry by default: it always prefers the local ledger, and it only writes a
 GitHub PR comment when `PR_COST_HOOK_LIVE=1`.
 
+Install and verify: [INSTALL.md](INSTALL.md). Adapters live in `adapters/{cursor,claude,codex}/`.
+
 ## Files
 
 - Collector: `scripts/pr_cost_collect.py`
