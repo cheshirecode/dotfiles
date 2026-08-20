@@ -1,0 +1,4 @@
+interface:
+  display_name: "Loop Helpers"
+  short_description: "Opt-in transport and compact-context helpers"
+  default_prompt: "Use $loop-helpers only when a loop needs a gated transport decision or compact context pack."
