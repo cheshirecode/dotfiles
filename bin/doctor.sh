@@ -50,18 +50,20 @@ if [[ -f "$MANIFEST" ]]; then
   skill_list_err=$(mktemp)
   skill_list=$(python3 -c "
 import yaml
-print('\n'.join(s['name'] for s in yaml.safe_load(open('$MANIFEST'))['skills']))
+print('\n'.join(f\"{s['name']}\\t{str(bool(s.get('optional'))).lower()}\" for s in yaml.safe_load(open('$MANIFEST'))['skills']))
 " 2>"$skill_list_err")
   if [[ -z "$skill_list" ]] && [[ -s "$skill_list_err" ]]; then
     fail "manifest parse error: $(cat "$skill_list_err")"
   fi
   rm -f "$skill_list_err"
-  while IFS= read -r name; do
+  while IFS=$'\t' read -r name optional; do
     [[ -z "$name" ]] && continue
     for skill_root in "${SKILL_ROOTS[@]}"; do
       skill_md="$skill_root/$name/SKILL.md"
       if [[ -f "$skill_md" ]]; then
         ok "$name → $skill_md"
+      elif [[ "$optional" == true ]]; then
+        ok "$name optional and not installed at $skill_root"
       else
         warn "$name SKILL.md missing at $skill_root (run bin/install-skills.sh)"
       fi

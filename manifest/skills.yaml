@@ -6,6 +6,8 @@
 # Targets:
 #   every manifest skill is installed under ~/.claude/skills/<name>/,
 #   ~/.agents/skills/<name>/, and ~/.cursor/skills/<name>/.
+#   Entries marked optional: true are skipped by default; install one by name
+#   or pass --include-optional.
 #
 # Skills that ship with Claude Code itself (init, review, security-review,
 # claude-api, loop, schedule, statusline-setup, update-config, etc.) are
@@ -44,6 +46,15 @@ skills:
       ref: HEAD
       path: skills/loop-engineering
     install_to: ~/.claude/skills/loop-engineering
+
+  - name: loop-helpers
+    description: Opt-in transport gates and compact context-pack helpers for loop-engineering.
+    optional: true
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/loop-helpers
+    install_to: ~/.claude/skills/loop-helpers
 
   - name: evidence-gate
     description: Require typed evidence coverage for every completion criterion.
