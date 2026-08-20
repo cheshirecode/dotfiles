@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install agent skills from manifest/skills.yaml into all supported user roots:
+# Install non-optional agent skills from manifest/skills.yaml into all supported user roots:
 # ~/.claude/skills/ for Claude Code, ~/.agents/skills/ for Codex and shared
 # discovery, and ~/.cursor/skills/ for Cursor's native discovery surface.
 #
@@ -16,19 +16,23 @@
 # Usage:
 #   bin/install-skills.sh            # install all skills in manifest
 #   bin/install-skills.sh --dry-run  # print actions, don't apply
+#   bin/install-skills.sh --include-optional  # include optional skills
 #   bin/install-skills.sh <name>     # install a single skill
 
 set -euo pipefail
 
 DRY_RUN=0
+INCLUDE_OPTIONAL=0
 SINGLE=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY_RUN=1 ;;
+    --include-optional) INCLUDE_OPTIONAL=1 ;;
     -h|--help)
-      cat <<EOF
-usage: install-skills.sh [--dry-run] [<name>]
-  --dry-run   print intended actions, don't apply.
+cat <<EOF
+usage: install-skills.sh [--dry-run] [--include-optional] [<name>]
+  --dry-run            print intended actions, don't apply.
+  --include-optional   include entries marked optional: true.
   <name>      install only this skill (else: install all from manifest).
 EOF
       exit 0
@@ -53,7 +57,7 @@ if [[ $DRY_RUN -eq 0 ]]; then
 fi
 
 # Parse manifest via Python (yaml is stdlib-adjacent; safer than awk on YAML).
-python3 - "$MANIFEST" "$SINGLE" "$DRY_RUN" "$SKILLS_DIR" "$SHARED_SKILLS_DIR" "$CURSOR_SKILLS_DIR" "$SOURCE_CACHE_DIR" "$REPO_ROOT" <<'PY'
+python3 - "$MANIFEST" "$SINGLE" "$DRY_RUN" "$SKILLS_DIR" "$SHARED_SKILLS_DIR" "$CURSOR_SKILLS_DIR" "$SOURCE_CACHE_DIR" "$REPO_ROOT" "$INCLUDE_OPTIONAL" <<'PY'
 import os, sys, shutil, subprocess, pathlib
 try:
     import yaml
@@ -61,8 +65,9 @@ except ImportError:
     sys.stderr.write("install-skills: PyYAML not installed. Run: pip3 install --user pyyaml\n")
     sys.exit(1)
 
-manifest_path, single, dry_run, skills_dir, shared_skills_dir, cursor_skills_dir, source_cache_dir, repo_root = sys.argv[1:9]
+manifest_path, single, dry_run, skills_dir, shared_skills_dir, cursor_skills_dir, source_cache_dir, repo_root, include_optional = sys.argv[1:10]
 dry = dry_run == "1"
+include_optional = include_optional == "1"
 skills_dir = pathlib.Path(skills_dir).expanduser()
 shared_skills_dir = pathlib.Path(shared_skills_dir).expanduser()
 cursor_skills_dir = pathlib.Path(cursor_skills_dir).expanduser()
@@ -76,6 +81,11 @@ if single:
     if not entries:
         sys.stderr.write(f"install-skills: no manifest entry for '{single}'\n")
         sys.exit(2)
+else:
+    skipped_optional = [e for e in entries if e.get("optional") is True and not include_optional]
+    entries = [e for e in entries if e not in skipped_optional]
+    for entry in skipped_optional:
+        print(f"  SKIP optional {entry['name']}: pass --include-optional or name it explicitly")
 
 def run(cmd, check=True):
     if dry:
@@ -288,7 +298,8 @@ def install_git(entry):
         link_or_copy(cache, dst, name, source_info)
     return True
 
-installed = skipped = 0
+installed = 0
+skipped = len(skipped_optional) if not single else 0
 for entry in entries:
     src_type = entry["source"]["type"]
     if src_type == "subpath":
