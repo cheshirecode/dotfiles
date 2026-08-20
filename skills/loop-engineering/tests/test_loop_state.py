@@ -138,6 +138,7 @@ class LoopStateTest(unittest.TestCase):
             "serena-rg-search",
             "worklog",
             "which-model",
+            "loop-helpers",
             "council",
             "karpathy-guidelines",
             "evidence-gate",
@@ -225,26 +226,69 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("model-routing: skipped", routing)
         self.assertIn("do not spend a cycle", routing)
 
-    def test_pixel_transport_is_optional_dense_recoverable_and_byte_preserving(self) -> None:
+    def test_payload_transport_is_optional_recoverable_and_byte_preserving(self) -> None:
         skill_text = SKILL.read_text()
-        transport = skill_text.split("### Optional Pixel transport", 1)[1].split(
-            "## Run one bounded cycle", 1
+        transport = skill_text.split("### Optional payload transport", 1)[1].split(
+            "### Compaction-friendly output", 1
         )[0]
         for requirement in (
             "command -v caveman",
             "pixel-transport: skipped",
             "dense, long-line payloads",
+            "caveman shrink -- <command>",
             "caveman wrap --pixel <agent>",
-            "Do not pixel sparse code",
-            "recoverable CCR",
+            "Never pixel sparse code",
+            "original in CCR",
             "recovery handle",
             "bytes unchanged",
+            "set -o pipefail",
+            "caveman convert --dry-run",
+            "byte-identical `--revert`",
+            "never rewrite canonical source",
+            "output-only response skill",
             "`inferred`",
             "`verified`",
             "Do not install Caveman",
             "One compact example",
         ):
             self.assertIn(requirement, transport)
+
+    def test_compaction_friendly_output_packs_state_without_replaying_transcript(self) -> None:
+        skill_text = SKILL.read_text()
+        output = skill_text.split("### Compaction-friendly output", 1)[1].split(
+            "## Run one bounded cycle", 1
+        )[0]
+        for requirement in (
+            "state",
+            "one next\naction",
+            "number multi-step work",
+            "cap lists at five items",
+            "without replacing evidence",
+            "simple technical English",
+            "concrete verbs",
+            "minimal",
+            "Remove hype",
+            "exact commands",
+            "typed evidence",
+        ):
+            self.assertIn(requirement, output)
+        self.assertIn("typed", output)
+        self.assertIn("state/worklog artifact", output)
+
+        durable = skill_text.split("## Preserve durable context", 1)[1].split(
+            "## Orchestrator mode", 1
+        )[0]
+        for field in (
+            "objective",
+            "known evidence",
+            "constraints",
+            "budget",
+            "requested return",
+            "recovery handles",
+            "system temp",
+            "never rebuild a handoff",
+        ):
+            self.assertIn(field, durable)
 
     def test_protocol_checkpoint_has_replayable_handoff_fields(self) -> None:
         protocol = (SKILL.parent / "references" / "protocol.md").read_text()
