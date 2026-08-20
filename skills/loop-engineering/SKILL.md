@@ -42,6 +42,7 @@ a cycle.
 | multi-faceted search across symbols, text, JSON, history, or logs | `serena-rg-search` | search facet + candidate paths; replay the exact search/history command | one literal or known-file lookup |
 | resumability, cross-session context, or a durable handoff is needed | `worklog` | use `context`/checkpoint rules and return the task or state reference | one-shot work with no durable task |
 | actual delegation has materially different model, cost, context, or data-policy needs | `which-model` | return a model lane and policy gate before dispatch | no delegate surface, or in-band work is sufficient |
+| a compact context pack or payload transport gate is needed and the helper is installed | `loop-helpers` | pass explicit fields or gate facts; replay the helper command | no helper install, or ordinary context is sufficient |
 | independent results disagree, a counterexample appears, retries fail, or scope/dependencies become ambiguous | `council` | pass the smallest escalation pack and replay its decision check | clear answer, known trade-offs, or one-shot scope |
 | code is written, reviewed, or refactored | `karpathy-guidelines` | state assumptions, make the smallest change, and replay goal-driven checks | read-only work |
 | completion has multiple observable clauses or providers | `evidence-gate` | map each clause to typed evidence and replay the gate command | one action with one sufficient check |
@@ -89,29 +90,47 @@ the skill is unavailable, or a required supporting tool is unavailable, skip
 routing and record `model-routing: skipped — <reason>` as one-line evidence;
 do not spend a cycle on selection ceremony.
 
-### Optional Pixel transport
+### Optional payload transport
 
-At a provider boundary, optionally use [Caveman Pixel
-Mode](https://github.com/juliusbrussee/caveman#pixel-mode) to reduce transport
-for genuinely dense, long-line payloads such as minified JSON tool catalogs,
-long-line logs, or old history. This is a capability-gated transport choice,
-not a replacement for the loop state or evidence contract:
+At a provider or tool-output boundary, choose a capability-gated,
+fail-open, recoverable representation. Measure after selection; if the result
+is not smaller or legible, send the original bytes.
 
-1. Check `command -v caveman` and authorization before using it. If unavailable,
-   record `pixel-transport: skipped — <reason>` and pass the original bytes.
-2. Require a model legibility gate and a measured size win before using
-   `caveman wrap --pixel <agent>`. Do not pixel sparse code, normal Markdown,
-   loop state, evidence, diffs, or small payloads.
-3. Preserve the original bytes in Caveman's recoverable CCR store first; retain
-   the recovery handle and retrieve the original when parsing, storage, or
-   transport verification fails. Any decline or failure passes bytes unchanged.
-4. Label token/size estimates `inferred`; call them `verified` only after real
+1. For noisy command output or tool catalogs, an authorized Caveman install may
+   use `caveman shrink -- <command>` before Pixel. Preserve producer status with
+   `set -o pipefail`; keep the original in CCR and retain its recovery handle.
+   Do not install an output-only response skill for input savings: it can add
+   prompt overhead while leaving provider input unchanged.
+2. Use [Caveman Pixel Mode](https://github.com/juliusbrussee/caveman#pixel-mode)
+   only for dense, long-line payloads, with a legible model and a measured win
+   before `caveman wrap --pixel <agent>`. Never pixel sparse code, normal
+   Markdown, loop state, evidence, diffs, or small payloads.
+3. For installed skill bodies, use `caveman convert --dry-run` first and convert
+   only profitable installed copies; keep frontmatter text, preserve the
+   byte-identical `--revert` path, and never rewrite canonical source here.
+4. Check `command -v caveman` and authorization first. On missing capability,
+   decline, failure, or recovery/verification trouble, record
+   `pixel-transport: skipped — <reason>` and pass bytes unchanged.
+5. Label token/size estimates `inferred`; call them `verified` only after real
    traffic and an evaluation gate. Do not install Caveman or change agent
-   configuration unless the effect boundary explicitly authorizes it.
+   configuration unless the effect boundary authorizes it.
 
-One compact example: `dense long-line log + authorized Pixel CLI + measured win`
-uses Pixel transport; `sparse code`, missing CLI, or no measured win records a
-skip and sends original bytes.
+One compact example: `dense long-line log + authorized CLI + measured win` may
+use shrink or Pixel; `sparse code`, missing CLI, or no win keeps the original.
+
+### Compaction-friendly output
+
+Default loop updates are action-first and bounded: put `state` and the one next
+action first, number multi-step work, cap lists at five items, and omit
+preambles, tangents, and recap prose. Keep detailed findings in the typed
+state/worklog artifact; the visible update is only the index. This shapes the
+conversation without replacing evidence, verification, or a user's request
+for a full explanation.
+
+Use simple technical English: short sentences, concrete verbs, and minimal
+jargon; define unavoidable acronyms once. Remove hype, idioms, filler, repeated
+summaries, and process chatter. Preserve exact commands, paths, identifiers,
+errors, and typed evidence.
 
 ## Run one bounded cycle
 
@@ -161,6 +180,10 @@ context before initializing state. Before cold delegation, pass the returned
 or imply that `spawn` enriches the pack. If Worklog or its environment is not
 available, use the explicit state path plus one authorized artifact and label
 the run `worklog-checkpoint: unavailable — local fallback`.
+
+Pack before compaction: pass only the objective, known evidence, constraints,
+budget, requested return, and recovery handles. Keep raw output in system temp
+or CCR; never rebuild a handoff by replaying the parent transcript.
 
 For brittle state classification or handoff sequencing, read
 [references/examples.md](references/examples.md). Otherwise stay zero-shot.
