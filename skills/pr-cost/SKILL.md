@@ -11,6 +11,10 @@ GitHub PR comment when `PR_COST_HOOK_LIVE=1`.
 
 Install and verify: [INSTALL.md](INSTALL.md). Adapters live in `adapters/{cursor,claude,codex}/`.
 
+To comment Claude cost on an already-open PR, paste
+[handovers/claude-comment-pr-cost.md](handovers/claude-comment-pr-cost.md) into a
+fresh Claude Code session.
+
 ## Files
 
 - Collector: `scripts/pr_cost_collect.py`

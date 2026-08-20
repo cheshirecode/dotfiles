@@ -49,6 +49,15 @@ export PR_COST_HOOK_LIVE=1
 The collector posts an idempotent `gh pr comment`. Duplicate `pr_url` +
 `session_id` rows are skipped.
 
+To dogfood a **Claude** cost comment on an open PR, paste
+`handovers/claude-comment-pr-cost.md` into a new Claude Code session. That
+prompt sums `message.usage` from the session JSONL and runs `annotate` with
+`PR_COST_HOOK_LIVE=1`.
+
+Codex sessions expose running totals as `event_msg.type = token_count` in
+`~/.codex/sessions/**/rollout-*.jsonl`. Read the last one with
+`scripts/codex_session_usage.py`.
+
 ## Verify without a live PR
 
 ```bash
