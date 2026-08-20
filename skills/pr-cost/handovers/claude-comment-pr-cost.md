@@ -12,8 +12,9 @@ Task:
   Comment the **Claude Code** AI cost for this PR onto the PR itself. Do not
   change product code. Do not rewrite the PR body.
 
-  1. Resolve the PR URL:
-     `gh pr view --repo cheshirecode/dotfiles --head fred/pr-cost-hook --json url,number -q .url`
+  1. Resolve the PR URL (this dogfood PR):
+     `https://github.com/cheshirecode/dotfiles/pull/31`
+     or `gh pr view 31 --repo cheshirecode/dotfiles --json url -q .url`
   2. Find this Claude session JSONL. Prefer `$CLAUDE_PROJECT_DIR` transcripts
      under `~/.claude/projects/` matching cwd `dotfiles` or the current
      session id. If several files match, use the one whose `sessionId` matches
@@ -26,7 +27,7 @@ Task:
 export VIRTUAL_ENV=
 export PATH="/opt/homebrew/bin:/usr/bin:/bin:$PATH"
 export PR_COST_HOOK_LIVE=1
-PR_URL="$(gh pr view --repo cheshirecode/dotfiles --head fred/pr-cost-hook --json url -q .url)"
+PR_URL="$(gh pr view 31 --repo cheshirecode/dotfiles --json url -q .url)"
 USAGE="$(/opt/homebrew/bin/python3 /Users/fredtran/Documents/oss/dotfiles/skills/pr-cost/scripts/claude_session_usage.py --jsonl "$JSONL")"
 /opt/homebrew/bin/python3 /Users/fredtran/Documents/oss/dotfiles/skills/pr-cost/scripts/pr_cost_collect.py annotate \
   --harness claude \
