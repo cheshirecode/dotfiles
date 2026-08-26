@@ -3,6 +3,49 @@
 Read only when state classification, effect ordering, or handoff routing is
 ambiguous.
 
+## 0. Basic single-task loop
+
+INPUT
+
+> Verify that the API endpoint returns 200 for valid requests. Budget: 5 checks.
+
+OUTPUT
+
+Initialize the loop:
+
+```bash
+python3 <skill-dir>/scripts/loop_state.py init \
+  --state /tmp/api-check.json \
+  --goal "API endpoint returns 200 for valid requests" \
+  --evidence "endpoint URL confirmed" \
+  --budget-unit checks \
+  --budget-limit 5 \
+  --next-action "send test request with valid payload"
+```
+
+Run one cycle:
+
+```bash
+# After executing the check and capturing output
+python3 <skill-dir>/scripts/loop_state.py advance \
+  --state /tmp/api-check.json \
+  --evidence "command: curl -s -o /dev/null -w '%{http_code}' — 200" \
+  --next-action "verify response body schema"
+```
+
+On success after verification:
+
+```bash
+python3 <skill-dir>/scripts/loop_state.py finish \
+  --state /tmp/api-check.json \
+  --status complete \
+  --verification "curl exit 0 and HTTP 200 confirmed" \
+  --evidence "command: curl response — 200 OK with valid schema"
+```
+
+This pattern scales to multi-hypothesis diagnosis (fixture 1), delegation
+(fixture 2), and orchestrator programs (fixture 4).
+
 ## 1. Interactive diagnosis
 
 INPUT

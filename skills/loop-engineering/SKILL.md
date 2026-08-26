@@ -58,10 +58,23 @@ Routing example: `multi-repo search with uncertain ownership` →
 `serena-rg-search` → compact candidate paths plus one replay command;
 `one known-file lookup` → `optional-skill: skipped — single literal lookup`.
 
+## Resolve the skill directory
+
+Resolve `<skill-dir>` to the directory containing this `SKILL.md`. In most
+agent contexts, this is the path from which the skill was loaded. If uncertain,
+search for `loop_state.py` under the skill root:
+
+```bash
+SKILL_DIR="$(dirname "$(find ~/.claude/skills -name loop_state.py -print -quit 2>/dev/null)")/.."
+# Or, if the skill is in the current repo:
+SKILL_DIR="./skills/loop-engineering"
+```
+
+All script invocations below use `python3 <skill-dir>/scripts/loop_state.py`.
+
 ## Initialize through the script
 
-Resolve `<skill-dir>` as this `SKILL.md` file's directory. Choose an explicit,
-authorized state path; do not hand-edit its JSON.
+Choose an explicit, authorized state path; do not hand-edit its JSON.
 
 ```bash
 python3 <skill-dir>/scripts/loop_state.py init \
@@ -74,8 +87,10 @@ python3 <skill-dir>/scripts/loop_state.py init \
 ```
 
 Add `--allowed-effect` and `--approval-boundary` whenever writes or external
-effects are possible. If `python3` is unavailable, preserve the same five fields
-manually and label the run as a non-deterministic fallback.
+effects are possible. If `python3` is unavailable, preserve these five fields
+manually in a JSON file and label the run as a non-deterministic fallback:
+`goal`, `progress_evidence` (list), `budget` (unit/limit/used), `next_action`,
+and `terminal_status`.
 
 Keep transient loop state and verbose evidence out of the skill or repository
 worktree. Use `/tmp`, `$TMPDIR`, or another host-provided system temporary
@@ -158,6 +173,11 @@ cycle and contradicts the compaction rule above; `--quiet` emits the index line
 those rules ask for (`running 3/12 turns — next: <action>`, `satisfied 4/4`) and
 leaves exit codes unchanged.
 
+**Exit codes:** The state CLI exits `0` on success, `2` with a `usage:` error
+for malformed CLI usage, and `3` with a `loop-state:` error when the state
+contract rejects the transition. See
+[references/protocol.md](references/protocol.md) for transition rules.
+
 Keep each evidence value to one typed line: `kind: reference — result`, where
 `kind` is `command`, `artifact`, `git`, `github`, or `url`. Store verbose
 output in the referenced artifact and keep loop state as an index, not a log.
@@ -183,7 +203,9 @@ the successor is `running`. Never reopen the predecessor.
 
 When the installed `worklog` protocol is available, hydrate resume context
 before initialization and checkpoint verified state at compaction, delegation,
-retry exhaustion, scheduled handoff, or termination. For an existing task, run
+retry exhaustion, scheduled handoff, or termination. Resolve `$WORKLOG_BIN` to
+the worklog skill's `bin/` directory (e.g., `~/.claude/skills/worklog/bin` or
+the repo's `skills/worklog/bin`). For an existing task, run
 `$WORKLOG_BIN/context.sh <slug> --for=resume` from the target clone's direnv
 context before initializing state. Before cold delegation, pass the returned
 `context <slug> --for=compact` pack directly; do not pass the parent transcript
