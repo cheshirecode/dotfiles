@@ -1,7 +1,7 @@
 ---
 description: Orchestration, project management, and task breakdown — planning, architecture decisions, multimodal design review, and multi-subagent coordination. Strictly acts as project manager/dispatcher.
 mode: subagent
-model: openrouter/google/gemini-3.7-flash
+model: openrouter/qwen/qwen3.7-plus
 textVerbosity: low
 temperature: 0.1
 permission:
