@@ -5,7 +5,7 @@
 #   new <slug>                Create a project task file + child task stubs.
 #                             Reads optional tasks-JSON from stdin or --tasks-json=.
 #                             Required: --goal, --objective. Optional:
-#                             --stale-after=30m, --dry-run.
+#                             --stale-after=30m, --adopt, --dry-run.
 #   next <slug>               Print the first declaration-order claim-eligible
 #                             child task slug. Exit 0 with slug; exit 1 if none.
 #   claim <child-slug>        Phase 2: claim a child task (writes claim: block).
@@ -68,7 +68,7 @@ project_file() {
 # ---------- sub: new ----------
 
 cmd_new() {
-  local SLUG="" GOAL="" OBJECTIVE="" STALE_AFTER="30m" TASKS_JSON="" REPOS="" DRY=0
+  local SLUG="" GOAL="" OBJECTIVE="" STALE_AFTER="30m" TASKS_JSON="" REPOS="" DRY=0 ADOPT=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --goal=*)         GOAL="${1#--goal=}" ;;
@@ -77,6 +77,7 @@ cmd_new() {
       --tasks-json=*)   TASKS_JSON="${1#--tasks-json=}" ;;
       --repos=*)        REPOS="${1#--repos=}" ;;
       --dry-run)        DRY=1 ;;
+      --adopt)          ADOPT=1 ;;
       --goal)           GOAL="$2"; shift ;;
       --objective)      OBJECTIVE="$2"; shift ;;
       --stale-after)    STALE_AFTER="$2"; shift ;;
@@ -84,7 +85,9 @@ cmd_new() {
       --repos)          REPOS="$2"; shift ;;
       -h|--help)
         cat <<EOF
-usage: project.sh new <slug> --goal "..." --objective "..." [--stale-after=30m] [--repos=cheshirecode/<repo>,cheshirecode/<repo>] [--dry-run]
+usage: project.sh new <slug> --goal "..." --objective "..." [--stale-after=30m] [--repos=cheshirecode/<repo>,cheshirecode/<repo>] [--adopt] [--dry-run]
+  --adopt   wire tasks that already exist on disk into the project in place
+            (sets project:/parent_slug:, never rewrites their body)
        echo '[{"slug":"a"},{"slug":"b","depends_on":["a"]}]' | project.sh new <slug> ...
        project.sh new <slug> --tasks-json='[{"slug":"a"}]' ...
 EOF
@@ -114,7 +117,7 @@ EOF
   # everything in Python and emit a single JSON plan we then materialize in shell.
   local PLAN
   PLAN="$(SLUG="$SLUG" GOAL="$GOAL" OBJECTIVE="$OBJECTIVE" STALE_AFTER="$STALE_AFTER" \
-          LDAP="$LDAP" TODAY="$TODAY" TASKS_JSON="$TASKS_JSON" REPOS="$REPOS" \
+          LDAP="$LDAP" TODAY="$TODAY" TASKS_JSON="$TASKS_JSON" REPOS="$REPOS" ADOPT="$ADOPT" \
           python3 "$SCRIPT_DIR/_project.py" plan-new)" || {
     echo "project new: plan failed" >&2; return 1
   }
