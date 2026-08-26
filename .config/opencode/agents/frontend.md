@@ -1,7 +1,7 @@
 ---
 description: Frontend/UI work — Preact/Vite SPAs, Nova design system, CSS/styling, marketing pages (Astro/Next), image-reference-driven UI. Multimodal model for Figma refs, screenshots, design specs. Use for new mini-app FE, UI polish, layout fixes, theme/styling, or when a prompt contains an image reference.
 mode: subagent
-model: openrouter/google/gemini-3.7-flash
+model: openrouter/qwen/qwen3-vl-235b-a22b-instruct
 textVerbosity: low
 temperature: 0.3
 permission:
