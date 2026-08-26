@@ -9,7 +9,9 @@ Subcommands invoked from the shell driver:
 
   materialize-new
                Read the same plan JSON from stdin and write every file to disk.
-               Refuses if any target file already exists.
+               Refuses if any target file already exists, except children
+               marked adopt:true — those are wired in place (project: /
+               parent_slug: only; body preserved).
 
   next         Read PROJECT_SLUG from env. Walk the project's tasks: list and
                print the first declaration-order claim-eligible task slug
@@ -196,20 +198,35 @@ def cmd_plan_new() -> None:
       if d not in seen and d not in {x["slug"] for x in tasks}:
         die(f"plan-new: '{cs}' depends_on '{d}' which is not in tasks")
 
-  # Refuse if any target file already exists.
+  # Refuse if any target file already exists, unless adopting.
+  adopt = os.environ.get("ADOPT", "0") == "1"
   active_dir = pathlib.Path("people") / ldap / "active"
   project_path = active_dir / f"{slug}.md"
   if find_task_path(slug):
     die(f"plan-new: project slug '{slug}' already exists on disk")
+  adopted: set[str] = set()
   for t in tasks:
-    if find_task_path(t["slug"]):
-      die(f"plan-new: child slug '{t['slug']}' already exists on disk")
+    existing = find_task_path(t["slug"])
+    if existing:
+      if not adopt:
+        die(f"plan-new: child slug '{t['slug']}' already exists on disk"
+            " (pass --adopt to wire it into the project in place)")
+      adopted.add(t["slug"])
 
   project_body = render_project_body(slug, goal, objective, stale_after,
                                      ldap, today, tasks, repos)
   children = []
   for t in tasks:
     cs = t["slug"]
+    if cs in adopted:
+      # Existing task: wire it in place, never regenerate its body.
+      children.append({
+        "slug": cs,
+        "path": str(find_task_path(cs)),
+        "depends_on": t.get("depends_on") or [],
+        "adopt": True,
+      })
+      continue
     # Per-task repos override; else children inherit the project's repos.
     child_repos = t.get("repos") if isinstance(t.get("repos"), list) else repos
     body = render_child_body(cs, slug, ldap, today, t.get("title"),
@@ -219,6 +236,7 @@ def cmd_plan_new() -> None:
       "slug": cs,
       "path": str(active_dir / f"{cs}.md"),
       "depends_on": t.get("depends_on") or [],
+      "adopt": False,
       "body": body,
     })
 
@@ -250,9 +268,34 @@ def cmd_materialize_new() -> None:
   proj_path.write_text(plan["project_body"])
   for c in plan["children"]:
     cp = pathlib.Path(c["path"])
+    if c.get("adopt"):
+      if not cp.exists():
+        die(f"materialize-new: adopted child missing on disk: {cp}")
+      _adopt_child(cp, plan["slug"])
+      continue
     if cp.exists():
       die(f"materialize-new: refusing to overwrite {cp}")
     cp.write_text(c["body"])
+
+
+def _adopt_child(path: pathlib.Path, project_slug: str) -> None:
+  """Point an existing task at its project, preserving all other content.
+
+  Sets `project:` and `parent_slug:` in frontmatter only. Body is untouched.
+  """
+  text = path.read_text()
+  if not text.startswith("---\n"):
+    die(f"materialize-new: {path} has no frontmatter to adopt")
+  _, fm, body = text.split("---\n", 2)
+  if re.search(r"^project:", fm, re.M):
+    fm = re.sub(r"^project:.*$", f"project: {project_slug}", fm, count=1, flags=re.M)
+  else:
+    fm = f"project: {project_slug}\n" + fm
+  if re.search(r"^parent_slug:", fm, re.M):
+    fm = re.sub(r"^parent_slug:.*$", f"parent_slug: {project_slug}", fm, count=1, flags=re.M)
+  else:
+    fm = re.sub(r"^(project: .*)$", r"\1\nparent_slug: " + project_slug, fm, count=1, flags=re.M)
+  path.write_text("---\n" + fm + "---\n" + body)
 
 
 def _eligible_list(slug: str) -> list[str]:
