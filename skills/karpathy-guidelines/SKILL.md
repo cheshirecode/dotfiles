@@ -68,11 +68,20 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
-For uncertain multi-step work, make the load-bearing model falsifiable before editing:
+### Falsifiable hypotheses for uncertain work
+
+For uncertain multi-step work, make the load-bearing assumption falsifiable before editing:
 
 - `Hypothesis:` the assumption that makes the planned approach valid.
 - `Falsifier:` the observation that would disprove or materially change it.
 - `Replay check:` the original reproduction or narrow command to rerun after revision.
+
+**Example:**
+```
+Hypothesis: the auth middleware reads the token from the Authorization header.
+Falsifier: the middleware reads a different header or cookie.
+Replay check: curl -H "Authorization: Bearer test" /api/protected
+```
 
 If observed evidence contradicts a load-bearing assumption or a planned expected result:
 
