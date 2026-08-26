@@ -257,7 +257,7 @@ Do not present the live progress log as the final answer.
 
 ### Final report
 
-The final report is outcome-first. The first 25 rendered lines should show the decision summary, not ballots.
+The final report is outcome-first. The first 25 rendered lines should show the decision summary, not ballots. Use the following section headings and table formats verbatim in the output:
 
 ## Outcome
 
@@ -351,5 +351,3 @@ Claude: SKIP single-agent answer: 4
 ## Why voting
 
 A single synthesis agent inventing items and verifiers cleaning them up is structurally backwards. Items should clear an explicit bar to enter, not enter by default and need removal. Voting flips it: the collator only gathers, voters apply explicit criteria, and items need positive majority-plus-one support to be kept.
-
-- Quick reference: support threshold is `ceil(M_returned / 2 + 1)` for odd returned voter counts only: M=3 threshold 3, M=5 threshold 4, M=7 threshold 5. M=2 or M=4 is `UNVERIFIED` until a replacement voter restores an odd count.
