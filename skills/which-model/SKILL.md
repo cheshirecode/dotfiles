@@ -7,6 +7,14 @@ description: Choose the best-value model lane for a task by comparing capability
 
 Choose by capability and cost for the job, not provider reputation. Treat OpenAI, Anthropic, Chinese models, and local/open-weight routes as first-class candidates.
 
+## When to use
+
+- User invokes `/which-model`, asks which model to use, or wants value-for-token model suggestions
+- Session-level model-selection guidelines are needed
+- `/which-model` with no arguments prints the guideline; `/which-model task prose or capability` returns 1-3 model suggestions
+
+Skip if: no delegate surface, or in-band work is sufficient for the task.
+
 ## Resolve the skill directory
 
 Resolve `<skill-dir>` to the directory containing this `SKILL.md`. All script and reference paths below are relative to it:

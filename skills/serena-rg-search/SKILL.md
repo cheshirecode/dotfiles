@@ -7,6 +7,14 @@ description: Pick the right tool for multi-faceted code search across symbols, t
 
 Use this skill to pick the fastest search approach for a coding task. Most real questions touch more than one facet — combine tools deliberately instead of reflexively reaching for `rg`.
 
+## When to use
+
+- Finding definitions, references, files, strings, structured config, when-it-changed, or log events
+- Planning a search workflow before reading code
+- Multi-faceted search across symbols, text, JSON, git history, and logs
+
+Skip if: one literal or known-file lookup is sufficient.
+
 ## Route first
 
 - Unfamiliar codebase or broad discovery: start with `rg`, then escalate to Serena for symbol-aware follow-up.

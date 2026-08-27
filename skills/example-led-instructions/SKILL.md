@@ -7,6 +7,14 @@ description: Design compact examples for brittle reusable agent instructions. Us
 
 Use examples only when they buy reliability.
 
+## When to use
+
+- Writing or reviewing skills, rubrics, schemas, tool-use instructions, strict output contracts, or prompts
+- Format/style is underspecified or recurrently wrong
+- Another skill invokes `$example-led-instructions`
+
+Skip if: the format is standard (JSON, markdown, natural language), the task has no known failure mode, or examples would cost more context than they save.
+
 ## Opt-in Preamble
 
 Skill authors: add this line to your SKILL.md to signal that the skill benefits from example-led review:

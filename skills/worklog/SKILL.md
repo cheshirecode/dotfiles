@@ -7,6 +7,13 @@ description: Manage the shared `_worklog` journal across machines and sessions. 
 
 Single entry point for the shared `_worklog` protocol. Canonical protocol lives in `_worklog/AGENTS.md`. This file is a thin router. Mode detail lives in `modes/<name>.md`; the compact protocol reference lives in `references/protocol.md`. Load both only when routed below.
 
+## When to use
+
+- Managing the shared `_worklog` journal across machines and sessions
+- Invoking any worklog mode: `init`, `sync`, `status`, `context`, `plan`, `spawn`, `export`, `import`, `lint`, `project`, `scrape-slack`, `review`
+
+Skip if: no durable task tracking or cross-session context is needed.
+
 ## Skill structure
 
 ```
