@@ -1,0 +1,222 @@
+#!/usr/bin/env bash
+# crew-radar — flag files that more than one git worktree is changing.
+#
+# Replicates Fleet Deck's conflict radar with no daemon and no model calls:
+# a merge conflict surfaced before either branch is ready to merge.
+#
+# For every worktree of a repo it collects the paths changed since the merge-base
+# with the base ref, split into two buckets:
+#   committed — in the branch's history but not the base
+#   dirty     — staged, unstaged, or untracked right now
+# Any path claimed by two or more worktrees is an overlap.
+#
+# Severity:
+#   info  every owner has the path COMMITTED and their branches form an ancestry
+#         chain — the expected footprint of deliberately stacking one branch on
+#         another, where the descendant carries the ancestor's change forward
+#   warn  anything else: any owner holding the path dirty (an uncommitted edit
+#         racing a committed one is a real conflict), or unrelated branches
+#
+# Exit: 0 clean (or info only) · 2 collision · 1 usage or repo error
+#
+# Zero tokens by construction: safe to arm from the Monitor tool and to run in a
+# PostToolUse hook. Paths containing newlines are not supported (NUL-delimited
+# git output is parsed, but the report is line-oriented).
+
+set -uo pipefail
+
+PROG=${0##*/}
+
+usage() {
+  cat <<EOF
+$PROG — flag files that more than one git worktree is changing
+
+Usage: $PROG [options] [repo-path]
+
+  repo-path        any path inside the repo (default: current directory)
+
+Options:
+  --base <ref>     base ref to diff against
+                   (default: origin/HEAD, else origin/master, origin/main, master, main)
+  --json           machine-readable output; stable ordering, for Monitor fingerprints
+  --quiet          suppress output, exit code only
+  --strict         treat 'info' (stacked-branch) overlaps as collisions too
+  -h, --help       this text
+
+Exit codes: 0 clean · 2 collision · 1 usage or repo error
+
+Examples:
+  $PROG /workspace/midas
+  $PROG --json /workspace/midas | jq -S -c .          # fingerprint for Monitor
+  $PROG --quiet /workspace/midas || echo "crew collision"
+EOF
+}
+
+die() { printf '%s: %s\n' "$PROG" "$1" >&2; exit 1; }
+
+BASE=""; FMT=text; QUIET=0; STRICT=0; REPO=""
+while [ $# -gt 0 ]; do
+  case $1 in
+    --base) [ $# -ge 2 ] || die "--base needs a ref"; BASE=$2; shift 2 ;;
+    --base=*) BASE=${1#*=}; shift ;;
+    --json) FMT=json; shift ;;
+    --quiet|-q) QUIET=1; shift ;;
+    --strict) STRICT=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    -*) die "unknown option: $1 (try --help)" ;;
+    *) [ -z "$REPO" ] || die "only one repo path accepted"; REPO=$1; shift ;;
+  esac
+done
+
+command -v git >/dev/null || die "git not found on PATH"
+REPO=${REPO:-$PWD}
+[ -e "$REPO" ] || die "no such path: $REPO"
+ROOT=$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null) \
+  || die "not inside a git repository: $REPO"
+
+# --- base ref -----------------------------------------------------------------
+if [ -z "$BASE" ]; then
+  for cand in \
+    "$(git -C "$ROOT" symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null)" \
+    origin/master origin/main master main; do
+    [ -n "$cand" ] || continue
+    if git -C "$ROOT" rev-parse --verify -q "${cand}^{commit}" >/dev/null 2>&1; then
+      BASE=$cand; break
+    fi
+  done
+fi
+[ -n "$BASE" ] || die "could not detect a base ref; pass --base <ref>"
+git -C "$ROOT" rev-parse --verify -q "${BASE}^{commit}" >/dev/null 2>&1 \
+  || die "base ref not found: $BASE"
+
+# --- enumerate worktrees ------------------------------------------------------
+declare -a LABELS=() WTPATHS=()
+declare -A HEADS=()
+wt=""; head=""; branch=""; bare=0
+flush_wt() {
+  [ -n "$wt" ] || return 0
+  if [ "$bare" -eq 0 ]; then
+    local label
+    if [ -n "$branch" ]; then label=${branch#refs/heads/}
+    elif [ -n "$head" ]; then label="detached@${head:0:8}"
+    else label="${wt##*/}"; fi
+    # keep labels unique so two detached worktrees never merge into one row
+    if [ -n "${HEADS[$label]+x}" ]; then label="$label(${wt##*/})"; fi
+    LABELS+=("$label"); WTPATHS+=("$wt"); HEADS["$label"]=$head
+  fi
+  wt=""; head=""; branch=""; bare=0
+}
+while IFS= read -r line; do
+  case $line in
+    "worktree "*) flush_wt; wt=${line#worktree } ;;
+    "HEAD "*)     head=${line#HEAD } ;;
+    "branch "*)   branch=${line#branch } ;;
+    bare)         bare=1 ;;
+    "")           flush_wt ;;
+  esac
+done < <(git -C "$ROOT" worktree list --porcelain 2>/dev/null)
+flush_wt
+
+[ "${#LABELS[@]}" -gt 0 ] || die "no usable worktrees found under $ROOT"
+
+# --- collect changed paths per worktree --------------------------------------
+declare -A COMMITTED=() DIRTY=() OWNERS=()
+add_owner() { # $1 path  $2 label
+  local cur=${OWNERS[$1]:-}
+  case " $cur " in *" $2 "*) return 0 ;; esac
+  OWNERS[$1]="${cur:+$cur }$2"
+}
+
+for i in "${!LABELS[@]}"; do
+  label=${LABELS[$i]}; path=${WTPATHS[$i]}
+  [ -d "$path" ] || continue
+  mb=$(git -C "$path" merge-base "$BASE" HEAD 2>/dev/null) || mb=""
+  if [ -n "$mb" ]; then
+    while IFS= read -r -d '' f; do
+      [ -n "$f" ] || continue
+      COMMITTED["$label|$f"]=1; add_owner "$f" "$label"
+    done < <(git -C "$path" diff --name-only -z "$mb" HEAD -- 2>/dev/null)
+  fi
+  while IFS= read -r -d '' f; do
+    [ -n "$f" ] || continue
+    DIRTY["$label|$f"]=1; add_owner "$f" "$label"
+  done < <(git -C "$path" diff --name-only -z HEAD -- 2>/dev/null)
+  while IFS= read -r -d '' f; do
+    [ -n "$f" ] || continue
+    DIRTY["$label|$f"]=1; add_owner "$f" "$label"
+  done < <(git -C "$path" ls-files --others --exclude-standard -z 2>/dev/null)
+done
+
+# --- classify overlaps --------------------------------------------------------
+# info == nobody holds the path dirty AND the owner HEADs form an ancestry chain
+# warn == anything else. A dirty owner is never "stacked": an uncommitted edit
+#         racing another worktree's committed change is exactly a live conflict.
+is_chain() { # labels... -> 0 when totally ordered by ancestry
+  local -a l=("$@") a b
+  for a in "${l[@]}"; do
+    for b in "${l[@]}"; do
+      [ "$a" = "$b" ] && continue
+      local ha=${HEADS[$a]:-} hb=${HEADS[$b]:-}
+      [ -n "$ha" ] && [ -n "$hb" ] || return 1
+      git -C "$ROOT" merge-base --is-ancestor "$ha" "$hb" 2>/dev/null && continue
+      git -C "$ROOT" merge-base --is-ancestor "$hb" "$ha" 2>/dev/null && continue
+      return 1
+    done
+  done
+  return 0
+}
+
+declare -a ROWS=()
+nwarn=0; ninfo=0
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  # shellcheck disable=SC2206  # deliberate word-splitting of the owner list
+  owners=(${OWNERS[$f]})
+  [ "${#owners[@]}" -ge 2 ] || continue
+  ndirty=0
+  for o in "${owners[@]}"; do [ -n "${DIRTY[$o|$f]+x}" ] && ndirty=$((ndirty+1)); done
+  if [ "$ndirty" -eq 0 ] && is_chain "${owners[@]}"; then
+    sev=info; ninfo=$((ninfo+1))
+  else
+    sev=warn; nwarn=$((nwarn+1))
+  fi
+  annotated=()
+  for o in "${owners[@]}"; do
+    if [ -n "${DIRTY[$o|$f]+x}" ]; then annotated+=("$o[dirty]"); else annotated+=("$o"); fi
+  done
+  ROWS+=("$sev|$f|$(IFS=,; echo "${annotated[*]}")")
+done < <(printf '%s\n' "${!OWNERS[@]}" | LC_ALL=C sort)
+
+collision=$nwarn
+[ "$STRICT" -eq 1 ] && collision=$((nwarn + ninfo))
+
+# --- report -------------------------------------------------------------------
+if [ "$QUIET" -eq 0 ]; then
+  if [ "$FMT" = json ]; then
+    printf '{"base":"%s","worktrees":%d,"warn":%d,"info":%d,"overlaps":[' \
+      "$BASE" "${#LABELS[@]}" "$nwarn" "$ninfo"
+    first=1
+    for row in $(printf '%s\n' "${ROWS[@]:-}" | LC_ALL=C sort); do
+      [ -n "$row" ] || continue
+      sev=${row%%|*}; rest=${row#*|}; f=${rest%%|*}; own=${rest#*|}
+      [ "$first" -eq 1 ] || printf ','
+      first=0
+      printf '{"severity":"%s","path":"%s","owners":"%s"}' "$sev" "$f" "$own"
+    done
+    printf ']}\n'
+  else
+    printf '%s  base=%s  worktrees=%d\n' "$PROG" "$BASE" "${#LABELS[@]}"
+    if [ "${#ROWS[@]}" -eq 0 ]; then
+      printf 'clean — no overlapping paths\n'
+    else
+      for row in $(printf '%s\n' "${ROWS[@]}" | LC_ALL=C sort); do
+        sev=${row%%|*}; rest=${row#*|}; f=${rest%%|*}; own=${rest#*|}
+        printf '%-5s %-52s %s\n' "$sev" "$f" "$own"
+      done
+      printf '%d overlapping path(s): %d warn, %d info\n' "${#ROWS[@]}" "$nwarn" "$ninfo"
+    fi
+  fi
+fi
+
+[ "$collision" -gt 0 ] && exit 2
+exit 0
