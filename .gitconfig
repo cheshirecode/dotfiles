@@ -4,6 +4,10 @@
 	path = ~/.gitconfig.local
 [includeIf "gitdir:~/.config/coderv2/dotfiles/"]
 	path = ~/.config/coderv2/dotfiles/.gitconfig.cheshireCode
+[includeIf "gitdir:~/src/personal/"]
+	path = ~/.config/coderv2/dotfiles/.gitconfig.cheshireCode
+[includeIf "hasconfig:remote.*.url:**/cheshireCode/**"]
+	path = ~/.config/coderv2/dotfiles/.gitconfig.cheshireCode
 [rebase]
 	# autosquash = true
 [core]
@@ -28,6 +32,3 @@
 	last = log -1 HEAD --stat
 	cm = commit -m
 	rv = remote -v
-[user]
-	name = cheshirecode
-	email = cheshirecode@users.noreply.github.com
