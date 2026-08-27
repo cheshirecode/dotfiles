@@ -10,6 +10,14 @@ checks that every declared criterion has at least one typed evidence record; the
 agent remains responsible for verifying that each record is truthful and
 relevant.
 
+## When to use
+
+- Before marking a multi-clause task, agent loop, deployment, PR, or verification workflow complete
+- When tests passing does not prove delivery, merge, or user-visible success
+- When you need to map every observable goal or acceptance criterion to typed evidence
+
+Skip if: the task has a single observable outcome with one sufficient check (tests alone prove completion).
+
 ## Resolve the skill directory
 
 Resolve `<skill-dir>` to the directory containing this `SKILL.md`. In most

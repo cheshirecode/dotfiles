@@ -8,6 +8,13 @@ license: MIT
 
 Behavioral guidelines to reduce common LLM coding mistakes, derived from [Andrej Karpathy's observations](https://x.com/karpathy/status/2015883857489522876) on LLM coding pitfalls.
 
+## When to use
+
+- Writing, reviewing, or refactoring code
+- Avoiding overcomplication, making surgical changes, surfacing assumptions, defining verifiable success criteria
+
+Skip if: read-only work with no code changes.
+
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
 For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
