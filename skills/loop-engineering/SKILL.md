@@ -12,10 +12,13 @@ not a loop design.
 
 1. Skip this skill when one action plus one check is sufficient.
 2. For interactive, resumable, or delegated loops, use the state script below.
-3. For scheduled loops or installation drift, also read
+3. For concurrent workers in separate worktrees, also read
+   [references/crew.md](references/crew.md); arm `bin/crew-radar` before the
+   first parallel dispatch.
+4. For scheduled loops or installation drift, also read
    [references/hosts.md](references/hosts.md); require a real recurrence
    primitive for scheduling and use its audit command for duplicate copies.
-4. For exact transition, effect, worklog, or handoff rules, read
+5. For exact transition, effect, worklog, or handoff rules, read
    [references/protocol.md](references/protocol.md).
 
 Use this compact route matrix before loading references:
@@ -24,6 +27,7 @@ Use this compact route matrix before loading references:
 | --- | --- | --- |
 | one action + one check | one-shot | no loop state |
 | repeated, resumable, or delegated work | state CLI | initialize a bounded run |
+| tasks run concurrently in separate worktrees | state CLI + crew | prove isolation, then arm the conflict radar |
 | recurrence or installation drift | state CLI + hosts | verify host primitive or audit |
 | exact transition, effect, worklog, or handoff question | selected route + protocol | load only the needed rules |
 
@@ -217,6 +221,10 @@ token it cannot spend on dispatch. Follow these rules:
 - **Optional invocations are gated.** Invoke an optional skill only when its
   trigger is met; do not preload or invoke it as ceremony. Use the regular loop
   for one or two tasks instead of creating a project.
+
+When the tasks must run at the same time in separate worktrees, read
+[references/crew.md](references/crew.md) — same queue, budget, and evidence
+rules, plus isolation and the conflict radar.
 
 ### Natural language invocation
 
