@@ -1,8 +1,8 @@
 # Crew mode — parallel worker sessions
 
 Use when the orchestrator's tasks must run **concurrently in separate worktrees**
-rather than one cycle at a time. Crew mode is orchestrator mode plus isolation:
-the queue, budget, and one-line-evidence rules are unchanged.
+rather than one cycle at a time. Crew mode is orchestrator mode plus isolation: the queue, budget, and
+one-line-evidence rules in `references/orchestrator.md` are unchanged.
 
 Do not stand up a coordination daemon for this. The harness already exposes the
 primitives; `project.sh` already supplies the claim model. Map them directly:
