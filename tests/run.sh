@@ -154,6 +154,9 @@ hosts = (skill / "references/hosts.md").read_text()
 protocol = (skill / "references/protocol.md").read_text()
 orchestrator = (skill / "references/orchestrator.md").read_text()
 crew = (skill / "references/crew.md").read_text()
+# Prose references are hard-wrapped, so multi-word contracts match a flattened
+# copy; that keeps them robust to reflowing the paragraph.
+crew_flat = " ".join(crew.split())
 state_script = (skill / "scripts/loop_state.py").read_text()
 install_script = (skill / "scripts/install_audit.py").read_text()
 references = {path.name for path in (skill / "references").glob("*.md")}
@@ -227,6 +230,25 @@ checks = {
         and "verify state ownership" in protocol
     ),
     "host differences deferred": references == {"crew.md", "examples.md", "hosts.md", "orchestrator.md", "protocol.md"},
+    # Crew mode must keep naming the primitives it replaces a daemon with, the
+    # radar's contract, and the two boundaries that make delegation safe.
+    "crew mode names its primitives": (
+        "references/crew.md" in root
+        and 'isolation: "worktree"' in crew
+        and "ListAgents" in crew
+        and "notify_when_idle" in crew
+        and "project.sh" in crew
+    ),
+    "crew radar contract is stated": (
+        "bin/crew-radar" in crew_flat
+        and "`2` collision" in crew_flat
+        and "it has no exit-code condition" in crew_flat
+        and "ancestry chain" in crew_flat
+    ),
+    "crew boundaries are explicit": (
+        "answer another session's permission prompt" in crew_flat
+        and "never edit a worker's worktree" in crew_flat.lower()
+    ),
     "cross-host continuation": (
         hosts.count("while state is `running`") >= 3
         and "A prompt cannot manufacture background execution" in hosts

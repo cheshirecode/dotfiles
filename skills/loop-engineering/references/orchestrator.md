@@ -29,7 +29,7 @@ token it cannot spend on dispatch. Follow these rules:
   for one or two tasks instead of creating a project.
 
 When the tasks must run at the same time in separate worktrees, read
-[references/crew.md](references/crew.md) — same queue, budget, and evidence
+`references/crew.md` — same queue, budget, and evidence
 rules, plus isolation and the conflict radar.
 
 ### Natural language invocation
