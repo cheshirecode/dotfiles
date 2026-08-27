@@ -11,6 +11,18 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 PASS=0; FAIL=0
+
+# Worklog fixtures pass their own WORKLOG_REPO/WORKLOG_LDAP. A developer shell
+# that pins those vars — BASH_ENV, direnv, or the per-clone .envrc the worklog
+# protocol itself requires — is sourced AFTER the per-command assignment, so it
+# silently overrides them and the fixtures test the real vault instead of the
+# throwaway one. Neutralize that inheritance; CI has nothing to unset.
+WL_HERMETIC=(env -u BASH_ENV -u WORKLOG_LDAP -u WORKLOG_NS -u WORKLOG_REPO)
+# Dropping BASH_ENV also drops any PYTHONPATH it exported, and fixtures that pin
+# PATH=/usr/bin:/bin to force a fallback then hit a system python without PyYAML.
+# Carry the site path explicitly; a per-line PYTHONPATH still overrides this one.
+WL_SITE=$(python3 -c 'import pathlib, yaml; print(pathlib.Path(yaml.__file__).resolve().parents[1])' 2>/dev/null || true)
+[[ -n "$WL_SITE" ]] && WL_HERMETIC+=("PYTHONPATH=$WL_SITE")
 say() { printf "  %-5s %s\n" "$1" "$2"; }
 ok()   { say PASS "$1"; PASS=$((PASS+1)); }
 fail() { say FAIL "$1"; FAIL=$((FAIL+1)); }
@@ -140,6 +152,8 @@ root = (skill / "SKILL.md").read_text()
 examples = (skill / "references/examples.md").read_text()
 hosts = (skill / "references/hosts.md").read_text()
 protocol = (skill / "references/protocol.md").read_text()
+orchestrator = (skill / "references/orchestrator.md").read_text()
+crew = (skill / "references/crew.md").read_text()
 state_script = (skill / "scripts/loop_state.py").read_text()
 install_script = (skill / "scripts/install_audit.py").read_text()
 references = {path.name for path in (skill / "references").glob("*.md")}
@@ -159,7 +173,13 @@ checks = {
     "terminal evidence rule": "model's prose claim is not evidence" in root,
     "typed evidence rule": "one typed line" in root and "index, not a log" in root,
     "optional model route": "$which-model" in root and "model-routing: skipped" in root,
-    "council replay pack": "affected mutation" in root and "one decision" in root and "replay check" in root,
+    # Orchestrator-only rules moved to references/orchestrator.md with the mode;
+    # the contract follows the content rather than pinning it to the root.
+    "council replay pack": (
+        "affected mutation" in orchestrator
+        and "one decision" in orchestrator
+        and "replay check" in orchestrator
+    ),
     "checkpoint handoff": "state fingerprint" in protocol and "typed evidence reference" in protocol,
     "continuous active run": (
         "While state is `running`" in root
@@ -206,7 +226,7 @@ checks = {
         and "state fingerprint changed" in state_script
         and "verify state ownership" in protocol
     ),
-    "host differences deferred": references == {"crew.md", "examples.md", "hosts.md", "protocol.md"},
+    "host differences deferred": references == {"crew.md", "examples.md", "hosts.md", "orchestrator.md", "protocol.md"},
     "cross-host continuation": (
         hosts.count("while state is `running`") >= 3
         and "A prompt cannot manufacture background execution" in hosts
@@ -331,7 +351,7 @@ print(pathlib.Path(yaml.__file__).resolve().parents[1])
 PY
 )
 
-  if skills/worklog/tests/reconcile_pr/test_reconcile_pr.sh >/dev/null; then
+  if "${WL_HERMETIC[@]}" skills/worklog/tests/reconcile_pr/test_reconcile_pr.sh >/dev/null; then
     ok "worklog PR reconciliation fixtures"
   else
     fail "worklog PR reconciliation fixtures"
@@ -580,7 +600,7 @@ PY
   fi
   rm -rf "$fake_home"
 
-  local skill_names skill_name skill_md shared_skill_md install_home canonical_skill installed_skill skills_root
+  local skill_names default_skill_names skill_name skill_md shared_skill_md install_home canonical_skill installed_skill skills_root
   skill_names=$(python3 - <<'PY'
 import pathlib
 import yaml
@@ -596,6 +616,23 @@ for entry in manifest.get("skills", []):
     if skill_md.is_file():
         print(entry["name"])
 PY
+)
+  # Subset a bare `install-skills.sh` actually installs: optional entries are
+  # opt-in, so only these may be required to appear in every user root.
+  default_skill_names=$(python3 - <<'PYD'
+import pathlib
+import yaml
+
+manifest = yaml.safe_load(open("manifest/skills.yaml"))
+for entry in manifest.get("skills", []):
+    if entry["name"] == "worklog" or entry.get("optional", False):
+        continue
+    source = entry.get("source", {})
+    if source.get("type") != "subpath":
+        continue
+    if (pathlib.Path(source["path"]) / "SKILL.md").is_file():
+        print(entry["name"])
+PYD
 )
   while IFS= read -r skill_name; do
     [[ -z "$skill_name" ]] && continue
@@ -617,15 +654,18 @@ PY
   install_home=$(mktemp -d)
   if HOME="$install_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" ./bin/install-skills.sh >/dev/null 2>&1; then
     rc=0
-    for canonical_skill in "$REPO_ROOT"/skills/*/SKILL.md; do
-      skill_name=$(basename "$(dirname "$canonical_skill")")
+    # A bare run installs only non-optional manifest skills, so asserting over
+    # skills/*/ would demand exposure for opt-in ones (e.g. loop-helpers).
+    while IFS= read -r skill_name; do
+      [[ -z "$skill_name" ]] && continue
+      canonical_skill="$REPO_ROOT/skills/$skill_name/SKILL.md"
       for skills_root in .agents/skills .claude/skills .cursor/skills; do
         installed_skill="$install_home/$skills_root/$skill_name/SKILL.md"
         if [[ ! -f "$installed_skill" || "$(realpath "$installed_skill")" != "$(realpath "$canonical_skill")" ]]; then
           rc=1
         fi
       done
-    done
+    done <<< "$default_skill_names"
   else
     rc=1
   fi
@@ -1450,7 +1490,7 @@ test_worklog_skill() {
   local vault rc
   vault=$(mktemp -d)/test-vault
   set +e
-  bash "$sb/init-new-data-repo.sh" "$vault" test-ldap >/dev/null 2>&1
+  "${WL_HERMETIC[@]}" bash "$sb/init-new-data-repo.sh" "$vault" test-ldap >/dev/null 2>&1
   rc=$?
   set -e
   if [[ $rc -eq 0 && -f "$vault/AGENTS.md" && -d "$vault/people/test-ldap/active" ]]; then
@@ -1463,7 +1503,7 @@ test_worklog_skill() {
 
   # Idempotent re-run: zero diffs in working tree.
   set +e
-  bash "$sb/init-new-data-repo.sh" "$vault" test-ldap >/dev/null 2>&1
+  "${WL_HERMETIC[@]}" bash "$sb/init-new-data-repo.sh" "$vault" test-ldap >/dev/null 2>&1
   if [[ -z "$(git -C "$vault" status --porcelain)" ]]; then
     ok "init-new-data-repo idempotent (no diff on re-run)"
   else
@@ -1473,21 +1513,21 @@ test_worklog_skill() {
 
   # Run preamble + status + lint against the throwaway vault.
   local out
-  out=$(WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap bash "$sb/preamble.sh" --minimal 2>&1)
+  out=$("${WL_HERMETIC[@]}" WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap bash "$sb/preamble.sh" --minimal 2>&1)
   if echo "$out" | grep -q 'LDAP=test-ldap'; then
     ok "preamble.sh --minimal resolves vault LDAP"
   else
     fail "preamble.sh --minimal (got: $(echo "$out" | head -1))"
   fi
 
-  out=$(WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap bash "$sb/status.sh" --since=today 2>&1)
+  out=$("${WL_HERMETIC[@]}" WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap bash "$sb/status.sh" --since=today 2>&1)
   if echo "$out" | grep -q '_nothing to report_'; then
     ok "status.sh runs against empty vault"
   else
     fail "status.sh against empty vault (got: $(echo "$out" | head -2 | tr '\n' ' '))"
   fi
 
-  out=$(WORKLOG_REPO="$vault" bash "$sb/lint.sh" 2>&1)
+  out=$("${WL_HERMETIC[@]}" WORKLOG_REPO="$vault" bash "$sb/lint.sh" 2>&1)
   if echo "$out" | grep -qE '0 errors'; then
     ok "lint.sh runs clean against empty vault"
   else
@@ -1509,44 +1549,44 @@ test_worklog_skill() {
   fi
 
   # Hard-fail when WORKLOG_REPO unset + cwd outside any clone.
-  out=$( cd /tmp && env -u WORKLOG_REPO -u WORKLOG_LDAP -u WORKLOG_NS bash "$sb/kernels-roster.sh" 2>&1 || true )
+  out=$( cd /tmp && env -u BASH_ENV -u WORKLOG_REPO -u WORKLOG_LDAP -u WORKLOG_NS bash "$sb/kernels-roster.sh" 2>&1 || true )
   if echo "$out" | grep -q 'cannot locate'; then
     ok "scripts hard-fail outside a worklog clone"
   else
     fail "expected hard-fail outside clone, got: $(echo "$out" | head -1)"
   fi
 
-  if bash "$skill/tests/worklog_manager/test_graph.sh" >/dev/null 2>&1; then
+  if "${WL_HERMETIC[@]}" bash "$skill/tests/worklog_manager/test_graph.sh" >/dev/null 2>&1; then
     ok "worklog-manager graph fixture"
   else
     fail "worklog-manager graph fixture"
   fi
 
-  if bash "$skill/tests/worklog_manager/test_dispatch.sh" >/dev/null 2>&1; then
+  if "${WL_HERMETIC[@]}" bash "$skill/tests/worklog_manager/test_dispatch.sh" >/dev/null 2>&1; then
     ok "worklog-manager dispatch fixture"
   else
     fail "worklog-manager dispatch fixture"
   fi
 
-  if bash "$skill/tests/worklog_manager/test_poll.sh" >/dev/null 2>&1; then
+  if "${WL_HERMETIC[@]}" bash "$skill/tests/worklog_manager/test_poll.sh" >/dev/null 2>&1; then
     ok "worklog-manager poll fixture"
   else
     fail "worklog-manager poll fixture"
   fi
 
-  if node "$skill/tests/worklog_manager/test_units.mjs" >/dev/null 2>&1; then
+  if "${WL_HERMETIC[@]}" node "$skill/tests/worklog_manager/test_units.mjs" >/dev/null 2>&1; then
     ok "worklog-manager unit fixtures"
   else
     fail "worklog-manager unit fixtures"
   fi
 
-  if bash "$skill/tests/context/test_context.sh" >/dev/null 2>&1; then
+  if "${WL_HERMETIC[@]}" bash "$skill/tests/context/test_context.sh" >/dev/null 2>&1; then
     ok "context current Next + unique slug fixture"
   else
     fail "context current Next + unique slug fixture"
   fi
 
-  if WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap CODEX_SKILL_PATH="$skill/SKILL.md" bash "$sb/codex-surface-check.sh" >/dev/null 2>&1; then
+  if "${WL_HERMETIC[@]}" WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap CODEX_SKILL_PATH="$skill/SKILL.md" bash "$sb/codex-surface-check.sh" >/dev/null 2>&1; then
     ok "codex-surface-check accepts Codex-native skill"
   else
     fail "codex-surface-check rejected Codex-native skill"
@@ -1556,7 +1596,7 @@ test_worklog_skill() {
   bad_codex_skill="$(mktemp)"
   cp "$skill/SKILL.md" "$bad_codex_skill"
   printf '\nNon-Claude agents don'\''t invoke this skill.\n' >> "$bad_codex_skill"
-  if WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap CODEX_SKILL_PATH="$bad_codex_skill" bash "$sb/codex-surface-check.sh" >/dev/null 2>&1; then
+  if "${WL_HERMETIC[@]}" WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap CODEX_SKILL_PATH="$bad_codex_skill" bash "$sb/codex-surface-check.sh" >/dev/null 2>&1; then
     fail "codex-surface-check accepted self-excluding Codex skill"
   else
     ok "codex-surface-check rejects self-excluding Codex skill"
@@ -1565,7 +1605,7 @@ test_worklog_skill() {
 
   bad_init_mode="$(mktemp)"
   printf '# missing Codex hydration contract\n' > "$bad_init_mode"
-  if WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap CODEX_SKILL_PATH="$skill/SKILL.md" MODE_INIT_PATH="$bad_init_mode" bash "$sb/codex-surface-check.sh" >/dev/null 2>&1; then
+  if "${WL_HERMETIC[@]}" WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap CODEX_SKILL_PATH="$skill/SKILL.md" MODE_INIT_PATH="$bad_init_mode" bash "$sb/codex-surface-check.sh" >/dev/null 2>&1; then
     fail "codex-surface-check accepted init without update_plan contract"
   else
     ok "codex-surface-check rejects init without update_plan contract"
@@ -1584,8 +1624,8 @@ repos: []
 
 Borrow Schema fallback evidence.
 EOF
-  WORKLOG_REPO="$vault" bash "$sb/index.sh" >/dev/null
-  out=$(PATH=/usr/bin:/bin WORKLOG_REPO="$vault" bash "$sb/search.sh" 'Borrow|Schema' --active 2>&1)
+  "${WL_HERMETIC[@]}" WORKLOG_REPO="$vault" bash "$sb/index.sh" >/dev/null
+  out=$("${WL_HERMETIC[@]}" PATH=/usr/bin:/bin WORKLOG_REPO="$vault" bash "$sb/search.sh" 'Borrow|Schema' --active 2>&1)
   if echo "$out" | grep -q 'Borrow Schema fallback evidence'; then
     ok "search.sh grep fallback preserves common regex alternation"
   else
@@ -1593,7 +1633,7 @@ EOF
   fi
 
   set +e
-  out=$(PATH=/usr/bin:/bin WORKLOG_REPO="$vault" bash "$sb/search.sh" 'BORROW SCHEMA' --active -- -i 2>&1)
+  out=$("${WL_HERMETIC[@]}" PATH=/usr/bin:/bin WORKLOG_REPO="$vault" bash "$sb/search.sh" 'BORROW SCHEMA' --active -- -i 2>&1)
   rc=$?
   set -e
   if [[ $rc -eq 2 && "$out" == *"extra rg arguments require ripgrep"* ]]; then

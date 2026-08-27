@@ -102,7 +102,7 @@ def find_mentions(lines: list[str], term: str) -> list[tuple[int, str, bool]]:
     for index, line in enumerate(lines, start=1):
         marker = fence_marker(line)
         line_in_fence = active_fence is not None or marker is not None or is_indented_code(line)
-        if term in line:
+        if term in line and not is_table_row(line):
             mentions.append((index, line, line_in_fence))
         if marker is None:
             continue
@@ -116,6 +116,19 @@ def find_mentions(lines: list[str], term: str) -> list[tuple[int, str, bool]]:
         ):
             active_fence = None
     return mentions
+
+
+
+def is_table_row(line: str) -> bool:
+    """A Markdown table row, not an opt-in preamble.
+
+    Owner skills are listed in composition tables (`| trigger | owner | ... |`)
+    where naming example-led-instructions is documentation, not an opt-in. Those
+    rows can never match the canonical preamble and are legitimately longer than
+    the per-line limit, so they must not be validated as references.
+    """
+    stripped = line.strip()
+    return stripped.startswith("|") and stripped.count("|") >= 2
 
 
 def validate_reference_line(

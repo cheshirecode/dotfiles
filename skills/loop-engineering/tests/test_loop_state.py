@@ -15,6 +15,7 @@ import unittest
 
 SCRIPT = pathlib.Path(__file__).parents[1] / "scripts" / "loop_state.py"
 SKILL = SCRIPT.parents[1] / "SKILL.md"
+ORCHESTRATOR = SCRIPT.parents[1] / "references/orchestrator.md"
 SPEC = importlib.util.spec_from_file_location("loop_state_under_test", SCRIPT)
 assert SPEC and SPEC.loader
 LOOP_STATE = importlib.util.module_from_spec(SPEC)
@@ -91,7 +92,7 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("do\nnot leave ad hoc run artifacts behind", initialization)
 
     def test_orchestrator_terminal_example_supplies_required_verification(self) -> None:
-        skill_text = SKILL.read_text()
+        skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
         terminal_example = skill_text.split(
             "When budget is consumed or the project queue is empty", 1
         )[1].split("If the queue still has tasks", 1)[0]
@@ -101,13 +102,13 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("if ! $WORKLOG_BIN/project.sh verify <program-slug>", terminal_example)
 
     def test_orchestrator_does_not_treat_any_next_exit_one_as_success(self) -> None:
-        skill_text = SKILL.read_text()
+        skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
         terminal = skill_text.split("When budget is consumed or the project queue is empty", 1)[1]
         self.assertIn("Exit 1 alone is\nnot proof of an empty queue", terminal)
         self.assertIn("blocked or missing", terminal)
 
     def test_orchestrator_preserves_explicit_budget_and_minimum(self) -> None:
-        skill_text = SKILL.read_text()
+        skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
         budgeting = skill_text.split("### 1. Decompose & budget", 1)[1].split(
             "### Mid-run council escalation", 1
         )[0]
@@ -317,7 +318,7 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("worklog-checkpoint: unavailable", durable)
 
     def test_orchestrator_gates_optional_decomposition_and_delegate_output(self) -> None:
-        skill_text = SKILL.read_text()
+        skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
         orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
         self.assertIn("regular loop", orchestrator)
         self.assertIn("one or two tasks", orchestrator)
@@ -327,7 +328,7 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("prose", orchestrator)
 
     def test_orchestrator_checks_delegate_capability_before_dispatch(self) -> None:
-        skill_text = SKILL.read_text()
+        skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
         orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
         self.assertIn("current harness exposes the", orchestrator)
         self.assertIn("do not fabricate a delegate result", orchestrator)
@@ -335,7 +336,7 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("model-routing: skipped — no delegate surface", orchestrator)
 
     def test_orchestrator_can_escalate_council_mid_run_without_archiving(self) -> None:
-        skill_text = SKILL.read_text()
+        skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
         orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
         self.assertIn("without a new user turn", orchestrator)
         self.assertIn("material uncertainty trigger", orchestrator)
@@ -343,7 +344,7 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("never\narchive or finish `complete`", orchestrator)
 
     def test_council_escalation_pack_is_minimal_and_replay_bound(self) -> None:
-        skill_text = SKILL.read_text()
+        skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
         escalation = skill_text.split("### Mid-run council escalation", 1)[1].split(
             "### 2. Create project", 1
         )[0]
