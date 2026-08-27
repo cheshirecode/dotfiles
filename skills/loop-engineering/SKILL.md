@@ -8,6 +8,16 @@ description: "Design and run bounded, evidence-driven loops for repeated, resuma
 Use deterministic state transitions around agent judgment. Repeated prompting is
 not a loop design.
 
+## When to use
+
+- Agent must iterate toward a verifiable condition
+- Recover across context boundaries
+- Coordinate subagents
+- Decide whether work belongs in a manual loop, worklog-backed handoff, or host-native scheduler
+- Multi-task programs with sub-agent dispatch (orchestrator mode)
+
+Skip if: one action plus one check is sufficient (trivial one-shot tasks).
+
 ## Route
 
 1. Skip this skill when one action plus one check is sufficient.
