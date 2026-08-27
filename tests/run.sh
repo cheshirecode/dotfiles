@@ -206,7 +206,7 @@ checks = {
         and "state fingerprint changed" in state_script
         and "verify state ownership" in protocol
     ),
-    "host differences deferred": references == {"examples.md", "hosts.md", "protocol.md"},
+    "host differences deferred": references == {"crew.md", "examples.md", "hosts.md", "protocol.md"},
     "cross-host continuation": (
         hosts.count("while state is `running`") >= 3
         and "A prompt cannot manufacture background execution" in hosts
