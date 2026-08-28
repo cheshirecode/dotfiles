@@ -197,7 +197,20 @@ def render_markdown(slug: str, for_mode: str, fm: dict, body: str,
       # docs/lessons.md top-of-2026-04 entry on TaskCreate drift, this is
       # MANDATORY when ≥3 unchecked items remain (single-step tasks exempt).
       if len(open_items) >= 3:
-        print("## Tracker-ready snippet (MANDATORY hydration; ≥3 open items)")
+        # The pack reproduces `## Next` faithfully, including items that went
+        # stale — it has checked nothing. Commanding hydration of unverified
+        # items is what gets a resuming session to re-open finished work.
+        # `last_updated` does NOT settle this: it tracks the file and is bumped
+        # by every checkpoint, while `## Next` rots per-section, so an actively
+        # maintained task shows a fresh date over two-week-old items.
+        # Keep the imperative (it exists to stop TaskCreate drift) and add the
+        # precondition. Observed 2026-08-28.
+        print("## Tracker-ready snippet (≥3 open items)")
+        print()
+        print("**Verify before hydrating: these items are reproduced from "
+              "`## Next` unchecked.** Any citing an MR or ticket id may name "
+              "work already merged or closed. Hydration is MANDATORY for the "
+              "items that survive that check; drop the rest and fix `## Next`.")
         print()
         print("Run one block matching the active agent:")
         print()

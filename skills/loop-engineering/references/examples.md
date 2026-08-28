@@ -170,6 +170,27 @@ Delegate return contract: `archived <slug> <sha>` is the success case;
 `blocked <slug> <reason>` preserves a non-success outcome without returning a
 full task narrative.
 
+## 5. Discovery keyed on a join dimension
+
+INPUT
+
+> Watch for MRs in my team's repos that need review.
+
+OUTPUT (agent runs the inverse sweep, not just the forward one)
+
+```text
+[sweep A: MRs whose title/branch carries a ticket id -> 6 found]
+[sweep B: tickets on the team field -> resolve to MRs -> 5 found]
+[reconcile: A\B = 1 MR whose ticket is untagged; B\A = 1 MR in a repo not enumerated]
+[evidence: "command: two sweeps reconciled — 2 items visible to exactly one"]
+```
+
+If a loop discovers work through a join key, items lacking that key are
+invisible **by construction**, not by accident: a title-keyed sweep cannot see an
+untagged MR, and a ticket-keyed sweep cannot see a repo it does not enumerate.
+Run the inverse sweep and reconcile the two sets. Observed 2026-08-28: each
+direction missed something real on the same day.
+
 Same prompt in natural language:
 
 > Use loop-engineering orchestrator mode. Goal: audit skills for shellcheck
