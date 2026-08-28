@@ -26,6 +26,14 @@ Read this file only when the selected mode requires task creation or direct task
   Context while its Scope section held the current, looser rules. Absolute
   claims in a summary — never, always, only — are the ones that go stale, so
   prefer pointing at the rules section over restating it.
+- `$WORKLOG_BIN/verify-refs.sh [<slug>]` flags unchecked `## Next` items citing
+  an MR or ticket that has already merged or closed — the state a resume pack
+  otherwise reproduces as live work. Opt-in and network-bound **by design**: it
+  is not in the resume path, because `context.sh --for=resume` must work with a
+  dead token and no network, which is exactly when a session is recovering. With
+  no token every ref reports `unchecked` and the exit stays 0; an unverifiable
+  ref is not a passing ref. Exit 3 means stale refs were found — capture the
+  output before parsing it.
 - When a document *must* restate rules to stand alone — a handover, and anything
   `spawn` or `export` emits, all of which are self-contained by design — say
   which copy wins. Two copies of a rule diverge the moment either changes, and a
