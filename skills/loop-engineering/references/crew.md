@@ -44,7 +44,9 @@ code repo.
 
 `crew-radar` takes the same `--roster` and annotates each owner with the agent
 holding it (`feat-a@worker-7f`, or `@?` when nothing matches), so an overlap row
-says who to mail rather than only which branch.
+says who to mail rather than only which branch. Both tools accept a file, a
+comma-separated list, or `-` for stdin. The column renders only on overlap rows,
+so a clean repo shows nothing either way.
 
 Two worktrees changing one file is a merge conflict surfacing early. Treat it as
 evidence that **the split was wrong**, not that a worker misbehaved.
@@ -135,8 +137,8 @@ predates the merge. `--no-fetch` stays offline and says so in the header.
 
 Two gates, both from real incidents:
 
-- **Ownership.** Pass the live agent roster with `--roster <file|->`, or pipe it
-  in on stdin. Measured on live data: the peer worktree this gate protected had
+- **Ownership.** Pass the live agent roster with `--roster <file|list|->`, or
+  pipe it in on stdin. Measured on live data: the peer worktree this gate protected had
   **0 commits ahead of the target** — fully landed — so the landed gate alone
   would have deleted a running session's checkout. The two gates are not
   redundant. A worktree whose

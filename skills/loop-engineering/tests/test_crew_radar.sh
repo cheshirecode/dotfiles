@@ -69,7 +69,10 @@ printf 'wa-7f [ab12] . interactive\nunrelated\n' > "$TMP/roster.txt"
 ck "roster annotates the matched owner"  2 "feat-a@wa-7f\[dirty\]" --base master --roster "$TMP/roster.txt" "$R"
 ck "roster marks unmatched owner with ?" 2 "feat-b@\?\[dirty\]"       --base master --roster "$TMP/roster.txt" "$R"
 ck "no roster leaves owners bare"        2 "feat-a\[dirty\],feat-b\[dirty\]" --base master "$R"
+ck "roster accepts an inline list"       2 "feat-a@wa-7f\[dirty\]" --base master --roster 'wa-7f,other' "$R"
+ck "roster accepts a single name"        2 "feat-a@wa-7f\[dirty\]" --base master --roster 'wa-7f' "$R"
 ck "unreadable roster is rejected"       1 "cannot read roster"       --roster /nope/nope "$R"
+ck "--roster is documented in --help"    0 "roster"                   --help
 G -C "$TMP/wa" checkout -q -- shared.txt; G -C "$TMP/wb" checkout -q -- shared.txt
 
 ck "non-repo rejected"                  1 "not inside a git repository" "$TMP"
