@@ -26,7 +26,7 @@
 #   leaving the branch's own commits absent from the target.
 #
 # Usage:
-#   crew-reap [--target <ref>] [--apply] [--json] <repo>
+#   crew-reap [--target <ref>] [--roster <file|->] [--apply] [--no-fetch] [--json] <repo>
 #   ListAgents-names | crew-reap --apply /workspace/midas
 #
 # Exit: 0 nothing to do or dry run clean, 3 removals performed (or pending in
@@ -46,12 +46,15 @@ die() {
   exit 1
 }
 
-TARGET=""; APPLY=0; REPO=""
+TARGET=""; APPLY=0; REPO=""; FETCH=1; ROSTER_SRC=""
 while [ $# -gt 0 ]; do
   case $1 in
     --target) [ $# -ge 2 ] || die "--target needs a ref"; TARGET=$2; shift 2 ;;
     --target=*) TARGET=${1#*=}; shift ;;
     --apply) APPLY=1; shift ;;
+    --no-fetch) FETCH=0; shift ;;
+    --roster) [ $# -ge 2 ] || die "--roster needs a file or -"; ROSTER_SRC=$2; shift 2 ;;
+    --roster=*) ROSTER_SRC=${1#*=}; shift ;;
     --json)  shift ;;
     -h|--help) usage; exit 0 ;;
     -*) die "unknown option: $1 (try --help)" ;;
@@ -74,10 +77,43 @@ fi
 [ -n "$TARGET" ] || die "no target ref found; pass --target"
 git -C "$ROOT" rev-parse --verify -q "$TARGET" >/dev/null 2>&1 || die "target ref not found: $TARGET"
 
+# The landed test is only as fresh as the local target ref, and a stale one
+# fails SAFE but SILENTLY: it reports "N commit(s) not in <target>", which reads
+# as unlanded work when the truth is that the ref predates the merge. Observed
+# on live data 2026-08-28 — the same command two minutes apart said keep, then
+# reap, because a fetch had happened in between. A cheap agent handed the first
+# reading would report it with full confidence and be wrong.
+# So: fetch by default, and print the resolved SHA and date either way, so a
+# stale reading is visible rather than merely safe.
+FETCH_NOTE=""
+if [ "$FETCH" = 1 ]; then
+  case "$TARGET" in
+    */*) remote=${TARGET%%/*}; branch=${TARGET#*/}
+         if git -C "$ROOT" fetch --quiet "$remote" "$branch" 2>/dev/null; then
+           FETCH_NOTE="fetched"
+         else
+           FETCH_NOTE="FETCH FAILED — reading may be stale"
+         fi ;;
+    *)   FETCH_NOTE="local ref, not fetched" ;;
+  esac
+else
+  FETCH_NOTE="--no-fetch — reading may be stale"
+fi
+TARGET_SHA=$(git -C "$ROOT" rev-parse --short "$TARGET" 2>/dev/null || echo "?")
+TARGET_WHEN=$(git -C "$ROOT" log -1 --format=%cI "$TARGET" 2>/dev/null | cut -c1-16 | tr T ' ' || echo "?")
+
 # Roster on stdin. Absent means "ownership unknown", which is NOT the same as
 # "unowned" -- worktree removal is skipped entirely rather than guessed at.
+# --roster <file|-> is the documented form and matches crew-radar. A bare stdin
+# pipe still works. The read is bounded: an unbounded one would hang a caller
+# that left stdin open with nothing to say.
 ROSTER=""; HAVE_ROSTER=0
-if [ ! -t 0 ]; then
+if [ -n "$ROSTER_SRC" ]; then
+  if [ "$ROSTER_SRC" = "-" ]; then ROSTER=$(cat)
+  elif [ -r "$ROSTER_SRC" ]; then ROSTER=$(cat "$ROSTER_SRC")
+  else die "cannot read roster: $ROSTER_SRC"; fi
+  [ -n "$ROSTER" ] && HAVE_ROSTER=1
+elif [ ! -t 0 ]; then
   ROSTER=$(timeout 5 cat 2>/dev/null || true)
   [ -n "$ROSTER" ] && HAVE_ROSTER=1
 fi
@@ -138,8 +174,10 @@ done < <(git -C "$ROOT" worktree list --porcelain | awk '/^worktree /{print $2}'
 [ "$APPLY" = 1 ] && git -C "$ROOT" worktree prune >/dev/null 2>&1
 
 if [ "$FMT" = json ]; then
-  printf '{"target":"%s","apply":%s,"reaped":%s,"kept":%s,"rows":[' \
-    "$(json_escape "$TARGET")" "$([ "$APPLY" = 1 ] && echo true || echo false)" "$reaped" "$kept"
+  printf '{"target":"%s","target_sha":"%s","target_date":"%s","fetch":"%s","apply":%s,"reaped":%s,"kept":%s,"rows":[' \
+    "$(json_escape "$TARGET")" "$(json_escape "$TARGET_SHA")" "$(json_escape "$TARGET_WHEN")" \
+    "$(json_escape "$FETCH_NOTE")" \
+    "$([ "$APPLY" = 1 ] && echo true || echo false)" "$reaped" "$kept"
   first=1
   while IFS="|" read -r act nm brn why; do
     [ $first = 1 ] || printf ','
@@ -149,7 +187,8 @@ if [ "$FMT" = json ]; then
   done <"$ROWS"
   printf ']}\n'
 else
-  printf '%s  target=%s  %s\n' "$PROG" "$TARGET" \
+  printf '%s  target=%s@%s (%s, %s)  %s\n' "$PROG" "$TARGET" "$TARGET_SHA" \
+    "$TARGET_WHEN" "$FETCH_NOTE" \
     "$([ "$APPLY" = 1 ] && echo APPLY || echo 'DRY RUN (--apply to remove)')"
   while IFS="|" read -r act nm brn why; do
     printf '%-5s %-34s %-40s %s\n' "$act" "$nm" "$brn" "$why"

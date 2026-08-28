@@ -42,6 +42,10 @@ code repo.
 
 ### Conflict radar
 
+`crew-radar` takes the same `--roster` and annotates each owner with the agent
+holding it (`feat-a@worker-7f`, or `@?` when nothing matches), so an overlap row
+says who to mail rather than only which branch.
+
 Two worktrees changing one file is a merge conflict surfacing early. Treat it as
 evidence that **the split was wrong**, not that a worker misbehaved.
 
@@ -122,13 +126,23 @@ utility agent rather than enumerating worktrees on frontier tokens.
 ListAgents-names | <skill-dir>/bin/crew-reap [--target <ref>] [--apply] <repo>
 ```
 
-**Dry run by default; `--apply` is required to remove anything.** Two gates,
-both from real incidents:
+**Dry run by default; `--apply` is required to remove anything.** It fetches the
+target ref first and prints what it resolved to —
+`target=origin/master@fed8242 (18:37, fetched)` — because the landed test is only
+as fresh as that ref. A stale one fails safe but silently, reporting
+"N commit(s) not in <target>", which reads as unlanded work when the ref simply
+predates the merge. `--no-fetch` stays offline and says so in the header.
 
-- **Ownership.** Pipe the live agent roster in on stdin. A worktree whose
-  basename matches a live agent is never touched — merged is not the same as
-  unowned, and mtime is not ownership. With no roster it removes nothing rather
-  than guessing.
+Two gates, both from real incidents:
+
+- **Ownership.** Pass the live agent roster with `--roster <file|->`, or pipe it
+  in on stdin. Measured on live data: the peer worktree this gate protected had
+  **0 commits ahead of the target** — fully landed — so the landed gate alone
+  would have deleted a running session's checkout. The two gates are not
+  redundant. A worktree whose
+  A worktree whose basename matches a live agent is never touched — merged is
+  not the same as unowned, and mtime is not ownership. With no roster it removes
+  nothing rather than guessing.
 - **Landed.** A branch is deleted only when `git rev-list <target>..<branch>`
   is empty. Do **not** gate on an MR's merged flag: a squash sets it true while
   the branch's own commits are absent from the target. Removing a worktree is

@@ -62,6 +62,16 @@ ck "info: --strict escalates"           2 "^info +shared\.txt" --strict --base m
 # 5. plumbing
 ck "help exits 0"                       0 "flag files that more than one" --help
 ck "bad option rejected"                1 "unknown option" --nope
+# Ownership annotation. A worktree in the list may belong to another session and
+# neither path nor mtime says so; --roster names who holds each owner.
+printf 'a\n' > "$TMP/wa/shared.txt"; printf 'b\n' > "$TMP/wb/shared.txt"
+printf 'wa-7f [ab12] . interactive\nunrelated\n' > "$TMP/roster.txt"
+ck "roster annotates the matched owner"  2 "feat-a@wa-7f\[dirty\]" --base master --roster "$TMP/roster.txt" "$R"
+ck "roster marks unmatched owner with ?" 2 "feat-b@\?\[dirty\]"       --base master --roster "$TMP/roster.txt" "$R"
+ck "no roster leaves owners bare"        2 "feat-a\[dirty\],feat-b\[dirty\]" --base master "$R"
+ck "unreadable roster is rejected"       1 "cannot read roster"       --roster /nope/nope "$R"
+G -C "$TMP/wa" checkout -q -- shared.txt; G -C "$TMP/wb" checkout -q -- shared.txt
+
 ck "non-repo rejected"                  1 "not inside a git repository" "$TMP"
 ck "bad base rejected"                  1 "base ref not found" --base no/such/ref "$R"
 
