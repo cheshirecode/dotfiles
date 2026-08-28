@@ -2,7 +2,9 @@
 # Worklog pre-commit hook. Runs deterministic checks on staged changes,
 # path-filtered so commits that don't touch sensitive surfaces are free.
 #
-# Wired via `bin/install-hooks.sh --write` (sets core.hooksPath).
+# Wired via `bin/install-hooks.sh --write` — either directly via
+# core.hooksPath, or chained into .git/hooks/ as a symlink when an outer
+# (system/global) core.hooksPath is already taken. See install-hooks.sh.
 # Bypass: `WORKLOG_NO_HOOK=1 git commit ...`.
 #
 # Checks:
@@ -18,9 +20,22 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-# Skill bin/ is the dir holding the script that invokes us — git uses
-# core.hooksPath which points at skills/worklog/bin/git-hooks/.
-SKILL_BIN="$(cd "$(dirname "$0")/.." && pwd)"
+# Skill bin/ is the dir holding the script that invokes us. Resolve
+# through symlinks first: install-hooks.sh either points core.hooksPath
+# straight at skills/worklog/bin/git-hooks/ (so "$0" is already the real
+# path), or — when an outer core.hooksPath is already taken by the
+# platform — chains us in via a symlink at .git/hooks/pre-commit, in
+# which case "$0" is the symlink and a plain dirname would resolve to
+# .git/hooks instead of the skill dir.
+SELF="$0"
+while [[ -L "$SELF" ]]; do
+  link="$(readlink "$SELF")"
+  case "$link" in
+    /*) SELF="$link" ;;
+    *)  SELF="$(dirname "$SELF")/$link" ;;
+  esac
+done
+SKILL_BIN="$(cd "$(dirname "$SELF")/.." && pwd)"
 
 # Staged paths (added/copied/modified/renamed; deletes don't need checking).
 # Read into an array via while-read for bash 3.2 compatibility (macOS default).
@@ -169,9 +184,9 @@ fi
 
 # 7. Secret-leak scan on staged additions (advisory by default; strict via
 #    WORKLOG_STRICT_SCAN=1; bypass via WORKLOG_NO_SCAN=1).
-#    Resolves to the skill's pre-commit-scan.sh (this hook lives at
-#    skills/worklog/bin/git-hooks/pre-commit; its sibling is bin/pre-commit-scan.sh).
-"$(dirname "$0")/../pre-commit-scan.sh" || exit 1
+#    Resolves to the skill's pre-commit-scan.sh, a sibling of $SKILL_BIN
+#    (not a raw dirname-of-$0 — see the symlink resolution above).
+"$SKILL_BIN/pre-commit-scan.sh" || exit 1
 
 # 8. Claim arbitration: for any staged task file with a `claim:` block change,
 #    refuse if HEAD already holds a non-stale claim under a different session.
