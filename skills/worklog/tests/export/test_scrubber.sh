@@ -36,6 +36,9 @@ perl -pe '
   s{xox[abpros]-[A-Za-z0-9-]{10,}}{<REDACTED:SECRET>}g;
   s{AIza[A-Za-z0-9_-]{35}}{<REDACTED:SECRET>}g;
   s{AKIA[0-9A-Z]{16}}{<REDACTED:SECRET>}g;
+  s{glpat-[A-Za-z0-9_-]{20,}}{<REDACTED:SECRET>}g;
+  s{AT[AC]TT3[A-Za-z0-9_-]{10,}}{<REDACTED:SECRET>}g;
+  s{ddpat_[A-Za-z0-9]{20,}}{<REDACTED:SECRET>}g;
 ' <"$CORPUS" >"$SCRUBBED"
 
 if diff -u "$CORPUS" "$SCRUBBED"; then

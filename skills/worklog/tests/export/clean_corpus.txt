@@ -13,6 +13,9 @@ github-actions-pinning
 sky-asset-rebuild
 akia-archetype-store
 aiza-prompt-eval-pipeline
+glpat-rotation-runbook
+ddpat-metrics-naming-doc
+atlassian-jira-sync-notes
 
 ## Realistic content tokens we emit in commit bodies / PR refs
 PR ideogram-ai/ui#1234 lands the carve-out.
