@@ -30,6 +30,16 @@ isn't yours. Match a worktree's basename against `ListAgents` before touching or
 removing it; if it's someone else's, mail them to ask, don't `git worktree remove`
 it. (Observed in practice 2026-08-28, across two sessions.)
 
+Code-worktree isolation does **not** cover `WORKLOG_REPO`. Parallel crew workers
+that `checkpoint.sh` / `archive.sh` the same clone are a write race: one
+worker's pull can fail on an untracked path another worker just archived
+(observed 2026-08-28, `people/oss/archive/review-pr-14851-b.md`). Serialize
+mutating worklog helpers; keep parallelism in the code worktrees. Before each
+mutation, `git -C "$WORKLOG_REPO" status --porcelain -- people/"$WORKLOG_LDAP"/`
+must be empty or limited to the claimed `active/<slug>.md`. On pull failure,
+return `blocked <slug> worklog pull failed` — do not return a SHA from the
+code repo.
+
 ### Conflict radar
 
 Two worktrees changing one file is a merge conflict surfacing early. Treat it as
