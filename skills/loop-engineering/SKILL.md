@@ -211,6 +211,13 @@ the successor is `running`. Never reopen the predecessor.
 
 ## Preserve durable context
 
+**Uncommitted working-tree state is not durable state.** A checkpoint records
+that work exists; it does not make it exist. Commit and push before any
+checkpoint claiming an artifact, and confirm with `git ls-remote` — local
+`git log` only proves the commit reached this machine, and a forge API can serve
+a stale head SHA. Observed 2026-08-28: worktree fixes checkpointed, instance
+died, record survived, work did not.
+
 When the installed `worklog` protocol is available, hydrate resume context
 before initialization and checkpoint verified state at compaction, delegation,
 retry exhaustion, scheduled handoff, or termination. Resolve `$WORKLOG_BIN` to
