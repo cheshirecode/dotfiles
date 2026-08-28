@@ -69,6 +69,16 @@ ckjson() {  # ckjson <name> <filter> [args...]
   fi
 }
 
+# The landed test is only as fresh as the target ref. A stale one fails safe but
+# silently, and the message reads as unlanded work. The header must expose the
+# resolved SHA and whether it was fetched, so a stale reading is visible.
+build
+ck "header names the resolved target" 'wt-peer-9d' 'target=main@[0-9a-f]+ \(' --no-fetch
+ck "no-fetch is disclosed"            'wt-peer-9d' 'reading may be stale'      --no-fetch
+printf 'wt-peer-9d\n' > "$TMP/roster.txt"
+ck "roster flag matches stdin"        ''           'keep +wt-peer .*live agent' --no-fetch --roster "$TMP/roster.txt"
+ck "unreadable roster rejected"       ''           'cannot read roster'         --roster /nope/nope
+
 build
 ckjson "json: happy path" '.'       --target main --json "$TMP/r"
 ckjson "json: error path" '.error'  --json "$TMP/nope"
