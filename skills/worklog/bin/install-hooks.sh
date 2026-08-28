@@ -43,6 +43,12 @@
 #   install-hooks.sh --data-root=<path>               # dry-run for a specific clone
 #   install-hooks.sh --data-root=<path> --write       # apply to that clone
 #   install-hooks.sh --uninstall [--data-root=<path>] [--write]
+#   install-hooks.sh --data-root=<path> --write --git-hooks-only   # skip settings.json
+#
+# Guard: --write refuses to touch the DEFAULT ~/.claude/settings.json when the
+# target repo is temporary / not a worklog repo, or when running from a copy of
+# this script other than the installed skill. Both bake a path into every
+# session's hooks that later vanishes. Override with CLAUDE_SETTINGS=<path>.
 #
 # Idempotent: re-running --write is a no-op once the hooks are present.
 # Only touches entries pointing at the skill's scripts, and --uninstall
@@ -54,12 +60,14 @@ set -euo pipefail
 MODE="install"
 WRITE=0
 DATA_ROOT_OVERRIDE=""
+GIT_HOOKS_ONLY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --write)         WRITE=1 ;;
     --uninstall)     MODE="uninstall" ;;
     --data-root=*)   DATA_ROOT_OVERRIDE="${1#--data-root=}" ;;
+    --git-hooks-only) GIT_HOOKS_ONLY=1 ;;
     -h|--help)
       sed -n '2,23p' "$0"
       exit 0
@@ -86,6 +94,56 @@ AUTOSAVE="$SCRIPT_DIR/autosave.sh"
 FLUSH="$SCRIPT_DIR/autosave-flush.sh"
 KERNELS="$SCRIPT_DIR/compact-kernels.sh"
 SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
+SETTINGS_IS_DEFAULT=0
+[[ -z "${CLAUDE_SETTINGS:-}" ]] && SETTINGS_IS_DEFAULT=1
+
+# Guard the global write. `--data-root` reads as "operate on this repo", but the
+# Claude-hooks half of this script edits ONE global settings file and bakes
+# REPO_ROOT into every hook command. Point it at a scratch repo and the live
+# hooks of every session on this machine are silently repointed there; when the
+# scratch dir is later removed, autosave and compact-kernels fail on every
+# compaction. The scripts themselves exit 1 loudly, but a hook's stderr is not
+# surfaced, so five broken hooks look like nothing at all. This bit two sessions
+# on 2026-08-28.
+#
+# So: a target that is not a durable worklog repo may configure git hooks, but
+# may not rewrite the DEFAULT settings file. Set CLAUDE_SETTINGS to a scratch
+# path to exercise the Claude-hooks half in a test.
+if (( WRITE )) && (( SETTINGS_IS_DEFAULT )) && ! (( GIT_HOOKS_ONLY )); then
+  reason=""
+  case "$REPO_ROOT" in
+    /tmp/*|/var/tmp/*|"${TMPDIR:-/nonexistent}"/*) reason="a temporary directory" ;;
+  esac
+  [[ -z "$reason" && ! -d "$REPO_ROOT/people" ]] \
+    && reason="not a worklog data repo (no people/ directory)"
+
+  # Second axis: WHICH COPY of this script is running. The hook commands embed
+  # $SCRIPT_DIR, so invoking a worktree or scratch copy bakes that path into the
+  # global settings — and it disappears when the worktree is removed. Same
+  # silent breakage, different cause, so it needs its own check.
+  if [[ -z "$reason" ]]; then
+    installed="$(readlink -f "$HOME/.claude/skills/worklog/bin" 2>/dev/null || true)"
+    here="$(readlink -f "$SCRIPT_DIR")"
+    [[ -n "$installed" && "$here" != "$installed" ]] \
+      && reason="running from $here, not the installed skill ($installed)"
+  fi
+  if [[ -n "$reason" ]]; then
+    cat >&2 <<EOF
+install-hooks: refusing to rewrite $SETTINGS
+  target repo : $REPO_ROOT
+  reason      : $reason
+
+  Hook commands bake this path in as WORKLOG_REPO, so writing it to the global
+  settings file would repoint every session's hooks at a path that cannot work.
+
+  To exercise the Claude-hooks half against this target, redirect the write:
+    CLAUDE_SETTINGS="\$(mktemp)" $0 --data-root="$REPO_ROOT" --write
+  Git hooks for this repo can be installed on their own with:
+    $0 --data-root="$REPO_ROOT" --write --git-hooks-only
+EOF
+    exit 1
+  fi
+fi
 
 for s in "$AUTOSAVE" "$FLUSH" "$KERNELS"; do
   if [[ ! -x "$s" ]]; then
@@ -106,6 +164,9 @@ if [[ -f "$REPO_ROOT/.envrc" ]]; then
   )"
 fi
 
+if (( GIT_HOOKS_ONLY )); then
+  echo "install-hooks: --git-hooks-only, leaving $SETTINGS untouched"
+else
 python3 - "$SETTINGS" "$AUTOSAVE" "$FLUSH" "$KERNELS" "$MODE" "$WRITE" "$REPO_ROOT" "$WORKLOG_LDAP_FROM_ENVRC" <<'PY'
 import json, pathlib, sys
 
@@ -213,6 +274,7 @@ else:
   print(rendered, end="")
   print("install-hooks: re-run with --write to apply")
 PY
+fi
 
 # ---- git hooks -------------------------------------------------------------
 # Absolute path is the only sane option post-relocation — the hooks live
