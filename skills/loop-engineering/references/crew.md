@@ -112,6 +112,32 @@ Act on severity:
   branch on another. Leave it; mail the descendant once to keep the shared file
   read-only. Repeat `info` rows on those paths are noise.
 
+### Reaping finished worktrees
+
+`bin/crew-reap` is the radar's companion: the radar says who is still working,
+this says who has finished. It costs no model call, so hand it to a cheap
+utility agent rather than enumerating worktrees on frontier tokens.
+
+```bash
+ListAgents-names | <skill-dir>/bin/crew-reap [--target <ref>] [--apply] <repo>
+```
+
+**Dry run by default; `--apply` is required to remove anything.** Two gates,
+both from real incidents:
+
+- **Ownership.** Pipe the live agent roster in on stdin. A worktree whose
+  basename matches a live agent is never touched — merged is not the same as
+  unowned, and mtime is not ownership. With no roster it removes nothing rather
+  than guessing.
+- **Landed.** A branch is deleted only when `git rev-list <target>..<branch>`
+  is empty. Do **not** gate on an MR's merged flag: a squash sets it true while
+  the branch's own commits are absent from the target. Removing a worktree is
+  recoverable; deleting the branch is the irreversible half.
+
+Exit `0` nothing to do, `3` something was reaped (or would be, in a dry run),
+`1` usage error. Capture the output before piping it to `jq` — under
+`set -o pipefail` the intentional exit 3 otherwise reads as failure.
+
 Record the radar verdict as one typed line, like any other evidence:
 `command: crew-radar <repo> — exit 0, 0 warn`.
 
