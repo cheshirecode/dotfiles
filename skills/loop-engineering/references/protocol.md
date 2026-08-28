@@ -96,6 +96,15 @@ Before every mutation, run this effect preflight:
 3. Does the action cross `approval_boundary` or require a new authority?
 4. What read-only check will prove that the intended target, and no adjacent
    target, changed?
+5. Is the action reversible? Name the irreversible ones in
+   `approval_boundary` — merge, deploy, publish, a secret write, a ticket
+   transition — and re-read that list here. Questions 1-4 treat every write
+   alike, so an authority to comment reads as an authority to merge unless the
+   boundary says otherwise.
+6. Does the action *satisfy someone else's armed automation*? An approval that
+   releases an armed `merge_when_pipeline_succeeds` merges the MR; you did not
+   call merge, you supplied its last condition. Check the flag before any action
+   whose completion you would not be permitted to perform directly.
 
 If any answer is unknown, stop before the write and narrow the action or end
 `needs_human` with the missing authority named.
