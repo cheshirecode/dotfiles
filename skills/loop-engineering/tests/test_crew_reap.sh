@@ -85,5 +85,28 @@ ckjson "json: happy path" '.'       --target main --json "$TMP/r"
 ckjson "json: error path" '.error'  --json "$TMP/nope"
 ckjson "json: bad option" '.error'  --json --no-such-flag "$TMP/r"
 
+# Exit 3 is a verdict, not an error. Lock BOTH directions: capture-then-parse
+# must read it correctly, and the piped form must still fail — otherwise this
+# fixture stops guarding the documented trap. See references/examples.md §6.
+build
+(
+  set -uo pipefail
+  raw=$(printf 'x\n' | "$REAP" --target main --json --no-fetch "$TMP/r" 2>/dev/null) || true
+  cur=$(printf '%s' "$raw" | jq -S -c '{reaped}' 2>/dev/null) || cur='{"error":"unparseable"}'
+  if printf '%s' "$cur" | jq -e '.reaped >= 1' >/dev/null 2>&1; then
+    PASS=$((PASS+1)); printf '  PASS  capture-then-parse survives exit 3\n'
+  else
+    FAIL=$((FAIL+1)); printf '  FAIL  capture-then-parse survives exit 3 (got %s)\n' "$cur"
+  fi
+  old=$( { set -o pipefail
+    printf 'x\n' | "$REAP" --target main --json --no-fetch "$TMP/r" 2>/dev/null | jq -S -c '{reaped}' 2>/dev/null
+  } ) || old='{"error":"unparseable"}'
+  if [ "$old" = '{"error":"unparseable"}' ]; then
+    PASS=$((PASS+1)); printf '  PASS  piped form still false-positives on exit 3\n'
+  else
+    FAIL=$((FAIL+1)); printf '  FAIL  piped form no longer locks the trap (got %s)\n' "$old"
+  fi
+)
+
 printf '\n  %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
