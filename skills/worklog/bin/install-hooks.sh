@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Install the worklog hooks into ~/.claude/settings.json so Claude Code
-# runs them at the right lifecycle points, plus wire `core.hooksPath` so
-# git fires bin/git-hooks/pre-commit on every commit in this clone.
+# runs them at the right lifecycle points, plus wire git so it fires
+# bin/git-hooks/{pre-commit,commit-msg,post-commit} on every commit in
+# this clone.
 #
 #   Claude Code (PreCompact + SessionEnd):
 #     - bin/autosave.sh        → uncommitted worklog edits land in git
@@ -11,9 +12,30 @@
 #                                 to _worklog/.cache/compact-kernels.md so
 #                                 the next session re-orients on one file.
 #
-#   Git pre-commit:
+#   Git hooks:
 #     - bin/git-hooks/pre-commit → path-filtered lint + test gate per
 #                                   docs/helpers.md § Pre-commit hook.
+#
+#     Wiring mode depends on whether an OUTER core.hooksPath (system or
+#     global scope) is already set:
+#
+#       - Outer hooksPath present → CHAIN. Some platforms (e.g. Coder)
+#         ship their own system-level core.hooksPath pointing at a
+#         blocking secret scanner (gitleaks) whose pre-commit sources
+#         run_existing_hook.sh, which in turn execs the repo's own
+#         .git/hooks/<name> if present. We symlink our hooks into
+#         .git/hooks/ so BOTH the platform scanner and the worklog
+#         hooks run. We deliberately do NOT set a repo-local
+#         core.hooksPath in this case: git only ever honors one
+#         hooksPath, so a repo-local value would silently make git
+#         ignore the outer path — and whatever it runs — for this
+#         clone (verified: this disabled gitleaks entirely on a clone
+#         until reverted by hand). Overriding core.hooksPath is only
+#         safe when nothing outer is already relying on it.
+#
+#       - No outer hooksPath → FALLBACK. Set repo-local core.hooksPath
+#         to the skill's git-hooks dir directly (the old, simpler
+#         behavior) since there's nothing else to preserve.
 #
 # Usage:
 #   install-hooks.sh                                  # dry-run for cwd / $WORKLOG_REPO
@@ -23,7 +45,9 @@
 #   install-hooks.sh --uninstall [--data-root=<path>] [--write]
 #
 # Idempotent: re-running --write is a no-op once the hooks are present.
-# Only touches entries pointing at the skill's scripts.
+# Only touches entries pointing at the skill's scripts, and --uninstall
+# reverses whichever mode (chain symlinks, or repo-local hooksPath) is
+# currently active.
 
 set -euo pipefail
 
@@ -190,27 +214,123 @@ else:
   print("install-hooks: re-run with --write to apply")
 PY
 
-# ---- git pre-commit hook --------------------------------------------------
-# Wire `core.hooksPath` to the skill's git-hooks dir. Absolute path is the
-# only sane option post-relocation — the hooks live in dotfiles, not in
-# the data repo. Per-machine brittle (path differs per host); --data-root
-# callers re-run install-hooks.sh per machine to refresh.
-CURRENT_HOOKS_PATH="$(git -C "$REPO_ROOT" config --get core.hooksPath || true)"
+# ---- git hooks -------------------------------------------------------------
+# Absolute path is the only sane option post-relocation — the hooks live
+# in dotfiles, not in the data repo. Per-machine brittle (path differs
+# per host); --data-root callers re-run install-hooks.sh per machine to
+# refresh.
 DESIRED="$SCRIPT_DIR/git-hooks"
+HOOK_NAMES=(pre-commit commit-msg post-commit)
+
+# Outer scope = system or global core.hooksPath — anything NOT set by us
+# in this repo's local config. System takes precedence, matching git's
+# own resolution order.
+OUTER_HOOKS_PATH="$(git -C "$REPO_ROOT" config --system --get core.hooksPath 2>/dev/null || true)"
+if [[ -z "$OUTER_HOOKS_PATH" ]]; then
+  OUTER_HOOKS_PATH="$(git -C "$REPO_ROOT" config --global --get core.hooksPath 2>/dev/null || true)"
+fi
+LOCAL_HOOKS_PATH="$(git -C "$REPO_ROOT" config --local --get core.hooksPath 2>/dev/null || true)"
+# NOTE: `git rev-parse --git-path hooks` resolves core.hooksPath itself,
+# so it can't be used here — it would just echo back whatever hooksPath
+# is already configured. We want the real on-disk .git/hooks/ directory
+# regardless of hooksPath, so derive it from --git-dir instead.
+GIT_DIR="$(git -C "$REPO_ROOT" rev-parse --git-dir)"
+[[ "$GIT_DIR" == /* ]] || GIT_DIR="$REPO_ROOT/$GIT_DIR"
+GIT_HOOKS_DIR="$GIT_DIR/hooks"
+
+# Treat an outer hooksPath equal to our own DESIRED (e.g. set by an old
+# run of this very script, or a --data-root sharing config) as "no outer
+# hooksPath to preserve" — there's nothing else to chain with.
+if [[ "$OUTER_HOOKS_PATH" == "$DESIRED" ]]; then
+  OUTER_HOOKS_PATH=""
+fi
+
+symlink_current_target() {
+  # Prints the resolved link target of .git/hooks/<name>, or nothing.
+  # Always returns 0 — this is used in `current="$(...)"` assignments
+  # under `set -e`, where a nonzero substitution exit would abort the
+  # script even though "not a symlink" is an expected, handled case.
+  if [[ -L "$GIT_HOOKS_DIR/$1" ]]; then
+    readlink "$GIT_HOOKS_DIR/$1"
+  fi
+  return 0
+}
 
 if [[ "$MODE" == "install" ]]; then
-  if [[ "$CURRENT_HOOKS_PATH" == "$DESIRED" ]]; then
-    echo "install-hooks: git core.hooksPath already $DESIRED (no change)"
+  if [[ -n "$OUTER_HOOKS_PATH" ]]; then
+    # ---- CHAIN mode: symlink into .git/hooks/, leave outer hooksPath alone.
+    changed=0
+
+    if [[ -n "$LOCAL_HOOKS_PATH" && "$LOCAL_HOOKS_PATH" == "$DESIRED" ]]; then
+      # Leftover repo-local override from a previous (unsafe) run — it
+      # would shadow the outer hooksPath, so it must go.
+      if (( WRITE )); then
+        git -C "$REPO_ROOT" config --unset core.hooksPath
+        echo "install-hooks: unset repo-local core.hooksPath (was shadowing outer $OUTER_HOOKS_PATH)"
+      else
+        echo "install-hooks: DRY RUN — would unset repo-local core.hooksPath (shadows outer $OUTER_HOOKS_PATH)"
+      fi
+      changed=1
+    fi
+
+    (( WRITE )) && mkdir -p "$GIT_HOOKS_DIR"
+
+    for h in "${HOOK_NAMES[@]}"; do
+      target="$DESIRED/$h"
+      dest="$GIT_HOOKS_DIR/$h"
+      current="$(symlink_current_target "$h")"
+      if [[ "$current" == "$target" ]]; then
+        continue
+      fi
+      if [[ -e "$dest" && ! -L "$dest" ]]; then
+        echo "install-hooks: $dest exists and is not a symlink — leaving it untouched (worklog $h hook not chained)" >&2
+        continue
+      fi
+      changed=1
+      if (( WRITE )); then
+        ln -sf "$target" "$dest"
+        echo "install-hooks: chained $dest -> $target"
+      else
+        echo "install-hooks: DRY RUN — would chain $dest -> $target (current: ${current:-<none>})"
+      fi
+    done
+
+    if (( ! changed )); then
+      echo "install-hooks: git hooks already chained via $GIT_HOOKS_DIR (outer hooksPath: $OUTER_HOOKS_PATH; no change)"
+    fi
   else
-    if (( WRITE )); then
-      git -C "$REPO_ROOT" config core.hooksPath "$DESIRED"
-      echo "install-hooks: set git core.hooksPath = $DESIRED"
+    # ---- FALLBACK mode: no outer hooksPath to preserve — safe to own it.
+    # Clean up any stale chain symlinks first so state doesn't straddle
+    # both modes.
+    for h in "${HOOK_NAMES[@]}"; do
+      dest="$GIT_HOOKS_DIR/$h"
+      current="$(symlink_current_target "$h")"
+      if [[ "$current" == "$DESIRED/$h" ]]; then
+        if (( WRITE )); then
+          rm -f "$dest"
+          echo "install-hooks: removed stale chain symlink $dest"
+        else
+          echo "install-hooks: DRY RUN — would remove stale chain symlink $dest"
+        fi
+      fi
+    done
+
+    if [[ "$LOCAL_HOOKS_PATH" == "$DESIRED" ]]; then
+      echo "install-hooks: git core.hooksPath already $DESIRED (no change)"
     else
-      echo "install-hooks: DRY RUN — would set git core.hooksPath = $DESIRED (current: ${CURRENT_HOOKS_PATH:-<unset>})"
+      if (( WRITE )); then
+        git -C "$REPO_ROOT" config core.hooksPath "$DESIRED"
+        echo "install-hooks: set git core.hooksPath = $DESIRED"
+      else
+        echo "install-hooks: DRY RUN — would set git core.hooksPath = $DESIRED (current: ${LOCAL_HOOKS_PATH:-<unset>})"
+      fi
     fi
   fi
 else
-  if [[ "$CURRENT_HOOKS_PATH" == "$DESIRED" ]]; then
+  # ---- uninstall: reverse whichever mode is actually active, regardless
+  # of what the outer config currently says (it may have changed since
+  # install).
+  if [[ "$LOCAL_HOOKS_PATH" == "$DESIRED" ]]; then
     if (( WRITE )); then
       git -C "$REPO_ROOT" config --unset core.hooksPath
       echo "install-hooks: unset git core.hooksPath"
@@ -218,4 +338,17 @@ else
       echo "install-hooks: DRY RUN — would unset git core.hooksPath"
     fi
   fi
+
+  for h in "${HOOK_NAMES[@]}"; do
+    dest="$GIT_HOOKS_DIR/$h"
+    current="$(symlink_current_target "$h")"
+    if [[ "$current" == "$DESIRED/$h" ]]; then
+      if (( WRITE )); then
+        rm -f "$dest"
+        echo "install-hooks: removed chain symlink $dest"
+      else
+        echo "install-hooks: DRY RUN — would remove chain symlink $dest"
+      fi
+    fi
+  done
 fi
