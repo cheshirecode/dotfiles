@@ -7,6 +7,23 @@ description: Pick the right tool for multi-faceted code search across symbols, t
 
 Use this skill to pick the fastest search approach for a coding task. Most real questions touch more than one facet — combine tools deliberately instead of reflexively reaching for `rg`.
 
+## When to use
+
+- Finding definitions, references, files, strings, structured config, when-it-changed, or log events
+- Planning a search workflow before reading code
+- Multi-faceted search across symbols, text, JSON, git history, and logs
+
+Skip if: one literal or known-file lookup is sufficient.
+
+## Route first
+
+- Unfamiliar codebase or broad discovery: start with `rg`, then escalate to Serena for symbol-aware follow-up.
+- Known symbol, references, or file overview: start with Serena (`find_symbol`, `find_referencing_symbols`, `get_symbols_overview`).
+- Structured JSON shape (keys, nesting, API payloads): use `jq`, optionally piped from `rg --files` to locate files.
+- History-aware ("when did this appear/change"): use `git log -S` / `-G` / `-p`.
+- Runtime logs or time-windowed events: `rg` on the log file, or `journalctl` / `log show`.
+- Serena MCP not activated: fall back to `rg`; do not block. See `references/mcp-setup.md` to set it up.
+
 ## Decision Rule
 
 Match the question to the facet, then the tool:
@@ -30,6 +47,8 @@ rg -n "useUserTaskQuotaStats" frontend/react/src
 rg -n "announcement_text" openapi packages/api-client/src
 rg --files | rg 'announcement'
 rg -U 'pattern\n.*other' path/   # multiline
+rg -t py -t ts "class User"      # restrict by file type
+rg -g '!*.test.*' "TODO"         # exclude by glob
 ```
 
 ## Prefer Serena For
@@ -39,7 +58,7 @@ Exact symbol lookup, references, file overview before editing.
 - `find_symbol` — known function/class/hook
 - `find_referencing_symbols` — usages
 - `get_symbols_overview` — file map
-- `search_for_pattern` — only as a scoped fallback after symbolic tools
+- `search_for_pattern` — scoped regex/substring search within Serena's index; use when `rg` returns too many hits and you need symbol-boundary awareness, or when you want to restrict to a specific file/directory that Serena has indexed. Falls back gracefully if the index is stale.
 
 ## Prefer `jq` For
 
@@ -48,7 +67,7 @@ JSON where keys and shape matter, not just substrings. Combine with `rg --files`
 ```bash
 jq '.paths | keys[]' openapi/spec.json
 jq '.dependencies | to_entries[] | select(.value | test("^\\^?1\\."))' package.json
-rg --files -g '*.json' | xargs -I{} jq -r 'select(.kind=="X") | input_filename' {} 2>/dev/null
+rg -g '*.json' -l '"kind"\s*:\s*"X"'   # find JSON files containing a key/value pair
 ```
 
 Stay in `rg` if you only need to know whether a string appears.
@@ -59,7 +78,7 @@ History-aware questions: when, why, by whom.
 
 ```bash
 git log -S 'announcement_text' -- path/         # pickaxe: commits that add/remove the string
-git log -G 'use\w+Quota' -- frontend/           # regex over diff content
+git log -G 'use\w+Quota' --perl-regexp -- frontend/  # PCRE regex over diff content
 git log -p -- path/to/file                      # full diff history of a path
 git log --follow -- path/to/file                # survive renames
 ```
@@ -80,10 +99,11 @@ For deep interactive exploration consider `lnav`, but `rg` + a time filter usual
 ## Practical Heuristics
 
 - `rg` is the best first pass; Serena the best second pass.
-- On noisy `rg` hits: narrow the file, then switch to Serena.
+- On noisy `rg` hits: narrow with `-t` (type) or `-g` (glob), then switch to Serena for symbol-aware filtering.
 - Stay in `rg` for YAML/generated artifacts; switch to `jq` only when shape matters.
 - `git log -S` beats guessing — use it before claiming "this used to work."
 - Avoid reading full files until search has narrowed the target.
+- When `rg` returns 50+ hits, switch strategy: add path restrictions, use `-g`/`-t` filters, or escalate to Serena's symbol tools.
 
 ## Worked Examples
 
@@ -103,4 +123,6 @@ For deep interactive exploration consider `lnav`, but `rg` + a time filter usual
 command -v rg jq
 ```
 
-If missing: `brew install ripgrep jq` (macOS) · `apt-get install ripgrep jq` (Debian) · `dnf install ripgrep jq` (Fedora) · `pacman -S ripgrep jq` (Arch). `git` is assumed present in any repo. Serena is provided by the MCP server — if it isn't activated for the project, fall back to `rg` and don't block on it. To set up the Serena MCP server, read `references/mcp-setup.md`.
+If missing: `brew install ripgrep jq` (macOS) · `apt-get install ripgrep jq` (Debian) · `dnf install ripgrep jq` (Fedora) · `pacman -S ripgrep jq` (Arch). `git` is assumed present in any repo.
+
+**Serena MCP setup:** Serena is provided by the MCP server — if it isn't activated for the project, fall back to `rg` and don't block on it. To set up the Serena MCP server for Claude Code, Cursor, or OpenCode, read `references/mcp-setup.md`.
