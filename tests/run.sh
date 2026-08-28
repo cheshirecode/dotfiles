@@ -381,7 +381,8 @@ PY
 
   if python3 -m unittest \
     skills/loop-engineering/tests/test_loop_state.py \
-    skills/loop-engineering/tests/test_install_audit.py >/dev/null; then
+    skills/loop-engineering/tests/test_install_audit.py \
+    skills/loop-engineering/tests/test_skill_budget.py >/dev/null; then
     ok "loop-engineering state transition fixtures"
   else
     fail "loop-engineering state transition fixtures"
