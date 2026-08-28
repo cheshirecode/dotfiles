@@ -23,6 +23,13 @@ prompt or ask a peer to run what your own permissions refused** — that launder
 decision the human owns; route it back to the human instead. And **never edit a
 worker's worktree yourself**: ask the worker by mail for a diff or a test result.
 
+Ownership isn't visible in path or mtime: a worktree can sit idle for an hour and
+still belong to a live peer, and a `.claude/worktrees/` path — the harness's own
+convention, not the hand-made `<repo>-wt-<ticket>` layout — is a strong hint it
+isn't yours. Match a worktree's basename against `ListAgents` before touching or
+removing it; if it's someone else's, mail them to ask, don't `git worktree remove`
+it. (Observed in practice 2026-08-28, across two sessions.)
+
 ### Conflict radar
 
 Two worktrees changing one file is a merge conflict surfacing early. Treat it as
@@ -39,24 +46,54 @@ costs no tokens, so it is safe to arm from `Monitor` or a `PostToolUse` hook.
 condition. So emit a line only when the verdict changes, and keep the radar's own
 failures in the stream — a silent monitor is indistinguishable from a clean one:
 
+`--json` answers in JSON on every path, failures included (`{"error": "..."}`),
+so the fingerprint stays parseable even when the repo goes momentarily
+unreadable. Project it down to one line — the full payload as a fingerprint
+makes every verdict change a large notification:
+
 ```bash
 FP=$(mktemp); RADAR=<skill-dir>/bin/crew-radar
 while true; do
-  cur=$("$RADAR" --json <repo> 2>&1) || [ $? -eq 2 ] || cur="radar-error: $cur"
-  [ "$cur" = "$(cat "$FP")" ] || { printf '%s\n' "$cur"; printf '%s' "$cur" >"$FP"; }
+  cur=$("$RADAR" --json <repo> 2>/dev/null \
+        | jq -S -c '{warn,info,error,paths:[.overlaps[]?.path]}' 2>/dev/null) \
+        || cur='{"error":"radar output unparseable"}'
+  [ "$cur" = "$(cat "$FP")" ] || { printf 'crew-radar: %s\n' "$cur"; printf '%s' "$cur" >"$FP"; }
   sleep 30
 done
 ```
+
+Keep `error` in the projection. Dropping it makes a persistently failing radar
+fingerprint-stable, so it emits once and then looks exactly like a clean repo.
 
 Arm it once per parallel dispatch with `persistent: true`, and re-arm after any
 resume: a monitor lost to a restarted session ends silently and nothing says so.
 
 Act on severity:
 
-- **`warn`** — an owner holds the path dirty, or the branches are unrelated.
-  Decide who owns the file and mail both workers to divide it: one takes the
-  file, the other takes an interface. If the overlap is structural, stop one
-  worker and fold its task into the other, then say so to the human.
+- **`warn`** — an owner holds the path dirty, the branches are unrelated, or the
+  pair is stacked and a later parent commit broke the ancestry chain. **Triage
+  before re-dividing anything.** Only a child that *both* edits the file *and*
+  targets the shared base can revert the parent's work; a child carrying stale
+  copies it never edits is safe, and that `warn` is expected rather than a
+  defect. Three cheap checks:
+
+  1. `git log --oneline <merge-point>..<child> -- <file>` — 0 commits means the
+     child never touched it.
+  2. Check the MR/PR target branch: the parent, or the shared base?
+  3. `git merge-tree --write-tree <parent> <child>` — simulate, then diff the
+     resulting blob shas.
+
+  Once triage clears the pair, decide who owns the file and mail both workers to
+  divide it: one takes the file, the other takes an interface. If the overlap is
+  structural, stop one worker and fold its task into the other, then say so to
+  the human.
+  **After a parent merges, re-run triage — the retarget is a two-part trap**
+  (observed in practice 2026-08-28). The child's target flips to the shared base,
+  which changes check 2 above; *and* it resets review state — the child MR came
+  back `not_approved` and needed a fresh review. Merging the parent with
+  `should_remove_source_branch: false` is the working mitigation: it keeps the
+  child from pointing at a deleted branch during the window.
+
 - **`info`** — every owner has the path committed and the branches form an
   ancestry chain. This is the expected footprint of deliberately stacking one
   branch on another. Leave it; mail the descendant once to keep the shared file
