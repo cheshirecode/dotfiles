@@ -50,6 +50,9 @@ HITS="$(printf '%s\n' "$ADDED" | perl -ne '
     [SECRET_SLACK        => qr/xox[abpros]-[A-Za-z0-9-]{10,}/],
     [SECRET_GCP_KEY      => qr/AIza[A-Za-z0-9_-]{35}/],
     [SECRET_AWS_KEY      => qr/AKIA[0-9A-Z]{16}/],
+    [SECRET_GITLAB_PAT   => qr/glpat-[A-Za-z0-9_-]{20,}/],
+    [SECRET_ATLASSIAN    => qr/AT[AC]TT3[A-Za-z0-9_-]{10,}/],
+    [SECRET_DATADOG_PAT  => qr/ddpat_[A-Za-z0-9]{20,}/],
   );
   for my $p (@pats) {
     if (/$p->[1]/) {

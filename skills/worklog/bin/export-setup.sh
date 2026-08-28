@@ -54,6 +54,9 @@ scrub() {
     s{xox[abpros]-[A-Za-z0-9-]{10,}}{<REDACTED:SECRET>}g;
     s{AIza[A-Za-z0-9_-]{35}}{<REDACTED:SECRET>}g;
     s{AKIA[0-9A-Z]{16}}{<REDACTED:SECRET>}g;
+    s{glpat-[A-Za-z0-9_-]{20,}}{<REDACTED:SECRET>}g;
+    s{AT[AC]TT3[A-Za-z0-9_-]{10,}}{<REDACTED:SECRET>}g;
+    s{ddpat_[A-Za-z0-9]{20,}}{<REDACTED:SECRET>}g;
     # 40-hex unprefixed token pattern removed: legacy GitHub PATs (deprecated
     # since 2021) were the only real-world hit; full git SHAs in commit
     # permalinks are the dominant clean-content collision. Modern secrets
@@ -232,7 +235,7 @@ check_residue() {
 }
 check_residue "$DRAFT" "[Ii]deogram|@ideogram\\.ai"                                     "org-identifier"
 check_residue "$DRAFT" "(^|[^A-Za-z0-9_])${LDAP}([^A-Za-z0-9_]|$)"                       "ldap"
-check_residue "$DRAFT" "sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|AIza[A-Za-z0-9_-]{35}|AKIA[0-9A-Z]{16}|github_pat_[A-Za-z0-9_]{20,}|xox[abpros]-[A-Za-z0-9-]{10,}" "secret"
+check_residue "$DRAFT" "sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|AIza[A-Za-z0-9_-]{35}|AKIA[0-9A-Z]{16}|github_pat_[A-Za-z0-9_]{20,}|xox[abpros]-[A-Za-z0-9-]{10,}|glpat-[A-Za-z0-9_-]{20,}|AT[AC]TT3[A-Za-z0-9_-]{10,}|ddpat_[A-Za-z0-9]{20,}" "secret"
 
 SIZE=$(wc -c <"$DRAFT" | tr -d ' ')
 FILES=$(grep -c '^=====WORKLOG-EXPORT-FILE=====' "$DRAFT" || true)
