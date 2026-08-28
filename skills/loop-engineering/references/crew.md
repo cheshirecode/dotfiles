@@ -48,15 +48,18 @@ failures in the stream — a silent monitor is indistinguishable from a clean on
 
 `--json` answers in JSON on every path, failures included (`{"error": "..."}`),
 so the fingerprint stays parseable even when the repo goes momentarily
-unreadable. Project it down to one line — the full payload as a fingerprint
-makes every verdict change a large notification:
+unreadable. Exit `2` is a collision **verdict**, not a parse failure: fingerprint
+stdout and do not bind `||` (or `set -o pipefail`) to radar's exit. A Monitor
+that treats exit 2 as unparseable fires once on a real overlap and then looks
+clean. Project it down to one line — the full payload as a fingerprint makes
+every verdict change a large notification:
 
 ```bash
 FP=$(mktemp); RADAR=<skill-dir>/bin/crew-radar
 while true; do
-  cur=$("$RADAR" --json <repo> 2>/dev/null \
-        | jq -S -c '{warn,info,error,paths:[.overlaps[]?.path]}' 2>/dev/null) \
-        || cur='{"error":"radar output unparseable"}'
+  raw=$("$RADAR" --json <repo> 2>/dev/null) || true   # exit 2 is a verdict
+  cur=$(printf '%s' "$raw" | jq -S -c '{warn,info,error,paths:[.overlaps[]?.path]}' 2>/dev/null) \
+    || cur='{"error":"radar output unparseable"}'
   [ "$cur" = "$(cat "$FP")" ] || { printf 'crew-radar: %s\n' "$cur"; printf '%s' "$cur" >"$FP"; }
   sleep 30
 done
