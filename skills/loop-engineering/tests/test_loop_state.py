@@ -324,6 +324,8 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("one or two tasks", orchestrator)
         self.assertIn("only when the task graph is not already explicit", orchestrator)
         self.assertIn("archived <child-slug> <worklog-commit>", orchestrator)
+        self.assertIn('git -C "$WORKLOG_REPO"', orchestrator)
+        self.assertIn("never `HEAD` from the code worktree", orchestrator)
         self.assertIn("discards any", orchestrator)
         self.assertIn("prose", orchestrator)
 

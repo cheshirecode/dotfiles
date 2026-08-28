@@ -132,7 +132,10 @@ Then either:
   task file and call `archive.sh`. After that, return exactly one status line:
   `archived <child-slug> <worklog-commit>` (or `blocked|needs_human|failed
   <child-slug> <reason>`); the orchestrator parses that line and discards any
-  prose.
+  prose. The SHA is `git -C "$WORKLOG_REPO" log -1 --format=%H` after
+  `archive.sh` succeeds — never `HEAD` from the code worktree and never
+  `gh pr view --json headRefOid`. Reject a return whose `log -1 --format=%s`
+  does not start with `<child-slug>:`.
 - **Execute in-band** — do the work yourself if it is small and well-scoped.
   Write evidence to the task file, checkpoint, and archive.
 
@@ -151,6 +154,16 @@ python3 <skill-dir>/scripts/loop_state.py advance \
 That's it. The diff, the findings, the verification — all in the worklog
 commit, not in the orchestrator's loop state. This keeps the orchestrator's
 context footprint at ~1KB even after 100+ cycles.
+
+PR-watch / in-flight HEAD moves: if a fingerprint Monitor fires while a review
+`Task` is still running, record one evidence line
+(`github: repo#N head <old>→<new> — <slug> in-flight`) and **do not interrupt**
+the worker unless the user asked. A stale-SHA archive is valid cycle evidence.
+After it lands, compare `gh pr view --json headRefOid` to the SHA in the archive
+summary; mismatch → claim a pre-declared `review-pr-N-r2` child (or start a new
+wave project). Do not spawn an orphan `review-pr-N` with `project:` set but
+missing from the parent's `tasks:` block — `project.sh` has no add-child.
+`project verify` must exit 0 before the rereview claim.
 
 ### 4. Terminal
 
