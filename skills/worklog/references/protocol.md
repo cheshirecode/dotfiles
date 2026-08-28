@@ -26,6 +26,11 @@ Read this file only when the selected mode requires task creation or direct task
   Context while its Scope section held the current, looser rules. Absolute
   claims in a summary — never, always, only — are the ones that go stale, so
   prefer pointing at the rules section over restating it.
+- When a document *must* restate rules to stand alone — a handover, and anything
+  `spawn` or `export` emits, all of which are self-contained by design — say
+  which copy wins. Two copies of a rule diverge the moment either changes, and a
+  reader with no way to tell which is authoritative will follow the one in front
+  of them. Name the source section and mark the copy a dated snapshot.
 
 ## Search ladder
 
