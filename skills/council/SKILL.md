@@ -5,6 +5,8 @@ description: "Run multi-angle, audited research with independent voting. Use whe
 
 # council
 
+Resolve `<skill-dir>` as this `SKILL.md` file's directory.
+
 ## When to use
 
 - "Run a council on X" / "get multiple opinions on Y" / `/council <topic>`
@@ -255,13 +257,13 @@ Do not present the live progress log as the final answer.
 
 ### Final report
 
-The final report is outcome-first. The first 25 rendered lines should show the decision summary, not ballots.
+The final report is outcome-first. The first 25 rendered lines should show the decision summary, not ballots. Use the following section headings and table formats verbatim in the output:
 
 ## Outcome
 
 | Field | Value |
 |---|---|
-| Status | `verified` or `UNVERIFIED: <reason>` |
+| Status | `VERIFIED` or `UNVERIFIED: <reason>` |
 | Mode | `<foreground|background>` |
 | Angles | `<returned>/<planned>` |
 | Voters | `<returned>/<planned>` |
@@ -317,10 +319,10 @@ Put full Stage 5 ballots here, after the outcome and vote tables.
 
 ## Pairings
 
-- `Agent` tool: every sub-agent in every stage is an `Agent` call when that primitive is available.
-- `karpathy-guidelines`: the council criteria above operationalize Think-Before, Simplicity-First, Surgical-Changes, and Goal-Driven.
-- For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
-- `worklog plan`: only when the user has not opted out of worklog tracking. Feed the council's kept list into `/worklog plan <task>` for planning artifacts.
+- `task` tool: every sub-agent in every stage is a `task` call with the appropriate `subagent_type` (e.g., `general` for research angles, `council-collator` for Stage 4, `council-research` for Stage 5 voting).
+- `$karpathy-guidelines`: the council criteria above operationalize Think-Before, Simplicity-First, Surgical-Changes, and Goal-Driven.
+- `$example-led-instructions`: for brittle outputs, 0/1/few-shot gate, max 1-3 examples, skip if obvious.
+- `$worklog`: `worklog plan` only when the user has not opted out of worklog tracking. Feed the council's kept list into `/worklog plan <task>` for planning artifacts.
 
 ## Examples
 
@@ -349,5 +351,3 @@ Claude: SKIP single-agent answer: 4
 ## Why voting
 
 A single synthesis agent inventing items and verifiers cleaning them up is structurally backwards. Items should clear an explicit bar to enter, not enter by default and need removal. Voting flips it: the collator only gathers, voters apply explicit criteria, and items need positive majority-plus-one support to be kept.
-
-- Quick reference: support threshold is `ceil(M_returned / 2 + 1)` for odd returned voter counts only: M=3 threshold 3, M=5 threshold 4, M=7 threshold 5. M=2 or M=4 is `UNVERIFIED` until a replacement voter restores an odd count.
