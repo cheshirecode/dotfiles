@@ -388,6 +388,19 @@ PY
     fail "loop-engineering state transition fixtures"
   fi
 
+  # Shell fixtures for the crew tools. Neither was reachable from this runner
+  # before, so a regression in either only surfaced if someone ran it by hand.
+  if bash skills/loop-engineering/tests/test_crew_radar.sh >/dev/null 2>&1; then
+    ok "crew-radar conflict fixtures"
+  else
+    fail "crew-radar conflict fixtures"
+  fi
+  if bash skills/loop-engineering/tests/test_crew_reap.sh >/dev/null 2>&1; then
+    ok "crew-reap safety-gate fixtures"
+  else
+    fail "crew-reap safety-gate fixtures"
+  fi
+
   if python3 -m unittest skills/evidence-gate/tests/test_evidence_gate.py >/dev/null; then
     ok "evidence-gate coverage fixtures"
   else
