@@ -60,7 +60,10 @@ EOF
 FMT=text
 for _a in "$@"; do [ "$_a" = "--json" ] && FMT=json && break; done
 
-json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+# Escape backslash and quote, then strip control characters. die() interpolates
+# $REPO, so a path containing a newline or tab is reachable, not theoretical --
+# it produced a literal raw newline inside the JSON string and broke the parse.
+json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\000-\037'; }
 
 die() {
   printf '%s: %s\n' "$PROG" "$1" >&2
