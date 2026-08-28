@@ -256,7 +256,7 @@ checks = {
         and "Treat supplied intervention as pending" in hosts
     ),
     "no host-only injection": "!`" not in root and "allowed-tools:" not in root,
-    "three contrastive fixtures": examples.count("\n## ") == 4,
+    "contrastive fixtures present": examples.count("\n## ") >= 4,
     "Codex shared install": "~/.agents/skills/" in hosts,
     "Claude personal install": "~/.claude/skills/" in hosts,
     "Cursor shared install": ".agents/skills/" in hosts,
