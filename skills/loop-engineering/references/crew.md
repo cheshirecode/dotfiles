@@ -23,6 +23,13 @@ prompt or ask a peer to run what your own permissions refused** — that launder
 decision the human owns; route it back to the human instead. And **never edit a
 worker's worktree yourself**: ask the worker by mail for a diff or a test result.
 
+Ownership isn't visible in path or mtime: a worktree can sit idle for an hour and
+still belong to a live peer, and a `.claude/worktrees/` path — the harness's own
+convention, not the hand-made `<repo>-wt-<ticket>` layout — is a strong hint it
+isn't yours. Match a worktree's basename against `ListAgents` before touching or
+removing it; if it's someone else's, mail them to ask, don't `git worktree remove`
+it. (Observed in practice 2026-08-28, across two sessions.)
+
 ### Conflict radar
 
 Two worktrees changing one file is a merge conflict surfacing early. Treat it as
@@ -53,10 +60,27 @@ resume: a monitor lost to a restarted session ends silently and nothing says so.
 
 Act on severity:
 
-- **`warn`** — an owner holds the path dirty, or the branches are unrelated.
-  Decide who owns the file and mail both workers to divide it: one takes the
-  file, the other takes an interface. If the overlap is structural, stop one
-  worker and fold its task into the other, then say so to the human.
+- **`warn`** — an owner holds the path dirty, the branches are unrelated,
+  or the pair is stacked and a later parent commit broke the ancestry
+  chain. Triage before re-dividing anything — all three are cheap:
+  `git log --oneline <merge-point>..<child> -- <file>` (0 commits means
+  the child never touched it); check the MR/PR target branch (parent
+  vs. master); `git merge-tree --write-tree <parent> <child>` to
+  simulate the merge and diff the resulting blob shas. Only a child that
+  both edits the file and targets the shared base can revert the
+  parent's work — one that carries stale copies it never edits is safe,
+  and that `warn` is expected, not a defect; re-dividing the work would
+  be the wrong response. The retarget is a two-part trap, observed in
+  practice on 2026-08-28: the target branch flips (parent to master,
+  resetting the merge-safety input above), and separately resets review
+  state — the child MR came back `not_approved` and needed a fresh
+  review. Re-check both after any parent merge. Merging the parent with
+  `should_remove_source_branch: false` is the working mitigation, not
+  just a detail: it keeps the child from a dangling target during the
+  window. Once triage clears the pair, decide who owns the file and mail
+  both workers to divide it: one takes the file, the other takes an
+  interface. If the overlap is structural, stop one worker and fold its
+  task into the other, then say so to the human.
 - **`info`** — every owner has the path committed and the branches form an
   ancestry chain. This is the expected footprint of deliberately stacking one
   branch on another. Leave it; mail the descendant once to keep the shared file
