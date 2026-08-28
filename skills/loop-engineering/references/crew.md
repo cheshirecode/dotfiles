@@ -46,14 +46,24 @@ costs no tokens, so it is safe to arm from `Monitor` or a `PostToolUse` hook.
 condition. So emit a line only when the verdict changes, and keep the radar's own
 failures in the stream — a silent monitor is indistinguishable from a clean one:
 
+`--json` answers in JSON on every path, failures included (`{"error": "..."}`),
+so the fingerprint stays parseable even when the repo goes momentarily
+unreadable. Project it down to one line — the full payload as a fingerprint
+makes every verdict change a large notification:
+
 ```bash
 FP=$(mktemp); RADAR=<skill-dir>/bin/crew-radar
 while true; do
-  cur=$("$RADAR" --json <repo> 2>&1) || [ $? -eq 2 ] || cur="radar-error: $cur"
-  [ "$cur" = "$(cat "$FP")" ] || { printf '%s\n' "$cur"; printf '%s' "$cur" >"$FP"; }
+  cur=$("$RADAR" --json <repo> 2>/dev/null \
+        | jq -S -c '{warn,info,error,paths:[.overlaps[]?.path]}' 2>/dev/null) \
+        || cur='{"error":"radar output unparseable"}'
+  [ "$cur" = "$(cat "$FP")" ] || { printf 'crew-radar: %s\n' "$cur"; printf '%s' "$cur" >"$FP"; }
   sleep 30
 done
 ```
+
+Keep `error` in the projection. Dropping it makes a persistently failing radar
+fingerprint-stable, so it emits once and then looks exactly like a clean repo.
 
 Arm it once per parallel dispatch with `persistent: true`, and re-arm after any
 resume: a monitor lost to a restarted session ends silently and nothing says so.
