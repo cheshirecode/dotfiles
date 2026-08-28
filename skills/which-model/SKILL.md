@@ -40,39 +40,8 @@ Do not preload references that the selected route does not require.
 
 ## Task requests
 
-For a non-trivial task, use an available sequential-thinking MCP first to decompose capability requirements, constraints, and risk gates. Common namespace mappings:
-- Claude Code: `mcp__sequential-thinking__sequentialthinking`
-- OpenCode: check available MCPs for a structured-decomposition or thinking tool
-- Other agents: use their equivalent structured-reasoning tool, or decompose inline
-
-Use the result to choose models without exposing chain-of-thought. Skip it for obvious one-lane asks.
-
-Return up to three recommendations: best value, fallback, then premium/escalation only when useful.
-
-```markdown
-1. <model or lane> — <why it is best value for this task>
-   Use for: <specific subtask shape>
-   Avoid if: <capability/privacy/cost caveat>
-   Availability: <selectable here | requires wrapper | not available in this harness>
-```
-
-Concrete example:
-
-```markdown
-1. qwen/qwen3-coder — best value for routine coding in this harness at $0.80/$3.20 per Mtok with 262k context
-   Use for: targeted patches, refactors, and test writes under ~100k tokens of repo context
-   Avoid if: task needs vision input or >200k output
-   Availability: selectable here (openrouter)
-2. anthropic/claude-sonnet-4 — fallback when the task needs strong tool-use or long-horizon agentic coding
-   Use for: multi-file refactors, ambiguous specs requiring judgment
-   Avoid if: cost-sensitive bulk subagent work
-   Availability: selectable here
-```
-
-If filtering by hard requirements (data policy, modality, context, tools) leaves zero candidates, say so explicitly and recommend the closest relaxable constraint rather than inventing a match.
-
-Include exact prices only after reading `references/catalog.md` and obtaining a fresh enough snapshot. Otherwise compare qualitatively and label dated calibration as approximate.
-
+See [references/routing.md](references/routing.md) for the decomposition
+procedure and the per-agent sequential-thinking namespaces.
 ## Guideline
 
 1. Identify the job: mechanical search, code edit, long-context review, visual judgment, adversarial verification, planning, synthesis, or final decision.

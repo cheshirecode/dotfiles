@@ -34,102 +34,19 @@ All script invocations below use `python3 <skill-dir>/scripts/evidence_gate.py`.
 
 ## Declare every goal clause
 
-Use stable lowercase criterion IDs (matching `^[a-z][a-z0-9_-]*$`) and an
-explicit gate path. Store gate files alongside task evidence (e.g.,
-`_worklog/evidence/<task-slug>.json`).
-
-```bash
-python3 <skill-dir>/scripts/evidence_gate.py init \
-  --gate <gate-file> \
-  --goal "<full observable goal>" \
-  --criterion "tests=full suite passes" \
-  --criterion "merge=PR is merged into main"
-```
-
-Do not collapse distinct outcomes into one criterion. Tests, commit, deployment,
-PR state, and user-visible behavior are separate when the goal names them.
-
-**Overwrite protection:** `init` refuses to overwrite an existing gate file.
-Pass `--force` to replace it (use sparingly; prefer appending evidence).
-
+Initialize with `python3 <skill-dir>/scripts/evidence_gate.py init`; see
+[references/recording.md](references/recording.md) for clause wording rules.
 ## Record verified evidence
 
-After checking the source, attach evidence to exactly one criterion:
+**Evidence kinds:** `command`, `artifact`, `git`, `github`, `url`. Never
+record model prose as evidence.
 
-```bash
-python3 <skill-dir>/scripts/evidence_gate.py record \
-  --gate <gate-file> \
-  --criterion tests \
-  --kind command \
-  --ref "tests/run.sh all" \
-  --result "62 pass, 0 fail"
-```
-
-**Evidence kinds:** `command`, `artifact`, `git`, `github`, `url`. Never record
-model prose as evidence. Each criterion may have multiple evidence records
-(append-only; no edit/remove).
-
-**Evidence of a change is not evidence of its health.** A verified diff proves
-the change is what you think it is; it says nothing about whether it works. Any
-clause asserting readiness, mergeability, or a successful rollout needs a second,
-separate piece of typed evidence for health — the CI verdict at the head SHA for
-an MR, the canary verdict for a deploy. Observed 2026-08-28: an MR re-approved on
-a correctly-read diff while its pipeline was red with 28 errors.
-
-Health evidence must also **span the failure period**, not merely measure the
-right quantity. A check whose window is shorter than the period of an
-intermittent failure returns clean and means nothing. Measured the same day: a
-crossed auth pairing failing on a ~15-minute cache clock read 180/180 clean over
-one short run and 38/360 (~10.6%) over a run crossing four cache boundaries —
-same system, opposite verdicts.
-
-**GitHub example:** For PR merge, inspect the exact PR head SHA, base branch,
-state, non-empty diff, and merged target before recording:
-
-```bash
-python3 <skill-dir>/scripts/evidence_gate.py record \
-  --gate <gate-file> \
-  --criterion merge \
-  --kind github \
-  --ref "https://github.com/org/repo/pull/42" \
-  --result "merged commit abc1234 into main"
-```
-
+See [references/recording.md](references/recording.md) for the record
+subcommand, evidence kinds, and worked examples.
 ## Gate completion
 
-Run `python3 <skill-dir>/scripts/evidence_gate.py check --gate <gate-file>`.
-
-**Exit codes:**
-- `0` — all criteria covered. Prints JSON with `verification` field in format
-  `evidence-gate:<absolute-path>#sha256=<digest>`. Pass this value to the
-  parent workflow's completion record.
-- `1` — one or more criteria uncovered. Prints JSON with `missing` array.
-  **Do not claim completion.** Address each missing criterion before re-checking.
-- `2` — contract violation (invalid gate file, unknown criterion, etc.).
-  Check stderr for the error message.
-
-**Example output (satisfied):**
-```json
-{
-  "covered": ["tests", "merge"],
-  "goal": "change is verified and merged",
-  "missing": [],
-  "status": "satisfied",
-  "verification": "evidence-gate:/path/to/gate.json#sha256=abc123..."
-}
-```
-
-**Example output (unsatisfied):**
-```json
-{
-  "covered": ["tests"],
-  "goal": "change is verified and merged",
-  "missing": ["merge"],
-  "status": "unsatisfied",
-  "verification": ""
-}
-```
-
+See [references/recording.md](references/recording.md) for the check
+subcommand, its exit codes, and the pass/fail contract.
 ## Inspect the gate
 
 Run `python3 <skill-dir>/scripts/evidence_gate.py show --gate <gate-file>` to
