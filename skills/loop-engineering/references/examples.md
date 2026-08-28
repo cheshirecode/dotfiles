@@ -3,6 +3,49 @@
 Read only when state classification, effect ordering, or handoff routing is
 ambiguous.
 
+## 0. Basic single-task loop
+
+INPUT
+
+> Verify that the API endpoint returns 200 for valid requests. Budget: 5 checks.
+
+OUTPUT
+
+Initialize the loop:
+
+```bash
+python3 <skill-dir>/scripts/loop_state.py init \
+  --state /tmp/api-check.json \
+  --goal "API endpoint returns 200 for valid requests" \
+  --evidence "endpoint URL confirmed" \
+  --budget-unit checks \
+  --budget-limit 5 \
+  --next-action "send test request with valid payload"
+```
+
+Run one cycle:
+
+```bash
+# After executing the check and capturing output
+python3 <skill-dir>/scripts/loop_state.py advance \
+  --state /tmp/api-check.json \
+  --evidence "command: curl -s -o /dev/null -w '%{http_code}' — 200" \
+  --next-action "verify response body schema"
+```
+
+On success after verification:
+
+```bash
+python3 <skill-dir>/scripts/loop_state.py finish \
+  --state /tmp/api-check.json \
+  --status complete \
+  --verification "curl exit 0 and HTTP 200 confirmed" \
+  --evidence "command: curl response — 200 OK with valid schema"
+```
+
+This pattern scales to multi-hypothesis diagnosis (fixture 1), delegation
+(fixture 2), and orchestrator programs (fixture 4).
+
 ## 1. Interactive diagnosis
 
 INPUT
@@ -126,6 +169,27 @@ worklog commits.
 Delegate return contract: `archived <slug> <sha>` is the success case;
 `blocked <slug> <reason>` preserves a non-success outcome without returning a
 full task narrative.
+
+## 5. Discovery keyed on a join dimension
+
+INPUT
+
+> Watch for MRs in my team's repos that need review.
+
+OUTPUT (agent runs the inverse sweep, not just the forward one)
+
+```text
+[sweep A: MRs whose title/branch carries a ticket id -> 6 found]
+[sweep B: tickets on the team field -> resolve to MRs -> 5 found]
+[reconcile: A\B = 1 MR whose ticket is untagged; B\A = 1 MR in a repo not enumerated]
+[evidence: "command: two sweeps reconciled — 2 items visible to exactly one"]
+```
+
+If a loop discovers work through a join key, items lacking that key are
+invisible **by construction**, not by accident: a title-keyed sweep cannot see an
+untagged MR, and a ticket-keyed sweep cannot see a repo it does not enumerate.
+Run the inverse sweep and reconcile the two sets. Observed 2026-08-28: each
+direction missed something real on the same day.
 
 Same prompt in natural language:
 

@@ -53,6 +53,8 @@ def main() -> None:
 
   if args.items < 1:
     fail("--items must be positive")
+  if not args.ballot.is_file():
+    fail(f"ballot file not found: {args.ballot}")
   unresolved = parse_ids(args.unresolved)
   expected = set(range(1, args.items + 1))
   if not unresolved <= expected:

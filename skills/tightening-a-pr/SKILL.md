@@ -19,6 +19,16 @@ When an agent finishes a PR, the code is the easy part to see and the hard part 
 
 **Skip / downgrade if:** trivial one-commit PR with no lessons worth codifying (do the deslop step alone). Multiple open PRs to sweep periodically → that's `ship-hygiene`, not this. Implementation not actually finished → finish it first. **No worklog task tracks this PR** → either create one first, or distill from the diff + PR body alone and skip step 4 (`checkpoint.sh` needs a slug).
 
+## Resolve `$WORKLOG_BIN`
+
+This skill invokes worklog scripts via `$WORKLOG_BIN`. Resolve it the same way the worklog skill does:
+
+```bash
+WORKLOG_BIN="${WORKLOG_BIN:-$HOME/Documents/oss/dotfiles/skills/worklog/bin}"
+```
+
+All `checkpoint.sh` references below use this variable.
+
 ## Relationship to ship-hygiene (read this — the overlap is real)
 
 `ship-hygiene` is a **periodic, multi-PR** sweep (CI triage across the stack, "clean my open PRs"). This skill is a **single-PR, post-completion retrospective**. They share exactly one surface — the PR title/body deslop + internal-reference purge — and this skill **delegates that step to ship-hygiene's rules rather than re-deriving the grep patterns.** Do not duplicate ship-hygiene's leak greps here; invoke its guidance for step 3. What this skill adds on top: the council-driven learning distillation (step 1) and the codify triage (step 2), which ship-hygiene has no concept of.
@@ -33,7 +43,7 @@ Dispatch `council` on the question: *"What are the durable, reusable learnings f
 
 Why council and not a single read: a single agent transcribes the lessons that are already labeled and misses the ones that aren't (this is the observed baseline failure). Council's independent angles surface blind spots, and its voting criteria are the exact filter you need next — `N-THRESHOLD-MET` answers "is this a recurring class worth a guardrail or an n=1 one-off", `SOLVES-EXTANT-PAIN` and `COST-PROPORTIONATE` gate speculative "might need it" learnings out.
 
-Downgrade to a single-pass distillation only for a genuinely small PR — mirror council's own skip rule.
+Downgrade to a single-pass distillation only for a genuinely small PR — mirror council's own skip rule. Single-pass: read the worklog task body + diff once, ask yourself "what bug class, missing utility, or guardrail gap would the next agent re-discover?" and list them. Apply the same codify triage (step 2) to the list. Skip the voting machinery.
 
 The output you carry forward is council's **kept list**: learnings that cleared the bar.
 
@@ -54,13 +64,15 @@ Council gates whether a *learning* is kept — not its *destination*. Before wri
 
 ### 3. Deslop the PR title/body + tracking tasks — via `ship-hygiene`
 
-Apply `ship-hygiene`'s PR-title/body audit and **internal-reference purge** to this one PR, then the same purge on the tracking worklog task's public-facing fields. `ship-hygiene` **owns** the authoritative leak-token list and the two leak greps (title/body + the diff's added comments) — run them from there rather than keeping a second copy in sync here. Rewrite product-first (what changed for users + why) unless it's pure engineering/infra; skill command names are a leak *unless* the PR changes skill files, where they're product surface.
+Load the `ship-hygiene` skill and apply its step 7 (body + comment audit) to this one PR. Specifically: run ship-hygiene's two leak greps (title/body + diff added-lines) from its SKILL.md, fix any leaks in place, then apply the same purge to the tracking worklog task's public-facing fields (title, Context section — not the frontmatter). `ship-hygiene` **owns** the authoritative leak-token list — do not re-derive the grep patterns here. Rewrite product-first (what changed for users + why) unless it's pure engineering/infra; skill command names are a leak *unless* the PR changes skill files, where they're product surface.
 
 Before calling the PR ready, record the current head SHA, the focused validation commands with pass/fail results, and the green CI run or check set in the PR body or a final PR comment. Keep "evidence complete" distinct from "ready for review": a draft PR is not ready until it is explicitly marked ready after those facts are current.
 
 ### 4. Compress + checkpoint the worklog
 
 Compress the decided iteration drama out of the task body (drop ToT/Reflexion scaffolding, verified "Assumptions", multi-row iteration tables — git log is the audit trail; keep the decision rationale, lessons, re-runnable commands, `next_action`), then checkpoint it **on its own**: `"$WORKLOG_BIN/checkpoint.sh" <slug>`. Use the plain command — its staged-scope guard *refuses* any staged path outside the task file, which is exactly what enforces the single-concern commit; do **not** pass `WORKLOG_CHECKPOINT_FORCE=1` (that bypasses the guard) unless you have a stated reason. Keep this separate from the step-2 codify commits — up to three concerns, up to three commits, never one bundle.
+
+**No worklog task:** if step 1 was single-pass distillation from the diff + PR body alone (no worklog task tracks this PR), skip this step — there's nothing to checkpoint. The codify commits from step 2 and the deslop from step 3 are sufficient.
 
 ## Red flags — STOP, you're skipping a step
 
@@ -107,6 +119,7 @@ Compress the decided iteration drama out of the task body (drop ToT/Reflexion sc
 
 === checkpoint ===
   <slug>: N → M lines. Commit <sha>. (separate from codify commits)
+  [OR: skipped — no worklog task tracked this PR]
 ```
 
 ## Example
@@ -114,7 +127,7 @@ Compress the decided iteration drama out of the task body (drop ToT/Reflexion sc
 ```
 User: tighten up PR #482 before I hand it off
 Claude: [council on "durable learnings from #482" → 3 kept / 5 proposed]
-        - abort-signal not propagated (class of bug, N-THRESHOLD-MET) → guard: bin/lint-pr.sh + audit task
+        - abort-signal not propagated (class of bug, N-THRESHOLD-MET) → guard: bin/lint-pr.sh
         - fake-timer test helper missing (n=1 so far)              → follow-up task
         - backoff cap hardcoded                                     → follow-up task
         [codify: lint guard committed; 2 next_actions added; 0 dropped]

@@ -8,6 +8,13 @@ license: MIT
 
 Behavioral guidelines to reduce common LLM coding mistakes, derived from [Andrej Karpathy's observations](https://x.com/karpathy/status/2015883857489522876) on LLM coding pitfalls.
 
+## When to use
+
+- Writing, reviewing, or refactoring code
+- Avoiding overcomplication, making surgical changes, surfacing assumptions, defining verifiable success criteria
+
+Skip if: read-only work with no code changes.
+
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
 For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
@@ -68,11 +75,20 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
-For uncertain multi-step work, make the load-bearing model falsifiable before editing:
+### Falsifiable hypotheses for uncertain work
+
+For uncertain multi-step work, make the load-bearing assumption falsifiable before editing:
 
 - `Hypothesis:` the assumption that makes the planned approach valid.
 - `Falsifier:` the observation that would disprove or materially change it.
 - `Replay check:` the original reproduction or narrow command to rerun after revision.
+
+**Example:**
+```
+Hypothesis: the auth middleware reads the token from the Authorization header.
+Falsifier: the middleware reads a different header or cookie.
+Replay check: curl -H "Authorization: Bearer test" /api/protected
+```
 
 If observed evidence contradicts a load-bearing assumption or a planned expected result:
 
