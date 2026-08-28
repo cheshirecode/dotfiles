@@ -400,6 +400,11 @@ PY
   else
     fail "crew-reap safety-gate fixtures"
   fi
+  if bash skills/worklog/tests/verify_refs/test_verify_refs.sh >/dev/null 2>&1; then
+    ok "worklog verify-refs fixtures"
+  else
+    fail "worklog verify-refs fixtures"
+  fi
 
   if python3 -m unittest skills/evidence-gate/tests/test_evidence_gate.py >/dev/null; then
     ok "evidence-gate coverage fixtures"
