@@ -41,12 +41,49 @@ Save locally — never pretend to upload to Drive:
 
 Naming convention: `resume-<company>-<jobid>.txt`, `cover-letter-<company>-<jobid>.txt`, `skills-keywords-<company>-<jobid>.txt`. Co-locate in a folder per application.
 
-### 5. Hand off for manual upload
+### 5. Hand off for upload
 
-Write a short `UPLOAD-INSTRUCTIONS.txt` next to the artifacts:
-- Suggested Drive folder name (e.g. `<Company> — <gh_jid> — <title>`).
-- Step-by-step upload + form-submit checklist.
-- Note that the `gdrive` MCP in this environment is read-only (`list_mcp_resources` shows no `gdrive_create_folder` or `gdrive_upload_file`).
+Always write the three artifacts locally first (Steps 4.1–4.3). Then write
+`UPLOAD-INSTRUCTIONS.txt` next to them, with **two parallel paths** depending
+on whether `gws` is available:
+
+**Path A — manual (always works).** Drag-and-drop the three files into a
+per-application Drive folder. Suggested folder name:
+`<Company> — <jobid> — <YYYY-MM-DD>` (e.g. `Elastic — 8106089 — 2026-08-27`).
+The date is the application date, not the JD post date — re-runs on the
+same job create a new dated folder, preserving the audit trail.
+
+**Path B — gws one-liner (when `gws --version` succeeds AND `gws auth setup`
+has been completed).** The instructions file contains a copy-pasteable
+shell snippet the user can run to create the folder and upload the three
+artifacts in one go. The snippet is built once, after artifacts are saved,
+so file paths are real:
+
+```bash
+# Create the per-application folder (idempotent: search first, create if absent).
+FOLDER_NAME="<Company> — <jobid> — <YYYY-MM-DD>"
+EXISTING=$(gws drive files list \
+  --params "{\"q\": \"name = '${FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false\"}" \
+  --format json | jq -r '.files[0].id // empty')
+FOLDER_ID="${EXISTING:-$(gws drive files create \
+  --json "{\"name\": \"${FOLDER_NAME}\", \"mimeType\": \"application/vnd.google-apps.folder\"}" \
+  --format json | jq -r '.id')}"
+
+# Upload the three artifacts (run ×3, swap filename + parents).
+for f in resume-<co>-<jobid>.txt cover-letter-<co>-<jobid>.txt skills-keywords-<co>-<jobid>.txt; do
+  gws drive files create \
+    --upload "$f" \
+    --json "{\"name\": \"$f\", \"parents\": [\"${FOLDER_ID}\"]}"
+done
+```
+
+If `gws` is missing, Path B is omitted from `UPLOAD-INSTRUCTIONS.txt`.
+The skill **never writes to Drive on its own** — both paths require the
+user to act. Privacy + auditability are preserved; speed is opt-in.
+
+The historical note that "the gdrive MCP is read-only" still holds; `gws`
+is the supported write path. Both paths in `UPLOAD-INSTRUCTIONS.txt` are
+still manual-from-the-agent's-perspective.
 
 ## Lessons (apply by default)
 
@@ -55,6 +92,21 @@ Write a short `UPLOAD-INSTRUCTIONS.txt` next to the artifacts:
 - **L3 — Honest-stretch beats keyword-max.** Stretch roles surface gaps in the cover letter; do not over-claim.
 - **L4 — Drive upload is manual.** Produce local files + handoff instructions; do not fake it.
 - **L5 — Stop early on low fit.** If most required rows are gap, tell the user before drafting.
+- **L6 — Drive linkage (read Drive → local → worklog fallback; write never silent).**
+  - **Read flow:** try `gws drive files get` on the canonical resume first (the
+    Drive file ID is recorded in the worklog task file, not in the skill);
+    fall back to `$HOME/<canonical-resume>` if Drive returns 401/403/404;
+    fall back to worklog evidence directly if no file exists.
+  - **Write flow:** never silent. The skill produces local files; the
+    `UPLOAD-INSTRUCTIONS.txt` always contains the manual drag-and-drop
+    path, and **only when `gws --version` succeeds AND `gws auth setup`
+    is complete**, also the one-liner shell snippet for folder create +
+    upload. User pastes; agent doesn't run.
+  - **Folder convention:** `<Company> — <jobid> — <YYYY-MM-DD>` (date =
+    application date). Idempotent: search by name first, create only if absent.
+  - **Worklog is still the source of truth for fit-assessment.** Drive is
+    a deliverable surface. Anything copied to Drive is a *pointer* to the
+    worklog task, not a duplicate of its evidence.
 
 ## Output checklist
 
@@ -63,11 +115,17 @@ Before declaring done, verify:
 - [ ] Cover letter has the honest-stretch carve-out (or is omitted for non-stretch roles)
 - [ ] Skills keyword block covers required + bonus terminology
 - [ ] Files are saved locally with consistent naming
-- [ ] `UPLOAD-INSTRUCTIONS.txt` is written
+- [ ] `UPLOAD-INSTRUCTIONS.txt` is written with **both** Path A (manual) and — when `gws --version` succeeds AND auth is complete — Path B (gws one-liner)
+- [ ] Per-application Drive folder name in the instructions matches `<Company> — <jobid> — <YYYY-MM-DD>`
+- [ ] If the canonical resume was read from Drive, the worklog task file records the file ID (for re-runs and re-uploads)
 - [ ] A worklog task is created recording the run (per `worklog` skill): JD text, fit-assessment matrix, angle, file manifest
 
 ## Worked example
 
 `people/oss/active/job-application-elastic-8106089.md` in the worklog.
 Reference it for the full JD, 15-row fit-assessment matrix, and the six
-codified lessons that this skill distills down.
+codified lessons that this skill distills down. For the Drive-linkage
+design that produced L6 and Path B in Step 5, see
+`gws-skill-drive-linkage-design` in the worklog archive (includes the
+live Drive-state table of canonical file IDs, sizes, and modification
+times that the read flow should target).
