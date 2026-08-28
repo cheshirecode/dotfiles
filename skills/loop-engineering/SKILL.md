@@ -166,8 +166,9 @@ errors, and typed evidence.
 1. Observe from tools or durable evidence.
 2. Choose the smallest action that advances or falsifies the approach.
 3. Run the protocol's effect preflight for every mutation; if target, authority,
-   or read-only proof is unknown, stop before writing. Serialize writes unless
-   isolation is proven.
+   or read-only proof is unknown, stop before writing. Name irreversible effects
+   in `--approval-boundary`, and treat satisfying someone else's armed automation
+   as an effect of your own. Serialize writes unless isolation is proven.
 4. Execute and verify. A model's prose claim is not evidence.
 5. On apparent success, invoke `$evidence-gate`. Map every observable goal
    clause to typed evidence and require its `check` command to pass.
