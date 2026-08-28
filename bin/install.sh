@@ -3,26 +3,30 @@
 #   1. install-runtime-deps.sh  — python/gh/git/rg/jq/direnv
 #   2. install-skills.sh        — symlink/copy agent skills from manifest
 #   3. install-worklog.sh       — clone _worklog repo + wire hooks
-#   4. install-opencode.sh      — link OpenCode agents
-#   5. doctor.sh                — verify
+#   4. install-agents.sh        — link OpenCode & Claude agents and global instructions
+#   5. install-gws.sh           — install Google Workspace CLI + wire its skills
+#   6. doctor.sh                — verify
 #
 # Refuses Windows-native. WSL2 is the supported Windows path.
 #
 # Usage:
-#   bin/install.sh             # full install
-#   bin/install.sh --skip-deps # skip package-manager step (CI environments
-#                              # that already have deps baked into the image)
-#   bin/install.sh --no-worklog # don't clone _worklog (skills-only install)
+#   bin/install.sh                # full install
+#   bin/install.sh --skip-deps    # skip package-manager step (CI environments
+#                                 # that already have deps baked into the image)
+#   bin/install.sh --no-worklog   # don't clone _worklog (skills-only install)
+#   bin/install.sh --no-gws       # skip gws install (lighter bootstrap)
 
 set -euo pipefail
 
 SKIP_DEPS=0
 NO_WORKLOG=0
+NO_GWS=0
 DRY_RUN=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip-deps)  SKIP_DEPS=1 ;;
     --no-worklog) NO_WORKLOG=1 ;;
+    --no-gws)     NO_GWS=1 ;;
     --dry-run)    DRY_RUN=1 ;;
     -h|--help)
       # HELP-START
@@ -31,16 +35,19 @@ install.sh — one-shot installer entry point. Detects OS and orchestrates:
   1. install-runtime-deps.sh
   2. install-skills.sh
   3. install-worklog.sh
-  4. doctor.sh
+  4. install-agents.sh
+  5. install-gws.sh
+  6. doctor.sh
 
 Refuses Windows-native. WSL2 is the supported Windows path.
 
 Usage:
-  bin/install.sh             # full install
-  bin/install.sh --skip-deps # skip package-manager step (CI images that
-                             # bake deps in)
-  bin/install.sh --no-worklog # don't clone _worklog (skills-only install)
-  bin/install.sh --dry-run    # print intended actions; do nothing
+  bin/install.sh                # full install
+  bin/install.sh --skip-deps    # skip package-manager step (CI images that
+                                # bake deps in)
+  bin/install.sh --no-worklog   # don't clone _worklog (skills-only install)
+  bin/install.sh --no-gws       # skip gws install (lighter bootstrap)
+  bin/install.sh --dry-run      # print intended actions; do nothing
 EOF
       # HELP-END
       exit 0
@@ -95,18 +102,18 @@ echo "=== install: detected $OS ==="
 
 if [[ $SKIP_DEPS -eq 0 ]]; then
   echo
-  echo "=== 1/4 runtime deps ==="
+  echo "=== 1/6 runtime deps ==="
   if [[ $DRY_RUN -eq 1 ]]; then
     echo "  [dry-run] would run: bin/install-runtime-deps.sh"
   else
     run_step bin/install-runtime-deps.sh
   fi
 else
-  echo "=== 1/4 runtime deps SKIPPED (--skip-deps) ==="
+  echo "=== 1/6 runtime deps SKIPPED (--skip-deps) ==="
 fi
 
 echo
-echo "=== 2/4 agent skills ==="
+echo "=== 2/6 agent skills ==="
 if [[ $DRY_RUN -eq 1 ]]; then
   run_step bin/install-skills.sh --dry-run
 else
@@ -115,26 +122,38 @@ fi
 
 if [[ $NO_WORKLOG -eq 0 ]]; then
   echo
-  echo "=== 3/4 worklog ==="
+  echo "=== 3/6 worklog ==="
   if [[ $DRY_RUN -eq 1 ]]; then
     echo "  [dry-run] would run: bin/install-worklog.sh"
   else
     run_step bin/install-worklog.sh
   fi
 else
-  echo "=== 3/4 worklog SKIPPED (--no-worklog) ==="
+  echo "=== 3/6 worklog SKIPPED (--no-worklog) ==="
 fi
 
 echo
-echo "=== 4/5 OpenCode agents ==="
+echo "=== 4/6 agents & global instructions ==="
 if [[ $DRY_RUN -eq 1 ]]; then
-  echo "  [dry-run] would run: bin/install-opencode.sh"
+  echo "  [dry-run] would run: bin/install-agents.sh"
 else
-  run_step bin/install-opencode.sh
+  run_step bin/install-agents.sh
+fi
+
+if [[ $NO_GWS -eq 0 ]]; then
+  echo
+  echo "=== 5/6 gws (Google Workspace CLI) ==="
+  if [[ $DRY_RUN -eq 1 ]]; then
+    run_step bin/install-gws.sh --dry-run
+  else
+    run_step bin/install-gws.sh
+  fi
+else
+  echo "=== 5/6 gws SKIPPED (--no-gws) ==="
 fi
 
 echo
-echo "=== 5/5 doctor ==="
+echo "=== 6/6 doctor ==="
 if [[ $DRY_RUN -eq 1 ]]; then
   echo "  [dry-run] would run: bin/doctor.sh"
 else
