@@ -390,6 +390,26 @@ def command_fingerprint(args: argparse.Namespace) -> str:
     return hashlib.sha256(raw_state).hexdigest()
 
 
+def index_line(state: dict[str, Any]) -> str:
+    """One line: the index, not the log.
+
+    SKILL.md asks the visible update to lead with state and the next action and
+    to carry no recap prose, but the default output is the whole state document
+    -- history included, so it grows every cycle. By cycle four a caller is
+    piping each transition through its own extractor. This is that extractor,
+    shipped.
+    """
+    budget = state["budget"]
+    head = (
+        f"{state['terminal_status']} "
+        f"{budget['used']}/{budget['limit']} {budget['unit']}"
+    )
+    if state["terminal_status"] == "running":
+        return f"{head} — next: {state['next_action']}"
+    verification = state.get("verification") or ""
+    return f"{head} — {verification}" if verification else head
+
+
 def summary(state: dict[str, Any]) -> str:
     budget = state["budget"]
     return "\n".join(
@@ -405,6 +425,11 @@ def summary(state: dict[str, Any]) -> str:
 
 def add_state_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--state", type=pathlib.Path, required=True)
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="emit one index line instead of the full state document",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -499,6 +524,8 @@ def main() -> int:
         return 3
     if args.command == "fingerprint":
         print(state)
+    elif getattr(args, "quiet", False):
+        print(index_line(state))
     elif args.command == "show" and not args.json:
         print(summary(state))
     else:
