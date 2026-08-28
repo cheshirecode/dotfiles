@@ -30,6 +30,11 @@ import sys
 
 import yaml
 
+# Single source of truth for the valid `kind` set. Importing it (rather than
+# copying the list) keeps plan-new and the pre-commit lint from drifting apart.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from _lint import KINDS  # noqa: E402
+
 SLUG_RE = re.compile(r"^(eng-\d+-)?[a-z0-9]+(-[a-z0-9]+)*$")
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 
@@ -177,6 +182,15 @@ def cmd_plan_new() -> None:
     die(f"plan-new: tasks JSON parse error: {e}")
   if not isinstance(tasks, list) or not tasks:
     die("plan-new: tasks JSON must be a non-empty array")
+
+  # Reject unknown kinds HERE, before materialize-new writes anything. The
+  # pre-commit lint enforces the same set, but it only fires after every task
+  # file is on disk and staged, so a typo used to abort the run half-created
+  # and leave the caller to `git reset` and `rm` by hand.
+  bad = sorted({t.get("kind") for t in tasks
+                if isinstance(t, dict) and t.get("kind") and t["kind"] not in KINDS})
+  if bad:
+    die(f"plan-new: unknown kind(s) {bad}; valid kinds: {sorted(KINDS)}")
 
   # Validate each task.
   seen: set[str] = set()
