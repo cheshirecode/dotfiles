@@ -65,5 +65,20 @@ ck "bad option rejected"                1 "unknown option" --nope
 ck "non-repo rejected"                  1 "not inside a git repository" "$TMP"
 ck "bad base rejected"                  1 "base ref not found" --base no/such/ref "$R"
 
+# --json must yield JSON on EVERY path, including failures. Consumers
+# fingerprint the output, so a bare error line becomes a parse error in their
+# pipeline and the fingerprint silently turns to garbage.
+ck "json: error path is still json"     1 '^\{"error":' --json "$TMP/nope"
+ck "json: bad option is still json"     1 '^\{"error":' --json --no-such-flag "$R"
+for case in "$TMP/nope" "--base no/such/ref $R"; do
+  # shellcheck disable=SC2086
+  if crew_out=$("$RADAR" --json $case 2>/dev/null); then :; fi
+  if printf '%s' "$crew_out" | jq -e . >/dev/null 2>&1; then
+    PASS=$((PASS+1)); printf '  PASS  json parses: %s\n' "$case"
+  else
+    FAIL=$((FAIL+1)); printf '  FAIL  json parses: %s -> %s\n' "$case" "$crew_out"
+  fi
+done
+
 printf "\n  %d passed, %d failed\n" "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
