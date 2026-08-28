@@ -19,6 +19,13 @@ Read this file only when the selected mode requires task creation or direct task
 - Edit only `$WORKLOG_REPO/people/$LDAP/`. Other namespaces read-only.
 - Never `git rebase` / `git pull --rebase` / force-push during normal sync. Maintenance ops (`$WORKLOG_BIN/log-compact.sh`, `$WORKLOG_BIN/cache-purge.sh`) are the carve-out — see AGENTS.md.
 - Prior-art grep before infra surfaces: `"$WORKLOG_BIN/related-search.sh" <keyword>`.
+- When you add or change a rules section, re-read `## Context` and
+  `next_action`. A summary written early accretes contradictions as the task
+  grows, and the summary is what a fresh session reads first. Observed
+  2026-08-28: a watch task carried a bolded **"Never approves/merges"** in
+  Context while its Scope section held the current, looser rules. Absolute
+  claims in a summary — never, always, only — are the ones that go stale, so
+  prefer pointing at the rules section over restating it.
 
 ## Search ladder
 
