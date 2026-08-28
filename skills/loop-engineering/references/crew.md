@@ -60,27 +60,30 @@ resume: a monitor lost to a restarted session ends silently and nothing says so.
 
 Act on severity:
 
-- **`warn`** — an owner holds the path dirty, the branches are unrelated,
-  or the pair is stacked and a later parent commit broke the ancestry
-  chain. Triage before re-dividing anything — all three are cheap:
-  `git log --oneline <merge-point>..<child> -- <file>` (0 commits means
-  the child never touched it); check the MR/PR target branch (parent
-  vs. master); `git merge-tree --write-tree <parent> <child>` to
-  simulate the merge and diff the resulting blob shas. Only a child that
-  both edits the file and targets the shared base can revert the
-  parent's work — one that carries stale copies it never edits is safe,
-  and that `warn` is expected, not a defect; re-dividing the work would
-  be the wrong response. The retarget is a two-part trap, observed in
-  practice on 2026-08-28: the target branch flips (parent to master,
-  resetting the merge-safety input above), and separately resets review
-  state — the child MR came back `not_approved` and needed a fresh
-  review. Re-check both after any parent merge. Merging the parent with
-  `should_remove_source_branch: false` is the working mitigation, not
-  just a detail: it keeps the child from a dangling target during the
-  window. Once triage clears the pair, decide who owns the file and mail
-  both workers to divide it: one takes the file, the other takes an
-  interface. If the overlap is structural, stop one worker and fold its
-  task into the other, then say so to the human.
+- **`warn`** — an owner holds the path dirty, the branches are unrelated, or the
+  pair is stacked and a later parent commit broke the ancestry chain. **Triage
+  before re-dividing anything.** Only a child that *both* edits the file *and*
+  targets the shared base can revert the parent's work; a child carrying stale
+  copies it never edits is safe, and that `warn` is expected rather than a
+  defect. Three cheap checks:
+
+  1. `git log --oneline <merge-point>..<child> -- <file>` — 0 commits means the
+     child never touched it.
+  2. Check the MR/PR target branch: the parent, or the shared base?
+  3. `git merge-tree --write-tree <parent> <child>` — simulate, then diff the
+     resulting blob shas.
+
+  Once triage clears the pair, decide who owns the file and mail both workers to
+  divide it: one takes the file, the other takes an interface. If the overlap is
+  structural, stop one worker and fold its task into the other, then say so to
+  the human.
+  **After a parent merges, re-run triage — the retarget is a two-part trap**
+  (observed in practice 2026-08-28). The child's target flips to the shared base,
+  which changes check 2 above; *and* it resets review state — the child MR came
+  back `not_approved` and needed a fresh review. Merging the parent with
+  `should_remove_source_branch: false` is the working mitigation: it keeps the
+  child from pointing at a deleted branch during the window.
+
 - **`info`** — every owner has the path committed and the branches form an
   ancestry chain. This is the expected footprint of deliberately stacking one
   branch on another. Leave it; mail the descendant once to keep the shared file
