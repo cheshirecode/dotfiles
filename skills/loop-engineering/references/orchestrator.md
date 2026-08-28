@@ -92,6 +92,11 @@ echo '<tasks-json>' | "$WORKLOG_BIN/project.sh" new <slug> \
 ```
 
 The tasks-json is the sequential-thinking output mapped to `{slug, kind, depends_on}`.
+`kind` must be one of the worklog set — `bug`, `bugfix`, `cleanup`, `debug`,
+`design`, `impl`, `infra`, `investigation`, `ops`, `perf`, `plan`, `postmortem`,
+`program`, `project`, `proposal`, `review`, `runbook`, `spike`, `tooling`. There
+is no `fix` or `docs`; use `bugfix` and `tooling`. `plan-new` rejects an unknown
+kind before writing anything, and lists the valid set in the error.
 Each task is one cycle. Use the user-supplied budget when present; otherwise
 set 999 as a safety net (the real limit is queue emptiness, not budget
 exhaustion).
