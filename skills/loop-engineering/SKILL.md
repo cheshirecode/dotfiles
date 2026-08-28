@@ -152,6 +152,12 @@ errors, and typed evidence.
    The script emits `budget_exhausted` when the declared ceiling is consumed.
 8. Run `show`; continue only while `terminal_status` is `running`.
 
+Pass `--quiet` to every `loop_state.py` and `evidence_gate.py` call. Without it
+they print the whole state document, history included, so the output grows each
+cycle and contradicts the compaction rule above; `--quiet` emits the index line
+those rules ask for (`running 3/12 turns — next: <action>`, `satisfied 4/4`) and
+leaves exit codes unchanged.
+
 Keep each evidence value to one typed line: `kind: reference — result`, where
 `kind` is `command`, `artifact`, `git`, `github`, or `url`. Store verbose
 output in the referenced artifact and keep loop state as an index, not a log.

@@ -186,10 +186,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     check = subparsers.add_parser("check", help="require evidence for all criteria")
     check.add_argument("--gate", type=pathlib.Path, required=True)
+    check.add_argument(
+        "--quiet",
+        action="store_true",
+        help="emit one index line instead of the full document",
+    )
     check.set_defaults(handler=lambda args: read_gate(args.gate))
 
     show = subparsers.add_parser("show", help="render the full gate")
     show.add_argument("--gate", type=pathlib.Path, required=True)
+    show.add_argument(
+        "--quiet",
+        action="store_true",
+        help="emit one index line instead of the full document",
+    )
     show.set_defaults(handler=lambda args: read_gate(args.gate))
     return parser
 
@@ -201,9 +211,22 @@ def main() -> int:
         gate = args.handler(args)
         if args.command == "check":
             report = gate_report(args.gate, gate)
-            print(json.dumps(report, indent=2, sort_keys=True))
+            if getattr(args, "quiet", False):
+                # The index, not the log: the caller acts on status and the
+                # count, and pipes the rest to /dev/null anyway.
+                covered = len(report["covered"])
+                total = covered + len(report["missing"])
+                line = f"{report['status']} {covered}/{total}"
+                if report["missing"]:
+                    line += " — missing: " + ", ".join(report["missing"][:5])
+                print(line)
+            else:
+                print(json.dumps(report, indent=2, sort_keys=True))
             return 0 if report["status"] == "satisfied" else 1
-        print(json.dumps(gate, indent=2, sort_keys=True))
+        if getattr(args, "quiet", False):
+            print(f"{len(gate['criteria'])} criteria — {gate.get('goal','')}")
+        else:
+            print(json.dumps(gate, indent=2, sort_keys=True))
         return 0
     except GateError as exc:
         print(f"evidence-gate: {exc}", file=sys.stderr)
