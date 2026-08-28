@@ -109,8 +109,13 @@ TARGET_WHEN=$(git -C "$ROOT" log -1 --format=%cI "$TARGET" 2>/dev/null | cut -c1
 # that left stdin open with nothing to say.
 ROSTER=""; HAVE_ROSTER=0
 if [ -n "$ROSTER_SRC" ]; then
+  # File, `-` for stdin, or an inline comma-separated list. Same acceptance as
+  # crew-radar: the pair must not disagree about what --roster means.
   if [ "$ROSTER_SRC" = "-" ]; then ROSTER=$(cat)
   elif [ -r "$ROSTER_SRC" ]; then ROSTER=$(cat "$ROSTER_SRC")
+  elif [ "${ROSTER_SRC#*,}" != "$ROSTER_SRC" ]; then ROSTER=$(printf '%s' "$ROSTER_SRC" | tr ',' '\n')
+  elif [ -n "$ROSTER_SRC" ] && [ "${ROSTER_SRC#/}" = "$ROSTER_SRC" ] && [ "${ROSTER_SRC#./}" = "$ROSTER_SRC" ]; then
+    ROSTER=$ROSTER_SRC
   else die "cannot read roster: $ROSTER_SRC"; fi
   [ -n "$ROSTER" ] && HAVE_ROSTER=1
 elif [ ! -t 0 ]; then

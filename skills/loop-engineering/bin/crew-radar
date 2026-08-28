@@ -39,6 +39,10 @@ Options:
   --base <ref>     base ref to diff against
                    (default: origin/HEAD, else origin/master, origin/main, master, main)
   --json           machine-readable output; stable ordering, for Monitor fingerprints
+  --roster <src>   live agent names, so each owner is annotated with who holds it
+                   (feat-a@worker-7f, or @? when unmatched). <src> is a file, a
+                   comma-separated list, or - for stdin. Ownership is not
+                   inferable from a worktree's path or mtime.
   --quiet          suppress output, exit code only
   --strict         treat 'info' (stacked-branch) overlaps as collisions too
   -h, --help       this text
@@ -49,6 +53,8 @@ Examples:
   $PROG /workspace/midas
   $PROG --json /workspace/midas | jq -S -c .          # fingerprint for Monitor
   $PROG --quiet /workspace/midas || echo "crew collision"
+  $PROG --roster a,b /workspace/midas                 # inline names
+  ListAgents-names | $PROG --roster - /workspace/midas
 EOF
 }
 
@@ -151,8 +157,14 @@ flush_wt
 # loop, where a blocking read would stall the watch.
 ROSTER=""
 if [ -n "$ROSTER_SRC" ]; then
+  # A file, `-` for stdin, or an inline comma-separated list. The flag reads
+  # like a value and the sibling tool takes the same names on stdin, so a bare
+  # list is the natural first guess -- accept it rather than failing on it.
   if [ "$ROSTER_SRC" = "-" ]; then ROSTER=$(cat)
   elif [ -r "$ROSTER_SRC" ]; then ROSTER=$(cat "$ROSTER_SRC")
+  elif [ "${ROSTER_SRC#*,}" != "$ROSTER_SRC" ]; then ROSTER=$(printf '%s' "$ROSTER_SRC" | tr ',' '\n')
+  elif [ -n "$ROSTER_SRC" ] && [ "${ROSTER_SRC#/}" = "$ROSTER_SRC" ] && [ "${ROSTER_SRC#./}" = "$ROSTER_SRC" ]; then
+    ROSTER=$ROSTER_SRC   # single bare name
   else die "cannot read roster: $ROSTER_SRC"; fi
 fi
 
