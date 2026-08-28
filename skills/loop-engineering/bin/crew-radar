@@ -71,12 +71,14 @@ die() {
   exit 1
 }
 
-BASE=""; QUIET=0; STRICT=0; REPO=""
+BASE=""; QUIET=0; STRICT=0; REPO=""; ROSTER_SRC=""
 while [ $# -gt 0 ]; do
   case $1 in
     --base) [ $# -ge 2 ] || die "--base needs a ref"; BASE=$2; shift 2 ;;
     --base=*) BASE=${1#*=}; shift ;;
     --json) FMT=json; shift ;;
+    --roster) [ $# -ge 2 ] || die "--roster needs a file or -"; ROSTER_SRC=$2; shift 2 ;;
+    --roster=*) ROSTER_SRC=${1#*=}; shift ;;
     --quiet|-q) QUIET=1; shift ;;
     --strict) STRICT=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -135,6 +137,46 @@ done < <(git -C "$ROOT" worktree list --porcelain 2>/dev/null)
 flush_wt
 
 [ "${#LABELS[@]}" -gt 0 ] || die "no usable worktrees found under $ROOT"
+
+# --- ownership ----------------------------------------------------------------
+# A worktree in this list may belong to another session, and neither its path
+# nor its mtime says so: a live peer's checkout can sit idle for hours, and a
+# `.claude/worktrees/<name>` path is the harness's own convention. Reading a
+# worktree as abandoned on that evidence deleted nothing only because someone
+# checked first (2026-08-28). Pass `--roster` (a file, or `-` for stdin) with
+# one live agent name per line -- ListAgents rows work as-is -- and each owner
+# is annotated with the agent that holds it, or `?` when nothing matches.
+#
+# Explicit flag rather than implicit stdin: the radar is armed in a 30s Monitor
+# loop, where a blocking read would stall the watch.
+ROSTER=""
+if [ -n "$ROSTER_SRC" ]; then
+  if [ "$ROSTER_SRC" = "-" ]; then ROSTER=$(cat)
+  elif [ -r "$ROSTER_SRC" ]; then ROSTER=$(cat "$ROSTER_SRC")
+  else die "cannot read roster: $ROSTER_SRC"; fi
+fi
+
+agent_for() {  # $1 = worktree basename -> prints agent name, or empty
+  [ -n "$ROSTER" ] || return 0
+  local n
+  while IFS= read -r n; do
+    n=$(printf '%s' "$n" | tr -d '\r' | awk '{print $1}')
+    [ -z "$n" ] && continue
+    [ "$n" = "$1" ] && { printf '%s' "$n"; return 0; }
+    case "$n" in "$1"-*) printf '%s' "$n"; return 0 ;; esac
+  done <<EOF
+$ROSTER
+EOF
+}
+
+declare -A AGENT=()
+if [ -n "$ROSTER" ]; then
+  for i in "${!LABELS[@]}"; do
+    b=${WTPATHS[$i]##*/}
+    a=$(agent_for "$b")
+    AGENT[${LABELS[$i]}]=${a:-?}
+  done
+fi
 
 # --- collect changed paths per worktree --------------------------------------
 declare -A COMMITTED=() DIRTY=() OWNERS=()
@@ -199,7 +241,9 @@ while IFS= read -r f; do
   fi
   annotated=()
   for o in "${owners[@]}"; do
-    if [ -n "${DIRTY[$o|$f]+x}" ]; then annotated+=("$o[dirty]"); else annotated+=("$o"); fi
+    tok="$o"
+    [ -n "${AGENT[$o]:-}" ] && tok="$tok@${AGENT[$o]}"
+    if [ -n "${DIRTY[$o|$f]+x}" ]; then annotated+=("$tok[dirty]"); else annotated+=("$tok"); fi
   done
   ROWS+=("$sev|$f|$(IFS=,; echo "${annotated[*]}")")
 done < <(printf '%s\n' "${!OWNERS[@]}" | LC_ALL=C sort)
