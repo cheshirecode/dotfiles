@@ -321,7 +321,7 @@ Put full Stage 5 ballots here, after the outcome and vote tables.
 
 - `task` tool: every sub-agent in every stage is a `task` call with the appropriate `subagent_type` (e.g., `general` for research angles, `council-collator` for Stage 4, `council-research` for Stage 5 voting).
 - `$karpathy-guidelines`: the council criteria above operationalize Think-Before, Simplicity-First, Surgical-Changes, and Goal-Driven.
-- `$example-led-instructions`: for brittle outputs, 0/1/few-shot gate, max 1-3 examples, skip if obvious.
+- For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
 - `$worklog`: `worklog plan` only when the user has not opted out of worklog tracking. Feed the council's kept list into `/worklog plan <task>` for planning artifacts.
 
 ## Examples
