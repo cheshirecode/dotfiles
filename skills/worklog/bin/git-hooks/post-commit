@@ -13,7 +13,20 @@ set -euo pipefail
 [[ -n "${WORKLOG_NO_HOOK:-}" ]] && exit 0
 
 cd "$(git rev-parse --show-toplevel)"
-SKILL_BIN="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Resolve through symlinks first: install-hooks.sh may have chained us
+# in via a symlink at .git/hooks/post-commit (platform-owned outer
+# core.hooksPath case) rather than pointing core.hooksPath straight at
+# git-hooks/, so "$0" can be the symlink path rather than the real one.
+SELF="$0"
+while [[ -L "$SELF" ]]; do
+  link="$(readlink "$SELF")"
+  case "$link" in
+    /*) SELF="$link" ;;
+    *)  SELF="$(dirname "$SELF")/$link" ;;
+  esac
+done
+SKILL_BIN="$(cd "$(dirname "$SELF")/.." && pwd)"
 
 STAMP=".cache/cross-task.stamp"
 TTL=3600
