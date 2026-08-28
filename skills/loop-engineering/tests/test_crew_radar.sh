@@ -80,5 +80,38 @@ for case in "$TMP/nope" "--base no/such/ref $R"; do
   fi
 done
 
+# Recreate a warn collision: both worktrees dirty on shared.txt. After the
+# stacked-info fixture this is the cheapest way to get exit 2 + valid JSON.
+printf 'mon-a\n' > "$TMP/wa/shared.txt"
+printf 'mon-b\n' > "$TMP/wb/shared.txt"
+
+# Monitor snippet: radar exit 2 is a verdict. Binding || / pipefail to radar
+# treats a real collision as unparseable (observed 2026-08-28). Fingerprint
+# stdout; only jq parse failure hits the sentinel.
+(
+  set -uo pipefail
+  raw=$("$RADAR" --json --base master "$R" 2>/dev/null) || true
+  cur=$(printf '%s' "$raw" | jq -S -c '{warn,info,error,paths:[.overlaps[]?.path]}' 2>/dev/null) \
+    || cur='{"error":"radar output unparseable"}'
+  if [ "$cur" = '{"error":"radar output unparseable"}' ]; then
+    bad "monitor: warn fingerprint survives pipefail (got sentinel)"
+  elif printf '%s' "$cur" | jq -e '.warn >= 1' >/dev/null 2>&1; then
+    ok "monitor: warn fingerprint survives pipefail"
+  else
+    bad "monitor: warn fingerprint survives pipefail (got $cur)"
+  fi
+  # The old piped form MUST still false-positive, or this test is not locking
+  # the documented failure mode.
+  old=$( { set -o pipefail
+    "$RADAR" --json --base master "$R" 2>/dev/null \
+      | jq -S -c '{warn,info,error}' 2>/dev/null
+  } ) || old='{"error":"radar output unparseable"}'
+  if [ "$old" = '{"error":"radar output unparseable"}' ]; then
+    ok "monitor: piped || still false-positives on exit 2"
+  else
+    bad "monitor: piped || still false-positives on exit 2 (got $old)"
+  fi
+)
+
 printf "\n  %d passed, %d failed\n" "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
