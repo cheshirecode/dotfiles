@@ -26,7 +26,7 @@
 #   leaving the branch's own commits absent from the target.
 #
 # Usage:
-#   crew-reap [--target <ref>] [--roster <file|->] [--apply] [--no-fetch] [--json] <repo>
+#   crew-reap [--target <ref>] [--roster <file|list|->] [--apply] [--no-fetch] [--json] <repo>
 #   ListAgents-names | crew-reap --apply /workspace/midas
 #
 # Exit: 0 nothing to do or dry run clean, 3 removals performed (or pending in
@@ -120,12 +120,11 @@ if [ -n "$ROSTER_SRC" ]; then
   elif [ -r "$ROSTER_SRC" ]; then ROSTER=$(cat "$ROSTER_SRC")
   elif [ "${ROSTER_SRC#*,}" != "$ROSTER_SRC" ]; then ROSTER=$(printf '%s' "$ROSTER_SRC" | tr ',' '\n')
   else
-    # Single bare agent name. A path-like or list-file-like value is a typo'd
-    # --roster file, not a name; fail loudly rather than degrade the gate.
-    case "$ROSTER_SRC" in
-      */*|*.txt|*.list) die "cannot read roster: $ROSTER_SRC" ;;
-      *) ROSTER=$ROSTER_SRC ;;
-    esac
+    # FAIL CLOSED: a bare word here is indistinguishable from a typo'd roster
+    # filename, and treating it as an agent name arms the removal gate with a
+    # roster that owns nothing (E2E 2026-08-29: a one-char typo flipped a live
+    # worktree from keep to reap). For a single name, append a comma.
+    die "cannot read roster: $ROSTER_SRC (pass a file, '-', or a comma-separated list; for one name append a comma)"
   fi
   [ -n "$ROSTER" ] && HAVE_ROSTER=1
 elif [ ! -t 0 ]; then
@@ -164,7 +163,7 @@ while IFS= read -r wt; do
     printf 'keep|%s|%s|live agent owns this worktree\n' "$base" "$br" >>"$ROWS"; kept=$((kept+1)); continue
   fi
   if [ "$HAVE_ROSTER" != 1 ]; then
-    printf 'keep|%s|%s|no roster on stdin; ownership unknown\n' "$base" "$br" >>"$ROWS"; kept=$((kept+1)); continue
+    printf 'keep|%s|%s|no roster supplied; ownership unknown\n' "$base" "$br" >>"$ROWS"; kept=$((kept+1)); continue
   fi
   if [ -n "$(git -C "$wt" status --porcelain 2>/dev/null)" ]; then
     printf 'keep|%s|%s|uncommitted changes\n' "$base" "$br" >>"$ROWS"; kept=$((kept+1)); continue
