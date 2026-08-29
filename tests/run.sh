@@ -154,8 +154,11 @@ hosts = (skill / "references/hosts.md").read_text()
 protocol = (skill / "references/protocol.md").read_text()
 orchestrator = (skill / "references/orchestrator.md").read_text()
 crew = (skill / "references/crew.md").read_text()
+handover = (skill / "references/handover.md").read_text()
+radar = (skill / "bin/crew-radar").read_text()
 # Prose references are hard-wrapped, so multi-word contracts match a flattened
 # copy; that keeps them robust to reflowing the paragraph.
+root_flat = " ".join(root.split())
 crew_flat = " ".join(crew.split())
 state_script = (skill / "scripts/loop_state.py").read_text()
 install_script = (skill / "scripts/install_audit.py").read_text()
@@ -229,7 +232,7 @@ checks = {
         and "state fingerprint changed" in state_script
         and "verify state ownership" in protocol
     ),
-    "host differences deferred": references == {"crew.md", "examples.md", "hosts.md", "orchestrator.md", "protocol.md"},
+    "host differences deferred": references == {"crew.md", "examples.md", "handover.md", "hosts.md", "orchestrator.md", "protocol.md"},
     # Crew mode must capability-gate host primitives. Codex has shared files,
     # no isolation flag, and mailbox waits rather than a file Monitor.
     "crew mode matches Codex collaboration": (
@@ -244,8 +247,17 @@ checks = {
         and "project.sh" in crew
     ),
     "loop uses supported evidence-gate flags": (
-        "The bundled `evidence_gate.py` has no" in root
-        and "redirect successful `init`/`record` stdout" in root
+        "installed `evidence-gate` skill exposes `--quiet` only on `check` and `show`" in root_flat
+        and "redirect successful `init`/`record` stdout" in root_flat
+    ),
+    "crew radar supports macOS Bash 3": "declare -A" not in radar,
+    "handover resolver is executable": (
+        "xargs dirname/../" not in handover
+        and 'dirname "$(dirname "$found_file")"' in handover
+    ),
+    "handover runs shell fixture with Bash": (
+        "bash <skill-dir>/tests/test_crew_radar.sh" in handover
+        and "python3 <skill-dir>/tests/test_crew_radar.sh" not in handover
     ),
     "crew radar contract is stated": (
         "bin/crew-radar" in crew_flat

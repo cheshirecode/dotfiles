@@ -108,6 +108,18 @@ TARGET_WHEN=$(git -C "$ROOT" log -1 --format=%cI "$TARGET" 2>/dev/null | cut -c1
 # pipe still works. The read is bounded: an unbounded one would hang a caller
 # that left stdin open with nothing to say.
 ROSTER=""; HAVE_ROSTER=0
+read_bounded_stdin() {
+  local line remaining deadline=$((SECONDS + 5))
+  while :; do
+    remaining=$((deadline - SECONDS))
+    [ "$remaining" -gt 0 ] || break
+    line=""
+    if IFS= read -r -t "$remaining" line; then printf '%s\n' "$line"
+    elif [ -n "$line" ]; then printf '%s\n' "$line"; break
+    else break
+    fi
+  done
+}
 if [ -n "$ROSTER_SRC" ]; then
   # File, `-` for stdin, or an inline comma-separated list. Same acceptance as
   # crew-radar: the pair must not disagree about what --roster means.
@@ -119,7 +131,7 @@ if [ -n "$ROSTER_SRC" ]; then
   else die "cannot read roster: $ROSTER_SRC"; fi
   [ -n "$ROSTER" ] && HAVE_ROSTER=1
 elif [ ! -t 0 ]; then
-  ROSTER=$(timeout 5 cat 2>/dev/null || true)
+  ROSTER=$(read_bounded_stdin)
   [ -n "$ROSTER" ] && HAVE_ROSTER=1
 fi
 
