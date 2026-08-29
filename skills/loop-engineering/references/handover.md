@@ -22,7 +22,7 @@ Step 1 — sanity checks (pass fast):
   wc -l <skill-dir>/SKILL.md
 
 Step 2 — run the Python test suite:
-  cd <skill-dir> && python3 -m unittest tests.test_loop_state tests.test_skill_budget tests.test_install_audit -v 2>&1 | tail -8
+  cd <skill-dir> && python3 -m unittest tests.test_loop_state tests.test_skill_budget tests.test_install_audit -v
 
 Step 3 — check for regressions (grep every known issue surface):
   echo "--- non-existent skill references ---"

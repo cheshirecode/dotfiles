@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -90,6 +91,40 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("`$TMPDIR`", initialization)
         self.assertIn("evidence-gate JSON", initialization)
         self.assertIn("do\nnot leave ad hoc run artifacts behind", initialization)
+
+    def test_skill_directory_resolver_fails_closed_and_resolves_one_match(self) -> None:
+        resolver = SKILL.read_text().split("## Resolve the skill directory", 1)[1]
+        resolver = resolver.split("## Initialize through the script", 1)[0]
+        resolver = resolver.split("```bash", 1)[1].split("```", 1)[0]
+        root = pathlib.Path(self.temporary_directory.name)
+        home = root / "home"
+        cwd = root / "worktree"
+        (cwd / "skills").mkdir(parents=True)
+        environment = {**os.environ, "HOME": str(home)}
+
+        empty = subprocess.run(
+            ["/bin/bash", "-c", resolver],
+            cwd=cwd,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(empty.returncode, 0)
+
+        skill = cwd / "skills" / "loop-engineering"
+        (skill / "scripts").mkdir(parents=True)
+        (skill / "scripts" / "loop_state.py").touch()
+        found = subprocess.run(
+            ["/bin/bash", "-c", f'{resolver}\nprintf "%s" "$SKILL_DIR"'],
+            cwd=cwd,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(found.returncode, 0, found.stderr)
+        self.assertEqual(found.stdout, str(skill.resolve()))
 
     def test_orchestrator_terminal_example_supplies_required_verification(self) -> None:
         skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
@@ -808,6 +843,58 @@ class LoopStateTest(unittest.TestCase):
         )
         self.assertIn("loop-state:", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
+
+    def test_validate_enforces_transition_invariants(self) -> None:
+        base = self.initialize()
+        cases = (
+            (
+                "running action",
+                "running",
+                " ",
+                0,
+                "",
+                "running requires non-empty next_action",
+            ),
+            (
+                "blocked action",
+                "blocked",
+                "",
+                0,
+                "",
+                "blocked requires non-empty next_action",
+            ),
+            (
+                "complete action",
+                "complete",
+                "stale follow-up",
+                0,
+                "test log",
+                "complete requires empty next_action",
+            ),
+            (
+                "exhausted budget",
+                "budget_exhausted",
+                "request more budget",
+                0,
+                "",
+                "budget_exhausted requires budget.used equal budget.limit",
+            ),
+        )
+        for name, status, next_action, used, verification, message in cases:
+            with self.subTest(name=name):
+                state = json.loads(json.dumps(base))
+                state["terminal_status"] = status
+                state["next_action"] = next_action
+                state["budget"]["used"] = used
+                state["verification"] = verification
+                self.state.write_text(json.dumps(state))
+                result = self.run_cli(
+                    "validate",
+                    "--state",
+                    str(self.state),
+                    expected_returncode=3,
+                )
+                self.assertIn(message, result.stderr)
 
     def test_annotate_corrects_terminal_evidence_without_reopening(self) -> None:
         self.initialize(limit=1)

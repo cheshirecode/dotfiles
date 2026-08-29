@@ -262,6 +262,10 @@ checks = {
         and "python3 <skill-dir>/tests/test_crew_radar.sh" not in handover
         and "test_crew_radar.sh 2>&1 | tail" not in handover
         and "test_crew_reap.sh 2>&1 | tail" not in handover
+        and "-m unittest tests.test_loop_state tests.test_skill_budget "
+        "tests.test_install_audit -v" in handover
+        and "-m unittest tests.test_loop_state tests.test_skill_budget "
+        "tests.test_install_audit -v 2>&1 | tail" not in handover
     ),
     "crew radar contract is stated": (
         "bin/crew-radar" in crew_flat

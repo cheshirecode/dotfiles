@@ -199,10 +199,18 @@ def validate_state(state: dict[str, Any]) -> None:
     if not isinstance(used, int) or used < 0 or used > limit:
         raise StateError("budget.used must be between zero and budget.limit")
 
-    if state["terminal_status"] == "running" and used >= limit:
+    status = state["terminal_status"]
+    next_action = state["next_action"]
+    if (status == "running" or status in RESUMABLE_STATUSES) and not next_action.strip():
+        raise StateError(f"{status} requires non-empty next_action")
+    if status in NON_RESUMABLE_STATUSES and next_action != "":
+        raise StateError(f"{status} requires empty next_action")
+    if status == "budget_exhausted" and used != limit:
+        raise StateError("budget_exhausted requires budget.used equal budget.limit")
+    if status == "running" and used >= limit:
         raise StateError("running state cannot have an exhausted budget")
     verification = state.get("verification")
-    if state["terminal_status"] == "complete" and (
+    if status == "complete" and (
         not isinstance(verification, str) or not verification.strip()
     ):
         raise StateError("complete state requires non-empty verification")

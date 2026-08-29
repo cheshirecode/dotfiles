@@ -76,16 +76,10 @@ agent contexts, this is the path from which the skill was loaded. If uncertain,
 search for `loop_state.py` under the skill root:
 
 ```bash
-# Claude Code:
-SKILL_DIR="$(dirname "$(find -L ~/.claude/skills -name loop_state.py -print -quit 2>/dev/null)")/.."
-# Codex:
-SKILL_DIR="$(dirname "$(find -L ~/.agents/skills -name loop_state.py -print -quit 2>/dev/null)")/.."
-# Cursor:
-SKILL_DIR="$(dirname "$(find -L ~/.cursor/skills -name loop_state.py -print -quit 2>/dev/null)")/.."
-# Opencode / git worktree:
-SKILL_DIR="$(git rev-parse --show-toplevel 2>/dev/null)/skills/loop-engineering"
-# Fallback — search common install roots:
-SKILL_DIR="$(find -L ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills -name loop_state.py -print -quit 2>/dev/null | head -1 | xargs dirname)/.."
+found_file="$(find -L ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills \
+  -name loop_state.py -print -quit 2>/dev/null)"
+  test -n "$found_file" &&
+  SKILL_DIR="$(cd "$(dirname "$(dirname "$found_file")")" && pwd -P)"
 ```
 
 All script invocations below use `python3 <skill-dir>/scripts/loop_state.py`.
