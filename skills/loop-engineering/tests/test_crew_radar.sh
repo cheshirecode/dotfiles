@@ -126,5 +126,20 @@ printf 'mon-b\n' > "$TMP/wb/shared.txt"
   fi
 )
 
+# Native macOS /bin/bash is 3.2 and has no associative arrays. PATH bash may be
+# Homebrew 5, so the fixtures above can pass while a stock shell still dies.
+if [ -x /bin/bash ]; then
+  bash3_out=$(/bin/bash "$RADAR" --json --base master "$R" 2>&1); bash3_rc=$?
+  if printf '%s' "$bash3_out" | grep -q 'declare: -A'; then
+    bad "bash3: /bin/bash rejects associative arrays"
+    printf '%s\n' "$bash3_out" | sed 's/^/        /'
+  elif ! printf '%s' "$bash3_out" | jq -e . >/dev/null 2>&1; then
+    bad "bash3: /bin/bash did not emit JSON (exit $bash3_rc)"
+    printf '%s\n' "$bash3_out" | sed 's/^/        /'
+  else
+    ok "bash3: /bin/bash runs crew-radar"
+  fi
+fi
+
 printf "\n  %d passed, %d failed\n" "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
