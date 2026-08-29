@@ -18,8 +18,6 @@ Convention: `$skill-name` means invoke installed skill `skill-name`; skip and re
 - Decide whether work belongs in a manual loop, worklog-backed handoff, or host-native scheduler
 - Multi-task programs with sub-agent dispatch (orchestrator mode)
 
-Skip if: one action plus one check is sufficient (trivial one-shot tasks).
-
 ## Route
 
 1. Skip this skill when one action plus one check is sufficient.
@@ -32,6 +30,8 @@ Skip if: one action plus one check is sufficient (trivial one-shot tasks).
    primitive for scheduling and use its audit command for duplicate copies.
 5. For exact transition, effect, worklog, or handoff rules, read
    [references/protocol.md](references/protocol.md).
+6. To re-verify or improve an installed copy of this skill, use the prompt in
+   [references/handover.md](references/handover.md).
 
 Use this compact route matrix before loading references:
 
@@ -55,15 +55,15 @@ a cycle.
 
 | Trigger | Owner | Handoff and replay | Skip when |
 | --- | --- | --- | --- |
-| multi-faceted search across symbols, text, JSON, history, or logs | `serena-rg-search` | search facet + candidate paths; replay the exact search/history command | one literal or known-file lookup |
-| resumability, cross-session context, or a durable handoff is needed | `worklog` | use `context`/checkpoint rules and return the task or state reference | one-shot work with no durable task |
-| actual delegation has materially different model, cost, context, or data-policy needs | `which-model` | return a model lane and policy gate before dispatch | no delegate surface, or in-band work is sufficient |
-| independent results disagree, a counterexample appears, retries fail, or scope/dependencies become ambiguous | `council` | pass the smallest escalation pack and replay its decision check | clear answer, known trade-offs, or one-shot scope |
-| code is written, reviewed, or refactored | `karpathy-guidelines` | state assumptions, make the smallest change, and replay goal-driven checks | read-only work |
-| completion has multiple observable clauses or providers | `evidence-gate` | map each clause to typed evidence and replay the gate command | one action with one sufficient check |
-| a reusable instruction has a brittle format or recurring classification error | `example-led-instructions` | apply the 0/1/few-shot gate and test the smallest example set | prose is obvious and examples add context cost |
-| multiple PRs or stale worklog/PR/CI surfaces need a pre-handoff sweep | `ship-hygiene` | audit only triggered surfaces and replay the hygiene checks | one short PR with no recent worklog activity |
-| one just-finished PR needs learning distillation before handoff | `tightening-a-pr` | pass the finished diff and task context; replay the handoff checks | implementation is unfinished or the change is trivial |
+| multi-faceted search across symbols, text, JSON, history, or logs | `$serena-rg-search` | search facet + candidate paths; replay the exact search/history command | one literal or known-file lookup |
+| resumability, cross-session context, or a durable handoff is needed | `$worklog` | use `context`/checkpoint rules and return the task or state reference | one-shot work with no durable task |
+| actual delegation has materially different model, cost, context, or data-policy needs | `$which-model` | return a model lane and policy gate before dispatch | no delegate surface, or in-band work is sufficient |
+| independent results disagree, a counterexample appears, retries fail, or scope/dependencies become ambiguous | `$council` | pass the smallest escalation pack and replay its decision check | clear answer, known trade-offs, or one-shot scope |
+| code is written, reviewed, or refactored | `$karpathy-guidelines` | state assumptions, make the smallest change, and replay goal-driven checks | read-only work |
+| completion has multiple observable clauses or providers | `$evidence-gate` | map each clause to typed evidence and replay the gate command | one action with one sufficient check |
+| a reusable instruction has a brittle format or recurring classification error | `$example-led-instructions` | apply the 0/1/few-shot gate and test the smallest example set | prose is obvious and examples add context cost |
+| multiple PRs or stale worklog/PR/CI surfaces need a pre-handoff sweep | `$ship-hygiene` | audit only triggered surfaces and replay the hygiene checks | one short PR with no recent worklog activity |
+| one just-finished PR needs learning distillation before handoff | `$tightening-a-pr` | pass the finished diff and task context; replay the handoff checks | implementation is unfinished or the change is trivial |
 
 Routing example: `multi-repo search with uncertain ownership` →
 `serena-rg-search` → compact candidate paths plus one replay command;
@@ -77,15 +77,15 @@ search for `loop_state.py` under the skill root:
 
 ```bash
 # Claude Code:
-SKILL_DIR="$(dirname "$(find ~/.claude/skills -name loop_state.py -print -quit 2>/dev/null)")/.."
+SKILL_DIR="$(dirname "$(find -L ~/.claude/skills -name loop_state.py -print -quit 2>/dev/null)")/.."
 # Codex:
-SKILL_DIR="$(dirname "$(find ~/.agents/skills -name loop_state.py -print -quit 2>/dev/null)")/.."
+SKILL_DIR="$(dirname "$(find -L ~/.agents/skills -name loop_state.py -print -quit 2>/dev/null)")/.."
 # Cursor:
-SKILL_DIR="$(dirname "$(find ~/.cursor/skills -name loop_state.py -print -quit 2>/dev/null)")/.."
+SKILL_DIR="$(dirname "$(find -L ~/.cursor/skills -name loop_state.py -print -quit 2>/dev/null)")/.."
 # Opencode / git worktree:
-SKILL_DIR="$(dirname "$(git rev-parse --show-toplevel 2>/dev/null)")/skills/loop-engineering"
+SKILL_DIR="$(git rev-parse --show-toplevel 2>/dev/null)/skills/loop-engineering"
 # Fallback — search common install roots:
-SKILL_DIR="$(find ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills -name loop_state.py -print -quit 2>/dev/null | head -1 | xargs dirname)/.."
+SKILL_DIR="$(find -L ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills -name loop_state.py -print -quit 2>/dev/null | head -1 | xargs dirname)/.."
 ```
 
 All script invocations below use `python3 <skill-dir>/scripts/loop_state.py`.
@@ -131,20 +131,20 @@ do not spend a cycle on selection ceremony.
 
 At a provider or tool-output boundary, choose a capability-gated,
 fail-open, recoverable representation. Measure after selection; if the result
-is not smaller or legible, send the original bytes.
+is not both smaller and more legible, send the original bytes.
 
 1. For noisy command output or tool catalogs, an authorized Caveman install may
    use `caveman shrink -- <command>` before Pixel. Preserve producer status with
-   `set -o pipefail`; keep the original in CCR and retain its recovery handle.
+   `set -o pipefail`; keep the original in CCR (compact/cached remote storage, i.e. /tmp or your harness's artifact store) and retain its recovery handle.
    Do not install an output-only response skill for input savings: it can add
    prompt overhead while leaving provider input unchanged.
 2. Use [Caveman Pixel Mode](https://github.com/juliusbrussee/caveman#pixel-mode)
-   only for dense, long-line payloads, with a legible model and a measured win
-   before `caveman wrap --pixel <agent>`. Never pixel sparse code, normal
+   only for dense, long-line payloads. Require a legible model and a measured
+   win before `caveman wrap --pixel <agent>`. Never pixel sparse code, normal
    Markdown, loop state, evidence, diffs, or small payloads.
 3. For installed skill bodies, use `caveman convert --dry-run` first and convert
    only profitable installed copies; keep frontmatter text, preserve the
-   byte-identical `--revert` path, and never rewrite canonical source here.
+   byte-identical `--revert` path (the Caveman CLI subcommand), and never rewrite canonical source here.
 4. Check `command -v caveman` and authorization first. On missing capability,
    decline, failure, or recovery/verification trouble, record
    `pixel-transport: skipped — <reason>` and pass bytes unchanged.
@@ -179,13 +179,13 @@ errors, and typed evidence.
    clause to typed evidence and require its `check` command to pass.
 6. Only then run `finish --status complete --verification "<evidence-gate verification value>" --evidence "<result>"` (use `--consume N` if the final cycle spent N budget units). This is a terminal outcome — do not continue looping.
 7. Otherwise (apparent failure or incomplete) run `advance --evidence "<result>" --next-action "<next check>"`. The script transitions to `budget_exhausted` when the declared ceiling is consumed.
-8. If still running, begin the next cycle immediately in this same invocation.
 
 Pass `--quiet` to every `loop_state.py` call so it emits only the index line
 (`running 3/12 turns — next: <action>`). The `evidence_gate.py` from the
-installed `evidence-gate` skill has no `--quiet` flag: redirect successful
-`init`/`record` stdout when compact output is needed, preserve stderr, and leave
-the final `check` result visible. Never trade away exit codes to reduce output.
+installed `evidence-gate` skill exposes `--quiet` only on `check` and `show`:
+redirect successful `init`/`record` stdout when compact output is needed,
+preserve stderr, and leave the final `check` result visible. Never trade away
+exit codes to reduce output.
 
 **Exit codes:** The state CLI exits `0` on success, `2` with a `usage:` error
 for malformed CLI usage, and `3` with a `loop-state:` error when the state
