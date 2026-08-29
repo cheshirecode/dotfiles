@@ -115,9 +115,16 @@ git -C "$ROOT" rev-parse --verify -q "${BASE}^{commit}" >/dev/null 2>&1 \
   || die "base ref not found: $BASE"
 
 # --- enumerate worktrees ------------------------------------------------------
-declare -a LABELS=() WTPATHS=()
-declare -A HEADS=()
+declare -a LABELS=() WTPATHS=() HEADS=()
 wt=""; head=""; branch=""; bare=0
+label_exists() {
+  local candidate=$1 existing
+  [ "${#LABELS[@]}" -gt 0 ] || return 1
+  for existing in "${LABELS[@]}"; do
+    [ "$existing" = "$candidate" ] && return 0
+  done
+  return 1
+}
 flush_wt() {
   [ -n "$wt" ] || return 0
   if [ "$bare" -eq 0 ]; then
@@ -126,8 +133,8 @@ flush_wt() {
     elif [ -n "$head" ]; then label="detached@${head:0:8}"
     else label="${wt##*/}"; fi
     # keep labels unique so two detached worktrees never merge into one row
-    if [ -n "${HEADS[$label]+x}" ]; then label="$label(${wt##*/})"; fi
-    LABELS+=("$label"); WTPATHS+=("$wt"); HEADS["$label"]=$head
+    if label_exists "$label"; then label="$label(${wt##*/})"; fi
+    LABELS+=("$label"); WTPATHS+=("$wt"); HEADS+=("$head")
   fi
   wt=""; head=""; branch=""; bare=0
 }
@@ -187,21 +194,54 @@ $ROSTER
 EOF
 }
 
-declare -A AGENT=()
+declare -a AGENTS=()
 if [ -n "$ROSTER" ]; then
   for i in "${!LABELS[@]}"; do
     b=${WTPATHS[$i]##*/}
     a=$(agent_for "$b")
-    AGENT[${LABELS[$i]}]=${a:-?}
+    AGENTS[$i]=${a:-?}
   done
 fi
 
 # --- collect changed paths per worktree --------------------------------------
-declare -A DIRTY=() OWNERS=()
+declare -a DIRTY_KEYS=("") OWNER_PATHS=("") OWNER_VALUES=("")
 add_owner() { # $1 path  $2 label
-  local cur=${OWNERS[$1]:-}
-  case " $cur " in *" $2 "*) return 0 ;; esac
-  OWNERS[$1]="${cur:+$cur }$2"
+  local i cur
+  for i in "${!OWNER_PATHS[@]}"; do
+    [ "${OWNER_PATHS[$i]}" = "$1" ] || continue
+    cur=${OWNER_VALUES[$i]}
+    case " $cur " in *" $2 "*) return 0 ;; esac
+    OWNER_VALUES[$i]="${cur:+$cur }$2"
+    return 0
+  done
+  OWNER_PATHS+=("$1"); OWNER_VALUES+=("$2")
+}
+owners_for() { # $1 path
+  local i
+  for i in "${!OWNER_PATHS[@]}"; do
+    [ "${OWNER_PATHS[$i]}" = "$1" ] && { printf '%s' "${OWNER_VALUES[$i]}"; return 0; }
+  done
+}
+mark_dirty() { DIRTY_KEYS+=("$1|$2"); }
+is_dirty() { # $1 label  $2 path
+  local key="$1|$2" candidate
+  for candidate in "${DIRTY_KEYS[@]}"; do
+    [ "$candidate" = "$key" ] && return 0
+  done
+  return 1
+}
+head_for() { # $1 label
+  local i
+  for i in "${!LABELS[@]}"; do
+    [ "${LABELS[$i]}" = "$1" ] && { printf '%s' "${HEADS[$i]}"; return 0; }
+  done
+}
+agent_for_label() { # $1 label
+  local i
+  [ -n "$ROSTER" ] || return 0
+  for i in "${!LABELS[@]}"; do
+    [ "${LABELS[$i]}" = "$1" ] && { printf '%s' "${AGENTS[$i]:-}"; return 0; }
+  done
 }
 
 for i in "${!LABELS[@]}"; do
@@ -216,11 +256,11 @@ for i in "${!LABELS[@]}"; do
   fi
   while IFS= read -r -d '' f; do
     [ -n "$f" ] || continue
-    DIRTY["$label|$f"]=1; add_owner "$f" "$label"
+    mark_dirty "$label" "$f"; add_owner "$f" "$label"
   done < <(git -C "$path" diff --name-only -z HEAD -- 2>/dev/null)
   while IFS= read -r -d '' f; do
     [ -n "$f" ] || continue
-    DIRTY["$label|$f"]=1; add_owner "$f" "$label"
+    mark_dirty "$label" "$f"; add_owner "$f" "$label"
   done < <(git -C "$path" ls-files --others --exclude-standard -z 2>/dev/null)
 done
 
@@ -233,7 +273,8 @@ is_chain() { # labels... -> 0 when totally ordered by ancestry
   for a in "${l[@]}"; do
     for b in "${l[@]}"; do
       [ "$a" = "$b" ] && continue
-      local ha=${HEADS[$a]:-} hb=${HEADS[$b]:-}
+      local ha hb
+      ha=$(head_for "$a"); hb=$(head_for "$b")
       [ -n "$ha" ] && [ -n "$hb" ] || return 1
       git -C "$ROOT" merge-base --is-ancestor "$ha" "$hb" 2>/dev/null && continue
       git -C "$ROOT" merge-base --is-ancestor "$hb" "$ha" 2>/dev/null && continue
@@ -248,10 +289,10 @@ nwarn=0; ninfo=0
 while IFS= read -r f; do
   [ -n "$f" ] || continue
   # shellcheck disable=SC2206  # deliberate word-splitting of the owner list
-  owners=(${OWNERS[$f]})
+  owners=($(owners_for "$f"))
   [ "${#owners[@]}" -ge 2 ] || continue
   ndirty=0
-  for o in "${owners[@]}"; do [ -n "${DIRTY[$o|$f]+x}" ] && ndirty=$((ndirty+1)); done
+  for o in "${owners[@]}"; do is_dirty "$o" "$f" && ndirty=$((ndirty+1)); done
   if [ "$ndirty" -eq 0 ] && is_chain "${owners[@]}"; then
     sev=info; ninfo=$((ninfo+1))
   else
@@ -260,11 +301,12 @@ while IFS= read -r f; do
   annotated=()
   for o in "${owners[@]}"; do
     tok="$o"
-    [ -n "${AGENT[$o]:-}" ] && tok="$tok@${AGENT[$o]}"
-    if [ -n "${DIRTY[$o|$f]+x}" ]; then annotated+=("${tok}[dirty]"); else annotated+=("$tok"); fi
+    agent=$(agent_for_label "$o")
+    [ -n "$agent" ] && tok="$tok@$agent"
+    if is_dirty "$o" "$f"; then annotated+=("$tok[dirty]"); else annotated+=("$tok"); fi
   done
   ROWS+=("$sev|$f|$(IFS=,; echo "${annotated[*]}")")
-done < <(printf '%s\n' "${!OWNERS[@]}" | LC_ALL=C sort)
+done < <(printf '%s\n' "${OWNER_PATHS[@]}" | LC_ALL=C sort)
 
 collision=$nwarn
 [ "$STRICT" -eq 1 ] && collision=$((nwarn + ninfo))
