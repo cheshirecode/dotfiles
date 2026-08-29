@@ -91,7 +91,7 @@ echo '<tasks-json>' | "$WORKLOG_BIN/project.sh" new <slug> \
   --goal="<goal>" --objective="<objective>" --repos=<repo>
 ```
 
-The tasks-json is the sequential-thinking output mapped to `{slug, kind, depends_on}`.
+The tasks-json is the task decomposition output mapped to `{slug, kind, depends_on}`.
 `kind` must be one of the worklog set — `bug`, `bugfix`, `cleanup`, `debug`,
 `design`, `impl`, `infra`, `investigation`, `ops`, `perf`, `plan`, `postmortem`,
 `program`, `project`, `proposal`, `review`, `runbook`, `spike`, `tooling`. There
