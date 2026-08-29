@@ -85,6 +85,7 @@ printf 'wt-peer-9d\n' > "$TMP/roster.txt"
 ck "roster flag matches stdin"        ''           'keep +wt-peer .*live agent' --no-fetch --roster "$TMP/roster.txt"
 ck "roster accepts an inline list"    ''           'keep +wt-peer .*live agent' --no-fetch --roster 'wt-peer-9d,other'
 ck "unreadable roster rejected"       ''           'cannot read roster'         --roster /nope/nope
+ck "bare-word roster fails closed"    ''           'cannot read roster'         --no-fetch --roster wt-peer-9d
 
 build
 ckjson "json: happy path" '.'       --target main --json "$TMP/r"
