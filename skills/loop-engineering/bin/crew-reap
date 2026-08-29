@@ -71,11 +71,11 @@ ROOT=$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null) \
 if [ -z "$TARGET" ]; then
   for c in "$(git -C "$ROOT" symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null)" \
            origin/master origin/main master main; do
-    [ -n "$c" ] && git -C "$ROOT" rev-parse --verify -q "$c" >/dev/null 2>&1 && { TARGET=$c; break; }
+    [ -n "$c" ] && git -C "$ROOT" rev-parse --verify -q "${c}^{commit}" >/dev/null 2>&1 && { TARGET=$c; break; }
   done
 fi
 [ -n "$TARGET" ] || die "no target ref found; pass --target"
-git -C "$ROOT" rev-parse --verify -q "$TARGET" >/dev/null 2>&1 || die "target ref not found: $TARGET"
+git -C "$ROOT" rev-parse --verify -q "${TARGET}^{commit}" >/dev/null 2>&1 || die "target ref not found or not a commit: $TARGET"
 
 # The landed test is only as fresh as the local target ref, and a stale one
 # fails SAFE but SILENTLY: it reports "N commit(s) not in <target>", which reads
@@ -106,7 +106,12 @@ TARGET_WHEN=$(git -C "$ROOT" log -1 --format=%cI "$TARGET" 2>/dev/null | cut -c1
 # "unowned" -- worktree removal is skipped entirely rather than guessed at.
 # --roster <file|-> is the documented form and matches crew-radar. A bare stdin
 # pipe still works. The read is bounded: an unbounded one would hang a caller
-# that left stdin open with nothing to say.
+# that left stdin open with nothing to say. GNU timeout is not on macOS; use
+# bash `read -t` (Bash 3+) and never fall back to unbounded cat.
+read_bounded_stdin() {
+  local line
+  while IFS= read -r -t 5 line || [ -n "$line" ]; do printf '%s\n' "$line"; done
+}
 ROSTER=""; HAVE_ROSTER=0
 if [ -n "$ROSTER_SRC" ]; then
   # File, `-` for stdin, or an inline comma-separated list. Same acceptance as
@@ -114,12 +119,17 @@ if [ -n "$ROSTER_SRC" ]; then
   if [ "$ROSTER_SRC" = "-" ]; then ROSTER=$(cat)
   elif [ -r "$ROSTER_SRC" ]; then ROSTER=$(cat "$ROSTER_SRC")
   elif [ "${ROSTER_SRC#*,}" != "$ROSTER_SRC" ]; then ROSTER=$(printf '%s' "$ROSTER_SRC" | tr ',' '\n')
-  elif [ -n "$ROSTER_SRC" ] && [ "${ROSTER_SRC#/}" = "$ROSTER_SRC" ] && [ "${ROSTER_SRC#./}" = "$ROSTER_SRC" ]; then
-    ROSTER=$ROSTER_SRC
-  else die "cannot read roster: $ROSTER_SRC"; fi
+  else
+    # Single bare agent name. A path-like or list-file-like value is a typo'd
+    # --roster file, not a name; fail loudly rather than degrade the gate.
+    case "$ROSTER_SRC" in
+      */*|*.txt|*.list) die "cannot read roster: $ROSTER_SRC" ;;
+      *) ROSTER=$ROSTER_SRC ;;
+    esac
+  fi
   [ -n "$ROSTER" ] && HAVE_ROSTER=1
 elif [ ! -t 0 ]; then
-  ROSTER=$(timeout 5 cat 2>/dev/null || true)
+  ROSTER=$(read_bounded_stdin 2>/dev/null || true)
   [ -n "$ROSTER" ] && HAVE_ROSTER=1
 fi
 
@@ -151,30 +161,40 @@ while IFS= read -r wt; do
   br=$(git -C "$wt" symbolic-ref -q --short HEAD 2>/dev/null || echo "")
 
   if owned_by_live_agent "$base"; then
-    printf "keep|$base|$br|live agent owns this worktree\n" >>"$ROWS"; kept=$((kept+1)); continue
+    printf 'keep|%s|%s|live agent owns this worktree\n' "$base" "$br" >>"$ROWS"; kept=$((kept+1)); continue
   fi
   if [ "$HAVE_ROSTER" != 1 ]; then
-    printf "keep|$base|$br|no roster on stdin; ownership unknown\n" >>"$ROWS"; kept=$((kept+1)); continue
+    printf 'keep|%s|%s|no roster on stdin; ownership unknown\n' "$base" "$br" >>"$ROWS"; kept=$((kept+1)); continue
   fi
   if [ -n "$(git -C "$wt" status --porcelain 2>/dev/null)" ]; then
-    printf "keep|$base|$br|uncommitted changes\n" >>"$ROWS"; kept=$((kept+1)); continue
+    printf 'keep|%s|%s|uncommitted changes\n' "$base" "$br" >>"$ROWS"; kept=$((kept+1)); continue
   fi
   if [ -z "$br" ]; then
-    printf "keep|$base|(detached)|detached HEAD, cannot prove landed\n" >>"$ROWS"; kept=$((kept+1)); continue
+    printf 'keep|%s|(detached)|detached HEAD, cannot prove landed\n' "$base" >>"$ROWS"; kept=$((kept+1)); continue
   fi
 
   ahead=$(git -C "$ROOT" rev-list --count "$TARGET..$br" 2>/dev/null || echo "?")
   if [ "$ahead" != "0" ]; then
-    printf "keep|$base|$br|$ahead commit(s) not in $TARGET\n" >>"$ROWS"; kept=$((kept+1)); continue
+    printf 'keep|%s|%s|%s commit(s) not in %s\n' "$base" "$br" "$ahead" "$TARGET" >>"$ROWS"; kept=$((kept+1)); continue
   fi
 
-  printf "reap|$base|$br|0 commits ahead of $TARGET\n" >>"$ROWS"
-  reaped=$((reaped+1))
   if [ "$APPLY" = 1 ]; then
-    git -C "$ROOT" worktree remove --force "$wt" >/dev/null 2>&1 \
-      && git -C "$ROOT" branch -D "$br" >/dev/null 2>&1
+    # Remove before recording, so the row reports what actually happened.
+    if git -C "$ROOT" worktree remove --force "$wt" >/dev/null 2>&1; then
+      if git -C "$ROOT" branch -D "$br" >/dev/null 2>&1; then
+        printf 'reap|%s|%s|0 commits ahead of %s\n' "$base" "$br" "$TARGET" >>"$ROWS"
+      else
+        printf 'reap|%s|%s|worktree removed; branch delete failed\n' "$base" "$br" >>"$ROWS"
+      fi
+      reaped=$((reaped+1))
+    else
+      printf 'keep|%s|%s|removal failed\n' "$base" "$br" >>"$ROWS"; kept=$((kept+1))
+    fi
+  else
+    printf 'reap|%s|%s|0 commits ahead of %s\n' "$base" "$br" "$TARGET" >>"$ROWS"
+    reaped=$((reaped+1))
   fi
-done < <(git -C "$ROOT" worktree list --porcelain | awk '/^worktree /{print $2}')
+done < <(git -C "$ROOT" worktree list --porcelain | sed -n 's/^worktree //p')
 
 [ "$APPLY" = 1 ] && git -C "$ROOT" worktree prune >/dev/null 2>&1
 
