@@ -1,22 +1,36 @@
 # Crew mode — parallel worker sessions
 
-Use when the orchestrator's tasks must run **concurrently in separate worktrees**
-rather than one cycle at a time. Crew mode is orchestrator mode plus isolation: the queue, budget, and
-one-line-evidence rules in `references/orchestrator.md` are unchanged.
+Use when the orchestrator needs concurrent observations or independently
+isolated workers rather than one cycle at a time. Crew mode keeps the queue,
+budget, and one-line-evidence rules in `references/orchestrator.md`.
 
-Do not stand up a coordination daemon for this. The harness already exposes the
-primitives; `project.sh` already supplies the claim model. Map them directly:
+Do not assume that delegation isolates files. First inspect the current
+harness's actual tool schema. If it cannot create a private worktree or sandbox
+for each worker, parallel delegates are **read-only** and the orchestrator is
+the single writer. A clean radar result does not prove isolation.
 
-| Need | Primitive |
-| --- | --- |
-| one worker per task, isolated | `Agent` with `isolation: "worktree"`, `run_in_background: true` |
-| worker roster and live status | `ListAgents` — name, ref, busy/idle |
-| relay a decision to a worker | `SendMessage` to the worker's name |
-| hear that a worker finished | `SendMessage` `notify_when_idle: true` — one-shot, no polling |
-| wake on state change, not on a timer | `Monitor` with an edge-triggered condition |
-| overlapping edits across worktrees | `bin/crew-radar` (below) |
-| durable claim, stale reap, resume | `project.sh claim` / `reap` / `context.sh --for=resume` |
-| plan before building; race approaches | `Plan` agent type, or `$council` when the split is contested |
+Map available primitives by capability, not by a different host's tool names:
+
+| Need | Portable requirement | Codex collaboration harness | OpenCode (`task` tool) |
+| --- | --- | --- | --- |
+| start a worker | dispatch is authorized; writes require proven isolation | `spawn_agent`; no isolation flag, shared filesystem, so read-only only | `task` with chosen `subagent_type`; read-only unless proven isolated worktree |
+| roster and status | list active workers before ownership decisions | `list_agents` | none — orchestrator tracks via state file + worklog claims |
+| relay or resume work | address one worker explicitly | `send_message` / `followup_task` | use `task` with explicit description referencing child slug |
+| wait for completion | use an event/mailbox wait when available | `wait_agent`; there is no `Monitor` primitive | in-band: begin next cycle immediately while state is `running` |
+| stop a worker | interrupt only the named worker | `interrupt_agent` | orchestrator stops dispatching that worker; state remains bound |
+| overlapping worktree edits | run deterministic conflict evidence | `bin/crew-radar` (below) | `bin/crew-radar` (below) — same repo, same radar |
+| durable claim, stale reap, resume | use the Worklog claim lifecycle | `project.sh claim` / `reap` / `context.sh --for=resume` | `$WORKLOG_BIN/project.sh` / `context.sh` — host-agnostic paths |
+
+### Shared-filesystem boundary
+
+Codex subagents share the same filesystem and current directory. Concurrent
+Codex delegates may inspect files, git history, logs, and tool output, but must
+not edit files, create patches or artifacts, change the index, commit, run
+mutating Worklog helpers, or use the filesystem as a message bus. They return
+evidence and proposed changes through the collaboration tools. The orchestrator
+applies at most one write set at a time, verifies it, runs the radar, and only
+then starts the next write. Manually naming different directories does not
+upgrade this harness into proven isolation. This applies on every host: Codex subagents, OpenCode task dispatch, Cursor subagents — none provide filesystem isolation by default.
 
 Two boundaries are not negotiable. **Never answer another session's permission
 prompt or ask a peer to run what your own permissions refused** — that launders a
@@ -24,21 +38,21 @@ decision the human owns; route it back to the human instead. And **never edit a
 worker's worktree yourself**: ask the worker by mail for a diff or a test result.
 
 Ownership isn't visible in path or mtime: a worktree can sit idle for an hour and
-still belong to a live peer, and a `.claude/worktrees/` path — the harness's own
-convention, not the hand-made `<repo>-wt-<ticket>` layout — is a strong hint it
-isn't yours. Match a worktree's basename against `ListAgents` before touching or
-removing it; if it's someone else's, mail them to ask, don't `git worktree remove`
-it. (Observed in practice 2026-08-28, across two sessions.)
+still belong to a live peer. Match worktrees against the current worker roster
+before touching or removing one; if it belongs to another worker, message that
+worker instead of running `git worktree remove`. (Observed in practice
+2026-08-28, across two sessions.)
 
-Code-worktree isolation does **not** cover `WORKLOG_REPO`. Parallel crew workers
-that `checkpoint.sh` / `archive.sh` the same clone are a write race: one
+Even proven code-worktree isolation does **not** cover `WORKLOG_REPO`. Parallel
+crew workers that `checkpoint.sh` / `archive.sh` the same clone are a write race: one
 worker's pull can fail on an untracked path another worker just archived
 (observed 2026-08-28, `people/oss/archive/review-pr-14851-b.md`). Serialize
-mutating worklog helpers; keep parallelism in the code worktrees. Before each
-mutation, `git -C "$WORKLOG_REPO" status --porcelain -- people/"$WORKLOG_LDAP"/`
-must be empty or limited to the claimed `active/<slug>.md`. On pull failure,
-return `blocked <slug> worklog pull failed` — do not return a SHA from the
-code repo.
+mutating Worklog helpers. Permit concurrent code writes only on a harness that
+actually proved separate worktrees; Codex remains read-only in parallel. Before
+each mutation, `git -C "$WORKLOG_REPO" status --porcelain --
+people/"$WORKLOG_LDAP"/` must be empty or limited to the claimed
+`active/<slug>.md`. On pull failure, return `blocked <slug> worklog pull failed`
+— do not return a SHA from the code repo.
 
 ### Conflict radar
 
@@ -50,36 +64,32 @@ evidence that **the split was wrong**, not that a worker misbehaved.
 ```
 
 Exit `0` clean or info-only, `2` collision, `1` usage error. It runs no model and
-costs no tokens, so it is safe to arm from `Monitor` or a `PostToolUse` hook.
+costs no tokens. Run it before a parallel wave, after workers return, and before
+and after each serialized write. Record every boundary verdict; do not claim
+that an absent continuous monitor means the interval was observed.
 
-`Monitor` turns each **stdout line** into an event; it has no exit-code
-condition. So emit a line only when the verdict changes, and keep the radar's own
-failures in the stream — a silent monitor is indistinguishable from a clean one:
-
-`--json` answers in JSON on every path, failures included (`{"error": "..."}`),
-so the fingerprint stays parseable even when the repo goes momentarily
-unreadable. Exit `2` is a collision **verdict**, not a parse failure: fingerprint
-stdout and do not bind `||` (or `set -o pipefail`) to radar's exit. A Monitor
-that treats exit 2 as unparseable fires once on a real overlap and then looks
-clean. Project it down to one line — the full payload as a fingerprint makes
-every verdict change a large notification:
+Exit `2` is a collision **verdict**, not a parse failure. Capture stdout and the
+exit code separately, then project the JSON to one evidence line:
 
 ```bash
-FP=$(mktemp); RADAR=<skill-dir>/bin/crew-radar
-while true; do
-  raw=$("$RADAR" --json <repo> 2>/dev/null) || true   # exit 2 is a verdict
-  cur=$(printf '%s' "$raw" | jq -S -c '{warn,info,error,paths:[.overlaps[]?.path]}' 2>/dev/null) \
-    || cur='{"error":"radar output unparseable"}'
-  [ "$cur" = "$(cat "$FP")" ] || { printf 'crew-radar: %s\n' "$cur"; printf '%s' "$cur" >"$FP"; }
-  sleep 30
-done
+RADAR=<skill-dir>/bin/crew-radar
+if raw=$("$RADAR" --json <repo> 2>/dev/null); then radar_rc=0; else radar_rc=$?; fi
+cur=$(printf '%s' "$raw" | jq -S -c '{warn,info,error,paths:[.overlaps[]?.path]}') \
+  || cur='{"error":"radar output unparseable"}'
+printf 'command: crew-radar <repo> — exit %s, %s\n' "$radar_rc" "$cur"
 ```
 
-Keep `error` in the projection. Dropping it makes a persistently failing radar
-fingerprint-stable, so it emits once and then looks exactly like a clean repo.
+`--json` answers in JSON on every path, failures included (`{"error": "..."}`).
+Keep `error` in the projection. If the host does expose a persistent watcher,
+it may fingerprint verdict changes, but crew correctness cannot require that
+optional primitive. In Codex, use `wait_agent` for worker mailbox changes and
+rerun the radar synchronously at the boundaries above; do not start a polling
+daemon or pretend `wait_agent` watches files.
 
-Arm it once per parallel dispatch with `persistent: true`, and re-arm after any
-resume: a monitor lost to a restarted session ends silently and nothing says so.
+One-shot Codex example: spawn two read-only audit agents, wait for both with
+`wait_agent`, collect their evidence, run `crew-radar`, apply one reconciled
+patch in the root session, verify it, then run `crew-radar` again. Do not assign
+the agents different files and let them write concurrently.
 
 Act on severity:
 

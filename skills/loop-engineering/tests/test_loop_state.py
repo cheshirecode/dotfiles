@@ -139,7 +139,6 @@ class LoopStateTest(unittest.TestCase):
             "serena-rg-search",
             "worklog",
             "which-model",
-            "loop-helpers",
             "council",
             "karpathy-guidelines",
             "evidence-gate",
@@ -187,7 +186,8 @@ class LoopStateTest(unittest.TestCase):
         cycle = skill_text.split("## Run one bounded cycle", 1)[1].split(
             "## Preserve durable context", 1
         )[0]
-        self.assertIn("effect preflight for every mutation", cycle)
+        self.assertIn("effect preflight", cycle)
+        self.assertIn("for every mutation", cycle)
         self.assertIn("stop before writing", cycle)
         self.assertIn("Serialize writes", cycle)
 

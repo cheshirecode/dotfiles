@@ -63,13 +63,16 @@ command rejected by the state contract exits `3` with a `loop-state:` error.
 Before an action that can change the hypothesis, write a compact three-part
 record in the cycle evidence or durable task file:
 
-- `hypothesis`: the smallest claim the action tests.
-- `falsifier`: the observable result that would reject the claim.
-- `replay`: the exact check that must pass after a fix or intervention.
+```
+`hypothesis`: <the smallest claim this action tests>
+`falsifier`: <the observable result that would reject the claim>
+`replay`: <the exact check that must pass after a fix or intervention>
+```
 
-Keep the record to one line in loop state; retain expanded reasoning only in a
-durable artifact. If the result is neither a confirmation nor a falsifier,
-advance with a narrower next action rather than claiming progress.
+Keep to one line in loop state (`hypothesis=X falsifier=Y replay=Z`); retain
+expanded reasoning only in a durable artifact (worklog task file, /tmp log).
+If the result is neither a confirmation nor a falsifier, advance with a narrower
+next action rather than claiming progress.
 
 Preserve verifier exit status when output is piped or truncated. Use
 `set -o pipefail`, capture the producer status, or write the full output to an
