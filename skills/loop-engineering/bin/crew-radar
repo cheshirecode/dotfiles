@@ -163,9 +163,15 @@ if [ -n "$ROSTER_SRC" ]; then
   if [ "$ROSTER_SRC" = "-" ]; then ROSTER=$(cat)
   elif [ -r "$ROSTER_SRC" ]; then ROSTER=$(cat "$ROSTER_SRC")
   elif [ "${ROSTER_SRC#*,}" != "$ROSTER_SRC" ]; then ROSTER=$(printf '%s' "$ROSTER_SRC" | tr ',' '\n')
-  elif [ -n "$ROSTER_SRC" ] && [ "${ROSTER_SRC#/}" = "$ROSTER_SRC" ] && [ "${ROSTER_SRC#./}" = "$ROSTER_SRC" ]; then
-    ROSTER=$ROSTER_SRC   # single bare name
-  else die "cannot read roster: $ROSTER_SRC"; fi
+  else
+    # Single bare agent name. A path-like or list-file-like value here is a
+    # typo'd --roster file, not a name; treat it as an error rather than
+    # silently degrading the ownership annotation.
+    case "$ROSTER_SRC" in
+      */*|*.txt|*.list) die "cannot read roster: $ROSTER_SRC" ;;
+      *) ROSTER=$ROSTER_SRC ;;
+    esac
+  fi
 fi
 
 agent_for() {  # $1 = worktree basename -> prints agent name, or empty
@@ -191,7 +197,7 @@ if [ -n "$ROSTER" ]; then
 fi
 
 # --- collect changed paths per worktree --------------------------------------
-declare -A COMMITTED=() DIRTY=() OWNERS=()
+declare -A DIRTY=() OWNERS=()
 add_owner() { # $1 path  $2 label
   local cur=${OWNERS[$1]:-}
   case " $cur " in *" $2 "*) return 0 ;; esac
@@ -205,7 +211,7 @@ for i in "${!LABELS[@]}"; do
   if [ -n "$mb" ]; then
     while IFS= read -r -d '' f; do
       [ -n "$f" ] || continue
-      COMMITTED["$label|$f"]=1; add_owner "$f" "$label"
+      add_owner "$f" "$label"
     done < <(git -C "$path" diff --name-only -z "$mb" HEAD -- 2>/dev/null)
   fi
   while IFS= read -r -d '' f; do
@@ -255,7 +261,7 @@ while IFS= read -r f; do
   for o in "${owners[@]}"; do
     tok="$o"
     [ -n "${AGENT[$o]:-}" ] && tok="$tok@${AGENT[$o]}"
-    if [ -n "${DIRTY[$o|$f]+x}" ]; then annotated+=("$tok[dirty]"); else annotated+=("$tok"); fi
+    if [ -n "${DIRTY[$o|$f]+x}" ]; then annotated+=("${tok}[dirty]"); else annotated+=("$tok"); fi
   done
   ROWS+=("$sev|$f|$(IFS=,; echo "${annotated[*]}")")
 done < <(printf '%s\n' "${!OWNERS[@]}" | LC_ALL=C sort)
@@ -267,25 +273,27 @@ collision=$nwarn
 if [ "$QUIET" -eq 0 ]; then
   if [ "$FMT" = json ]; then
     printf '{"base":"%s","worktrees":%d,"warn":%d,"info":%d,"overlaps":[' \
-      "$BASE" "${#LABELS[@]}" "$nwarn" "$ninfo"
+      "$(json_escape "$BASE")" "${#LABELS[@]}" "$nwarn" "$ninfo"
     first=1
-    for row in $(printf '%s\n' "${ROWS[@]:-}" | LC_ALL=C sort); do
+    while IFS= read -r row; do
       [ -n "$row" ] || continue
       sev=${row%%|*}; rest=${row#*|}; f=${rest%%|*}; own=${rest#*|}
       [ "$first" -eq 1 ] || printf ','
       first=0
-      printf '{"severity":"%s","path":"%s","owners":"%s"}' "$sev" "$f" "$own"
-    done
+      printf '{"severity":"%s","path":"%s","owners":"%s"}' \
+        "$sev" "$(json_escape "$f")" "$(json_escape "$own")"
+    done < <(printf '%s\n' "${ROWS[@]:-}" | LC_ALL=C sort)
     printf ']}\n'
   else
     printf '%s  base=%s  worktrees=%d\n' "$PROG" "$BASE" "${#LABELS[@]}"
     if [ "${#ROWS[@]}" -eq 0 ]; then
       printf 'clean — no overlapping paths\n'
     else
-      for row in $(printf '%s\n' "${ROWS[@]}" | LC_ALL=C sort); do
+      while IFS= read -r row; do
+        [ -n "$row" ] || continue
         sev=${row%%|*}; rest=${row#*|}; f=${rest%%|*}; own=${rest#*|}
         printf '%-5s %-52s %s\n' "$sev" "$f" "$own"
-      done
+      done < <(printf '%s\n' "${ROWS[@]}" | LC_ALL=C sort)
       printf '%d overlapping path(s): %d warn, %d info\n' "${#ROWS[@]}" "$nwarn" "$ninfo"
     fi
   fi

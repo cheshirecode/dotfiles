@@ -786,6 +786,29 @@ class LoopStateTest(unittest.TestCase):
         self.assertNotIn("loop-state:", misuse.stderr)
         self.assertEqual(self.state.read_text(), before)
 
+    def test_malformed_state_inputs_exit_three_not_traceback(self) -> None:
+        for payload in ("[]", "5", '"loop"'):
+            self.state.write_text(payload)
+            result = self.run_cli(
+                "validate",
+                "--state",
+                str(self.state),
+                expected_returncode=3,
+            )
+            self.assertIn("loop-state:", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+
+        directory_state = pathlib.Path(self.temporary_directory.name) / "as-dir"
+        directory_state.mkdir()
+        result = self.run_cli(
+            "validate",
+            "--state",
+            str(directory_state),
+            expected_returncode=3,
+        )
+        self.assertIn("loop-state:", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
     def test_annotate_corrects_terminal_evidence_without_reopening(self) -> None:
         self.initialize(limit=1)
         exhausted = json.loads(
