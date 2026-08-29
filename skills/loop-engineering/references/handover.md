@@ -10,14 +10,15 @@ Use loop-engineering orchestrator mode. Goal: audit the installed loop-engineeri
 You are running in parallel with other sessions that may also be auditing this skill. Be tolerant of conflicts: if you must edit a file another session is changing, keep improvements that enhance clarity or safety, and resolve minor formatting disagreements locally.
 
 First, resolve <skill-dir>:
-  find ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills -name loop_state.py -print -quit 2>/dev/null | head -1 | xargs dirname/../
+  found_file="$(find -L ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills -name loop_state.py -print -quit 2>/dev/null)" && test -n "$found_file" && dirname "$(dirname "$found_file")"
 If the command fails, ask me which harness you are in and I will tell you.
 
 Then follow these steps IN ORDER, one bash call per step:
 
 Step 1 — sanity checks (pass fast):
   python3 <skill-dir>/scripts/loop_state.py validate --state /dev/null 2>&1 || true
-  python3 <skill-dir>/tests/test_crew_radar.sh 2>&1 | tail -1
+  bash <skill-dir>/tests/test_crew_radar.sh 2>&1 | tail -1
+  bash <skill-dir>/tests/test_crew_reap.sh 2>&1 | tail -1
   wc -l <skill-dir>/SKILL.md
 
 Step 2 — run the Python test suite:

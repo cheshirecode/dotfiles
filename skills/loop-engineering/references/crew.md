@@ -30,7 +30,9 @@ mutating Worklog helpers, or use the filesystem as a message bus. They return
 evidence and proposed changes through the collaboration tools. The orchestrator
 applies at most one write set at a time, verifies it, runs the radar, and only
 then starts the next write. Manually naming different directories does not
-upgrade this harness into proven isolation. This applies on every host: Codex subagents, OpenCode task dispatch, Cursor subagents — none provide filesystem isolation by default.
+upgrade this harness into proven isolation. This applies on every host: Codex
+subagents, OpenCode task dispatch, Cursor subagents — none provide filesystem
+isolation by default.
 
 Two boundaries are not negotiable. **Never answer another session's permission
 prompt or ask a peer to run what your own permissions refused** — that launders a
@@ -56,20 +58,20 @@ people/"$WORKLOG_LDAP"/` must be empty or limited to the claimed
 
 ### Conflict radar
 
-`crew-radar` takes the same `--roster` and annotates each owner with the agent
-holding it (`feat-a@worker-7f`, or `@?` when nothing matches), so an overlap row
-says who to mail rather than only which branch. Both tools accept a file, a
-comma-separated list, or `-` for stdin. The column renders only on overlap rows,
-so a clean repo shows nothing either way.
+`crew-radar` takes `--roster` (a file, a comma-separated list, or `-` for
+stdin; `crew-reap` below accepts the same form) and annotates each owner with
+the agent holding it (`feat-a@worker-7f`, or `@?` when nothing matches), so an
+overlap row says who to mail rather than only which branch. The column renders
+only on overlap rows, so a clean repo shows nothing either way.
 
 Two worktrees changing one file is a merge conflict surfacing early. Treat it as
 evidence that **the split was wrong**, not that a worker misbehaved.
 
 ```bash
-<skill-dir>/bin/crew-radar [--base <ref>] [--json] [--quiet] [--strict] <repo>
+<skill-dir>/bin/crew-radar [--base <ref>] [--roster <file|list|->] [--json] [--quiet] [--strict] <repo>
 ```
 
-Exit `0` clean or info-only, `2` collision, `1` usage error. It runs no model and
+Exit `0` clean or info-only, `2` collision, `1` usage or repo error. It runs no model and
 costs no tokens. Run it before a parallel wave, after workers return, and before
 and after each serialized write. Record every boundary verdict; do not claim
 that an absent continuous monitor means the interval was observed.
@@ -135,7 +137,7 @@ this says who has finished. It costs no model call, so hand it to a cheap
 utility agent rather than enumerating worktrees on frontier tokens.
 
 ```bash
-ListAgents-names | <skill-dir>/bin/crew-reap [--target <ref>] [--apply] <repo>
+ListAgents-names | <skill-dir>/bin/crew-reap [--target <ref>] [--roster <file|->] [--apply] [--no-fetch] [--json] <repo>
 ```
 
 **Dry run by default; `--apply` is required to remove anything.** It fetches the
@@ -160,10 +162,10 @@ Two gates, both from real incidents:
   recoverable; deleting the branch is the irreversible half.
 
 Exit `0` nothing to do, `3` something was reaped (or would be, in a dry run),
-`1` usage error. Capture the output before piping it to `jq` — under
+`1` usage or repo error. Capture the output before piping it to `jq` — under
 `set -o pipefail` the intentional exit 3 otherwise reads as failure.
 
-Record the radar verdict as one typed line, like any other evidence:
-`command: crew-radar <repo> — exit 0, 0 warn`.
+Record the reap verdict as one typed line, like any other evidence:
+`command: crew-reap <repo> — exit 3, 2 worktree(s) reaped`.
 
 Return to `SKILL.md` for budget, evidence, and terminal-state rules.

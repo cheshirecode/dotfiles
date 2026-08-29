@@ -57,7 +57,7 @@ OUTPUT
 ```text
 goal: targeted test passes three consecutive runs
 progress_evidence: failure reproduced once; no source mutation yet
-budget: 3 hypotheses
+budget: 0/3 hypotheses
 next_action: isolate timing-dependent assertions
 terminal_status: running
 ```
@@ -152,8 +152,13 @@ OUTPUT (agent decomposes, creates project, cycles through tasks)
 [         advance evidence: "fix-sh-preamble: archived"]
 [cycle 3: claim fix-py-errors → delegate → archive → advance]
 [         advance evidence: "fix-py-errors: archived"]
-[project next exits 1 → finish complete with verification]
+[project next reports "all tasks … are archived (nothing left)" + project verify exits 0 → finish complete]
 ```
+
+Same prompt in natural language:
+
+> Use loop-engineering orchestrator mode. Goal: audit skills for shellcheck
+> regressions.
 
 Mid-run escalation is resumable, not terminal:
 
@@ -200,12 +205,15 @@ INPUT
 OUTPUT (capture, then parse — never pipe a verdict into a parser)
 
 ```bash
+RADAR=<skill-dir>/bin/crew-radar   # not on PATH; always resolve via <skill-dir>
+
 # WRONG — pipefail binds the pipeline to the radar's exit 2, and a real
 # collision is reported as unparseable output.
-cur=$(crew-radar --json "$REPO" | jq -S -c '{warn,info}') || cur='{"error":"unparseable"}'
+set -o pipefail
+cur=$("$RADAR" --json "$REPO" | jq -S -c '{warn,info}') || cur='{"error":"unparseable"}'
 
 # RIGHT — capture first; only a jq failure reaches the sentinel.
-raw=$(crew-radar --json "$REPO" 2>/dev/null) || true
+raw=$("$RADAR" --json "$REPO" 2>/dev/null) || true
 cur=$(printf '%s' "$raw" | jq -S -c '{warn,info,error}' 2>/dev/null) \
   || cur='{"error":"unparseable"}'
 ```
@@ -223,8 +231,3 @@ pipeline**, so a caution does not prevent it — the executable fixtures in
 `tests/test_crew_radar.sh` do, because they assert both that the correct form
 works and that the wrong form still fails. Copy those when adding a tool whose
 exit code carries meaning.
-
-Same prompt in natural language:
-
-> Use loop-engineering orchestrator mode. Goal: audit skills for shellcheck
-> regressions.
