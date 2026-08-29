@@ -56,6 +56,12 @@ if [ -d "$TMP/wt-peer" ]; then
   PASS=$((PASS+1)); printf '  PASS  apply keeps the live peer worktree\n'
 else FAIL=$((FAIL+1)); printf '  FAIL  LIVE PEER WORKTREE DELETED\n'; fi
 
+# Porcelain `worktree <path>` is not awk-field-safe: a space in the path must
+# still enumerate. A 0-ahead branch is reapable when the roster does not own it.
+build
+G -C "$TMP/r" worktree add -q -b "br-space" "$TMP/wt spaced"
+ck "worktree path with a space is enumerated" 'wt-peer-9d' 'reap +wt spaced'
+
 # --json answers in JSON on every path. Capture BEFORE parsing: crew-reap exits
 # 3 when there is something to reap, and under `set -o pipefail` a pipeline into
 # jq would report that as failure even though the JSON is well formed.
@@ -80,6 +86,20 @@ ck "roster flag matches stdin"        ''           'keep +wt-peer .*live agent' 
 ck "roster accepts an inline list"    ''           'keep +wt-peer .*live agent' --no-fetch --roster 'wt-peer-9d,other'
 ck "unreadable roster rejected"       ''           'cannot read roster'         --roster /nope/nope
 
+# Bare stdin is bounded across the whole stream, not five seconds per line.
+# The seventh writer iteration should hit the closed pipe after the deadline.
+started=$SECONDS
+slow_out=$(
+  for i in 1 2 3 4 5 6 7; do sleep 1; printf 'agent-%s\n' "$i"; done |
+    "$REAP" --target main --no-fetch "$TMP/r" 2>&1
+) || true
+elapsed=$((SECONDS - started))
+if [ "$elapsed" -le 6 ]; then
+  PASS=$((PASS+1)); printf '  PASS  bare stdin has one total timeout\n'
+else
+  FAIL=$((FAIL+1)); printf '  FAIL  bare stdin timeout reset per line (%ss)\n' "$elapsed"
+fi
+
 build
 ckjson "json: happy path" '.'       --target main --json "$TMP/r"
 ckjson "json: error path" '.error'  --json "$TMP/nope"
@@ -89,7 +109,7 @@ ckjson "json: bad option" '.error'  --json --no-such-flag "$TMP/r"
 # must read it correctly, and the piped form must still fail — otherwise this
 # fixture stops guarding the documented trap. See references/examples.md §6.
 build
-(
+{
   set -uo pipefail
   raw=$(printf 'x\n' | "$REAP" --target main --json --no-fetch "$TMP/r" 2>/dev/null) || true
   cur=$(printf '%s' "$raw" | jq -S -c '{reaped}' 2>/dev/null) || cur='{"error":"unparseable"}'
@@ -106,7 +126,7 @@ build
   else
     FAIL=$((FAIL+1)); printf '  FAIL  piped form no longer locks the trap (got %s)\n' "$old"
   fi
-)
+}
 
 printf '\n  %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

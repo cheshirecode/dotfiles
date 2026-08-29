@@ -49,6 +49,8 @@ def read_state_snapshot(path: pathlib.Path) -> tuple[dict[str, Any], bytes]:
         raw_state = path.read_bytes()
     except FileNotFoundError as exc:
         raise StateError(f"state file does not exist: {path}") from exc
+    except OSError as exc:
+        raise StateError(f"state file is not readable: {path}: {exc}") from exc
     try:
         state = json.loads(raw_state)
     except json.JSONDecodeError as exc:
@@ -167,6 +169,8 @@ def write_state_unlocked(
 
 
 def validate_state(state: dict[str, Any]) -> None:
+    if not isinstance(state, dict):
+        raise StateError("state must be a JSON object")
     if state.get("schema_version") != SCHEMA_VERSION:
         raise StateError(f"schema_version must be {SCHEMA_VERSION}")
     for field in ("goal", "next_action", "terminal_status"):

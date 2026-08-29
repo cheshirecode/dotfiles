@@ -160,6 +160,7 @@ radar = (skill / "bin/crew-radar").read_text()
 # copy; that keeps them robust to reflowing the paragraph.
 root_flat = " ".join(root.split())
 crew_flat = " ".join(crew.split())
+hosts_flat = " ".join(hosts.split())
 state_script = (skill / "scripts/loop_state.py").read_text()
 install_script = (skill / "scripts/install_audit.py").read_text()
 references = {path.name for path in (skill / "references").glob("*.md")}
@@ -214,7 +215,7 @@ checks = {
         and "state contract exits `3`" in protocol
     ),
     "fail-closed installation consolidation": (
-        "install_audit.py --canonical" in hosts
+        "install_audit.py --canonical" in hosts_flat
         and "--link-identical" in hosts
         and "refusing all writes" in install_script
         and "divergent-copy" in install_script
@@ -257,7 +258,10 @@ checks = {
     ),
     "handover runs shell fixture with Bash": (
         "bash <skill-dir>/tests/test_crew_radar.sh" in handover
+        and "bash <skill-dir>/tests/test_crew_reap.sh" in handover
         and "python3 <skill-dir>/tests/test_crew_radar.sh" not in handover
+        and "test_crew_radar.sh 2>&1 | tail" not in handover
+        and "test_crew_reap.sh 2>&1 | tail" not in handover
     ),
     "crew radar contract is stated": (
         "bin/crew-radar" in crew_flat
@@ -274,8 +278,9 @@ checks = {
     "cross-host continuation": (
         hosts.count("while state is `running`") >= 3
         and "A prompt cannot manufacture background execution" in hosts
-        and hosts.count("wakes the agent") >= 3
-        and "Treat supplied intervention as pending" in hosts
+        and "After intervention or a scheduled wakeup" in hosts_flat
+        and "creates a successor state" in hosts_flat
+        and "Treat supplied intervention as pending" in hosts_flat
     ),
     "no host-only injection": "!`" not in root and "allowed-tools:" not in root,
     "contrastive fixtures present": examples.count("\n## ") >= 4,

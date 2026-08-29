@@ -9,12 +9,12 @@ days or weeks. Every token the orchestrator spends on per-task detail is a
 token it cannot spend on dispatch. Follow these rules:
 
 - **Evidence in loop_state is one line per cycle.** Just
-  `<slug>: claimed → archived`. Per-task evidence lives in worklog task files
+  `<slug>: archived`. Per-task evidence lives in worklog task files
   (committed by the sub-agent), not in the orchestrator's memory.
-- **Bulk generation offloading.** Never generate $\ge 3$ repetitive structured files
+- **Bulk generation offloading.** Never generate 3 or more repetitive structured files
   or template expansions in-band on frontier orchestrator tokens. Prepare a compact
   spec pack and delegate generation to a low-cost sub-agent (`mechanical` / utility model)
-  to cut generation token costs by $>85\%$.
+  to cut generation token costs by >85%.
 - **Never re-read sub-agent output.** Check that the sub-agent completed
   (`archive.sh` pushed successfully) and move on. The worklog commit is the
   evidence, not the orchestrator's recollection.
@@ -25,8 +25,7 @@ token it cannot spend on dispatch. Follow these rules:
   `claim X → archive X → advance`. No diffs, no results, no analysis. This
   compresses cleanly.
 - **Optional invocations are gated.** Invoke an optional skill only when its
-  trigger is met; do not preload or invoke it as ceremony. Use the regular loop
-  for one or two tasks instead of creating a project.
+  trigger is met; do not preload or invoke it as ceremony.
 
 When tasks need concurrent delegates, read `references/crew.md` — same queue,
 budget, and evidence rules, plus capability-gated isolation, serialized writes,
@@ -40,7 +39,8 @@ To invoke this mode, give the agent this prompt:
 
 The agent resolves the rest from the documentation below. No flags, no syntax,
 no setup instructions needed. The loop runs until the project queue is empty
-(`project next` exits 1), not until a fixed turn count.
+(`project next` reports "all tasks … are archived (nothing left)"; see §4 —
+exit 1 alone is not proof), not until a fixed turn count.
 
 ### 1. Decompose & budget
 
@@ -55,7 +55,8 @@ silently replace it with 999. If the user gives both a minimum cycle count and
 a ceiling, record the minimum in the goal and do not finish before that minimum
 is met, even if the queue empties. Otherwise, use 999 as the default safety net
 for a project whose real stopping condition is the queue emptying:
-`project next` exits 1 when no eligible tasks remain.
+`project next` exits 1 when no eligible tasks remain; exit 1 also covers
+blocked or missing children (see §4).
 
 If decomposition uncertainty is high (ambiguous scope, unclear dependencies,
 novel domain), run `$council` to debate the task breakdown before writing.
@@ -91,7 +92,7 @@ echo '<tasks-json>' | "$WORKLOG_BIN/project.sh" new <slug> \
   --goal="<goal>" --objective="<objective>" --repos=<repo>
 ```
 
-The tasks-json is the sequential-thinking output mapped to `{slug, kind, depends_on}`.
+The tasks-json is the task decomposition output mapped to `{slug, kind, depends_on}`.
 `kind` must be one of the worklog set — `bug`, `bugfix`, `cleanup`, `debug`,
 `design`, `impl`, `infra`, `investigation`, `ops`, `perf`, `plan`, `postmortem`,
 `program`, `project`, `proposal`, `review`, `runbook`, `spike`, `tooling`. There
@@ -159,9 +160,9 @@ PR-watch / in-flight HEAD moves: if a host-native fingerprint watcher reports a
 move while a review delegate is still running, record one evidence line
 (`github: repo#N head <old>→<new> — <slug> in-flight`) and **do not interrupt**
 the worker unless the user asked. A stale-SHA archive is valid cycle evidence.
-Without that watcher (including Codex), recheck the head after `wait_agent`
-returns and before the serialized write/archive step; do not imply continuous
-observation.
+Without that watcher (including Codex), recheck the head after the delegate
+returns (`wait_agent` on Codex) and before the serialized write/archive step;
+do not imply continuous observation.
 After it lands, compare `gh pr view --json headRefOid` to the SHA in the archive
 summary; mismatch → claim a pre-declared `review-pr-N-r2` child (or start a new
 wave project). Do not spawn an orphan `review-pr-N` with `project:` set but

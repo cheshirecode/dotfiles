@@ -18,6 +18,7 @@ Then follow these steps IN ORDER, one bash call per step:
 Step 1 — sanity checks (pass fast):
   python3 <skill-dir>/scripts/loop_state.py validate --state /dev/null 2>&1 || true
   bash <skill-dir>/tests/test_crew_radar.sh
+  bash <skill-dir>/tests/test_crew_reap.sh
   wc -l <skill-dir>/SKILL.md
 
 Step 2 — run the Python test suite:
