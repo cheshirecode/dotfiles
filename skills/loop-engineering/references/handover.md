@@ -7,6 +7,8 @@ demand. It is host-agnostic — resolve `<skill-dir>` before sending.
 ```
 Use loop-engineering orchestrator mode. Goal: audit the installed loop-engineering skill for correctness, multi-host compatibility, and clarity; fix any issues found, then finish complete with verification evidence.
 
+You are running in parallel with other sessions that may also be auditing this skill. Be tolerant of conflicts: if you must edit a file another session is changing, keep improvements that enhance clarity or safety, and resolve minor formatting disagreements locally.
+
 First, resolve <skill-dir>:
   find ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills -name loop_state.py -print -quit 2>/dev/null | head -1 | xargs dirname/../
 If the command fails, ask me which harness you are in and I will tell you.
@@ -39,7 +41,7 @@ Step 4 — decide:
   - If ANY test failed OR frontmatter > 450 chars OR route matrix lacks
     "serialize writes" OR examples.md still contains shot_count/format:
     BEGIN IMPROVEMENT LOOP (use bounded cycles via loop_state.py advance/finish).
-  - If everything is clean AND the harness asks you to continue anyway:
+  - If everything is clean AND you have nothing new to add:
     Report "CLEAN: <test-count> tests, <skill-line>-line SKILL.md, 0 issues."
     Then stop. Do NOT invent problems.
 
@@ -48,7 +50,9 @@ Step 5 — if improving:
     a. Identify ONE specific issue.
     b. Edit the smallest affected file.
     c. Re-run relevant tests (`python3 -m unittest ...`).
-    d. Advance via loop_state.py --quiet.
+    d. Advance via `loop_state.py advance --quiet`.
+  Handle concurrent-edit conflicts gracefully: prefer merging your improvement
+  over reverting, but never force-write over a conflicting file without checking.
   Finish with `finish --status complete --verification "<test-result>"`.
 
 Return exactly one final line:
@@ -56,6 +60,21 @@ Return exactly one final line:
 where <status> is CLEAN or IMPROVED, and <evidence> names each changed file
 and its test result. Keep all detail in the state artifact, not your output.
 ```
+
+## Parallel-session notes
+
+- **Race detection**: if two sessions edit the same file simultaneously, the
+  second will either get a git merge conflict (if committed) or overwrite the
+  first's changes (if only in-memory). Your job is to ensure BOTH improvements
+  survive the merge when they land.
+- **State independence**: each session has its own `loop_state.json` in /tmp.
+  Conflicts only appear at the git commit layer, not in loop state tracking.
+- **No stalemate protocol**: if a file is locked or conflicted from parallel
+  edits, resolve by taking the union of both improvements where possible,
+  or the more conservative safety-enforcing version where they disagree.
+- **Verification is shared**: once one session finishes and pushes, the others
+  should pull and re-verify rather than duplicating work. But it's acceptable
+  for multiple sessions to independently confirm a clean state.
 
 ## Why this works
 
@@ -65,3 +84,4 @@ and its test result. Keep all detail in the state artifact, not your output.
   that "see" problems that aren't there.
 - **Budget-bounded**: caps at 20 improvement turns so a healthy skill doesn't waste tokens on drive-by refactors.
 - **Pass-fast on clean**: explicit instruction to STOP when everything checks out avoids noise on stable installations.
+- **Parallel-safe**: aware that other agents may run this same prompt simultaneously; resolved conflicts preserve all valid improvements.
