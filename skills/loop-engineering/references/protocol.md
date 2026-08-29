@@ -108,7 +108,6 @@ Before every mutation, run this effect preflight:
    releases an armed `merge_when_pipeline_succeeds` merges the MR; you did not
    call merge, you supplied its last condition. Check the flag before any action
    whose completion you would not be permitted to perform directly.
-
 7. Has another session declared a constraint on this artifact? Authority
    settles whether you *may* act; it does not tell you whether you *should*.
    Read the owning task's notes before an irreversible action, even when every
