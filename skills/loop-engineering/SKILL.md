@@ -122,9 +122,7 @@ not leave ad hoc run artifacts behind.
 For a non-trivial loop, invoke `$which-model` before dispatch only when the
 current harness exposes it and the task has materially different capability,
 context, privacy, or cost needs. Ask for a model lane, not an unverified exact
-model. Apply its data-policy gate before delegation. If there is no dispatch,
-the skill is unavailable, or a required supporting tool is unavailable, skip
-routing and record `model-routing: skipped — <reason>` as one-line evidence;
+model. Apply its data-policy gate before delegation. If no dispatch tool exists in the harness, or if the target skill is unavailable, skip routing and record `model-routing: skipped — <reason>` as one-line evidence;
 do not spend a cycle on selection ceremony.
 
 ### Optional payload transport
@@ -135,7 +133,7 @@ is not both smaller and more legible, send the original bytes.
 
 1. For noisy command output or tool catalogs, an authorized Caveman install may
    use `caveman shrink -- <command>` before Pixel. Preserve producer status with
-   `set -o pipefail`; keep the original in CCR (compact/cached remote storage, i.e. /tmp or your harness's artifact store) and retain its recovery handle.
+   `set -o pipefail`; keep the original in an artifact store (`/tmp`, `$SCRATCH`, or your harness's upload area) and retain its recovery handle.
    Do not install an output-only response skill for input savings: it can add
    prompt overhead while leaving provider input unchanged.
 2. Use [Caveman Pixel Mode](https://github.com/juliusbrussee/caveman#pixel-mode)
@@ -189,7 +187,7 @@ exit codes to reduce output.
 
 **Exit codes:** The state CLI exits `0` on success, `2` with a `usage:` error
 for malformed CLI usage, and `3` with a `loop-state:` error when the state
-contract rejects the transition. See
+contract rejects the transition. (valid transitions: running→advance/blocked/needs_human/completed/cancelled; blocked/needs_human/human-exhausted/continue_scheduled accept --next-action; completed/cancelled clear it.) See
 [references/protocol.md](references/protocol.md) for transition rules.
 
 Keep each evidence value to one typed line: `kind: reference — result`, where
@@ -226,8 +224,8 @@ When the installed `worklog` protocol is available, hydrate resume context
 before initialization and checkpoint verified state at compaction, delegation,
 retry exhaustion, scheduled handoff, or termination. Resolve `$WORKLOG_BIN` to
 the worklog skill's `bin/` directory (`~/.claude/skills/worklog/bin`, `~/.agents/skills/worklog/bin`, or the repo's `skills/worklog/bin`). For an existing task, run
-`$WORKLOG_BIN/context.sh <slug> --for=resume` from the target clone's direnv
-context before initializing state. Before cold delegation, pass the returned
+`$WORKLOG_BIN/context.sh <slug> --for=resume` while the target clone's direnv
+variables are active (i.e., after `cd <clone-dir> && export $(direnv allow 2>/dev/null || true)`). Before cold delegation, pass the returned
 `context <slug> --for=compact` pack directly; do not pass the parent transcript
 or imply that `spawn` enriches the pack. If Worklog or its environment is not
 available, use the explicit state path plus one authorized artifact and label
