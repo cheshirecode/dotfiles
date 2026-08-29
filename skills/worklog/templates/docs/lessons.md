@@ -16,6 +16,17 @@ Each entry: short title (the lesson, one phrase) + 1–3 sentence rationale + `(
 
 Newest at top within each month section. **Entries are mutable** — refine wording, correct mistakes, expand rationale, or supersede with a clearer formulation as understanding deepens. To refine: edit the entry in place and mention which entry was touched in the commit body (e.g., `lessons: refine B5 entry — clarify which scripts must quote`). Git history is the audit trail of how each lesson evolved; the file itself reflects current best understanding.
 
+## 2026-08
+
+### Health evidence must span the failure period, not merely measure the right thing
+A dependency that fails on a cycle (Pagos rejects unmatched key/header pairs in blocks on a ~15-min validation-cache clock) will return a clean result to any window shorter than that period. Four separate runs gave confident *wrong* answers in both directions — 25 min "the key is broken", a later hour "it is perfect", 180 samples "clean 180/180", 360 samples "38 failures". Always sample across several periods and probe the known-good alternative alongside as a control, so a vendor-side outage cannot masquerade as a defect. This also binds canary gating: a verification window under one failure period promotes on timing, not health. (`51cded2e`, pagos-api-key-rotation)
+
+### A credential write is not a rotation; the deploy is
+Where a service's k8s Secret is Helm-rendered per deploy and the value is read at import (`os.getenv` at module level), writing Vault changes nothing for running pods and **a pod restart does not pick it up** — while the metric stays green and looks like a successful test. Exposure is therefore measured deploy-to-deploy, not write-to-write, and rollback needs a deploy too. Corollary: if code and credential must agree (e.g. matched auth pairs), they have to land in the *same* deploy, and the safe order is write-then-merge, since the merge is what triggers the deploy. (`51cded2e`, pagos-api-key-rotation)
+
+### Verifying an observation is not verifying the inference drawn from it
+Testing a dashboard's raw query strings against the metrics API proved they were valid *queries* — but the widget schema is a different validator, and two panels were silently broken (arithmetic inside a single query object instead of in `formulas`). Nothing errored; they just rendered blank. When a claim is "X works", check the surface that actually consumes X, and read back what the system stored rather than what you sent. (`4km-caa-3ac`, pagos-api-key-rotation)
+
 ## 2026-06
 
 - **Boundary lint needs scoped provenance exceptions, not context deletion.** Dogfooding the OSS/work split found a false positive: archived OSS package-port tasks legitimately cited `factory-brief` as the source material they extracted from. The correct fix was a path-scoped `.worklog-boundary.json allow` entry, not removing source provenance or dropping `factory-brief` from the deny rule globally. Boundary profiles are ownership heuristics; every hit needs classification into drift, intentional provenance, or over-broad regex before editing task content. (boundary dogfood, 2026-06-30)
