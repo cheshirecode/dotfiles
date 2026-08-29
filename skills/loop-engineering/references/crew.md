@@ -151,8 +151,7 @@ Two gates, both from real incidents:
   pipe it in on stdin. Measured on live data: the peer worktree this gate protected had
   **0 commits ahead of the target** — fully landed — so the landed gate alone
   would have deleted a running session's checkout. The two gates are not
-  redundant. A worktree whose
-  A worktree whose basename matches a live agent is never touched — merged is
+  redundant. A worktree whose basename matches a live agent is never touched — merged is
   not the same as unowned, and mtime is not ownership. With no roster it removes
   nothing rather than guessing.
 - **Landed.** A branch is deleted only when `git rev-list <target>..<branch>`
