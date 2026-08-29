@@ -222,8 +222,8 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("current harness exposes it", routing)
         self.assertIn("data-policy gate", routing)
         self.assertIn("model lane, not an unverified exact", routing)
-        self.assertIn("If there is no dispatch", routing)
-        self.assertIn("required supporting tool is unavailable", routing)
+        self.assertIn("If no dispatch tool exists in the harness", routing)
+        self.assertIn("target skill is unavailable", routing)
         self.assertIn("model-routing: skipped", routing)
         self.assertIn("do not spend a cycle", routing)
 
@@ -239,7 +239,7 @@ class LoopStateTest(unittest.TestCase):
             "caveman shrink -- <command>",
             "caveman wrap --pixel <agent>",
             "Never pixel sparse code",
-            "original in CCR",
+            "original in an artifact store",
             "recovery handle",
             "bytes unchanged",
             "set -o pipefail",
@@ -345,7 +345,7 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("replay check", orchestrator)
         self.assertIn("never\narchive or finish `complete`", orchestrator)
 
-    def test_council_escalation_pack_is_minimal_and_replay_bound(self) -> None:
+    def test_council_escalation_pack_fields_include_minimal_and_replay_bound(self) -> None:
         skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
         escalation = skill_text.split("### Mid-run council escalation", 1)[1].split(
             "### 2. Create project", 1
@@ -353,7 +353,7 @@ class LoopStateTest(unittest.TestCase):
         for field in (
             "`trigger`",
             "`affected mutation`",
-            "`one decision\nquestion`",
+            "`one decision question`",
             "`evidence`",
             "`replay check`",
         ):

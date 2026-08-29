@@ -129,12 +129,14 @@ printf 'mon-b\n' > "$TMP/wb/shared.txt"
 # Native macOS /bin/bash is 3.2 and has no associative arrays. PATH bash may be
 # Homebrew 5, so the fixtures above can pass while a stock shell still dies.
 if [ -x /bin/bash ]; then
-  bash3_out=$(/bin/bash "$RADAR" --json --base master "$R" 2>&1); bash3_rc=$?
-  if printf '%s' "$bash3_out" | grep -q 'declare: -A'; then
-    bad "bash3: /bin/bash rejects associative arrays"
-    printf '%s\n' "$bash3_out" | sed 's/^/        /'
+  # stdout must be pure JSON (a result under bash >= 4, or the version-guard
+  # {"error": ...} under 3.2); stderr may carry the human-readable die line.
+  bash3_out=$(/bin/bash "$RADAR" --json --base master "$R" 2>"$TMP/b3err"); bash3_rc=$?
+  if grep -q 'declare: -A' "$TMP/b3err"; then
+    bad "bash3: /bin/bash reached declare -A (version guard missing)"
+    sed 's/^/        /' "$TMP/b3err"
   elif ! printf '%s' "$bash3_out" | jq -e . >/dev/null 2>&1; then
-    bad "bash3: /bin/bash did not emit JSON (exit $bash3_rc)"
+    bad "bash3: /bin/bash did not emit JSON on stdout (exit $bash3_rc)"
     printf '%s\n' "$bash3_out" | sed 's/^/        /'
   else
     ok "bash3: /bin/bash runs crew-radar"
