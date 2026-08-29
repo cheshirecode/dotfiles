@@ -1,12 +1,14 @@
 ---
 name: loop-engineering
-description: "Design and run bounded, evidence-driven loops for repeated, resumable, delegated, or scheduled engineering and research work. Use when an agent must iterate toward a verifiable condition, recover across context boundaries, coordinate subagents, or decide whether work belongs in a manual loop, worklog-backed handoff, or host-native scheduler. Skip trivial one-shot tasks. Orchestrator mode: use for multi-task programs with sub-agent dispatch. Crew mode: use when workers must run in parallel across git worktrees, or to detect two worktrees changing the same file."
+description: "Design and run bounded, evidence-driven loops for repeated, resumable, delegated, or scheduled work. Use when iterating toward a verifiable condition, recovering across contexts, coordinating subagents, or deciding on loop vs worklog vs scheduler. Skip one-shot tasks. Orchestrator: multi-task dispatch across sub-agents. Crew: parallel delegates with isolation conflicts."
 ---
 
 # loop-engineering
 
 Use deterministic state transitions around agent judgment. Repeated prompting is
 not a loop design.
+
+Convention: `$skill-name` means invoke installed skill `skill-name`; skip and record reason if unavailable.
 
 ## When to use
 
@@ -22,9 +24,9 @@ Skip if: one action plus one check is sufficient (trivial one-shot tasks).
 
 1. Skip this skill when one action plus one check is sufficient.
 2. For interactive, resumable, or delegated loops, use the state script below.
-3. For concurrent workers in separate worktrees, also read
-   [references/crew.md](references/crew.md); arm `bin/crew-radar` before the
-   first parallel dispatch.
+3. For concurrent delegates or workers, also read
+   [references/crew.md](references/crew.md); prove the runtime's isolation or
+   keep delegates read-only, and capture `bin/crew-radar` evidence.
 4. For scheduled loops or installation drift, also read
    [references/hosts.md](references/hosts.md); require a real recurrence
    primitive for scheduling and use its audit command for duplicate copies.
@@ -37,7 +39,7 @@ Use this compact route matrix before loading references:
 | --- | --- | --- |
 | one action + one check | one-shot | no loop state |
 | repeated, resumable, or delegated work | state CLI | initialize a bounded run |
-| tasks run concurrently in separate worktrees | state CLI + crew | prove isolation, then arm the conflict radar |
+| delegates run concurrently | state CLI + crew | load crew.md; serialize writes unless proven isolation |
 | recurrence or installation drift | state CLI + hosts | verify host primitive or audit |
 | exact transition, effect, worklog, or handoff question | selected route + protocol | load only the needed rules |
 
@@ -56,7 +58,6 @@ a cycle.
 | multi-faceted search across symbols, text, JSON, history, or logs | `serena-rg-search` | search facet + candidate paths; replay the exact search/history command | one literal or known-file lookup |
 | resumability, cross-session context, or a durable handoff is needed | `worklog` | use `context`/checkpoint rules and return the task or state reference | one-shot work with no durable task |
 | actual delegation has materially different model, cost, context, or data-policy needs | `which-model` | return a model lane and policy gate before dispatch | no delegate surface, or in-band work is sufficient |
-| a compact context pack or payload transport gate is needed and the helper is installed | `loop-helpers` | pass explicit fields or gate facts; replay the helper command | no helper install, or ordinary context is sufficient |
 | independent results disagree, a counterexample appears, retries fail, or scope/dependencies become ambiguous | `council` | pass the smallest escalation pack and replay its decision check | clear answer, known trade-offs, or one-shot scope |
 | code is written, reviewed, or refactored | `karpathy-guidelines` | state assumptions, make the smallest change, and replay goal-driven checks | read-only work |
 | completion has multiple observable clauses or providers | `evidence-gate` | map each clause to typed evidence and replay the gate command | one action with one sufficient check |
@@ -75,9 +76,16 @@ agent contexts, this is the path from which the skill was loaded. If uncertain,
 search for `loop_state.py` under the skill root:
 
 ```bash
+# Claude Code:
 SKILL_DIR="$(dirname "$(find ~/.claude/skills -name loop_state.py -print -quit 2>/dev/null)")/.."
-# Or, if the skill is in the current repo:
-SKILL_DIR="./skills/loop-engineering"
+# Codex:
+SKILL_DIR="$(dirname "$(find ~/.agents/skills -name loop_state.py -print -quit 2>/dev/null)")/.."
+# Cursor:
+SKILL_DIR="$(dirname "$(find ~/.cursor/skills -name loop_state.py -print -quit 2>/dev/null)")/.."
+# Opencode / git worktree:
+SKILL_DIR="$(dirname "$(git rev-parse --show-toplevel 2>/dev/null)")/skills/loop-engineering"
+# Fallback — search common install roots:
+SKILL_DIR="$(find ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills -name loop_state.py -print -quit 2>/dev/null | head -1 | xargs dirname)/.."
 ```
 
 All script invocations below use `python3 <skill-dir>/scripts/loop_state.py`.
@@ -165,24 +173,19 @@ errors, and typed evidence.
 
 1. Observe from tools or durable evidence.
 2. Choose the smallest action that advances or falsifies the approach.
-3. Run the protocol's effect preflight for every mutation; if target, authority,
-   or read-only proof is unknown, stop before writing. Name irreversible effects
-   in `--approval-boundary`, and treat satisfying someone else's armed automation
-   as an effect of your own. Serialize writes unless isolation is proven.
+3. Run the protocol's effect preflight (see [references/protocol.md](references/protocol.md)) for every mutation; if target, authority, or read-only proof is unknown, stop before writing. Name irreversible effects (`merge`, `deploy`, `publish`, secret writes) in `--approval-boundary`, and treat satisfying someone else's armed automation (e.g. an approval releasing a `merge_when_pipeline_succeeds`) as an effect of your own. Serialize writes unless isolation is proven.
 4. Execute and verify. A model's prose claim is not evidence.
 5. On apparent success, invoke `$evidence-gate`. Map every observable goal
    clause to typed evidence and require its `check` command to pass.
-6. Only then run `finish --status complete --verification
-   "<evidence-gate verification value>" --evidence "<result>"`.
-7. Otherwise run `advance --evidence "<result>" --next-action "<next check>"`.
-   The script emits `budget_exhausted` when the declared ceiling is consumed.
-8. Run `show`; continue only while `terminal_status` is `running`.
+6. Only then run `finish --status complete --verification "<evidence-gate verification value>" --evidence "<result>"` (use `--consume N` if the final cycle spent N budget units). This is a terminal outcome — do not continue looping.
+7. Otherwise (apparent failure or incomplete) run `advance --evidence "<result>" --next-action "<next check>"`. The script transitions to `budget_exhausted` when the declared ceiling is consumed.
+8. If still running, begin the next cycle immediately in this same invocation.
 
-Pass `--quiet` to every `loop_state.py` and `evidence_gate.py` call. Without it
-they print the whole state document, history included, so the output grows each
-cycle and contradicts the compaction rule above; `--quiet` emits the index line
-those rules ask for (`running 3/12 turns — next: <action>`, `satisfied 4/4`) and
-leaves exit codes unchanged.
+Pass `--quiet` to every `loop_state.py` call so it emits only the index line
+(`running 3/12 turns — next: <action>`). The `evidence_gate.py` from the
+installed `evidence-gate` skill has no `--quiet` flag: redirect successful
+`init`/`record` stdout when compact output is needed, preserve stderr, and leave
+the final `check` result visible. Never trade away exit codes to reduce output.
 
 **Exit codes:** The state CLI exits `0` on success, `2` with a `usage:` error
 for malformed CLI usage, and `3` with a `loop-state:` error when the state
@@ -222,8 +225,7 @@ died, record survived, work did not.
 When the installed `worklog` protocol is available, hydrate resume context
 before initialization and checkpoint verified state at compaction, delegation,
 retry exhaustion, scheduled handoff, or termination. Resolve `$WORKLOG_BIN` to
-the worklog skill's `bin/` directory (e.g., `~/.claude/skills/worklog/bin` or
-the repo's `skills/worklog/bin`). For an existing task, run
+the worklog skill's `bin/` directory (`~/.claude/skills/worklog/bin`, `~/.agents/skills/worklog/bin`, or the repo's `skills/worklog/bin`). For an existing task, run
 `$WORKLOG_BIN/context.sh <slug> --for=resume` from the target clone's direnv
 context before initializing state. Before cold delegation, pass the returned
 `context <slug> --for=compact` pack directly; do not pass the parent transcript
@@ -252,5 +254,5 @@ regular loop for one or two tasks instead of creating a project.
 
 Invoke it with: `Use loop-engineering orchestrator mode. Goal: <goal>.`
 
-For workers running concurrently in separate worktrees, read
-[references/crew.md](references/crew.md) — orchestrator mode plus isolation.
+For concurrent delegates or isolated worktree workers, read
+[references/crew.md](references/crew.md) — orchestrator mode plus capability-gated concurrency.

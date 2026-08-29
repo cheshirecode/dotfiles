@@ -28,9 +28,9 @@ token it cannot spend on dispatch. Follow these rules:
   trigger is met; do not preload or invoke it as ceremony. Use the regular loop
   for one or two tasks instead of creating a project.
 
-When the tasks must run at the same time in separate worktrees, read
-`references/crew.md` — same queue, budget, and evidence
-rules, plus isolation and the conflict radar.
+When tasks need concurrent delegates, read `references/crew.md` — same queue,
+budget, and evidence rules, plus capability-gated isolation, serialized writes,
+and the conflict radar.
 
 ### Natural language invocation
 
@@ -44,7 +44,7 @@ no setup instructions needed. The loop runs until the project queue is empty
 
 ### 1. Decompose & budget
 
-Run `$sequential-thinking` only when the task graph is not already explicit or
+Run task decomposition (`sequential-thinking` or manual analysis) only when the task graph is not already explicit or
 its dependencies are uncertain. If the user or Worklog already supplies a
 clear graph, construct the minimal tasks-json directly. Tasks are independent
 unless `depends_on` is set.
@@ -155,10 +155,13 @@ That's it. The diff, the findings, the verification — all in the worklog
 commit, not in the orchestrator's loop state. This keeps the orchestrator's
 context footprint at ~1KB even after 100+ cycles.
 
-PR-watch / in-flight HEAD moves: if a fingerprint Monitor fires while a review
-`Task` is still running, record one evidence line
+PR-watch / in-flight HEAD moves: if a host-native fingerprint watcher reports a
+move while a review delegate is still running, record one evidence line
 (`github: repo#N head <old>→<new> — <slug> in-flight`) and **do not interrupt**
 the worker unless the user asked. A stale-SHA archive is valid cycle evidence.
+Without that watcher (including Codex), recheck the head after `wait_agent`
+returns and before the serialized write/archive step; do not imply continuous
+observation.
 After it lands, compare `gh pr view --json headRefOid` to the SHA in the archive
 summary; mismatch → claim a pre-declared `review-pr-N-r2` child (or start a new
 wave project). Do not spawn an orphan `review-pr-N` with `project:` set but
