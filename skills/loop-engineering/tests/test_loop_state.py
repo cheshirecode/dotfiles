@@ -136,17 +136,17 @@ class LoopStateTest(unittest.TestCase):
             "## Initialize through the script", 1
         )[0]
         for owner in (
-            "serena-rg-search",
-            "worklog",
-            "which-model",
-            "council",
-            "karpathy-guidelines",
-            "evidence-gate",
-            "example-led-instructions",
-            "ship-hygiene",
-            "tightening-a-pr",
+            "$serena-rg-search",
+            "$worklog",
+            "$which-model",
+            "$council",
+            "$karpathy-guidelines",
+            "$evidence-gate",
+            "$example-led-instructions",
+            "$ship-hygiene",
+            "$tightening-a-pr",
         ):
-            self.assertIn(f"`{owner}`", routing)
+            self.assertIn(owner, routing)
         for heading in ("Trigger", "Owner", "Handoff and replay", "Skip when"):
             self.assertIn(heading, routing)
         self.assertIn("Do not preload", routing)
