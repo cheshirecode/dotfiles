@@ -39,7 +39,7 @@ To invoke this mode, give the agent this prompt:
 
 The agent resolves the rest from the documentation below. No flags, no syntax,
 no setup instructions needed. The loop runs until the project queue is empty
-(`project next` reports "all tasks … are archived (nothing left)"; see §4 —
+(`project next` reports "all tasks ... are archived (nothing left)"; see §4 —
 exit 1 alone is not proof), not until a fixed turn count.
 
 ### 1. Decompose & budget
@@ -70,10 +70,7 @@ the task graph or scope becomes ambiguous. Pause only the affected mutation,
 pass the council the original goal plus compact context and evidence, and do
 not pass the full parent transcript.
 
-Use the smallest escalation pack: `trigger`, `affected mutation`, `one decision
-question`, `evidence`, and `replay check`. Accept only `verified` or
-`UNVERIFIED` plus a decision; a verified result must pass the replay check
-before the task resumes.
+Use the smallest escalation pack: `original goal`, `compact task context`, `trigger`, `affected mutation`, `evidence`, `constraints`, `one decision question`, and `replay check`. Accept only `verified` or `UNVERIFIED` plus a decision; a verified result must pass the replay check before the task resumes. A confirmed verdict carries `decision: <one-sentence answer>` with the exact replay command.
 
 Council is an advisory subloop, not success evidence. A verified council result
 must be written to Worklog, followed by the discriminating replay check, and
@@ -92,7 +89,7 @@ echo '<tasks-json>' | "$WORKLOG_BIN/project.sh" new <slug> \
   --goal="<goal>" --objective="<objective>" --repos=<repo>
 ```
 
-The tasks-json is the task decomposition output mapped to `{slug, kind, depends_on}`.
+The tasks-json is the task decomposition output or directly constructed graph mapped to `{slug, kind, depends_on}`.
 `kind` must be one of the worklog set — `bug`, `bugfix`, `cleanup`, `debug`,
 `design`, `impl`, `infra`, `investigation`, `ops`, `perf`, `plan`, `postmortem`,
 `program`, `project`, `proposal`, `review`, `runbook`, `spike`, `tooling`. There

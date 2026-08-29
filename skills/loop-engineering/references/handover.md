@@ -15,32 +15,30 @@ If the command fails, ask me which harness you are in and I will tell you.
 
 Then follow these steps IN ORDER, one bash call per step:
 
-Step 1 — sanity checks (pass fast):
+Step 1 — sanity checks (pass fast; capture each suite's own exit code — tail
+alone would report the pipeline's status, the exact trap examples.md §6 documents):
   python3 <skill-dir>/scripts/loop_state.py validate --state /dev/null 2>&1 || true
-  bash <skill-dir>/tests/test_crew_radar.sh 2>&1 | tail -1
-  bash <skill-dir>/tests/test_crew_reap.sh 2>&1 | tail -1
+  T=$(mktemp); printf '[]' > "$T"; python3 <skill-dir>/scripts/loop_state.py validate --state "$T" 2>&1 | grep -c 'must be a JSON object'; rm -f "$T"
+  out=$(bash <skill-dir>/tests/test_crew_radar.sh 2>&1); echo "radar rc=$?"; printf '%s\n' "$out" | tail -1
+  out=$(bash <skill-dir>/tests/test_crew_reap.sh 2>&1); echo "reap rc=$?"; printf '%s\n' "$out" | tail -1
   wc -l <skill-dir>/SKILL.md
 
 Step 2 — run the Python test suite:
-  cd <skill-dir> && python3 -m unittest tests.test_loop_state tests.test_skill_budget tests.test_install_audit -v 2>&1 | tail -8
+  cd <skill-dir> && python3 -m unittest tests.test_loop_state tests.test_skill_budget tests.test_install_audit -v 2>&1 | tail -8; echo "unittest rc=${PIPESTATUS[0]}"
 
-Step 3 — check for regressions (grep every known issue surface):
+Step 3 — check for regressions (each grep feeds a Step 4 clause):
   echo "--- non-existent skill references ---"
-  grep -n '\$[a-z]*\(thinking\|helpers\|sequential' <skill-dir>/references/orchestrator.md <skill-dir>/SKILL.md 2>/dev/null || echo "(none)"
+  grep -nE '[$][a-z-]*(thinking|helpers|sequential)' <skill-dir>/references/orchestrator.md <skill-dir>/SKILL.md 2>/dev/null || echo "(none)"
   echo "--- route matrix missing serialize writes ---"
-  grep 'delegates run concurrently' <skill-dir>/SKILL.md || echo "(not found)"
-  echo "--- examples.md leaked metadata ---"
-  tail -10 <skill-dir>/references/examples.md
+  grep 'delegates run concurrently.*serialize writes' <skill-dir>/SKILL.md || echo "(not found)"
   echo "--- frontmatter description length ---"
   sed -n '3p' <skill-dir>/SKILL.md | wc -c
-  echo "--- fallback SKILL_DIR includes /. ---"
-  grep 'Fallback' -A1 <skill-dir>/SKILL.md
-  echo "--- crew.md OpenCode column ---"
-  grep -c 'OpenCode\|task tool' <skill-dir>/references/crew.md
 
 Step 4 — decide:
-  - If ANY test failed OR frontmatter > 450 chars OR route matrix lacks
-    "serialize writes" OR examples.md still contains shot_count/format:
+  - If ANY rc above is nonzero OR the non-dict guard line printed 0 OR the
+    stale-skill grep printed matches OR the route-matrix grep printed
+    "(not found)" OR frontmatter > 450 chars OR unittest ran fewer than 46
+    tests OR radar reported fewer than 26 passed OR reap fewer than 22 passed:
     BEGIN IMPROVEMENT LOOP (use bounded cycles via loop_state.py advance/finish).
   - If everything is clean AND you have nothing new to add:
     Report "CLEAN: <test-count> tests, <skill-line>-line SKILL.md, 0 issues."
