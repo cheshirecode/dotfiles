@@ -56,6 +56,12 @@ people/"$WORKLOG_LDAP"/` must be empty or limited to the claimed
 
 ### Conflict radar
 
+`crew-radar` takes the same `--roster` and annotates each owner with the agent
+holding it (`feat-a@worker-7f`, or `@?` when nothing matches), so an overlap row
+says who to mail rather than only which branch. Both tools accept a file, a
+comma-separated list, or `-` for stdin. The column renders only on overlap rows,
+so a clean repo shows nothing either way.
+
 Two worktrees changing one file is a merge conflict surfacing early. Treat it as
 evidence that **the split was wrong**, not that a worker misbehaved.
 
@@ -121,6 +127,42 @@ Act on severity:
   ancestry chain. This is the expected footprint of deliberately stacking one
   branch on another. Leave it; mail the descendant once to keep the shared file
   read-only. Repeat `info` rows on those paths are noise.
+
+### Reaping finished worktrees
+
+`bin/crew-reap` is the radar's companion: the radar says who is still working,
+this says who has finished. It costs no model call, so hand it to a cheap
+utility agent rather than enumerating worktrees on frontier tokens.
+
+```bash
+ListAgents-names | <skill-dir>/bin/crew-reap [--target <ref>] [--apply] <repo>
+```
+
+**Dry run by default; `--apply` is required to remove anything.** It fetches the
+target ref first and prints what it resolved to —
+`target=origin/master@fed8242 (18:37, fetched)` — because the landed test is only
+as fresh as that ref. A stale one fails safe but silently, reporting
+"N commit(s) not in <target>", which reads as unlanded work when the ref simply
+predates the merge. `--no-fetch` stays offline and says so in the header.
+
+Two gates, both from real incidents:
+
+- **Ownership.** Pass the live agent roster with `--roster <file|list|->`, or
+  pipe it in on stdin. Measured on live data: the peer worktree this gate protected had
+  **0 commits ahead of the target** — fully landed — so the landed gate alone
+  would have deleted a running session's checkout. The two gates are not
+  redundant. A worktree whose
+  A worktree whose basename matches a live agent is never touched — merged is
+  not the same as unowned, and mtime is not ownership. With no roster it removes
+  nothing rather than guessing.
+- **Landed.** A branch is deleted only when `git rev-list <target>..<branch>`
+  is empty. Do **not** gate on an MR's merged flag: a squash sets it true while
+  the branch's own commits are absent from the target. Removing a worktree is
+  recoverable; deleting the branch is the irreversible half.
+
+Exit `0` nothing to do, `3` something was reaped (or would be, in a dry run),
+`1` usage error. Capture the output before piping it to `jq` — under
+`set -o pipefail` the intentional exit 3 otherwise reads as failure.
 
 Record the radar verdict as one typed line, like any other evidence:
 `command: crew-radar <repo> — exit 0, 0 warn`.

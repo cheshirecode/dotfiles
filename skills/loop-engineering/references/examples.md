@@ -191,6 +191,39 @@ untagged MR, and a ticket-keyed sweep cannot see a repo it does not enumerate.
 Run the inverse sweep and reconcile the two sets. Observed 2026-08-28: each
 direction missed something real on the same day.
 
+## 6. Reading a tool whose exit code is a verdict
+
+INPUT
+
+> Fingerprint crew-radar for a Monitor, and check it after the fix.
+
+OUTPUT (capture, then parse — never pipe a verdict into a parser)
+
+```bash
+# WRONG — pipefail binds the pipeline to the radar's exit 2, and a real
+# collision is reported as unparseable output.
+cur=$(crew-radar --json "$REPO" | jq -S -c '{warn,info}') || cur='{"error":"unparseable"}'
+
+# RIGHT — capture first; only a jq failure reaches the sentinel.
+raw=$(crew-radar --json "$REPO" 2>/dev/null) || true
+cur=$(printf '%s' "$raw" | jq -S -c '{warn,info,error}' 2>/dev/null) \
+  || cur='{"error":"unparseable"}'
+```
+
+A non-zero exit that *is* the answer — `crew-radar` 2 for a collision,
+`crew-reap` 3 for a removal, a linter's 1 for findings — inverts the usual
+reading. Under `set -o pipefail`, or `... | tail -1; echo $?`, the shell reports
+the pipeline rather than the command, so a correct tool reads as broken and a
+clean run reads as a failure.
+
+Six occurrences in one day across three agents, including one while verifying
+the fix for it and one in a test written by the person who had documented the
+trap that morning. **The knowledge does not fire at the moment you type the
+pipeline**, so a caution does not prevent it — the executable fixtures in
+`tests/test_crew_radar.sh` do, because they assert both that the correct form
+works and that the wrong form still fails. Copy those when adding a tool whose
+exit code carries meaning.
+
 Same prompt in natural language:
 
 > Use loop-engineering orchestrator mode. Goal: audit skills for shellcheck

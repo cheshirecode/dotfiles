@@ -62,6 +62,19 @@ ck "info: --strict escalates"           2 "^info +shared\.txt" --strict --base m
 # 5. plumbing
 ck "help exits 0"                       0 "flag files that more than one" --help
 ck "bad option rejected"                1 "unknown option" --nope
+# Ownership annotation. A worktree in the list may belong to another session and
+# neither path nor mtime says so; --roster names who holds each owner.
+printf 'a\n' > "$TMP/wa/shared.txt"; printf 'b\n' > "$TMP/wb/shared.txt"
+printf 'wa-7f [ab12] . interactive\nunrelated\n' > "$TMP/roster.txt"
+ck "roster annotates the matched owner"  2 "feat-a@wa-7f\[dirty\]" --base master --roster "$TMP/roster.txt" "$R"
+ck "roster marks unmatched owner with ?" 2 "feat-b@\?\[dirty\]"       --base master --roster "$TMP/roster.txt" "$R"
+ck "no roster leaves owners bare"        2 "feat-a\[dirty\],feat-b\[dirty\]" --base master "$R"
+ck "roster accepts an inline list"       2 "feat-a@wa-7f\[dirty\]" --base master --roster 'wa-7f,other' "$R"
+ck "roster accepts a single name"        2 "feat-a@wa-7f\[dirty\]" --base master --roster 'wa-7f' "$R"
+ck "unreadable roster is rejected"       1 "cannot read roster"       --roster /nope/nope "$R"
+ck "--roster is documented in --help"    0 "roster"                   --help
+G -C "$TMP/wa" checkout -q -- shared.txt; G -C "$TMP/wb" checkout -q -- shared.txt
+
 ck "non-repo rejected"                  1 "not inside a git repository" "$TMP"
 ck "bad base rejected"                  1 "base ref not found" --base no/such/ref "$R"
 
@@ -85,7 +98,7 @@ done
 printf 'mon-a\n' > "$TMP/wa/shared.txt"
 printf 'mon-b\n' > "$TMP/wb/shared.txt"
 
-# Monitor snippet: radar exit 2 is a verdict. Binding || / pipefail to radar
+# Boundary fingerprint: radar exit 2 is a verdict. Binding || / pipefail to radar
 # treats a real collision as unparseable (observed 2026-08-28). Fingerprint
 # stdout; only jq parse failure hits the sentinel.
 (
@@ -94,11 +107,11 @@ printf 'mon-b\n' > "$TMP/wb/shared.txt"
   cur=$(printf '%s' "$raw" | jq -S -c '{warn,info,error,paths:[.overlaps[]?.path]}' 2>/dev/null) \
     || cur='{"error":"radar output unparseable"}'
   if [ "$cur" = '{"error":"radar output unparseable"}' ]; then
-    bad "monitor: warn fingerprint survives pipefail (got sentinel)"
+    bad "boundary: warn fingerprint survives pipefail (got sentinel)"
   elif printf '%s' "$cur" | jq -e '.warn >= 1' >/dev/null 2>&1; then
-    ok "monitor: warn fingerprint survives pipefail"
+    ok "boundary: warn fingerprint survives pipefail"
   else
-    bad "monitor: warn fingerprint survives pipefail (got $cur)"
+    bad "boundary: warn fingerprint survives pipefail (got $cur)"
   fi
   # The old piped form MUST still false-positive, or this test is not locking
   # the documented failure mode.
@@ -107,9 +120,9 @@ printf 'mon-b\n' > "$TMP/wb/shared.txt"
       | jq -S -c '{warn,info,error}' 2>/dev/null
   } ) || old='{"error":"radar output unparseable"}'
   if [ "$old" = '{"error":"radar output unparseable"}' ]; then
-    ok "monitor: piped || still false-positives on exit 2"
+    ok "boundary: piped || still false-positives on exit 2"
   else
-    bad "monitor: piped || still false-positives on exit 2 (got $old)"
+    bad "boundary: piped || still false-positives on exit 2 (got $old)"
   fi
 )
 

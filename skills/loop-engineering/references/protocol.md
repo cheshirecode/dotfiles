@@ -109,6 +109,15 @@ Before every mutation, run this effect preflight:
    call merge, you supplied its last condition. Check the flag before any action
    whose completion you would not be permitted to perform directly.
 
+7. Has another session declared a constraint on this artifact? Authority
+   settles whether you *may* act; it does not tell you whether you *should*.
+   Read the owning task's notes before an irreversible action, even when every
+   mechanical signal is green. Verified 2026-08-28: an MR was approved,
+   mergeable, threads resolved and authored by the acting identity — and
+   merging it alone would have moved production onto a broken auth pairing,
+   because the code change had to land in the same deploy as a secret rotation.
+   No API field carried that; it existed only in a peer's worklog task.
+
 If any answer is unknown, stop before the write and narrow the action or end
 `needs_human` with the missing authority named.
 

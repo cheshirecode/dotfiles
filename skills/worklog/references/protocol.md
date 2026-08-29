@@ -19,6 +19,26 @@ Read this file only when the selected mode requires task creation or direct task
 - Edit only `$WORKLOG_REPO/people/$LDAP/`. Other namespaces read-only.
 - Never `git rebase` / `git pull --rebase` / force-push during normal sync. Maintenance ops (`$WORKLOG_BIN/log-compact.sh`, `$WORKLOG_BIN/cache-purge.sh`) are the carve-out — see AGENTS.md.
 - Prior-art grep before infra surfaces: `"$WORKLOG_BIN/related-search.sh" <keyword>`.
+- When you add or change a rules section, re-read `## Context` and
+  `next_action`. A summary written early accretes contradictions as the task
+  grows, and the summary is what a fresh session reads first. Observed
+  2026-08-28: a watch task carried a bolded **"Never approves/merges"** in
+  Context while its Scope section held the current, looser rules. Absolute
+  claims in a summary — never, always, only — are the ones that go stale, so
+  prefer pointing at the rules section over restating it.
+- `$WORKLOG_BIN/verify-refs.sh [<slug>]` flags unchecked `## Next` items citing
+  an MR or ticket that has already merged or closed — the state a resume pack
+  otherwise reproduces as live work. Opt-in and network-bound **by design**: it
+  is not in the resume path, because `context.sh --for=resume` must work with a
+  dead token and no network, which is exactly when a session is recovering. With
+  no token every ref reports `unchecked` and the exit stays 0; an unverifiable
+  ref is not a passing ref. Exit 3 means stale refs were found — capture the
+  output before parsing it.
+- When a document *must* restate rules to stand alone — a handover, and anything
+  `spawn` or `export` emits, all of which are self-contained by design — say
+  which copy wins. Two copies of a rule diverge the moment either changes, and a
+  reader with no way to tell which is authoritative will follow the one in front
+  of them. Name the source section and mark the copy a dated snapshot.
 
 ## Search ladder
 
