@@ -230,19 +230,29 @@ checks = {
         and "verify state ownership" in protocol
     ),
     "host differences deferred": references == {"crew.md", "examples.md", "hosts.md", "orchestrator.md", "protocol.md"},
-    # Crew mode must keep naming the primitives it replaces a daemon with, the
-    # radar's contract, and the two boundaries that make delegation safe.
-    "crew mode names its primitives": (
+    # Crew mode must capability-gate host primitives. Codex has shared files,
+    # no isolation flag, and mailbox waits rather than a file Monitor.
+    "crew mode matches Codex collaboration": (
         "references/crew.md" in root
-        and 'isolation: "worktree"' in crew
-        and "ListAgents" in crew
-        and "notify_when_idle" in crew
+        and "shared filesystem" in crew
+        and "spawn_agent" in crew
+        and "wait_agent" in crew
+        and "there is no `Monitor` primitive" in crew
+        and 'isolation: "worktree"' not in crew
+        and "parallel delegates are **read-only**" in crew
+        and "single writer" in crew
         and "project.sh" in crew
+    ),
+    "loop uses supported evidence-gate flags": (
+        "The bundled `evidence_gate.py` has no" in root
+        and "redirect successful `init`/`record` stdout" in root
     ),
     "crew radar contract is stated": (
         "bin/crew-radar" in crew_flat
         and "`2` collision" in crew_flat
-        and "it has no exit-code condition" in crew_flat
+        and "A clean radar result does not prove isolation" in crew
+        and "before a parallel wave" in crew
+        and "after each serialized write" in crew
         and "ancestry chain" in crew_flat
     ),
     "crew boundaries are explicit": (
@@ -386,6 +396,24 @@ PY
     ok "loop-engineering state transition fixtures"
   else
     fail "loop-engineering state transition fixtures"
+  fi
+
+  # Shell fixtures for the crew tools. Neither was reachable from this runner
+  # before, so a regression in either only surfaced if someone ran it by hand.
+  if bash skills/loop-engineering/tests/test_crew_radar.sh >/dev/null 2>&1; then
+    ok "crew-radar conflict fixtures"
+  else
+    fail "crew-radar conflict fixtures"
+  fi
+  if bash skills/loop-engineering/tests/test_crew_reap.sh >/dev/null 2>&1; then
+    ok "crew-reap safety-gate fixtures"
+  else
+    fail "crew-reap safety-gate fixtures"
+  fi
+  if bash skills/worklog/tests/verify_refs/test_verify_refs.sh >/dev/null 2>&1; then
+    ok "worklog verify-refs fixtures"
+  else
+    fail "worklog verify-refs fixtures"
   fi
 
   if python3 -m unittest skills/evidence-gate/tests/test_evidence_gate.py >/dev/null; then
