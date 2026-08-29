@@ -195,11 +195,3 @@ Same prompt in natural language:
 
 > Use loop-engineering orchestrator mode. Goal: audit skills for shellcheck
 > regressions.
-
-```text
-shot_count: few
-format: INPUT/OUTPUT
-examples_or_skip_reason: three distinct fixtures cover diagnosis, delegated durable context, and scheduled handoff
-risk_check: keep fixtures about classification and sequencing so agents do not copy task-specific details
-acceptance_test: an unseen resumable task hydrates context, bounds the run, and ends with evidence plus one valid terminal status
-```
