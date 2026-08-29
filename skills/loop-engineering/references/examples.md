@@ -152,7 +152,7 @@ OUTPUT (agent decomposes, creates project, cycles through tasks)
 [         advance evidence: "fix-sh-preamble: archived"]
 [cycle 3: claim fix-py-errors → delegate → archive → advance]
 [         advance evidence: "fix-py-errors: archived"]
-[project next reports "all tasks … are archived (nothing left)" + project verify exits 0 → finish complete]
+[project next reports "all tasks ... are archived (nothing left)" + project verify exits 0 → finish complete]
 ```
 
 Same prompt in natural language:
@@ -208,9 +208,12 @@ OUTPUT (capture, then parse — never pipe a verdict into a parser)
 RADAR=<skill-dir>/bin/crew-radar   # not on PATH; always resolve via <skill-dir>
 
 # WRONG — pipefail binds the pipeline to the radar's exit 2, and a real
-# collision is reported as unparseable output.
-set -o pipefail
-cur=$("$RADAR" --json "$REPO" | jq -S -c '{warn,info}') || cur='{"error":"unparseable"}'
+# collision is reported as unparseable output. (Subshell keeps the option
+# from leaking into the RIGHT form below.)
+(
+  set -o pipefail
+  cur=$("$RADAR" --json "$REPO" | jq -S -c '{warn,info}') || cur='{"error":"unparseable"}'
+)
 
 # RIGHT — capture first; only a jq failure reaches the sentinel.
 raw=$("$RADAR" --json "$REPO" 2>/dev/null) || true
@@ -228,6 +231,6 @@ Six occurrences in one day across three agents, including one while verifying
 the fix for it and one in a test written by the person who had documented the
 trap that morning. **The knowledge does not fire at the moment you type the
 pipeline**, so a caution does not prevent it — the executable fixtures in
-`tests/test_crew_radar.sh` do, because they assert both that the correct form
-works and that the wrong form still fails. Copy those when adding a tool whose
-exit code carries meaning.
+`tests/test_crew_radar.sh` and `tests/test_crew_reap.sh` do, because they
+assert both that the correct form works and that the wrong form still fails.
+Copy those when adding a tool whose exit code carries meaning.

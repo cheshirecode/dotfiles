@@ -17,9 +17,9 @@ the JSON.
   state after `blocked`, `needs_human`, `budget_exhausted`, or
   `continue_scheduled`. It inherits the goal and cumulative budget, requires a
   next action, and binds the successor to the predecessor path, status, and
-  SHA-256. Use `--extend-budget N` only with explicit authorization; exhausted
-  predecessors require an extension. It rejects `running`, `complete`, and
-  `cancelled`.
+  SHA-256. `--new-state` must be a distinct, nonexistent path. Use
+  `--extend-budget N` only with explicit authorization; exhausted predecessors
+  require an extension. It rejects `running`, `complete`, and `cancelled`.
 - `finish` records exactly one terminal outcome. `complete` requires
   `--verification` naming tool output or an artifact. It leaves budget
   unchanged by default; use `--consume N` when the terminal cycle spent `N`
@@ -34,6 +34,8 @@ the JSON.
   Annotation cannot add a next action to `complete` or `cancelled`.
 - `validate` checks the schema and transition invariants.
 - `show` prints the five-field contract; `--json` returns the full history.
+- `--quiet` (accepted by every subcommand) replaces the state document with
+  one index line: `<status> <used>/<limit> <unit> — next: <action>`.
 
 Every write is atomic. Mutating commands also hold an adjacent process lock
 across the full read-modify-write transition, so concurrent CLI processes apply
@@ -71,13 +73,16 @@ record in the cycle evidence or durable task file:
 
 Keep to one line in loop state (`hypothesis=X falsifier=Y replay=Z`); retain
 expanded reasoning only in a durable artifact (worklog task file, /tmp log).
-If the result is neither a confirmation nor a falsifier, advance with a narrower
-next action rather than claiming progress.
+Use `=` separators and no spaces around them in the compact form; use colons
+in expanded form above. If the result is neither a confirmation nor a falsifier,
+advance with a narrower next action rather than claiming progress.
 
-Preserve verifier exit status when output is piped or truncated. Use
-`set -o pipefail`, capture the producer status, or write the full output to an
-artifact before summarizing it; a successful `tail`, formatter, or parser is
-not evidence that the producer passed.
+Preserve verifier exit status when output is piped or truncated:
+capture the producer status first, or write the full output to an artifact
+before summarizing it; a successful `tail`, formatter, or parser is
+not evidence that the producer passed. Use `set -o pipefail` only when a nonzero producer exit
+means failure — for a verdict-carrying exit code (`crew-radar` 2, `crew-reap`
+3, a linter's findings) pipefail inverts the reading; see examples.md §6.
 
 Evidence lines use the same compact shape: `kind: reference — result`. The
 allowed kinds are `command`, `artifact`, `git`, `github`, and `url`; a missing
@@ -139,7 +144,8 @@ For work spanning sessions, compaction, retries, or agents:
    rehydrate the tracker.
 
 If worklog is unavailable, use the host tracker plus one authorized durable
-project file. Label that fallback and do not claim a worklog checkpoint.
+project file. Label the run `worklog-checkpoint: unavailable — local fallback`
+and do not claim a worklog checkpoint.
 
 At compaction, delegation, retry exhaustion, scheduled handoff, or
 termination, checkpoint exactly: `state path`, `state fingerprint`, `terminal
@@ -150,7 +156,9 @@ before making a new claim.
 ## Delegation
 
 - Delegate a bounded lookup, research, or verification question.
-- Delegate bulk file creation (>=3 files or repetitive templates) to a low-cost mechanical delegate rather than generating in-band on frontier orchestrator tokens.
+- Delegate bulk file creation (>=3 files or repetitive templates) to a
+  low-cost mechanical delegate rather than generating in-band on frontier
+  orchestrator tokens.
 - Include the objective, evidence, constraints, budget, and requested return.
 - Require evidence, uncertainty, and one proposed next action.
 - Reconcile returns into the parent state before any write.
