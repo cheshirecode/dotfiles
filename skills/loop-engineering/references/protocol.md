@@ -131,6 +131,38 @@ If any answer is unknown, stop before the write and narrow the action or end
 The script records state; it never grants permission, executes the action,
 verifies external truth, delegates, or schedules a wakeup.
 
+## Verifying a claim
+
+Most wrong answers this skill has produced were not reasoning errors. They came
+from an instrument that answered a question **adjacent** to the one asked, and
+whose output is indistinguishable from the right answer. `$PPID` is "my parent",
+not "my session". "Newest file" is not "mine". A clean grep for the wrong string
+looks exactly like a real negative. A pipeline's exit status is not its
+producer's. `git stash` before re-running a suite removes the new fixtures along
+with the fix, so the green means they never ran.
+
+Three rules, in order of how often they would have caught it:
+
+1. **Name the instrument's question, then compare it to yours.** Before stating
+   "X is/isn't in Y", re-run the check with X literally in it, in the same turn
+   as the claim. A negative inherited from an earlier command answered that
+   command's question.
+2. **Build the check so the wrong strategy visibly fails.** A fixture where
+   "newest" and "mine" happen to coincide certifies the bug. Make them disagree.
+   Prove a new fixture by reverting the *implementation* and leaving the fixture
+   in place — never the reverse.
+3. **Two derived values agreeing is not verification when they share a source.**
+   Cross-checking them feels like confirmation and is not. Verified 2026-08-31: a
+   session published a wrong peer socket and a wrong transcript id, both derived
+   from one shell's `$PPID`, both consistently pointing at a stranger's session.
+   Re-running the derivation returned the same wrong answer every time. When two
+   derived values are wrong in the same direction, look for the shared source
+   rather than correcting each in place.
+
+The cheap check almost always exists — one `ls -la`, one grep, one `--stat`. The
+failure is not that it is expensive; it is that the reachable answer already
+looked like the one being sought.
+
 ## Worklog composition
 
 For work spanning sessions, compaction, retries, or agents:
