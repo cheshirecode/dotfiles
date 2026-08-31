@@ -25,7 +25,7 @@ warns() {  # warns <pattern> -> count of matching warning lines
   python3 "$ROOT/bin/_lint.py" 2>&1 | grep -c "$1" || true
 }
 
-prog() {  # prog <body-sections...>  writes the program file
+prog() {  # prog <body-sections>  program with NO orientation frontmatter keys
   { printf -- '---\nslug: prog\nowner: tester\nstatus: draft\nkind: project\nproject: none\nrepos: []\nlast_updated: 2026-08-31\nnext_action: "x"\n---\n\n'
     printf '%s\n' "$1"
     printf '\n## Next\n\n- [ ] x\n'
@@ -56,13 +56,22 @@ Ship it.
 ## Objective
 
 Measurably shipped.'
-ck "program missing ## Tasks is caught" "$(warns 'missing ## Tasks')" 1
+ck "program with no tasks anywhere is caught" "$(warns "neither a 'tasks:' field")" 1
 
 prog '## Tasks
 
 - [ ] [[child-one]]'
-ck "program missing ## Goal is caught"      "$(warns 'missing ## Goal')" 1
-ck "program missing ## Objective is caught" "$(warns 'missing ## Objective')" 1
+ck "program with no goal anywhere is caught"      "$(warns "neither a 'goal:' field")" 1
+ck "program with no objective anywhere is caught" "$(warns "neither a 'objective:' field")" 1
+
+# Orientation may live in FRONTMATTER instead of body sections. A hand-maintained
+# program keeps goal:/objective:/tasks: as fields and organises its body as
+# Context / Findings / Scope / Work items / Verification. Demanding the body
+# sections flagged three warnings on exactly such a file in the live corpus —
+# the first version of this check swapped one false-positive class for another.
+{ printf -- '---\nslug: prog\nowner: tester\nstatus: draft\nkind: project\nproject: none\nrepos: []\nlast_updated: 2026-08-31\nnext_action: "x"\ngoal: "g"\nobjective: "o"\ntasks:\n  - slug: child-one\n---\n\n## Context\n\nc\n\n## Findings\n\nf\n\n## Next\n\n- [ ] x\n'
+} > people/tester/active/prog.md
+ck "frontmatter goal/objective/tasks satisfies it" "$(warns 'kind: project) has neither')" 0
 
 # ## Next is required of programs too — that rule was never task-specific.
 { printf -- '---\nslug: prog\nowner: tester\nstatus: draft\nkind: project\nproject: none\nrepos: []\nlast_updated: 2026-08-31\nnext_action: "x"\n---\n\n## Goal\n\ng\n\n## Objective\n\no\n\n## Tasks\n\n- [ ] x\n'
