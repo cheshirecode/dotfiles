@@ -6,7 +6,8 @@ set -uo pipefail
 REAP="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/bin/crew-reap"
 PASS=0; FAIL=0
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
-G() { git -c user.email=t@t.t -c user.name=t "$@"; }
+G() { git -c user.email=t@t.t -c user.name=t \
+        -c commit.gpgsign=false -c core.hooksPath=/dev/null "$@"; }
 
 build() {  # fresh fixture: main + landed, ahead, peer, dirty worktrees
   rm -rf "$TMP/r" "$TMP"/wt-*
@@ -163,6 +164,37 @@ build
     FAIL=$((FAIL+1)); printf '  FAIL  piped form no longer locks the trap (got %s)\n' "$old"
   fi
 }
+
+# Exit codes are the caller contract (crew.md: capture before parsing).
+# Assert them directly — the grep-only checks above would pass even if die()
+# regressed to exit 0.
+build
+out=$("$REAP" --target main --no-fetch --roster /nope/nope "$TMP/r" 2>&1); rc=$?
+if [ "$rc" = 1 ]; then PASS=$((PASS+1)); printf '  PASS  unreadable roster exits 1\n'
+else FAIL=$((FAIL+1)); printf '  FAIL  unreadable roster exited %s, want 1\n' "$rc"; fi
+out=$("$REAP" --target main --no-fetch --roster 'wt-peer-9d,' "$TMP/r" 2>&1); rc=$?
+if [ "$rc" = 3 ] && printf '%s' "$out" | grep -q 'DRY RUN'; then
+  PASS=$((PASS+1)); printf '  PASS  dry run with a pending reap exits 3\n'
+else FAIL=$((FAIL+1)); printf '  FAIL  dry-run pending reap exited %s, want 3\n' "$rc"; fi
+
+# A detached-HEAD worktree cannot prove landed; it is kept even when its
+# commit is fully present on the target.
+build
+G -C "$TMP/r" worktree add -q --detach "$TMP/wt-det" main
+ck "detached HEAD kept"            'wt-peer-9d'  'keep +wt-det .*detached HEAD' --no-fetch
+"$REAP" --target main --no-fetch --apply --roster 'wt-peer-9d,' "$TMP/r" >/dev/null 2>&1
+if [ -d "$TMP/wt-det" ]; then PASS=$((PASS+1)); printf '  PASS  --apply preserves detached worktree\n'
+else FAIL=$((FAIL+1)); printf '  FAIL  --apply REMOVED a detached worktree\n'; fi
+
+# A failed branch delete degrades the row but still exits 3 — crew.md tells
+# callers the exit code is not the whole verdict; lock that here.
+build
+touch "$TMP/r/.git/refs/heads/br-landed.lock"
+out=$("$REAP" --target main --no-fetch --apply --roster 'wt-peer-9d,' "$TMP/r" 2>&1); rc=$?
+rm -f "$TMP/r/.git/refs/heads/br-landed.lock"
+if [ "$rc" = 3 ] && printf '%s' "$out" | grep -q 'branch delete failed'; then
+  PASS=$((PASS+1)); printf '  PASS  branch delete failure degrades the row, still exits 3\n'
+else FAIL=$((FAIL+1)); printf '  FAIL  branch delete failure: rc=%s\n%s\n' "$rc" "$out"; fi
 
 printf '\n  %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
