@@ -168,6 +168,23 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("capture the producer status", protocol)
         self.assertIn("not evidence that the producer passed", protocol)
 
+    def test_protocol_names_the_adjacent_instrument_family(self) -> None:
+        # Five distinct instances in one day (2026-08-31): $PPID for session id,
+        # newest-file for this-session's-file, a grep of the wrong string, a
+        # pipeline's exit for its producer's, and `git stash` taking the
+        # fixtures with the fix. The section must keep all three detection
+        # rules, not just the memorable anecdote.
+        protocol = (SKILL.parent / "references" / "protocol.md").read_text()
+        section = protocol.split("## Verifying a claim", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("adjacent", section)
+        for rule in (
+            "in the same turn",          # 1: re-run with the real term
+            "visibly fails",             # 2: fixture must be able to fail
+            "share a source",            # 3: agreeing derivations
+        ):
+            self.assertIn(rule, section)
+        self.assertIn("reverting the *implementation*", section)
+
     def test_protocol_requires_effect_preflight_before_mutation(self) -> None:
         protocol = (SKILL.parent / "references" / "protocol.md").read_text()
         preflight = protocol.split("Before every mutation", 1)[1]
