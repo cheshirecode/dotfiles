@@ -105,5 +105,49 @@ class InstallAuditTest(unittest.TestCase):
         self.assertEqual(identical.resolve(), self.canonical.resolve())
 
 
+    def test_pycache_in_canonical_does_not_break_identical_detection(self) -> None:
+        copied = self.make_copy("copied")
+        pycache = self.canonical / "scripts" / "__pycache__"
+        pycache.mkdir()
+        (pycache / "tool.cpython-312.pyc").write_bytes(b"\x00machine-local")
+
+        _, entries = self.run_cli(copied, expected_returncode=1)
+
+        self.assertEqual(entries[0]["status"], "duplicate-identical")
+
+    def test_nonexistent_canonical_exits_two_without_traceback(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--canonical",
+                str(self.root / "missing"),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 2, msg=result.stderr)
+        self.assertIn("install-audit:", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_aliased_roots_are_deduplicated_before_repair(self) -> None:
+        identical = self.make_copy("identical")
+        alias_parent = self.root / "alias"
+        alias_parent.symlink_to(self.root, target_is_directory=True)
+
+        _, entries = self.run_cli(
+            identical,
+            alias_parent / "identical",
+            link_identical=True,
+        )
+
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["status"], "linked")
+        self.assertTrue(identical.is_symlink())
+        stray = [p for p in self.root.iterdir() if ".backup-" in p.name]
+        self.assertEqual(stray, [])
+
+
 if __name__ == "__main__":
     unittest.main()

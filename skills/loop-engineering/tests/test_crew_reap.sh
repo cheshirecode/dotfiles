@@ -31,7 +31,7 @@ ck() {  # ck <name> <roster> <pattern> [args...]
 
 build
 # The gates, one case each.
-ck "no roster keeps everything"    ""            '0 reapable, 4 kept'
+ck "no roster keeps everything"    ""            'keep .*no roster supplied'
 ck "live agent worktree kept"      'wt-peer-9d'  'keep +wt-peer .*live agent'
 ck "unlanded branch kept"          'wt-peer-9d'  'keep +wt-ahead .*not in main'
 ck "dirty worktree kept"           'wt-peer-9d'  'keep +wt-dirty .*uncommitted'
