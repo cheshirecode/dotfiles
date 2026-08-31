@@ -70,7 +70,8 @@ ck "roster annotates the matched owner"  2 "feat-a@wa-7f\[dirty\]" --base master
 ck "roster marks unmatched owner with ?" 2 "feat-b@\?\[dirty\]"       --base master --roster "$TMP/roster.txt" "$R"
 ck "no roster leaves owners bare"        2 "feat-a\[dirty\],feat-b\[dirty\]" --base master "$R"
 ck "roster accepts an inline list"       2 "feat-a@wa-7f\[dirty\]" --base master --roster 'wa-7f,other' "$R"
-ck "roster accepts a single name"        2 "feat-a@wa-7f\[dirty\]" --base master --roster 'wa-7f' "$R"
+ck "bare word is rejected, not guessed"  1 "cannot read roster"     --base master --roster 'wa-7f' "$R"
+ck "single name needs a trailing comma"  2 "feat-a@wa-7f\[dirty\]" --base master --roster 'wa-7f,' "$R"
 ck "unreadable roster is rejected"       1 "cannot read roster"       --roster /nope/nope "$R"
 ck "--roster is documented in --help"    0 "roster"                   --help
 G -C "$TMP/wa" checkout -q -- shared.txt; G -C "$TMP/wb" checkout -q -- shared.txt
