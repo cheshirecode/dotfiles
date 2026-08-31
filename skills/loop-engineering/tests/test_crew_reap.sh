@@ -92,6 +92,31 @@ ckjson "json: happy path" '.'       --target main --json "$TMP/r"
 ckjson "json: error path" '.error'  --json "$TMP/nope"
 ckjson "json: bad option" '.error'  --json --no-such-flag "$TMP/r"
 
+# A roster matching NO worktree is operationally identical to no roster: the
+# ownership gate voted on nothing. Reported live 2026-08-31 — a hand-typed
+# roster of session names matched 0 of 2 worktrees and the output looked exactly
+# like a run the gate had cleared.
+build
+ck "header reports the match count"   'wt-peer-9d' 'roster matched 1/'          --no-fetch
+ck "inert gate is announced"          'nope-a,'    'ownership gate inert'        --no-fetch
+ck "inert + apply is refused"         'nope-a,'    'APPLY REFUSED'               --no-fetch --apply
+if [ -d "$TMP/wt-peer" ] && [ -d "$TMP/wt-landed" ]; then
+  PASS=$((PASS+1)); printf '  PASS  inert refusal removed nothing\n'
+else FAIL=$((FAIL+1)); printf '  FAIL  INERT REFUSAL STILL REMOVED SOMETHING\n'; fi
+
+build
+out=$(OWNERSHIP_INERT_OK=1 "$REAP" --target main --no-fetch --apply --roster 'nope-a,' "$TMP/r" 2>&1)
+if printf '%s' "$out" | grep -q 'APPLY REFUSED'; then
+  FAIL=$((FAIL+1)); printf '  FAIL  override did not lift the refusal\n'
+else PASS=$((PASS+1)); printf '  PASS  OWNERSHIP_INERT_OK lifts the refusal\n'; fi
+
+build
+ck "matching roster raises no warning" 'wt-peer-9d' 'roster matched 1/'          --no-fetch
+out=$(printf 'wt-peer-9d\n' | "$REAP" --target main --no-fetch "$TMP/r" 2>&1)
+if printf '%s' "$out" | grep -q 'gate inert'; then
+  FAIL=$((FAIL+1)); printf '  FAIL  warned despite a matching roster\n'
+else PASS=$((PASS+1)); printf '  PASS  no inert warning when the gate voted\n'; fi
+
 # Exit 3 is a verdict, not an error. Lock BOTH directions: capture-then-parse
 # must read it correctly, and the piped form must still fail — otherwise this
 # fixture stops guarding the documented trap. See references/examples.md §6.
