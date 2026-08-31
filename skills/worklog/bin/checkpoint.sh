@@ -102,6 +102,28 @@ else
   OLD_STATUS="$(git show "HEAD:$FILE" 2>/dev/null | awk -F': *' '/^status:/ {print $2; exit}' || true)"
 fi
 
+# `blocked` carries an invariant: next_action must name what is being waited on.
+# The linter enforces it as an ERROR, but only on a later run — so a checkpoint
+# could put a task into a state whose contract the same toolchain then reports
+# as broken. Observed 2026-08-31: a generated child stub flipped to blocked kept
+# its "Awaiting claim — child of ..." default and became the corpus's only
+# error. Refuse at the transition, where the person still knows the answer.
+if [[ "$STATUS" == "blocked" ]]; then
+  CANDIDATE="$NEXT"
+  if [[ -z "$CANDIDATE" && -f "$FILE" ]]; then
+    CANDIDATE="$(awk '/^next_action:/ {sub(/^next_action: */, ""); print; exit}' "$FILE" | tr -d '"')"
+  fi
+  if [[ "$CANDIDATE" != "Waiting on"* ]]; then
+    {
+      echo "checkpoint: --status=blocked needs a next_action starting with 'Waiting on'"
+      echo "  current: ${CANDIDATE:-<none>}"
+      echo "  fix:     $0 $SLUG --status=blocked --next=\"Waiting on <who or what>\""
+      echo "  (FSM contract, AGENTS.md § Status lifecycle — the linter reports this as an ERROR)"
+    } >&2
+    exit 2
+  fi
+fi
+
 TODAY="$(date +%Y-%m-%d)"
 
 python3 - "$FILE" "$TODAY" "$STATUS" "$NEXT" "$PR" <<'PY'
