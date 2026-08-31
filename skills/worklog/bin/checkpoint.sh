@@ -225,6 +225,53 @@ if [[ -n "$RENAME_FROM" ]]; then
   fi
 fi
 
+if git diff --cached --quiet && [[ -n "$STATUS" ]]; then
+  # An explicit --status is an ASSERTION, and the Worklog-Status: trailer is the
+  # record of it. When frontmatter already reads that status there is nothing to
+  # rewrite, so this used to fall through to "no changes" and write no trailer —
+  # which made a stale trailer unfixable through the one path meant to fix it.
+  # The lint warning even advised aligning frontmatter DOWN to the stale trailer,
+  # the only move that path allowed. Reported live 2026-08-31 on a task whose
+  # 'in-review' was correct and whose 'draft' trailer was months old.
+  #
+  # Only fires when --status was passed explicitly, so ordinary checkpoints
+  # never produce empty commits.
+  # Only re-assert when the trailer actually diverges: an empty commit per no-op
+  # --status call would be noise. Mirrors _lint.py's _latest_status_trailers —
+  # newest-first, Worklog-Slug: trailer or a `<slug>:` subject prefix.
+  # Mirrors _lint.py's _latest_status_trailers: newest-first, matched by a
+  # Worklog-Slug: trailer or a `<slug>:` subject prefix. Done in python because
+  # trailer values can contain newlines, which a line-oriented awk splits.
+  CUR_TRAILER=$(git log --all --format="%s%x1f%(trailers:key=Worklog-Slug,valueonly=true)%x1f%(trailers:key=Worklog-Status,valueonly=true)%x1e" \
+    | python3 -c '
+import sys
+slug = sys.argv[1]
+for rec in sys.stdin.read().split("\x1e"):
+    rec = rec.strip("\n ")
+    if not rec:
+        continue
+    parts = rec.split("\x1f", 2)
+    if len(parts) < 3:
+        continue
+    subject, sl, st = (x.strip() for x in parts)
+    if not st:
+        continue
+    if sl == slug or subject.startswith(slug + ":"):
+        print(st.split("\n")[0].strip())
+        break
+' "$SLUG")
+  if [[ "$CUR_TRAILER" == "$STATUS" ]]; then
+    echo "checkpoint: no changes for $SLUG (status '$STATUS' already asserted)"
+    exit 0
+  fi
+  echo "checkpoint: frontmatter already reads '$STATUS', trailer says '${CUR_TRAILER:-<none>}' — re-asserting"
+  git commit -q --allow-empty -m "$SLUG: re-assert status $STATUS" \
+    -m "Worklog-Status: $STATUS
+Worklog-Slug: $SLUG"
+  git push -q origin HEAD && echo "checkpoint: pushed $SLUG (trailer re-asserted)"
+  exit 0
+fi
+
 if git diff --cached --quiet; then
   echo "checkpoint: no changes for $SLUG"
   # ...but "no changes for the task file" is not "no changes". A task's
