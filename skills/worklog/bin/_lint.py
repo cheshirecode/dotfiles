@@ -249,7 +249,7 @@ def _missing_related_slugs(fm: dict[str, Any], body: str, slug: str, known_slugs
     if isinstance(item, dict) and item.get("slug"):
       declared.add(str(item["slug"]))
   declared.add(slug)
-  missing = {t for t in BODY_SLUG_RE.findall(body) if t in known_slugs and t not in declared}
+  missing = {t for t in BODY_SLUG_RE.findall(_prose_only(body)) if t in known_slugs and t not in declared}
   return sorted(missing)
 
 
@@ -268,6 +268,40 @@ def _stub_related_block(missing: list[str], indent: str = "  ") -> str:
     f"{indent}- slug: {s}\n{note_indent}note: \"(auto-added; refine note)\"\n"
     for s in missing
   )
+
+
+def _prose_only(body: str) -> str:
+  """Body with fenced blocks and table rows blanked out.
+
+  The slug scan means "this prose refers to that task". A slug inside a fenced
+  block or a table cell is structured content -- a version table, a clone
+  command, a pasted log -- and naming a task there is not a relation. Verified
+  2026-08-31: `decision-engine` is both a repo and a task slug here, and a venv
+  version table plus a fenced clone line each produced a false relation that
+  --fix-related then wrote into frontmatter.
+
+  URLs and frontmatter need no handling: BODY_SLUG_RE's lookbehind already
+  rejects a preceding `/`, so `textemma/decision-engine` never matches, and
+  frontmatter is not part of `body`. Both were reported as failing and neither
+  reproduced -- do not add exclusions for them.
+
+  Prose that merely names the service ("decision-engine merged 23 MRs") stays
+  in. It is indistinguishable from a task reference without reading intent, and
+  a warning a human resolves beats a silent miss.
+  """
+  out = []
+  fenced = False
+  for line in body.split("\n"):
+    stripped = line.lstrip()
+    if stripped.startswith("```") or stripped.startswith("~~~"):
+      fenced = not fenced
+      out.append("")
+      continue
+    if fenced or stripped.startswith("|"):
+      out.append("")
+      continue
+    out.append(line)
+  return "\n".join(out)
 
 
 def _apply_fix_related(path: pathlib.Path, missing: list[str]) -> bool:
@@ -423,7 +457,7 @@ def _cross_task_checks(
         declared.add(str(item["slug"]))
     declared.add(slug)  # self-mentions are fine
 
-    for token in set(BODY_SLUG_RE.findall(body)):
+    for token in set(BODY_SLUG_RE.findall(_prose_only(body))):
       if token in known_slugs and token not in declared:
         warnings.append(f"body mentions slug '{token}' not in parent_slug/related/supersedes/reopens — declare the relation or remove the reference")
 
@@ -725,7 +759,17 @@ def main() -> None:
     }, indent=2))
   else:
     if fixed_files:
-      print(f"--fix-related applied: {len(fixed_files)} file(s) modified")
+      # Report the placeholders created, not only the files touched. Each one
+      # trades a "body mentions slug" warning for a "note is the placeholder"
+      # warning 1:1, so the total does not fall — and a caller reading
+      # "N file(s) modified" plus exit 0 reasonably concludes the work is done.
+      # It is not: the relation is now asserted with "refine note" as its stated
+      # purpose, and related: is load-bearing for context.sh and the graph.
+      # (Live 2026-08-31: 65 warnings before, 65 after.)
+      stubs = sum(len(slugs) for _f, slugs in fixed_files)
+      print(f"--fix-related applied: {len(fixed_files)} file(s) modified, "
+            f"{stubs} note(s) still need a real why "
+            f"(the warning count will not drop until they do)")
       for f, slugs in fixed_files:
         print(f"  {f}")
         for s in slugs:
