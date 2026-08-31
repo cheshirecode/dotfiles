@@ -874,6 +874,40 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("state fingerprint changed", result.stderr)
         self.assertEqual(self.state.read_text(), before)
 
+    def test_quiet_emits_one_running_index_line(self) -> None:
+        self.initialize(limit=2)
+        result = self.run_cli(
+            "advance",
+            "--state",
+            str(self.state),
+            "--evidence",
+            "step one done",
+            "--next-action",
+            "check step two",
+            "--quiet",
+        )
+        lines = result.stdout.strip().splitlines()
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0], "running 1/2 hypotheses — next: check step two")
+
+    def test_quiet_terminal_line_shows_verification_not_next_action(self) -> None:
+        self.initialize(limit=2)
+        result = self.run_cli(
+            "finish",
+            "--state",
+            str(self.state),
+            "--status",
+            "blocked",
+            "--evidence",
+            "hit wall",
+            "--next-action",
+            "retry after fix",
+            "--quiet",
+        )
+        line = result.stdout.strip()
+        self.assertTrue(line.startswith("blocked 0/2 hypotheses"))
+        self.assertNotIn("next:", line)
+
 
 if __name__ == "__main__":
     unittest.main()
