@@ -249,6 +249,10 @@ def _missing_related_slugs(fm: dict[str, Any], body: str, slug: str, known_slugs
     if isinstance(item, dict) and item.get("slug"):
       declared.add(str(item["slug"]))
   declared.add(slug)
+  # Same repo-vs-task resolution as the check in _cross_task_checks. This path
+  # WRITES to the file, so a miss here is worse than a spurious warning: it
+  # would commit `related: [decision-engine]` describing a repo as a task.
+  declared |= {str(r) for r in (fm.get("repos") or [])}
   missing = {t for t in BODY_SLUG_RE.findall(_prose_only(body)) if t in known_slugs and t not in declared}
   return sorted(missing)
 
@@ -397,6 +401,7 @@ def _cross_task_checks(
   slugs_with_pr: set[str],
   today: datetime.date,
   latest_status_trailers: dict[str, str] | None = None,
+  repo_named: list[str] | None = None,
 ) -> tuple[list[str], list[str]]:
   errors: list[str] = []
   warnings: list[str] = []
@@ -457,8 +462,25 @@ def _cross_task_checks(
         declared.add(str(item["slug"]))
     declared.add(slug)  # self-mentions are fine
 
+    # A slug that also names a repo THIS task works in is the repo, not the
+    # task. Measured 2026-08-31: `decision-engine` is both; the test resolved
+    # 6 of 8 live prose mentions, and the 2 files that do not list the repo
+    # still warn.
+    #
+    # The feared false negative — a task that both works in the repo and
+    # genuinely references the same-named task — cannot arise for that task
+    # itself, since self-mentions are excluded above. It stays possible for a
+    # third task, so the signal is not dropped: it is counted and surfaced in
+    # the summary rather than left in the warning list, where no edit could
+    # ever clear it. A permanently unresolvable warning teaches readers to skim
+    # the whole class, the resolvable ones included.
+    own_repos = {str(r) for r in (fm.get("repos") or [])}
     for token in set(BODY_SLUG_RE.findall(_prose_only(body))):
       if token in known_slugs and token not in declared:
+        if token in own_repos:
+          if repo_named is not None:
+            repo_named.append(f"{slug} -> {token}")
+          continue
         warnings.append(f"body mentions slug '{token}' not in parent_slug/related/supersedes/reopens — declare the relation or remove the reference")
 
   return errors, warnings
@@ -473,6 +495,7 @@ def _lint_file(
   slugs_with_pr: set[str] | None = None,
   today: datetime.date | None = None,
   latest_status_trailers: dict[str, str] | None = None,
+  repo_named: list[str] | None = None,
 ) -> tuple[list[str], list[str]]:
   errors: list[str] = []
   warnings: list[str] = []
@@ -632,6 +655,7 @@ def _lint_file(
       slugs_with_pr or set(),
       today or datetime.date.today(),
       latest_status_trailers=latest_status_trailers,
+      repo_named=repo_named,
     )
     errors.extend(ct_errors)
     warnings.extend(ct_warnings)
@@ -707,6 +731,10 @@ def main() -> None:
 
   slugs_with_pr = _slugs_with_pr_trailers() if cross_task else set()
   latest_status_trailers = _latest_status_trailers() if cross_task else {}
+  # Body mentions resolved as repo names rather than task references. Counted,
+  # not warned — see _cross_task_checks. Reported so the resolution is never
+  # silent: a wrong resolution is visible as a number that will not go down.
+  repo_named: list[str] = []
   today = datetime.date.today()
 
   fixed_files: list[tuple[str, list[str]]] = []
@@ -738,6 +766,7 @@ def main() -> None:
       slugs_with_pr=slugs_with_pr,
       today=today,
       latest_status_trailers=latest_status_trailers,
+      repo_named=repo_named,
     )
     total_errors += len(errors)
     total_warnings += len(warnings)
@@ -776,6 +805,11 @@ def main() -> None:
           print(f"    + related: {s}  (auto-added; refine note)")
       print()
     print(f"Scanned {len(files)} task files — {total_errors} errors, {total_warnings} warnings")
+    if repo_named:
+      # Not a warning: nothing to fix, and no edit could ever clear it.
+      # Printed so a wrong resolution stays discoverable rather than silent.
+      print(f"  ({len(repo_named)} body mention(s) read as a repo the task "
+            f"declares, not a task reference: {', '.join(sorted(repo_named))})")
     print()
     for item in report:
       print(f"{item['file']}  [{item['state']}]")
