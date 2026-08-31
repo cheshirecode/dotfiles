@@ -1698,6 +1698,14 @@ repos: []
 Borrow Schema fallback evidence.
 EOF
   "${WL_HERMETIC[@]}" WORKLOG_REPO="$vault" bash "$sb/index.sh" >/dev/null
+  if command -v rg >/dev/null; then
+    out=$("${WL_HERMETIC[@]}" WORKLOG_REPO="$vault" /bin/bash "$sb/search.sh" 'Borrow' --active --json 2>&1)
+    if echo "$out" | grep -q 'search-fixture' && ! echo "$out" | grep -q 'unbound variable'; then
+      ok "search.sh supports an empty rg-extra array under nounset"
+    else
+      fail "search.sh failed with no extra rg arguments (got: $out)"
+    fi
+  fi
   out=$("${WL_HERMETIC[@]}" PATH=/usr/bin:/bin WORKLOG_REPO="$vault" bash "$sb/search.sh" 'Borrow|Schema' --active 2>&1)
   if echo "$out" | grep -q 'Borrow Schema fallback evidence'; then
     ok "search.sh grep fallback preserves common regex alternation"
