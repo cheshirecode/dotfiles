@@ -130,7 +130,7 @@ Then either:
 - **Delegate** to a sub-agent via `task` tool — pass the compact context pack
   directly; do not pass the parent transcript. Instruct the sub-agent to
   commit its evidence, uncertainty, and proposed next action to the worklog
-  task file and call `archive.sh`. After that, return exactly one status line:
+  task file and call `archive.sh`, then capture the SHA via `git -C "$WORKLOG_REPO" log -1 --format=%H`, and emit `archived <child-slug> <sha>` as the one-line return. After that, return exactly one status line:
   `archived <child-slug> <worklog-commit>` (or `blocked|needs_human|failed
   <child-slug> <reason>`); the orchestrator parses that line and discards any
   prose. The SHA is `git -C "$WORKLOG_REPO" log -1 --format=%H` after
@@ -184,12 +184,13 @@ child work, so `project verify` warns and exits 1 on a legitimately finished
 project (verified live 2026-08-31). Archive the parent after the gate passes.
 
 ```bash
-next_output="$($WORKLOG_BIN/project.sh next <program-slug> 2>&1)" || true
-if ! grep -Fq "all tasks for '<program-slug>' are archived (nothing left)" <<<"$next_output"; then
+program_slug="<the-child-slug-of-this-project>"
+next_output="$("$WORKLOG_BIN/project.sh" next "$program_slug" 2>&1)" || true
+if ! grep -Fq "all tasks for '$program_slug' are archived (nothing left)" <<<"$next_output"; then
   echo "$next_output" >&2
   exit 1
 fi
-if ! $WORKLOG_BIN/project.sh verify <program-slug>; then
+if ! "$WORKLOG_BIN/project.sh" verify "$program_slug"; then
   echo "project verification failed" >&2
   exit 1
 fi
