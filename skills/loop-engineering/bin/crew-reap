@@ -150,6 +150,32 @@ EOF
   return 1
 }
 
+# Pre-pass: decide whether the ownership gate can vote at all, BEFORE any
+# removal. Counting during the main loop and refusing afterwards is too late —
+# the removals have already happened by then (caught by fixture, 2026-08-31).
+owned=0; seen=0
+while IFS= read -r wt; do
+  [ -n "$wt" ] || continue
+  [ "$wt" = "$(git -C "$ROOT" rev-parse --show-toplevel)" ] && continue
+  seen=$((seen+1))
+  owned_by_live_agent "${wt##*/}" && owned=$((owned+1))
+done < <(git -C "$ROOT" worktree list --porcelain | awk '/^worktree /{print $2}')
+
+# A roster matching NO worktree is operationally identical to no roster: the
+# gate voted on nothing, and every removal would rest on the landed check alone.
+# No-roster already refuses to remove, so this must too. Reported live
+# 2026-08-31: a hand-typed roster of interactive session names matched 0 of 2
+# worktrees, because an entry must equal a worktree basename or extend it with
+# -<suffix>, which session names never do.
+INERT=0; APPLY_REFUSED=0
+if [ "$HAVE_ROSTER" = 1 ] && [ "$seen" -gt 0 ] && [ "$owned" -eq 0 ]; then INERT=1; fi
+if [ "$INERT" = 1 ] && [ "$APPLY" = 1 ] && [ -z "${OWNERSHIP_INERT_OK:-}" ]; then
+  printf '%s: refusing --apply: roster matched 0 of %s worktrees, so the ownership gate voted on nothing.\n' "$PROG" "$seen" >&2
+  printf '  Pipe ListAgents names in (an entry must equal a worktree basename or extend it with -<suffix>),\n' >&2
+  printf '  or set OWNERSHIP_INERT_OK=1 if you know none of these worktrees is agent-owned.\n' >&2
+  APPLY=0; APPLY_REFUSED=1
+fi
+
 reaped=0; kept=0; ROWS=$(mktemp); trap 'rm -f "$ROWS"' EXIT
 MAIN=$(git -C "$ROOT" rev-parse --show-toplevel)
 
@@ -198,9 +224,10 @@ done < <(git -C "$ROOT" worktree list --porcelain | sed -n 's/^worktree //p')
 [ "$APPLY" = 1 ] && git -C "$ROOT" worktree prune >/dev/null 2>&1
 
 if [ "$FMT" = json ]; then
-  printf '{"target":"%s","target_sha":"%s","target_date":"%s","fetch":"%s","apply":%s,"reaped":%s,"kept":%s,"rows":[' \
+  printf '{"target":"%s","target_sha":"%s","target_date":"%s","fetch":"%s","roster_matched":%s,"worktrees":%s,"ownership_inert":%s,"apply":%s,"reaped":%s,"kept":%s,"rows":[' \
     "$(json_escape "$TARGET")" "$(json_escape "$TARGET_SHA")" "$(json_escape "$TARGET_WHEN")" \
-    "$(json_escape "$FETCH_NOTE")" \
+    "$(json_escape "$FETCH_NOTE")" "$owned" "$seen" \
+    "$([ "$INERT" = 1 ] && echo true || echo false)" \
     "$([ "$APPLY" = 1 ] && echo true || echo false)" "$reaped" "$kept"
   first=1
   while IFS="|" read -r act nm brn why; do
@@ -211,9 +238,12 @@ if [ "$FMT" = json ]; then
   done <"$ROWS"
   printf ']}\n'
 else
-  printf '%s  target=%s@%s (%s, %s)  %s\n' "$PROG" "$TARGET" "$TARGET_SHA" \
-    "$TARGET_WHEN" "$FETCH_NOTE" \
-    "$([ "$APPLY" = 1 ] && echo APPLY || echo 'DRY RUN (--apply to remove)')"
+  printf '%s  target=%s@%s (%s, %s)  roster matched %s/%s  %s\n' "$PROG" "$TARGET" "$TARGET_SHA" \
+    "$TARGET_WHEN" "$FETCH_NOTE" "$owned" "$seen" \
+    "$([ "${APPLY_REFUSED:-0}" = 1 ] && echo 'APPLY REFUSED (ownership gate inert)' \
+       || { [ "$APPLY" = 1 ] && echo APPLY || echo 'DRY RUN (--apply to remove)'; })"
+  [ "$INERT" = 1 ] && [ "$reaped" -gt 0 ] && \
+    printf 'WARNING: ownership gate inert — every reap below rests on the landed check alone.\n'
   while IFS="|" read -r act nm brn why; do
     printf '%-5s %-34s %-40s %s\n' "$act" "$nm" "$brn" "$why"
   done <"$ROWS"
