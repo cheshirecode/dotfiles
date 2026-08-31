@@ -110,6 +110,30 @@ if printf '%s' "$out" | grep -q 'APPLY REFUSED'; then
   FAIL=$((FAIL+1)); printf '  FAIL  override did not lift the refusal\n'
 else PASS=$((PASS+1)); printf '  PASS  OWNERSHIP_INERT_OK lifts the refusal\n'; fi
 
+# A refusal must fire only when a removal is pending, and must be visible to a
+# caller. Both reported live 2026-08-31.
+build
+# leave only worktrees that are kept for non-ownership reasons (unlanded, dirty),
+# so nothing is reapable and the refusal has nothing to protect
+G -C "$TMP/r" worktree remove --force "$TMP/wt-landed" >/dev/null 2>&1
+G -C "$TMP/r" worktree remove --force "$TMP/wt-peer"   >/dev/null 2>&1
+out=$("$REAP" --target main --no-fetch --apply --roster 'nope-a,' "$TMP/r" 2>&1); rc=$?
+if printf '%s' "$out" | grep -q 'REFUSED'; then
+  FAIL=$((FAIL+1)); printf '  FAIL  refused a run with nothing to reap\n'
+else PASS=$((PASS+1)); printf '  PASS  no refusal when nothing is reapable\n'; fi
+if [ "$rc" = 0 ]; then PASS=$((PASS+1)); printf '  PASS  no-op inert run exits 0\n'
+else FAIL=$((FAIL+1)); printf '  FAIL  no-op inert run exited %s\n' "$rc"; fi
+
+build
+out=$("$REAP" --target main --no-fetch --apply --roster 'nope-a,' "$TMP/r" 2>&1); rc=$?
+if [ "$rc" = 4 ]; then PASS=$((PASS+1)); printf '  PASS  refusal exits 4, distinct from 0 and 3\n'
+else FAIL=$((FAIL+1)); printf '  FAIL  refusal exited %s, want 4\n' "$rc"; fi
+if printf '%s' "$out" | grep -q 'wt-landed'; then
+  PASS=$((PASS+1)); printf '  PASS  refusal names the worktrees examined\n'
+else FAIL=$((FAIL+1)); printf '  FAIL  refusal does not name what it examined\n'; fi
+if [ -d "$TMP/wt-landed" ]; then PASS=$((PASS+1)); printf '  PASS  refusal removed nothing\n'
+else FAIL=$((FAIL+1)); printf '  FAIL  REFUSAL STILL REMOVED SOMETHING\n'; fi
+
 build
 ck "matching roster raises no warning" 'wt-peer-9d' 'roster matched 1/'          --no-fetch
 out=$(printf 'wt-peer-9d\n' | "$REAP" --target main --no-fetch "$TMP/r" 2>&1)

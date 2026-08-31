@@ -30,7 +30,8 @@
 #   ListAgents-names | crew-reap --apply /workspace/midas
 #
 # Exit: 0 nothing to do or dry run clean, 3 removals performed (or pending in
-# dry run), 1 usage or repo error.
+# dry run), 4 --apply refused because the ownership gate was inert (a human must
+# decide), 1 usage or repo error. Capture before parsing: 3 and 4 are verdicts.
 
 set -uo pipefail
 PROG=${0##*/}
@@ -157,7 +158,7 @@ owned=0; seen=0
 while IFS= read -r wt; do
   [ -n "$wt" ] || continue
   [ "$wt" = "$(git -C "$ROOT" rev-parse --show-toplevel)" ] && continue
-  seen=$((seen+1))
+  seen=$((seen+1)); SEEN_NAMES="${SEEN_NAMES:-}, ${wt##*/}"
   owned_by_live_agent "${wt##*/}" && owned=$((owned+1))
 done < <(git -C "$ROOT" worktree list --porcelain | awk '/^worktree /{print $2}')
 
@@ -167,13 +168,18 @@ done < <(git -C "$ROOT" worktree list --porcelain | awk '/^worktree /{print $2}'
 # 2026-08-31: a hand-typed roster of interactive session names matched 0 of 2
 # worktrees, because an entry must equal a worktree basename or extend it with
 # -<suffix>, which session names never do.
+SEEN_NAMES=$(printf '%s' "$SEEN_NAMES" | sed 's/^, //')
 INERT=0; APPLY_REFUSED=0
 if [ "$HAVE_ROSTER" = 1 ] && [ "$seen" -gt 0 ] && [ "$owned" -eq 0 ]; then INERT=1; fi
+# Suppress the removal immediately — that must not depend on anything computed
+# later — but hold the announcement until we know a removal was actually
+# pending. Refusing a run with nothing to reap protects nothing and teaches the
+# operator that OWNERSHIP_INERT_OK is simply the flag you type to make crew-reap
+# proceed; by the time a run matters, the habit is formed. A predictable bypass
+# means the check has already failed. (Reported live 2026-08-31.)
+PENDING_REFUSE=0
 if [ "$INERT" = 1 ] && [ "$APPLY" = 1 ] && [ -z "${OWNERSHIP_INERT_OK:-}" ]; then
-  printf '%s: refusing --apply: roster matched 0 of %s worktrees, so the ownership gate voted on nothing.\n' "$PROG" "$seen" >&2
-  printf '  Pipe ListAgents names in (an entry must equal a worktree basename or extend it with -<suffix>),\n' >&2
-  printf '  or set OWNERSHIP_INERT_OK=1 if you know none of these worktrees is agent-owned.\n' >&2
-  APPLY=0; APPLY_REFUSED=1
+  APPLY=0; PENDING_REFUSE=1
 fi
 
 reaped=0; kept=0; ROWS=$(mktemp); trap 'rm -f "$ROWS"' EXIT
@@ -221,6 +227,14 @@ while IFS= read -r wt; do
   fi
 done < <(git -C "$ROOT" worktree list --porcelain | sed -n 's/^worktree //p')
 
+if [ "$PENDING_REFUSE" = 1 ] && [ "$reaped" -gt 0 ]; then
+  printf '%s: refusing --apply: roster matched 0 of %s worktrees (%s), so the ownership gate voted on nothing.\n' \
+    "$PROG" "$seen" "$SEEN_NAMES" >&2
+  printf '  Pipe ListAgents names in (an entry must equal a worktree basename or extend it with -<suffix>),\n' >&2
+  printf '  or set OWNERSHIP_INERT_OK=1 if you know none of these worktrees is agent-owned.\n' >&2
+  APPLY_REFUSED=1
+fi
+
 [ "$APPLY" = 1 ] && git -C "$ROOT" worktree prune >/dev/null 2>&1
 
 if [ "$FMT" = json ]; then
@@ -250,5 +264,6 @@ else
   printf '%s reapable, %s kept\n' "$reaped" "$kept"
 fi
 
+[ "$APPLY_REFUSED" = 1 ] && exit 4
 [ "$reaped" -gt 0 ] && exit 3
 exit 0
