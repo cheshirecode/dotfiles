@@ -40,7 +40,7 @@ Step 4 — decide:
   - If ANY rc above is nonzero OR the non-dict guard line printed 0 OR the
     stale-skill grep printed matches OR the route-matrix grep printed
     "(not found)" OR frontmatter > 450 chars OR unittest ran fewer than 49
-    tests OR radar reported fewer than 26 passed OR reap fewer than 22 passed:
+    tests OR radar reported fewer than 27 passed OR reap fewer than 34 passed:
     BEGIN IMPROVEMENT LOOP (use bounded cycles via loop_state.py advance/finish).
   - If everything is clean AND you have nothing new to add:
     Report "CLEAN: <test-count> tests, <skill-line>-line SKILL.md, 0 issues."

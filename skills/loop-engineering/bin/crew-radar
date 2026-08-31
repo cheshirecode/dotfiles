@@ -165,9 +165,9 @@ flush_wt
 # loop, where a blocking read would stall the watch.
 ROSTER=""
 if [ -n "$ROSTER_SRC" ]; then
-  # A file, `-` for stdin, or an inline comma-separated list. The flag reads
-  # like a value and the sibling tool takes the same names on stdin, so a bare
-  # list is the natural first guess -- accept it rather than failing on it.
+  # A file, `-` for stdin, or an inline comma-separated list. A bare word is
+  # refused below (fail closed, matching crew-reap): it is indistinguishable
+  # from a typo'd roster filename.
   if [ "$ROSTER_SRC" = "-" ]; then ROSTER=$(cat)
   elif [ -r "$ROSTER_SRC" ]; then ROSTER=$(cat "$ROSTER_SRC")
   elif [ "${ROSTER_SRC#*,}" != "$ROSTER_SRC" ]; then ROSTER=$(printf '%s' "$ROSTER_SRC" | tr ',' '\n')

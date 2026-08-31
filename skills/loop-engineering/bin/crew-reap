@@ -115,8 +115,8 @@ read_bounded_stdin() {
 }
 ROSTER=""; HAVE_ROSTER=0
 if [ -n "$ROSTER_SRC" ]; then
-  # File, `-` for stdin, or an inline comma-separated list. Stricter than
-  # crew-radar by design: crew-reap deletes, so a bare word fails closed.
+  # File, `-` for stdin, or an inline comma-separated list. Same fail-closed
+  # acceptance as crew-radar: a bare word is refused as a likely typo'd file.
   if [ "$ROSTER_SRC" = "-" ]; then ROSTER=$(cat)
   elif [ -r "$ROSTER_SRC" ]; then ROSTER=$(cat "$ROSTER_SRC")
   elif [ "${ROSTER_SRC#*,}" != "$ROSTER_SRC" ]; then ROSTER=$(printf '%s' "$ROSTER_SRC" | tr ',' '\n')
