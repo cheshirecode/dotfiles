@@ -194,7 +194,11 @@ fi
 # Stage candidate files via xargs (rg lacks a --files-from flag; pipe paths in).
 declare -a SEARCH_CMD=()
 if command -v rg >/dev/null; then
-  SEARCH_CMD=(rg "${RG_EXTRA[@]}" --no-heading --color=never --line-number --with-filename)
+  if [[ ${#RG_EXTRA[@]} -gt 0 ]]; then
+    SEARCH_CMD=(rg "${RG_EXTRA[@]}" --no-heading --color=never --line-number --with-filename)
+  else
+    SEARCH_CMD=(rg --no-heading --color=never --line-number --with-filename)
+  fi
 else
   if [[ ${#RG_EXTRA[@]} -gt 0 ]]; then
     echo "search.sh: extra rg arguments require ripgrep; install rg or remove arguments after --" >&2
