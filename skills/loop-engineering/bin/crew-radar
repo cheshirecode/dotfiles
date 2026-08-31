@@ -41,8 +41,9 @@ Options:
   --json           machine-readable output; stable ordering, for Monitor fingerprints
   --roster <src>   live agent names, so each owner is annotated with who holds it
                    (feat-a@worker-7f, or @? when unmatched). <src> is a file, a
-                   comma-separated list, or - for stdin. Ownership is not
-                   inferable from a worktree's path or mtime.
+                   comma-separated list, or - for stdin; a bare word is refused
+                   as a likely typo'd filename, so for one name append a comma.
+                   Ownership is not inferable from a worktree's path or mtime.
   --quiet          suppress output, exit code only
   --strict         treat 'info' (stacked-branch) overlaps as collisions too
   -h, --help       this text
@@ -171,13 +172,14 @@ if [ -n "$ROSTER_SRC" ]; then
   elif [ -r "$ROSTER_SRC" ]; then ROSTER=$(cat "$ROSTER_SRC")
   elif [ "${ROSTER_SRC#*,}" != "$ROSTER_SRC" ]; then ROSTER=$(printf '%s' "$ROSTER_SRC" | tr ',' '\n')
   else
-    # Single bare agent name. A path-like or list-file-like value here is a
-    # typo'd --roster file, not a name; treat it as an error rather than
-    # silently degrading the ownership annotation.
-    case "$ROSTER_SRC" in
-      */*|*.txt|*.list) die "cannot read roster: $ROSTER_SRC" ;;
-      *) ROSTER=$ROSTER_SRC ;;
-    esac
+    # FAIL CLOSED, matching crew-reap. A bare word is indistinguishable from a
+    # typo'd roster filename, and accepting it as a name loads a roster that
+    # owns nothing -- every owner then annotates `@?`, which reads as "no live
+    # agent holds these" when the truth is "your roster never loaded". A
+    # misleading verdict, and on the reap side the same input flipped a live
+    # worktree from keep to reap (E2E 2026-08-29). The pair must not disagree
+    # about what --roster means. For a single name, append a comma.
+    die "cannot read roster: $ROSTER_SRC (pass a file, '-', or a comma-separated list; for one name append a comma)"
   fi
 fi
 
