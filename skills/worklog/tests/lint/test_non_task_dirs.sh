@@ -104,6 +104,60 @@ ck "fenced block is not a reference"      "$(mention '```
 decision-engine x
 ```')" 0
 ck "prose reference still warns"          "$(mention 'blocked on decision-engine')" 1
+
+# A slug that also names a repo the mentioning task works in is the repo.
+# Live 2026-08-31: 8 of 9 remaining collisions in a peer's clone were prose like
+# "`decision-engine` carries no CA deny rules" — a repo, unfixable as a warning.
+mention_repo() {
+  printf -- '---\nslug: mentions\nowner: tester\nstatus: in-progress\nkind: impl\nproject: none\nrepos: [decision-engine, midas]\nlast_updated: 2026-08-31\nnext_action: "x"\n---\n\n## Context\n\n%s\n\n## Next\n\n- [ ] x\n' "$1" > people/tester/active/mentions.md
+  python3 "$ROOT/bin/_lint.py" --cross-task 2>&1 | grep -c "body mentions slug 'decision-engine'" || true
+}
+ck "repo the task declares does not warn" "$(mention_repo 'decision-engine has no deny rules')" 0
+
+# ...but it is NOT silent. A suppressed mention is counted in the summary, so a
+# wrong resolution shows up as a number instead of vanishing.
+mention_repo 'decision-engine has no deny rules' >/dev/null
+sum=$(python3 "$ROOT/bin/_lint.py" --cross-task 2>&1 | grep -c "read as a repo the task" || true)
+ck "suppression is reported in the summary" "$sum" 1
+
+# The counterexample raised against this rule: a task that works in the repo AND
+# references the same-named task would be silently missed. It cannot happen for
+# the task itself — self-mentions are already excluded — so assert that, and
+# assert the case that CAN still happen (a third task) is only ever suppressed
+# with a count, never dropped.
+cat > people/tester/active/decision-engine.md <<'TASK'
+---
+slug: decision-engine
+owner: tester
+status: in-progress
+kind: impl
+project: none
+repos: [decision-engine, midas]
+last_updated: 2026-08-31
+next_action: "x"
+---
+
+## Context
+
+Works in decision-engine, and is named decision-engine.
+
+## Next
+
+- [ ] x
+TASK
+rm -f people/tester/active/mentions.md
+n=$(python3 "$ROOT/bin/_lint.py" --cross-task 2>&1 | grep -c "body mentions slug 'decision-engine'" || true)
+ck "task naming its own repo-slug never warned anyway" "$n" 0
+
+# --fix-related WRITES. It must not commit `related: [decision-engine]` for a
+# repo — a bad warning is noise, a bad write is a false record.
+mention_repo 'decision-engine has no deny rules' >/dev/null
+python3 "$ROOT/bin/_lint.py" --cross-task --fix-related >/dev/null 2>&1 || true
+grep -q 'decision-engine' people/tester/active/mentions.md && \
+  grep -A3 '^related:' people/tester/active/mentions.md 2>/dev/null | grep -q 'decision-engine' \
+  && ck "--fix-related does not write a repo as a relation" fail pass \
+  || ck "--fix-related does not write a repo as a relation" pass pass
+
 rm -f people/tester/active/mentions.md people/tester/active/decision-engine.md
 
 printf '\n  %d passed, %d failed\n' "$PASS" "$FAIL"
