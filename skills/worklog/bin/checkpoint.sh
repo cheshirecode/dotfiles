@@ -215,7 +215,11 @@ if git diff --cached --quiet; then
   if [[ -n "$DIRTY" ]]; then
     echo "checkpoint: NOTE — uncommitted files under people/$LDAP/ were not staged:" >&2
     printf '%s\n' "$DIRTY" | sed 's/^/  /' >&2
-    echo "  stage them with: $0 $SLUG --include <path>" >&2
+    # The clone can be shared: a dirty path here may be another session's
+    # in-flight edit, so following --include blindly hand-drives the same sweep
+    # this notice exists to avoid automating. Say so at the point of decision.
+    echo "  some may belong to another session — check before staging" >&2
+    echo "  stage the ones that are yours: $0 $SLUG --include <path>" >&2
   fi
   exit 0
 fi

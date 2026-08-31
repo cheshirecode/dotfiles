@@ -75,6 +75,13 @@ printf '%s' "$OUT" | grep -q 'thing-findings.md' \
 printf '%s' "$OUT" | grep -q -- '--include' \
   && ck "the notice says how to stage it" pass pass \
   || ck "the notice says how to stage it" fail pass
+# The clone can be shared. A reader following --include literally would commit
+# another session's in-flight edit under their own slug — the same sweep the
+# notice exists to avoid, just hand-driven. Raised by a consuming session
+# 2026-08-31 after that exact race happened between two of us.
+printf '%s' "$OUT" | grep -q 'another session' \
+  && ck "the notice warns the paths may not be yours" pass pass \
+  || ck "the notice warns the paths may not be yours" fail pass
 
 # The scope must NOT have widened: the artifact is still uncommitted.
 if [ -n "$(G status --porcelain -- people/tester/artifacts/)" ]; then
