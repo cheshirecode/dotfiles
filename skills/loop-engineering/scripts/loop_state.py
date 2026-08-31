@@ -294,9 +294,9 @@ def command_resume(args: argparse.Namespace) -> dict[str, Any]:
     if status not in RESUMABLE_STATUSES:
         raise StateError(f"cannot resume state with status: {status}")
     if (
-        predecessor["budget"]["used"] == predecessor["budget"]["limit"]
-        and args.extend_budget == 0
-    ):
+        status == "budget_exhausted"
+        or predecessor["budget"]["used"] == predecessor["budget"]["limit"]
+    ) and args.extend_budget == 0:
         raise StateError(
             "resume requires --extend-budget when predecessor budget is exhausted"
         )
@@ -383,6 +383,8 @@ def command_annotate(args: argparse.Namespace) -> dict[str, Any]:
         raise StateError(f"{state['terminal_status']} does not accept --next-action")
     state["progress_evidence"].extend(args.evidence)
     if args.next_action is not None:
+        if not args.next_action.strip():
+            raise StateError("--next-action must be non-empty")
         state["next_action"] = args.next_action
     append_history(state, "annotated", args.evidence, state["next_action"])
     write_state_unlocked(args.state, state, expect_sha256=actual_sha256)
