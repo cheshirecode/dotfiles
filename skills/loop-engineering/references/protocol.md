@@ -164,6 +164,22 @@ Three rules, in order of how often they would have caught it:
    derived values are wrong in the same direction, look for the shared source
    rather than correcting each in place.
 
+4. **Check the subject, not only the method.** Rules 1-3 catch a check that
+   answers an adjacent *question*. This is the harder one: a correct,
+   well-executed check pointed at the wrong *object*. It passes, and it produces
+   a true statement — about something nobody asked about — so nothing surfaces
+   to contradict it. Verified 2026-08-31: a rebase was confirmed safe by
+   checking that four specific commits survived, and those commits belonged to
+   someone else entirely; the verification was sound and the referent was wrong.
+   Before reporting a verification, restate what it ran *on* and confirm that
+   object is the one in the claim.
+
+   Corollary for negative results: an empty result is evidence only if you know
+   the check could have come back non-empty. `git log --author=X` returning
+   nothing proves X did not commit only to someone who already knows whether X
+   commits at all. Say which fact makes your negative conclusive, or it is not
+   one.
+
 The cheap check almost always exists — one `ls -la`, one grep, one `--stat`, one
 `git merge-base`. The failure is not that it is expensive; **it is that knowing
 the rule does not fire at the moment you type the command.** The `HEAD..origin/main`

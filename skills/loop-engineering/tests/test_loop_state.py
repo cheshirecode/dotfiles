@@ -181,6 +181,8 @@ class LoopStateTest(unittest.TestCase):
             "in the same turn",          # 1: re-run with the real term
             "visibly fails",             # 2: fixture must be able to fail
             "share a source",            # 3: agreeing derivations
+            "not only the method",       # 4: right check, wrong object
+            "could have come back",      # 4a: a negative needs a known control
         ):
             self.assertIn(rule, section)
         self.assertIn("reverting the *implementation*", section)
