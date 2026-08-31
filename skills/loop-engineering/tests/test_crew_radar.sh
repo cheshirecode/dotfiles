@@ -144,5 +144,38 @@ if [ -x /bin/bash ]; then
   fi
 fi
 
+# --- delimiter/roster regression fixtures (round-5 audit) -------------------
+# A spaced worktree basename must not word-split into phantom owners and
+# fabricate a collision on a file only one worktree touched.
+RS=$TMP/rspace
+G init -q "$RS"; ( cd "$RS" && G commit -q --allow-empty -m init \
+  && echo base > f.txt && G add f.txt && G commit -qm add-f && G branch -M main )
+G -C "$RS" worktree add -q --detach "$TMP/wt-plain" HEAD
+G -C "$RS" worktree add -q --detach "$TMP/wt-z space" HEAD
+echo solo > "$TMP/wt-z space/solo.txt"
+ck "spaced basename fabricates no collision" 0 'clean' --base main "$RS"
+
+# A `|` in a filename must survive into the JSON path field, not leak into
+# owners (rows are packed with \x1f, not the pipe).
+RP=$TMP/rpipe
+G init -q -b main "$RP"; ( cd "$RP" && G commit -q --allow-empty -m init )
+G -C "$RP" worktree add -q "$TMP/wp1" -b pfeat-a
+G -C "$RP" worktree add -q "$TMP/wp2" -b pfeat-b
+echo x > "$TMP/wp1/a|b.txt"; echo y > "$TMP/wp2/a|b.txt"
+pipe_path=$("$RADAR" --json --base main "$RP" | jq -r '.overlaps[0].path')
+if [ "$pipe_path" = 'a|b.txt' ]; then ok "pipe in filename keeps path intact"
+else bad "pipe in filename keeps path intact (got '$pipe_path')"; fi
+
+# An unreadable roster *path* containing a comma must fail closed, not load
+# as an inline two-name roster of phantoms.
+ck "unreadable roster path with comma fails closed" 1 'cannot read roster' \
+  --roster "./no/such,file.txt" --base main "$RP"
+
+# A loaded-but-empty roster is a verdict: owners annotate @?, distinct from
+# no --roster at all.
+: > "$TMP/empty.roster"
+ck "empty roster annotates owners @?" 2 'pfeat-a@[?]' \
+  --roster "$TMP/empty.roster" --base main "$RP"
+
 printf "\n  %d passed, %d failed\n" "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
