@@ -17,6 +17,12 @@ Read this file only when the selected mode requires task creation or direct task
 ## Editing rules
 
 - Edit only `$WORKLOG_REPO/people/$LDAP/`. Other namespaces read-only.
+- Task states are `active/` and `archive/`. Two sibling directories hold content
+  rather than tasks and are not linted as such: `transcripts/`, and
+  **`artifacts/`** — monitor templates, scripts, findings logs and anything else
+  a task body links to (`artifacts/splus-18198-m1-monitor.json`). Put a file
+  there when it is referenced by a task but is not itself a task. In use since
+  2026-08-20; documented here after a lint error revealed it had never been.
 - Never `git rebase` / `git pull --rebase` / force-push during normal sync. Maintenance ops (`$WORKLOG_BIN/log-compact.sh`, `$WORKLOG_BIN/cache-purge.sh`) are the carve-out — see AGENTS.md.
 - Prior-art grep before infra surfaces: `"$WORKLOG_BIN/related-search.sh" <keyword>`.
 - When you add or change a rules section, re-read `## Context` and
