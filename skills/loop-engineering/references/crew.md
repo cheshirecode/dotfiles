@@ -147,6 +147,8 @@ as fresh as that ref. A stale one fails safe but silently, reporting
 "N commit(s) not in <target>", which reads as unlanded work when the ref simply
 predates the merge. `--no-fetch` stays offline and says so in the header.
 
+Exit `4` means `--apply` was refused because the ownership gate was inert.
+
 Two gates, both from real incidents:
 
 - **Ownership.** Pass the live agent roster with `--roster <file|list|->`, or
