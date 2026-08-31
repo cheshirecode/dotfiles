@@ -129,12 +129,16 @@ label_exists() {
 flush_wt() {
   [ -n "$wt" ] || return 0
   if [ "$bare" -eq 0 ]; then
-    local label
+    local label base
+    # owner lists are word-split downstream; a basename-derived label must
+    # never carry whitespace (branch refs and short SHAs cannot), or one
+    # spaced label reads as two phantom owners and fabricates a collision
+    base=${wt##*/}; base=${base//[[:space:]]/_}
     if [ -n "$branch" ]; then label=${branch#refs/heads/}
     elif [ -n "$head" ]; then label="detached@${head:0:8}"
-    else label="${wt##*/}"; fi
+    else label="$base"; fi
     # keep labels unique so two detached worktrees never merge into one row
-    if label_exists "$label"; then label="$label(${wt##*/})"; fi
+    if label_exists "$label"; then label="$label($base)"; fi
     LABELS+=("$label"); WTPATHS+=("$wt"); HEADS+=("$head")
   fi
   wt=""; head=""; branch=""; bare=0
@@ -163,14 +167,16 @@ flush_wt
 #
 # Explicit flag rather than implicit stdin: the radar is armed in a 30s Monitor
 # loop, where a blocking read would stall the watch.
-ROSTER=""
+ROSTER=""; ROSTER_SET=0
 if [ -n "$ROSTER_SRC" ]; then
   # A file, `-` for stdin, or an inline comma-separated list. A bare word is
   # refused below (fail closed, matching crew-reap): it is indistinguishable
-  # from a typo'd roster filename.
+  # from a typo'd roster filename. An argument containing `/` is always a
+  # path, never an inline list — a comma inside an unreadable path must not
+  # silently load a roster of phantom names.
   if [ "$ROSTER_SRC" = "-" ]; then ROSTER=$(cat)
   elif [ -r "$ROSTER_SRC" ]; then ROSTER=$(cat "$ROSTER_SRC")
-  elif [ "${ROSTER_SRC#*,}" != "$ROSTER_SRC" ]; then ROSTER=$(printf '%s' "$ROSTER_SRC" | tr ',' '\n')
+  elif [ "${ROSTER_SRC#*,}" != "$ROSTER_SRC" ] && [ "${ROSTER_SRC#*/}" = "$ROSTER_SRC" ]; then ROSTER=$(printf '%s' "$ROSTER_SRC" | tr ',' '\n')
   else
     # FAIL CLOSED, matching crew-reap. A bare word is indistinguishable from a
     # typo'd roster filename, and accepting it as a name loads a roster that
@@ -181,10 +187,14 @@ if [ -n "$ROSTER_SRC" ]; then
     # about what --roster means. For a single name, append a comma.
     die "cannot read roster: $ROSTER_SRC (pass a file, '-', or a comma-separated list; for one name append a comma)"
   fi
+  # A loaded-but-empty roster (all agents dead) is a real verdict: owners
+  # annotate @? rather than silently dropping annotation, so ROSTER_SET, not
+  # roster emptiness, gates the annotation paths below.
+  ROSTER_SET=1
 fi
 
 agent_for() {  # $1 = worktree basename -> prints agent name, or empty
-  [ -n "$ROSTER" ] || return 0
+  [ "$ROSTER_SET" -eq 1 ] || return 0
   local n
   while IFS= read -r n; do
     n=$(printf '%s' "$n" | tr -d '\r' | awk '{print $1}')
@@ -197,7 +207,7 @@ EOF
 }
 
 declare -a AGENTS=()
-if [ -n "$ROSTER" ]; then
+if [ "$ROSTER_SET" -eq 1 ]; then
   for i in "${!LABELS[@]}"; do
     b=${WTPATHS[$i]##*/}
     a=$(agent_for "$b")
@@ -240,7 +250,7 @@ head_for() { # $1 label
 }
 agent_for_label() { # $1 label
   local i
-  [ -n "$ROSTER" ] || return 0
+  [ "$ROSTER_SET" -eq 1 ] || return 0
   for i in "${!LABELS[@]}"; do
     [ "${LABELS[$i]}" = "$1" ] && { printf '%s' "${AGENTS[$i]:-}"; return 0; }
   done
@@ -287,6 +297,10 @@ is_chain() { # labels... -> 0 when totally ordered by ancestry
 }
 
 declare -a ROWS=()
+# Row field separator: `|` is legal in file and branch names and truncated
+# rows there corrupt path and owners; \x1f cannot appear in either (json_escape
+# strips control characters anyway).
+SEP=$'\x1f'
 nwarn=0; ninfo=0
 while IFS= read -r f; do
   [ -n "$f" ] || continue
@@ -307,7 +321,7 @@ while IFS= read -r f; do
     [ -n "$agent" ] && tok="$tok@$agent"
     if is_dirty "$o" "$f"; then annotated+=("$tok[dirty]"); else annotated+=("$tok"); fi
   done
-  ROWS+=("$sev|$f|$(IFS=,; echo "${annotated[*]}")")
+  ROWS+=("$sev$SEP$f$SEP$(IFS=,; echo "${annotated[*]}")")
 done < <(printf '%s\n' "${OWNER_PATHS[@]}" | LC_ALL=C sort)
 
 collision=$nwarn
@@ -321,7 +335,7 @@ if [ "$QUIET" -eq 0 ]; then
     first=1
     while IFS= read -r row; do
       [ -n "$row" ] || continue
-      sev=${row%%|*}; rest=${row#*|}; f=${rest%%|*}; own=${rest#*|}
+      sev=${row%%"$SEP"*}; rest=${row#*"$SEP"}; f=${rest%%"$SEP"*}; own=${rest#*"$SEP"}
       [ "$first" -eq 1 ] || printf ','
       first=0
       printf '{"severity":"%s","path":"%s","owners":"%s"}' \
@@ -335,7 +349,7 @@ if [ "$QUIET" -eq 0 ]; then
     else
       while IFS= read -r row; do
         [ -n "$row" ] || continue
-        sev=${row%%|*}; rest=${row#*|}; f=${rest%%|*}; own=${rest#*|}
+        sev=${row%%"$SEP"*}; rest=${row#*"$SEP"}; f=${rest%%"$SEP"*}; own=${rest#*"$SEP"}
         printf '%-5s %-52s %s\n' "$sev" "$f" "$own"
       done < <(printf '%s\n' "${ROWS[@]}" | LC_ALL=C sort)
       printf '%d overlapping path(s): %d warn, %d info\n' "${#ROWS[@]}" "$nwarn" "$ninfo"
