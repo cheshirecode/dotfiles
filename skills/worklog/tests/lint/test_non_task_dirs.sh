@@ -117,8 +117,19 @@ ck "repo the task declares does not warn" "$(mention_repo 'decision-engine has n
 # ...but it is NOT silent. A suppressed mention is counted in the summary, so a
 # wrong resolution shows up as a number instead of vanishing.
 mention_repo 'decision-engine has no deny rules' >/dev/null
-sum=$(python3 "$ROOT/bin/_lint.py" --cross-task 2>&1 | grep -c "read as a repo the task" || true)
+sum=$(python3 "$ROOT/bin/_lint.py" --cross-task 2>&1 | grep -c "read as a repo name" || true)
 ck "suppression is reported in the summary" "$sum" 1
+
+# The union rule: the repo set is corpus-wide, not per-file. A task that names a
+# repo it ruled OUT will never declare that repo — "decision-engine carries no
+# CA deny rules" is a recorded negative result — so a per-file test left those
+# mentions permanently unresolvable. Reported live 2026-08-31 by a session whose
+# 4 surviving warnings were all this shape.
+printf -- '---\nslug: declarer\nowner: tester\nstatus: in-progress\nkind: impl\nproject: none\nrepos: [decision-engine]\nlast_updated: 2026-08-31\nnext_action: "x"\n---\n\n## Context\n\nWorks in the repo.\n\n## Next\n\n- [ ] x\n' > people/tester/active/declarer.md
+ck "repo declared by ANOTHER task resolves too" "$(mention 'decision-engine has no deny rules')" 0
+rm -f people/tester/active/declarer.md
+# ...and with nobody declaring it, the same prose is a task reference again.
+ck "undeclared-anywhere repo name still warns" "$(mention 'decision-engine has no deny rules')" 1
 
 # The counterexample raised against this rule: a task that works in the repo AND
 # references the same-named task would be silently missed. It cannot happen for

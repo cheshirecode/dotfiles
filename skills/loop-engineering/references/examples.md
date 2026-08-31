@@ -234,3 +234,39 @@ pipeline**, so a caution does not prevent it — the executable fixtures in
 `tests/test_crew_radar.sh` and `tests/test_crew_reap.sh` do, because they
 assert both that the correct form works and that the wrong form still fails.
 Copy those when adding a tool whose exit code carries meaning.
+
+## 7. Proving a fixture would have caught the bug
+
+INPUT
+
+> Added tests with the fix. Confirm they actually test it.
+
+OUTPUT (revert the FIX; never the fixtures)
+
+```bash
+cp path/to/impl.py "$SCRATCH/impl.fixed"     # keep the fix
+git checkout HEAD -- path/to/impl.py         # revert ONLY the implementation
+bash tests/the_new_suite.sh                  # MUST fail, and name which cases
+cp "$SCRATCH/impl.fixed" path/to/impl.py     # restore
+```
+
+```bash
+# WRONG — `git stash` takes the fixtures with the fix, so the new cases never
+# run. "5 passed, 0 failed" then means the suite you are validating was absent.
+git stash && bash tests/the_new_suite.sh && git stash pop
+```
+
+A fixture written alongside a fix is asserted against a codebase that already
+passes it. Nothing about writing it establishes that it would have failed
+before, and a green run is the same shape whether the case is guarding
+something or merely present. The check is cheap and almost never run.
+
+State the split in the report: on one change here, 3 of 4 new fixtures failed
+with the fix reverted and the 4th passed both ways *by design* — it pinned a
+pre-existing line the fix's correctness argument depended on, which had no
+guard. Both are worth having; conflating them is what hides a fixture that
+guards nothing.
+
+Same family as section 6: the instrument that is easy to reach could not have
+produced the other answer. There the pipeline reported its own exit instead of
+the tool's; here the revert removed the evidence along with the defect.
