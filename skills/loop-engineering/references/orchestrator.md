@@ -184,7 +184,7 @@ child work, so `project verify` warns and exits 1 on a legitimately finished
 project (verified live 2026-08-31). Archive the parent after the gate passes.
 
 ```bash
-program_slug="<the-child-slug-of-this-project>"
+program_slug="<program-slug>"
 next_output="$("$WORKLOG_BIN/project.sh" next "$program_slug" 2>&1)" || true
 if ! grep -Fq "all tasks for '$program_slug' are archived (nothing left)" <<<"$next_output"; then
   echo "$next_output" >&2

@@ -33,8 +33,8 @@ tracking.
 - Keep issuing tool calls in the current task while state is `running`; do not
   yield merely because one cycle ended.
 - Invoke the installed `worklog` skill for durable context and checkpoints.
-- For recurrence, use an available Codex automation or `loop-orchestrator`; if
-  neither is callable, end `needs_human`. Each heartbeat wakes the agent, which
+- For recurrence, use an available Codex automation; if none is callable, end
+  `needs_human`. Each heartbeat wakes the agent, which
   resumes from the prior `continue_scheduled` state instead of reopening it.
 
 ## Claude Code
