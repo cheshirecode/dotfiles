@@ -238,7 +238,8 @@ def _latest_status_trailers() -> dict[str, str]:
   return out_map
 
 
-def _missing_related_slugs(fm: dict[str, Any], body: str, slug: str, known_slugs: set[str]) -> list[str]:
+def _missing_related_slugs(fm: dict[str, Any], body: str, slug: str, known_slugs: set[str],
+                           declared_repos: set[str] | None = None) -> list[str]:
   """Return body-mention slugs (sorted) not declared in any relation field."""
   declared: set[str] = set()
   for k in ("parent_slug", "supersedes", "superseded_by", "reopens"):
@@ -252,7 +253,7 @@ def _missing_related_slugs(fm: dict[str, Any], body: str, slug: str, known_slugs
   # Same repo-vs-task resolution as the check in _cross_task_checks. This path
   # WRITES to the file, so a miss here is worse than a spurious warning: it
   # would commit `related: [decision-engine]` describing a repo as a task.
-  declared |= {str(r) for r in (fm.get("repos") or [])}
+  declared |= declared_repos or set()
   missing = {t for t in BODY_SLUG_RE.findall(_prose_only(body)) if t in known_slugs and t not in declared}
   return sorted(missing)
 
@@ -398,6 +399,7 @@ def _cross_task_checks(
   state: str,
   slug: str,
   known_slugs: set[str],
+  declared_repos: set[str],
   slugs_with_pr: set[str],
   today: datetime.date,
   latest_status_trailers: dict[str, str] | None = None,
@@ -474,10 +476,10 @@ def _cross_task_checks(
     # the summary rather than left in the warning list, where no edit could
     # ever clear it. A permanently unresolvable warning teaches readers to skim
     # the whole class, the resolvable ones included.
-    own_repos = {str(r) for r in (fm.get("repos") or [])}
+    repo_names = declared_repos
     for token in set(BODY_SLUG_RE.findall(_prose_only(body))):
       if token in known_slugs and token not in declared:
-        if token in own_repos:
+        if token in repo_names:
           if repo_named is not None:
             repo_named.append(f"{slug} -> {token}")
           continue
@@ -490,6 +492,7 @@ def _lint_file(
   path: pathlib.Path,
   state: str,
   known_slugs: set[str],
+  declared_repos: set[str] | None = None,
   cross_task: bool = False,
   okf: bool = False,
   slugs_with_pr: set[str] | None = None,
@@ -641,7 +644,20 @@ def _lint_file(
 
   body = text[m.end():]
   if state == "active":
-    if "\n## Context" not in f"\n{body}":
+    # A `kind: project` file is a program, not a task. It carries ## Goal,
+    # ## Objective and ## Tasks — strictly more orientation than ## Context —
+    # so demanding ## Context of it applied a task rule to a non-task, and
+    # `project.sh new` produced a file that warned the moment it was written.
+    # Reported live 2026-08-31: 3 of one clone's 8 remaining warnings were
+    # generator output. A generator that fails its own linter teaches people to
+    # ignore the linter, so this is not exempted quietly — the project sections
+    # are checked instead, and a hand-written program missing ## Tasks is still
+    # caught.
+    if fm.get("kind") == "project":
+      for section in ("## Goal", "## Objective", "## Tasks"):
+        if f"\n{section}" not in f"\n{body}":
+          warnings.append(f"program (kind: project) missing {section} section")
+    elif "\n## Context" not in f"\n{body}":
       warnings.append("missing ## Context section")
     if "\n## Next" not in f"\n{body}":
       warnings.append("missing ## Next section")
@@ -652,6 +668,7 @@ def _lint_file(
   if cross_task and slug and isinstance(slug, str):
     ct_errors, ct_warnings = _cross_task_checks(
       fm, body, state, slug, known_slugs,
+      declared_repos or set(),
       slugs_with_pr or set(),
       today or datetime.date.today(),
       latest_status_trailers=latest_status_trailers,
@@ -714,6 +731,14 @@ def main() -> None:
     files = all_files
   layout_report = [] if single_file else _layout_issues(root)
   known_slugs: set[str] = set()
+  # Every repo name declared anywhere in the corpus. Keyed corpus-wide, not
+  # per-file, because a task that names a repo it ruled OUT will never declare
+  # that repo — "decision-engine carries no CA underwriting deny rules" is a
+  # recorded negative result, and its repos: is [midas, monorepo] permanently.
+  # Per-file, those mentions stayed unresolvable warnings. Measured 2026-08-31:
+  # across 297 tasks and 17 declared repos, exactly ONE name is both a slug and
+  # a repo, so the union changes behaviour for that name and no other.
+  declared_repos: set[str] = set()
   for path, _ in all_files:
     text = path.read_text()
     m = FRONTMATTER_RE.match(text)
@@ -724,6 +749,9 @@ def main() -> None:
       fm = yaml.safe_load(m.group(1)) or {}
     except yaml.YAMLError:
       fm = {}
+    if isinstance(fm, dict):
+      for r in fm.get("repos") or []:
+        declared_repos.add(str(r))
     if isinstance(fm, dict) and fm.get("slug"):
       known_slugs.add(str(fm["slug"]))
     else:
@@ -751,7 +779,7 @@ def main() -> None:
         continue
       slug = fm.get("slug") or path.stem
       body = text[m.end():]
-      missing = _missing_related_slugs(fm, body, str(slug), known_slugs)
+      missing = _missing_related_slugs(fm, body, str(slug), known_slugs, declared_repos)
       if missing and _apply_fix_related(path, missing):
         fixed_files.append((str(path.relative_to(root)), missing))
 
@@ -761,6 +789,7 @@ def main() -> None:
   for path, state in files:
     errors, warnings = _lint_file(
       path, state, known_slugs,
+      declared_repos=declared_repos,
       cross_task=cross_task,
       okf=okf,
       slugs_with_pr=slugs_with_pr,
@@ -808,8 +837,9 @@ def main() -> None:
     if repo_named:
       # Not a warning: nothing to fix, and no edit could ever clear it.
       # Printed so a wrong resolution stays discoverable rather than silent.
-      print(f"  ({len(repo_named)} body mention(s) read as a repo the task "
-            f"declares, not a task reference: {', '.join(sorted(repo_named))})")
+      print(f"  ({len(repo_named)} body mention(s) read as a repo name "
+            f"declared in this corpus, not a task reference: "
+            f"{', '.join(sorted(repo_named))})")
     print()
     for item in report:
       print(f"{item['file']}  [{item['state']}]")
