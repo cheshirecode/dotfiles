@@ -35,7 +35,10 @@ the JSON.
 - `validate` checks the schema and transition invariants.
 - `show` prints the five-field contract; `--json` returns the full history.
 - `--quiet` (accepted by every subcommand) replaces the state document with
-  one index line: `<status> <used>/<limit> <unit> — next: <action>`.
+  one index line: `<status> <used>/<limit> <unit> — next: <action>` while
+  `running`; a terminal line shows the verification instead of the next action
+  (`<status> <used>/<limit> <unit>[ — <verification>]`), so read a resumable
+  state's required next action from the state file, not the quiet line.
 
 Every write is atomic. Mutating commands also hold an adjacent process lock
 across the full read-modify-write transition, so concurrent CLI processes apply
