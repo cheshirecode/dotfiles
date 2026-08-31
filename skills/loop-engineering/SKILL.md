@@ -76,16 +76,16 @@ agent contexts, this is the path from which the skill was loaded. If uncertain,
 search for `loop_state.py` under the skill root:
 
 ```bash
-# Claude Code:
-SKILL_DIR="$(dirname "$(find -L ~/.claude/skills -name loop_state.py -print -quit 2>/dev/null)")/.."
+# Claude Code (empty when absent — never a bogus "./.."):
+SKILL_DIR="$(f=$(find -L ~/.claude/skills -name loop_state.py -print -quit 2>/dev/null); [ -n "$f" ] && dirname "$(dirname "$f")")"
 # Codex:
-SKILL_DIR="$(dirname "$(find -L ~/.agents/skills -name loop_state.py -print -quit 2>/dev/null)")/.."
+SKILL_DIR="$(f=$(find -L ~/.agents/skills -name loop_state.py -print -quit 2>/dev/null); [ -n "$f" ] && dirname "$(dirname "$f")")"
 # Cursor:
-SKILL_DIR="$(dirname "$(find -L ~/.cursor/skills -name loop_state.py -print -quit 2>/dev/null)")/.."
-# Opencode / git worktree:
-SKILL_DIR="$(git rev-parse --show-toplevel 2>/dev/null)/skills/loop-engineering"
-# Fallback — search common install roots:
-SKILL_DIR="$(find -L ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills -name loop_state.py -print -quit 2>/dev/null | head -1 | xargs dirname)/.."
+SKILL_DIR="$(f=$(find -L ~/.cursor/skills -name loop_state.py -print -quit 2>/dev/null); [ -n "$f" ] && dirname "$(dirname "$f")")"
+# Opencode / git worktree (empty outside a repo):
+SKILL_DIR="$(r=$(git rev-parse --show-toplevel 2>/dev/null); [ -n "$r" ] && printf '%s' "$r/skills/loop-engineering")"
+# Fallback — roots checked in order (a parallel find races -quit across roots):
+SKILL_DIR="$(for r in ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills; do f=$(find -L "$r" -name loop_state.py -print -quit 2>/dev/null); [ -n "$f" ] && { dirname "$(dirname "$f")"; break; }; done)"
 ```
 
 All script invocations below use `python3 <skill-dir>/scripts/loop_state.py`.
@@ -122,7 +122,10 @@ not leave ad hoc run artifacts behind.
 For a non-trivial loop, invoke `$which-model` before dispatch only when the
 current harness exposes it and the task has materially different capability,
 context, privacy, or cost needs. Ask for a model lane, not an unverified exact
-model. Apply its data-policy gate before delegation. If no dispatch tool exists in the harness, or if the target skill is unavailable, skip routing and record `model-routing: skipped — <reason>` as one-line evidence;
+model. Apply its data-policy gate before delegation.
+If no dispatch tool exists in the harness, the target skill is unavailable,
+or a required supporting tool is missing, skip routing and record
+`model-routing: skipped — <reason>` as one-line evidence;
 do not spend a cycle on selection ceremony.
 
 ### Optional payload transport
@@ -133,7 +136,8 @@ is not both smaller and more legible, send the original bytes.
 
 1. For noisy command output or tool catalogs, an authorized Caveman install may
    use `caveman shrink -- <command>` before Pixel. Preserve producer status with
-   `set -o pipefail`; keep the original in an artifact store (`/tmp`, `$SCRATCH`, or your harness's upload area) and retain its recovery handle.
+   `set -o pipefail`; keep the original in an artifact store (`/tmp`,
+   `$TMPDIR`, or your harness's upload area) and retain its recovery handle.
    Do not install an output-only response skill for input savings: it can add
    prompt overhead while leaving provider input unchanged.
 2. Use [Caveman Pixel Mode](https://github.com/juliusbrussee/caveman#pixel-mode)
@@ -187,7 +191,7 @@ exit codes to reduce output.
 
 **Exit codes:** The state CLI exits `0` on success, `2` with a `usage:` error
 for malformed CLI usage, and `3` with a `loop-state:` error when the state
-contract rejects the transition. (valid transitions: running→advance/blocked/needs_human/completed/cancelled; blocked/needs_human/human-exhausted/continue_scheduled accept --next-action; completed/cancelled clear it.) See
+contract rejects the transition. See
 [references/protocol.md](references/protocol.md) for transition rules.
 
 Keep each evidence value to one typed line: `kind: reference — result`, where
@@ -224,8 +228,8 @@ When the installed `worklog` protocol is available, hydrate resume context
 before initialization and checkpoint verified state at compaction, delegation,
 retry exhaustion, scheduled handoff, or termination. Resolve `$WORKLOG_BIN` to
 the worklog skill's `bin/` directory (`~/.claude/skills/worklog/bin`, `~/.agents/skills/worklog/bin`, or the repo's `skills/worklog/bin`). For an existing task, run
-`$WORKLOG_BIN/context.sh <slug> --for=resume` while the target clone's direnv
-variables are active (i.e., after `cd <clone-dir> && export $(direnv allow 2>/dev/null || true)`). Before cold delegation, pass the returned
+`direnv exec <clone-dir> "$WORKLOG_BIN"/context.sh <slug> --for=resume` so the
+target clone's direnv variables are active. Before cold delegation, pass the returned
 `context <slug> --for=compact` pack directly; do not pass the parent transcript
 or imply that `spawn` enriches the pack. If Worklog or its environment is not
 available, use the explicit state path plus one authorized artifact and label

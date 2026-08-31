@@ -44,10 +44,7 @@ exit 1 alone is not proof), not until a fixed turn count.
 
 ### 1. Decompose & budget
 
-Run task decomposition (`sequential-thinking` or manual analysis) only when the task graph is not already explicit or
-its dependencies are uncertain. If the user or Worklog already supplies a
-clear graph, construct the minimal tasks-json directly. Tasks are independent
-unless `depends_on` is set.
+Run task decomposition (`sequential-thinking` or manual analysis) only when the task graph is not already explicit or its dependencies are uncertain. If the user or Worklog already supplies a clear graph, construct the minimal tasks-json directly. Tasks are independent unless `depends_on` is set.
 
 Budget is a **safety net**, not a planning constraint, only when the user has
 not supplied a ceiling. If the user gives a budget, use that exact limit; never
@@ -70,7 +67,12 @@ the task graph or scope becomes ambiguous. Pause only the affected mutation,
 pass the council the original goal plus compact context and evidence, and do
 not pass the full parent transcript.
 
-Use the smallest escalation pack: `original goal`, `compact task context`, `trigger`, `affected mutation`, `evidence`, `constraints`, `one decision question`, and `replay check`. Accept only `verified` or `UNVERIFIED` plus a decision; a verified result must pass the replay check before the task resumes. A confirmed verdict carries `decision: <one-sentence answer>` with the exact replay command.
+Use the smallest escalation pack: `original goal`, `compact task context`,
+`trigger`, `affected mutation`, `evidence`, `constraints`,
+`one decision question`, and `replay check`. Accept only `verified` or
+`UNVERIFIED` plus a decision; a verified result must pass the replay check
+before the task resumes. A confirmed verdict carries
+`decision: <one-sentence answer>` with the exact replay command.
 
 Council is an advisory subloop, not success evidence. A verified council result
 must be written to Worklog, followed by the discriminating replay check, and
@@ -89,7 +91,8 @@ echo '<tasks-json>' | "$WORKLOG_BIN/project.sh" new <slug> \
   --goal="<goal>" --objective="<objective>" --repos=<repo>
 ```
 
-The tasks-json is the task decomposition output or directly constructed graph mapped to `{slug, kind, depends_on}`.
+The tasks-json is the task decomposition output or directly constructed
+graph mapped to `{slug, kind, depends_on}`.
 `kind` must be one of the worklog set — `bug`, `bugfix`, `cleanup`, `debug`,
 `design`, `impl`, `infra`, `investigation`, `ops`, `perf`, `plan`, `postmortem`,
 `program`, `project`, `proposal`, `review`, `runbook`, `spike`, `tooling`. There
@@ -172,7 +175,13 @@ When budget is consumed or the project queue is empty, capture the complete
 `project next` result and verify the project before finishing. Exit 1 alone is
 not proof of an empty queue: it also covers blocked or missing children. Treat
 the queue as empty only when `project next` reports `all tasks ... are archived
-(nothing left)` and `project verify <slug>` exits 0:
+(nothing left)` and `project verify <slug>` exits 0.
+
+Before running the gate, rewrite the parent project file's `next_action` to
+its rollup/completion step and checkpoint it: the default that `project.sh
+new` writes ("Kick off — claim first eligible child ...") still requests
+child work, so `project verify` warns and exits 1 on a legitimately finished
+project (verified live 2026-08-31). Archive the parent after the gate passes.
 
 ```bash
 next_output="$($WORKLOG_BIN/project.sh next <program-slug> 2>&1)" || true
