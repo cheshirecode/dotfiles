@@ -84,5 +84,22 @@ printf -- '---\nslug: plain\nowner: tester\nstatus: in-progress\nkind: impl\npro
 rm -f people/tester/active/prog.md
 ck "a non-program task still owes ## Context" "$(warns 'missing ## Context')" 1
 
+# The blocked/next_action FSM rule is a SINGLE-FILE invariant and must fire on a
+# bare run. It lived in the cross-task pass, so `lint.sh --file=...` — which is
+# exactly what checkpoint.sh runs — reported nothing on a broken file. Reported
+# live 2026-08-31: the tool that accepted the bad transition also linted it clean.
+rm -f people/tester/active/prog.md
+printf -- '---\nslug: blocked-one\nowner: tester\nstatus: blocked\nkind: impl\nproject: none\nrepos: []\nlast_updated: 2026-08-31\nnext_action: "Awaiting claim — child of some-program"\n---\n\n## Context\n\nc\n\n## Next\n\n- [ ] x\n' \
+  > people/tester/active/blocked-one.md
+n=$(python3 "$ROOT/bin/_lint.py" 2>&1 | grep -c "does not start with 'Waiting on'" || true)
+ck "blocked FSM rule fires WITHOUT --cross-task" "$n" 1
+n=$(python3 "$ROOT/bin/_lint.py" --cross-task 2>&1 | grep -c "does not start with 'Waiting on'" || true)
+ck "and still fires WITH --cross-task (not doubled)" "$n" 1
+printf -- '---\nslug: blocked-one\nowner: tester\nstatus: blocked\nkind: impl\nproject: none\nrepos: []\nlast_updated: 2026-08-31\nnext_action: "Waiting on the payments team"\n---\n\n## Context\n\nc\n\n## Next\n\n- [ ] x\n' \
+  > people/tester/active/blocked-one.md
+n=$(python3 "$ROOT/bin/_lint.py" 2>&1 | grep -c "does not start with 'Waiting on'" || true)
+ck "a correct blocked task is clean" "$n" 0
+rm -f people/tester/active/blocked-one.md
+
 printf '\n  %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
