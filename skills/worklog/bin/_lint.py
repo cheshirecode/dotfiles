@@ -411,21 +411,16 @@ def _cross_task_checks(
     return errors, warnings
 
   status = fm.get("status")
-  next_action = fm.get("next_action") or ""
   last_updated_raw = fm.get("last_updated")
 
-  # 1. blocked → next_action must start "Waiting on"
-  if status == "blocked" and isinstance(next_action, str):
-    if not next_action.lstrip().lower().startswith("waiting on"):
-      errors.append("status 'blocked' but next_action does not start with 'Waiting on' (FSM contract, AGENTS.md § Status lifecycle)")
-
-  # 2a. trailer-vs-frontmatter divergence: latest Worklog-Status: trailer
-  # for this slug must match frontmatter status. Drift here means a commit
-  # author hand-wrote a trailer (e.g. via `git commit -m`) without flipping
-  # the frontmatter — bypassing bin/checkpoint.sh --status=, which is the
-  # only path that updates both atomically. Warning, not error: there are
-  # legitimate cases (force-push fixups, multi-task commits) where a brief
-  # divergence is fine.
+  # 2a. trailer-vs-frontmatter divergence. EITHER side can be the stale one and
+  # the lint cannot tell which: a hand-written trailer that skipped the
+  # frontmatter, or accurate frontmatter over a trailer nobody re-asserted.
+  # This warning used to name only the first case and advise aligning
+  # frontmatter DOWN to the trailer — which, in the case reported live
+  # 2026-08-31, would have degraded a correct 'in-review' to a stale 'draft'.
+  # Name both and both remedies; the reader knows which is true and the linter
+  # does not. Warning, not error: brief divergence is legitimate.
   if latest_status_trailers and isinstance(status, str):
     trailer_status = latest_status_trailers.get(slug)
     if trailer_status and trailer_status not in STATUSES:
@@ -436,7 +431,9 @@ def _cross_task_checks(
       warnings.append(
         f"frontmatter status '{status}' diverges from latest "
         f"Worklog-Status: trailer '{trailer_status}' for this slug — "
-        f"use `bin/checkpoint.sh {slug} --status={trailer_status}` to align"
+        f"if the trailer is right, `bin/checkpoint.sh {slug} "
+        f"--status={trailer_status}`; if the FRONTMATTER is right, re-assert it "
+        f"with `bin/checkpoint.sh {slug} --status={status}`"
       )
 
   # 2. stale in-review: in-review >14d with no Worklog-PR: trailer for slug
@@ -641,6 +638,18 @@ def _lint_file(
     if isinstance(ext_refs, list):
       if any("notion.so" in str(r) for r in ext_refs):
         warnings.append("external_refs: contains a notion.so URL but notion: field is absent — add 'notion: <page-id>' so init --full can match this task")
+
+  # blocked -> next_action must start "Waiting on" (FSM contract, AGENTS.md
+  # § Status lifecycle). This is a SINGLE-FILE invariant — it reads only this
+  # file's own frontmatter — but it lived in _cross_task_checks, so it fired
+  # only under --cross-task. checkpoint.sh runs `lint.sh --file=...` WITHOUT
+  # that flag, so the tool that accepted a bad blocked transition also linted
+  # the file and reported nothing. Reported live 2026-08-31 by a session whose
+  # broken file passed a bare lint.sh cleanly.
+  if state == "active" and fm.get("status") == "blocked":
+    na = fm.get("next_action") or ""
+    if isinstance(na, str) and not na.lstrip().lower().startswith("waiting on"):
+      errors.append("status 'blocked' but next_action does not start with 'Waiting on' (FSM contract, AGENTS.md § Status lifecycle)")
 
   body = text[m.end():]
   if state == "active":
