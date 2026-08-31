@@ -9,9 +9,10 @@ Use loop-engineering orchestrator mode. Goal: audit the installed loop-engineeri
 
 You are running in parallel with other sessions that may also be auditing this skill. Be tolerant of conflicts: if you must edit a file another session is changing, keep improvements that enhance clarity or safety, and resolve minor formatting disagreements locally.
 
-First, resolve <skill-dir>:
-  found_file="$(find -L ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills -name loop_state.py -print -quit 2>/dev/null)" && test -n "$found_file" && dirname "$(dirname "$found_file")"
-If the command fails, ask me which harness you are in and I will tell you.
+First, resolve <skill-dir> (roots checked in order; gate on non-empty output,
+never on find's exit code — a shimmed find can exit 1 after printing a match):
+  for r in ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills; do found_file="$(find -L "$r" -name loop_state.py -print -quit 2>/dev/null)"; test -n "$found_file" && break; done; test -n "$found_file" && dirname "$(dirname "$found_file")"
+If the command prints nothing, ask me which harness you are in and I will tell you.
 
 Then follow these steps IN ORDER, one bash call per step:
 
@@ -23,8 +24,9 @@ alone would report the pipeline's status, the exact trap examples.md §6 documen
   out=$(bash <skill-dir>/tests/test_crew_reap.sh 2>&1); echo "reap rc=$?"; printf '%s\n' "$out" | tail -1
   wc -l <skill-dir>/SKILL.md
 
-Step 2 — run the Python test suite:
-  cd <skill-dir> && python3 -m unittest tests.test_loop_state tests.test_skill_budget tests.test_install_audit -v 2>&1 | tail -8; echo "unittest rc=${PIPESTATUS[0]}"
+Step 2 — run the Python test suite (capture, don't pipe: ${PIPESTATUS[0]} is
+bash-only and silently empty under zsh, the Claude Code harness shell):
+  out=$(cd <skill-dir> && python3 -m unittest tests.test_loop_state tests.test_skill_budget tests.test_install_audit 2>&1); echo "unittest rc=$?"; printf '%s\n' "$out" | grep -E '^Ran [0-9]+ tests|^OK|^FAILED'
 
 Step 3 — check for regressions (each grep feeds a Step 4 clause):
   echo "--- non-existent skill references ---"
@@ -37,7 +39,7 @@ Step 3 — check for regressions (each grep feeds a Step 4 clause):
 Step 4 — decide:
   - If ANY rc above is nonzero OR the non-dict guard line printed 0 OR the
     stale-skill grep printed matches OR the route-matrix grep printed
-    "(not found)" OR frontmatter > 450 chars OR unittest ran fewer than 46
+    "(not found)" OR frontmatter > 450 chars OR unittest ran fewer than 49
     tests OR radar reported fewer than 26 passed OR reap fewer than 22 passed:
     BEGIN IMPROVEMENT LOOP (use bounded cycles via loop_state.py advance/finish).
   - If everything is clean AND you have nothing new to add:

@@ -80,8 +80,8 @@ advance with a narrower next action rather than claiming progress.
 Preserve verifier exit status when output is piped or truncated:
 capture the producer status first, or write the full output to an artifact
 before summarizing it; a successful `tail`, formatter, or parser is
-not evidence that the producer passed. Use `set -o pipefail` only when a nonzero producer exit
-means failure — for a verdict-carrying exit code (`crew-radar` 2, `crew-reap`
+not evidence that the producer passed. Use `set -o pipefail` only when a
+nonzero producer exit means failure — for a verdict-carrying exit code (`crew-radar` 2, `crew-reap`
 3, a linter's findings) pipefail inverts the reading; see examples.md §6.
 
 Evidence lines use the same compact shape: `kind: reference — result`. The

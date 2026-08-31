@@ -15,7 +15,7 @@ Map available primitives by capability, not by a different host's tool names:
 | --- | --- | --- | --- |
 | start a worker | dispatch is authorized; writes require proven isolation | `spawn_agent`; no isolation flag, shared filesystem, so read-only only | `task` with chosen `subagent_type`; read-only unless proven isolated worktree |
 | roster and status | list active workers before ownership decisions | `list_agents` | none — orchestrator tracks via state file + worklog claims |
-| relay or resume work | address one worker explicitly | `send_message`; no reply primitive — read state instead | use `task` with explicit description referencing child slug |
+| relay or resume work | address one worker explicitly | `send_message`; replies arrive via the `wait_agent` mailbox, not a dedicated reply primitive | use `task` with explicit description referencing child slug |
 | wait for completion | use an event/mailbox wait when available | `wait_agent`; there is no `Monitor` primitive | in-band: begin next cycle immediately while state is `running` |
 | stop a worker | interrupt only the named worker | `interrupt_agent` | orchestrator stops dispatching that worker; state remains bound |
 | overlapping worktree edits | run deterministic conflict evidence | `bin/crew-radar` (below) | `bin/crew-radar` (below) — same repo, same radar |
@@ -151,7 +151,9 @@ Exit `4` means `--apply` was refused because the ownership gate was inert.
 
 Two gates, both from real incidents:
 
-- **Ownership.** Pass the live agent roster with `--roster <file|list|->`, or
+- **Ownership.** Pass the live agent roster with `--roster <file|list|->`
+  (a bare single name is rejected — it is indistinguishable from a typo'd
+  filename, and reap deletes; for one name append a comma: `--roster 'a-1,'`), or
   pipe it in on stdin. Measured on live data: the peer worktree this gate protected had
   **0 commits ahead of the target** — fully landed — so the landed gate alone
   would have deleted a running session's checkout. The two gates are not
@@ -166,7 +168,7 @@ Two gates, both from real incidents:
 Exit `0` nothing to do, `3` something was reaped (or would be, in a dry run),
 `1` usage or repo error. Capture the output before piping it to `jq` — under
 `set -o pipefail` the intentional exit 3 otherwise reads as failure. The exit
-code is not the whole verdict: a `keep … removal failed` row still exits `0`
+code is not the whole verdict: a `keep … removal failed` row does not raise the exit code
 and a `reap … branch delete failed` row still exits `3` — grep the rows (or
 `--json` `.rows[].reason`) before treating either as clean.
 
