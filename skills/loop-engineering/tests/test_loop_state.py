@@ -99,7 +99,7 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("project verify <slug>", terminal_example)
         self.assertIn("project next reported all tasks archived", terminal_example)
         self.assertIn("project queue empty: typed command output", terminal_example)
-        self.assertIn("if ! $WORKLOG_BIN/project.sh verify <program-slug>", terminal_example)
+        self.assertIn('if ! "$WORKLOG_BIN/project.sh" verify "$program_slug"', terminal_example)
 
     def test_orchestrator_does_not_treat_any_next_exit_one_as_success(self) -> None:
         skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
