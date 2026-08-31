@@ -654,9 +654,21 @@ def _lint_file(
     # are checked instead, and a hand-written program missing ## Tasks is still
     # caught.
     if fm.get("kind") == "project":
-      for section in ("## Goal", "## Objective", "## Tasks"):
-        if f"\n{section}" not in f"\n{body}":
-          warnings.append(f"program (kind: project) missing {section} section")
+      # Orientation may live in EITHER place. `project.sh new` writes it twice —
+      # frontmatter `goal:`/`objective:`/`tasks:` and matching body sections —
+      # but a hand-maintained program legitimately keeps only the frontmatter
+      # (machine-readable) and organises its body as Context / Findings / Scope
+      # / Work items / Verification. Demanding the body sections flagged three
+      # of those on a well-formed file: the first version of this check swapped
+      # one false-positive class for another, caught by running it on the live
+      # corpus rather than by re-reading it.
+      for key, section in (("goal", "## Goal"), ("objective", "## Objective"),
+                           ("tasks", "## Tasks")):
+        if not fm.get(key) and f"\n{section}" not in f"\n{body}":
+          warnings.append(
+            f"program (kind: project) has neither a '{key}:' field nor a "
+            f"{section} section — a program needs its goal, objective and tasks "
+            f"recorded in one place or the other")
     elif "\n## Context" not in f"\n{body}":
       warnings.append("missing ## Context section")
     if "\n## Next" not in f"\n{body}":
