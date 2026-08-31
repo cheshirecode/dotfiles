@@ -177,8 +177,8 @@ after checking the evidence against the parent goal.
   counterexample, bounded retry failure, or an ambiguous scope/dependency.
 - Pause only the affected mutation. Keep the loop state `running`, preserve
   claims and unrelated task progress, and pass the original goal, compact task
-  context, trigger, evidence, constraints, and requested decision. Never pass
-  the full parent transcript.
+  context, trigger, affected mutation, evidence, constraints, one decision
+  question, and replay check. Never pass the full parent transcript.
 - A council result is advisory. On `verified`, persist its artifact, replay the
   discriminating check, and only then resume normal task progression. On
   `UNVERIFIED`, use `blocked` or `needs_human` with the exact replay check.

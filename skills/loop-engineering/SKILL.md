@@ -45,10 +45,9 @@ Use this compact route matrix before loading references:
 
 ## Compose with installed skills
 
-Within a running loop, select the smallest installed owner whose trigger is
+Within a running loop, select the most specific installed owner whose trigger is
 true. The owner skill supplies its procedure; loop-engineering supplies the
-budget, effect boundary, one-line evidence, and replay check. Do not preload
-every skill or duplicate an owner's rules. Pass only a compact objective,
+budget, effect boundary, one-line evidence, and replay check. Do not preload every skill or duplicate an owner's rules. When invoking the owner skill, pass only a compact objective,
 known evidence, constraints, budget, and requested return; if no trigger is
 true, record `optional-skill: skipped — <reason>` and continue without spending
 a cycle.
@@ -135,7 +134,7 @@ fail-open, recoverable representation. Measure after selection; if the result
 is not both smaller and more legible, send the original bytes.
 
 1. For noisy command output or tool catalogs, an authorized Caveman install may
-   use `caveman shrink -- <command>` before Pixel. Preserve producer status with
+    use `caveman shrink -- <command>` before using Caveman Pixel Mode. Preserve producer status with
    `set -o pipefail`; keep the original in an artifact store (`/tmp`,
    `$TMPDIR`, or your harness's upload area) and retain its recovery handle.
    Do not install an output-only response skill for input savings: it can add
@@ -185,7 +184,7 @@ errors, and typed evidence.
 Pass `--quiet` to every `loop_state.py` call so it emits only the index line
 (`running 3/12 turns — next: <action>`). The `evidence_gate.py` from the
 installed `evidence-gate` skill exposes `--quiet` only on `check` and `show`:
-redirect successful `init`/`record` stdout when compact output is needed,
+redirect successful `init`/`record` stdout to `/dev/null` when compact output is needed,
 preserve stderr, and leave the final `check` result visible. Never trade away
 exit codes to reduce output.
 
