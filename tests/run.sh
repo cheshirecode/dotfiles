@@ -428,6 +428,16 @@ PY
     fail "worklog verify-refs fixtures"
   fi
 
+  # Lint fixtures were never reachable from this runner either, so a regression
+  # in them only surfaced if someone ran them by hand.
+  for t in skills/worklog/tests/lint/*.sh; do
+    if bash "$t" >/dev/null 2>&1; then
+      ok "worklog lint: $(basename "$t" .sh)"
+    else
+      fail "worklog lint: $(basename "$t" .sh)"
+    fi
+  done
+
   if python3 -m unittest skills/evidence-gate/tests/test_evidence_gate.py >/dev/null; then
     ok "evidence-gate coverage fixtures"
   else

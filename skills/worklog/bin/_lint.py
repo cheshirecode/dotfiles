@@ -47,6 +47,9 @@ from typing import Any
 
 import yaml
 
+# Directories under people/<ldap>/ that hold content rather than tasks.
+NON_TASK_DIRS = {"transcripts", "artifacts"}
+
 KINDS = {
   "design", "review", "spike", "impl", "ops", "debug",
   "program", "postmortem", "runbook", "proposal",
@@ -105,9 +108,17 @@ def _layout_issues(root: pathlib.Path) -> list[dict[str, Any]]:
       if state_dir.name in {"active", "archive"}:
         task_paths.extend(sorted(state_dir.glob("*.md")))
         continue
-      if state_dir.name == "transcripts":
+      # Content directories, not task states. `artifacts/` holds monitor
+      # templates, scripts and findings logs that task bodies link to.
+      if state_dir.name in NON_TASK_DIRS:
         continue
       markdown = sorted(state_dir.rglob("*.md"))
+      # An UNKNOWN directory still has its files validated: `archived/` is a
+      # typo for `archive/`, and those files really are tasks worth checking.
+      # Only the named content dirs above skip parsing, because their files are
+      # not tasks at all. Suppressing the message and skipping the parse are
+      # separate decisions, and which one applies depends on whether the files
+      # are misplaced tasks or not tasks.
       task_paths.extend(markdown)
       if markdown:
         rel = state_dir.relative_to(root)
