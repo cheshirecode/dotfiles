@@ -15,8 +15,9 @@ the JSON.
   declared units; it cannot exceed the remaining budget.
 - `resume --state <terminal> --new-state <successor>` starts a fresh running
   state after `blocked`, `needs_human`, `budget_exhausted`, or
-  `continue_scheduled`. It inherits the goal and cumulative budget, requires a
-  next action, and binds the successor to the predecessor path, status, and
+  `continue_scheduled`. It inherits the goal and cumulative budget, requires
+  intervention evidence (`--evidence`) and a next action, and binds the
+  successor to the predecessor path, status, and
   SHA-256. `--new-state` must be a distinct, nonexistent path. Use
   `--extend-budget N` only with explicit authorization; exhausted predecessors
   require an extension. It rejects `running`, `complete`, and `cancelled`.
@@ -141,7 +142,7 @@ looks exactly like a real negative. A pipeline's exit status is not its
 producer's. `git stash` before re-running a suite removes the new fixtures along
 with the fix, so the green means they never ran.
 
-Three rules, in order of how often they would have caught it:
+Four rules, in order of how often they would have caught it:
 
 1. **Name the instrument's question, then compare it to yours.** Before stating
    "X is/isn't in Y", re-run the check with X literally in it, in the same turn
