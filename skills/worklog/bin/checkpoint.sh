@@ -205,6 +205,18 @@ fi
 
 if git diff --cached --quiet; then
   echo "checkpoint: no changes for $SLUG"
+  # ...but "no changes for the task file" is not "no changes". A task's
+  # artifacts/ files are content the body links to, and they are NOT auto-staged
+  # — deliberately, since widening the scope is how a checkpoint sweeps up a
+  # concurrent session's in-flight edits (observed 2026-08-31). So name what is
+  # dirty and point at --include, rather than letting "no changes" read as
+  # "your work is committed" over an uncommitted findings file.
+  DIRTY=$(git status --porcelain -- "people/$LDAP/" 2>/dev/null | head -5)
+  if [[ -n "$DIRTY" ]]; then
+    echo "checkpoint: NOTE — uncommitted files under people/$LDAP/ were not staged:" >&2
+    printf '%s\n' "$DIRTY" | sed 's/^/  /' >&2
+    echo "  stage them with: $0 $SLUG --include <path>" >&2
+  fi
   exit 0
 fi
 
