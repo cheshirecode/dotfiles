@@ -172,7 +172,7 @@ class LoopStateTest(unittest.TestCase):
         # Five distinct instances in one day (2026-08-31): $PPID for session id,
         # newest-file for this-session's-file, a grep of the wrong string, a
         # pipeline's exit for its producer's, and `git stash` taking the
-        # fixtures with the fix. The section must keep all three detection
+        # fixtures with the fix. The section must keep all four detection
         # rules, not just the memorable anecdote.
         protocol = (SKILL.parent / "references" / "protocol.md").read_text()
         section = protocol.split("## Verifying a claim", 1)[1].split("\n## ", 1)[0]
@@ -892,6 +892,72 @@ class LoopStateTest(unittest.TestCase):
 
         self.assertIn("state fingerprint changed", result.stderr)
         self.assertEqual(self.state.read_text(), before)
+
+    def test_annotate_rejects_blank_next_action_on_resumable_state(self) -> None:
+        self.initialize(limit=2)
+        self.run_cli(
+            "finish",
+            "--state",
+            str(self.state),
+            "--status",
+            "blocked",
+            "--evidence",
+            "hit wall",
+            "--next-action",
+            "retry after fix",
+        )
+        fingerprint = self.fingerprint()
+        before = self.state.read_text()
+
+        result = self.run_cli(
+            "annotate",
+            "--state",
+            str(self.state),
+            "--expect-sha256",
+            fingerprint,
+            "--evidence",
+            "correction",
+            "--next-action",
+            "  ",
+            expected_returncode=3,
+        )
+
+        self.assertIn("--next-action must be non-empty", result.stderr)
+        self.assertEqual(self.state.read_text(), before)
+
+    def test_resume_of_budget_exhausted_status_requires_extension_even_below_ceiling(
+        self,
+    ) -> None:
+        self.initialize(limit=9)
+        self.run_cli(
+            "finish",
+            "--state",
+            str(self.state),
+            "--status",
+            "budget_exhausted",
+            "--evidence",
+            "declared exhausted early",
+            "--next-action",
+            "resume later",
+            "--consume",
+            "1",
+        )
+
+        result = self.run_cli(
+            "resume",
+            "--state",
+            str(self.state),
+            "--new-state",
+            str(self.successor),
+            "--evidence",
+            "intervention supplied",
+            "--next-action",
+            "replay the blocked check",
+            expected_returncode=3,
+        )
+
+        self.assertIn("requires --extend-budget", result.stderr)
+        self.assertFalse(self.successor.exists())
 
     def test_quiet_emits_one_running_index_line(self) -> None:
         self.initialize(limit=2)
