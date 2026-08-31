@@ -36,7 +36,7 @@
 set -uo pipefail
 PROG=${0##*/}
 
-usage() { sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; }
 
 FMT=text
 for a in "$@"; do [ "$a" = "--json" ] && FMT=json && break; done
@@ -154,13 +154,13 @@ EOF
 # Pre-pass: decide whether the ownership gate can vote at all, BEFORE any
 # removal. Counting during the main loop and refusing afterwards is too late —
 # the removals have already happened by then (caught by fixture, 2026-08-31).
-owned=0; seen=0
+owned=0; seen=0; SEEN_NAMES=""
 while IFS= read -r wt; do
   [ -n "$wt" ] || continue
   [ "$wt" = "$(git -C "$ROOT" rev-parse --show-toplevel)" ] && continue
-  seen=$((seen+1)); SEEN_NAMES="${SEEN_NAMES:-}, ${wt##*/}"
+  seen=$((seen+1)); SEEN_NAMES="$SEEN_NAMES, ${wt##*/}"
   owned_by_live_agent "${wt##*/}" && owned=$((owned+1))
-done < <(git -C "$ROOT" worktree list --porcelain | awk '/^worktree /{print $2}')
+done < <(git -C "$ROOT" worktree list --porcelain | sed -n 's/^worktree //p')
 
 # A roster matching NO worktree is operationally identical to no roster: the
 # gate voted on nothing, and every removal would rest on the landed check alone.
