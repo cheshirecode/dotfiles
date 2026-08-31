@@ -146,7 +146,12 @@ Three rules, in order of how often they would have caught it:
 1. **Name the instrument's question, then compare it to yours.** Before stating
    "X is/isn't in Y", re-run the check with X literally in it, in the same turn
    as the claim. A negative inherited from an earlier command answered that
-   command's question.
+   command's question. Two more of the same shape, both live: `git diff
+   --name-only HEAD..origin/main` reports the *union* of both sides' changes,
+   not the overlap — it named nine colliding files where the merge base showed
+   two. And one repo carried two author identities differing by a single
+   capital letter and an email domain, so `git log --author` on either silently
+   answered about the other half of the history.
 2. **Build the check so the wrong strategy visibly fails.** A fixture where
    "newest" and "mine" happen to coincide certifies the bug. Make them disagree.
    Prove a new fixture by reverting the *implementation* and leaving the fixture
@@ -159,9 +164,11 @@ Three rules, in order of how often they would have caught it:
    derived values are wrong in the same direction, look for the shared source
    rather than correcting each in place.
 
-The cheap check almost always exists — one `ls -la`, one grep, one `--stat`. The
-failure is not that it is expensive; it is that the reachable answer already
-looked like the one being sought.
+The cheap check almost always exists — one `ls -la`, one grep, one `--stat`, one
+`git merge-base`. The failure is not that it is expensive; **it is that knowing
+the rule does not fire at the moment you type the command.** The `HEAD..origin/main`
+mistake above was made one message after writing this section, by the author of
+it. Treat the rules as things to run, not things to have read.
 
 ## Worklog composition
 
