@@ -54,7 +54,7 @@ while [ $# -gt 0 ]; do
     --target=*) TARGET=${1#*=}; shift ;;
     --apply) APPLY=1; shift ;;
     --no-fetch) FETCH=0; shift ;;
-    --roster) [ $# -ge 2 ] || die "--roster needs a file or -"; ROSTER_SRC=$2; shift 2 ;;
+    --roster) [ $# -ge 2 ] || die "--roster needs a file, '-', or a comma-separated list"; ROSTER_SRC=$2; shift 2 ;;
     --roster=*) ROSTER_SRC=${1#*=}; shift ;;
     --json)  shift ;;
     -h|--help) usage; exit 0 ;;
@@ -105,7 +105,7 @@ TARGET_WHEN=$(git -C "$ROOT" log -1 --format=%cI "$TARGET" 2>/dev/null | cut -c1
 
 # Roster on stdin. Absent means "ownership unknown", which is NOT the same as
 # "unowned" -- worktree removal is skipped entirely rather than guessed at.
-# --roster <file|-> is the documented form and matches crew-radar. A bare stdin
+# --roster <file|list|-> is the documented form. A bare stdin
 # pipe still works. The read is bounded: an unbounded one would hang a caller
 # that left stdin open with nothing to say. GNU timeout is not on macOS; use
 # bash `read -t` (Bash 3+) and never fall back to unbounded cat.
@@ -115,8 +115,8 @@ read_bounded_stdin() {
 }
 ROSTER=""; HAVE_ROSTER=0
 if [ -n "$ROSTER_SRC" ]; then
-  # File, `-` for stdin, or an inline comma-separated list. Same acceptance as
-  # crew-radar: the pair must not disagree about what --roster means.
+  # File, `-` for stdin, or an inline comma-separated list. Stricter than
+  # crew-radar by design: crew-reap deletes, so a bare word fails closed.
   if [ "$ROSTER_SRC" = "-" ]; then ROSTER=$(cat)
   elif [ -r "$ROSTER_SRC" ]; then ROSTER=$(cat "$ROSTER_SRC")
   elif [ "${ROSTER_SRC#*,}" != "$ROSTER_SRC" ]; then ROSTER=$(printf '%s' "$ROSTER_SRC" | tr ',' '\n')

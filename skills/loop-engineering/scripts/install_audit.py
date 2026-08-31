@@ -22,9 +22,19 @@ DIVERGENT_STATUSES = {
 }
 
 
+def digest_ignored(path: pathlib.Path, root: pathlib.Path) -> bool:
+    # Bytecode caches are interpreter- and machine-local: running the skill's
+    # own test suite creates them, and counting them would make a byte-identical
+    # source install read as divergent-copy forever (observed live 2026-08-31).
+    relative_parts = path.relative_to(root).parts
+    return "__pycache__" in relative_parts or path.suffix == ".pyc"
+
+
 def tree_digest(root: pathlib.Path) -> str:
     digest = hashlib.sha256()
     for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
+        if digest_ignored(path, root):
+            continue
         relative = path.relative_to(root).as_posix().encode()
         if path.is_symlink():
             digest.update(
@@ -130,7 +140,14 @@ def render(entries: list[dict[str, str]], as_json: bool) -> None:
 
 def main() -> int:
     args = build_parser().parse_args()
-    canonical = args.canonical.expanduser().resolve(strict=True)
+    try:
+        canonical = args.canonical.expanduser().resolve(strict=True)
+    except FileNotFoundError:
+        print(
+            f"install-audit: canonical path does not exist: {args.canonical}",
+            file=sys.stderr,
+        )
+        return 2
     if not (canonical / "SKILL.md").is_file():
         print(
             f"install-audit: canonical skill is missing SKILL.md: {canonical}",
@@ -138,11 +155,24 @@ def main() -> int:
         )
         return 2
 
-    roots = args.root or default_roots(pathlib.Path.home())
-    roots = [root.expanduser().absolute() for root in roots]
+    raw_roots = args.root or default_roots(pathlib.Path.home())
+    # Normalize the parent (so `..` spellings match) but keep the leaf as
+    # given: resolving the leaf itself would follow an installed symlink and
+    # misclassify `linked` roots. Dedupe — symlinked roots can alias one
+    # install, and repairing the same install twice rmtree's a symlink.
+    roots: list[pathlib.Path] = []
+    seen: set[pathlib.Path] = set()
+    for root in raw_roots:
+        root = root.expanduser().absolute()
+        normalized = root.parent.resolve(strict=False) / root.name
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        roots.append(normalized)
     canonical_digest = tree_digest(canonical)
     entries = [classify(root, canonical, canonical_digest) for root in roots]
 
+    write_failures = 0
     if args.link_identical:
         if any(entry["status"] in DIVERGENT_STATUSES for entry in entries):
             render(entries, args.json)
@@ -153,10 +183,19 @@ def main() -> int:
             return 1
         for root, entry in zip(roots, entries):
             if entry["status"] == "duplicate-identical":
-                replace_identical_copy(root, canonical)
+                try:
+                    replace_identical_copy(root, canonical)
+                except OSError as exc:
+                    write_failures += 1
+                    print(
+                        f"install-audit: failed to link {root}: {exc}",
+                        file=sys.stderr,
+                    )
         entries = [classify(root, canonical, canonical_digest) for root in roots]
 
     render(entries, args.json)
+    if write_failures:
+        return 1
     return 0 if all(entry["status"] in CLEAN_STATUSES for entry in entries) else 1
 
 
