@@ -198,13 +198,34 @@ fi
 # --- ghostty terminfo guard -------------------------------------------------
 # Ghostty sends TERM=xterm-ghostty. If this workspace was rebuilt and no longer
 # has that terminfo entry, TERM would be unusable, so fall back to
-# xterm-256color for THIS session only. Do not set `term` in the Ghostty config
-# instead: xterm-256color lacks the XF/XM/xm capabilities, so stuck focus (1004)
-# and SGR mouse (1003/1006) reporting modes cannot be cleared and leak into the
-# prompt as ^[[I / ^[[O / ^[[<35;..M on every mouse click.
-# Reinstall properly from the Mac with:
-#   infocmp -x xterm-ghostty | ssh coder.jade-magpie-83 'tic -x -o ~/.terminfo -'
+# xterm-256color for THIS session only.
+#
+# Note: xterm-256color is a perfectly serviceable fallback -- it defines the
+# same XM/xm mouse capabilities as xterm-ghostty on this host. Neither entry
+# defines XF, so focus reporting (1004) is never terminfo-mediated; apps that
+# use it write \033[?1004h directly and must disable it themselves on exit.
+# Prefer the real entry anyway so ghostty-specific capabilities resolve.
+#
+# If stray ^[[I / ^[[O / ^[[<35;..M appear at the prompt on mouse clicks, a TUI
+# exited without disabling its reporting modes. Clear them with:
+#   printf '\033[?1004l\033[?1003l\033[?1002l\033[?1000l\033[?1006l'
+# The reset-reporting PROMPT_COMMAND below does this automatically.
 if [ "$TERM" = "xterm-ghostty" ] && ! infocmp xterm-ghostty >/dev/null 2>&1; then
     export TERM=xterm-256color
+fi
+
+# Clear terminal reporting modes before each prompt. A TUI killed abruptly
+# (Ctrl+C, dropped SSH, laptop sleep) can leave focus (1004) and mouse
+# (1000/1002/1003 + SGR 1006) reporting enabled. Nothing then consumes those
+# reports, so every mouse click and focus change lands at the bash prompt as
+# ^[[I / ^[[O / ^[[<35;..M. Resetting per-prompt makes that self-healing.
+# Cheap: one printf of a few bytes, only for interactive terminals.
+if [ -t 1 ]; then
+    _reset_reporting() { printf '\033[?1004l\033[?1003l\033[?1002l\033[?1000l\033[?1006l\033[?1015l\033[?1005l'; }
+    case "$PROMPT_COMMAND" in
+        *_reset_reporting*) ;;
+        "") PROMPT_COMMAND="_reset_reporting" ;;
+        *)  PROMPT_COMMAND="_reset_reporting;$PROMPT_COMMAND" ;;
+    esac
 fi
 # --- end ghostty terminfo guard --------------------------------------------
