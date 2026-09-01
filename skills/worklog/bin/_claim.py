@@ -27,10 +27,10 @@ Subcommands (all operate on task files; no git ops here):
       <stale_after> (parsed `Ns|Nm|Nh|Nd`); exit 1 otherwise (no claim,
       or claim is fresh).
 
-  arbitrate --staged=PATH --head=PATH --stale-after=DUR
+  arbitrate --staged=PATH --head=PATH --stale-after=DUR [--session=ID]
       For pre-commit hook use. Both PATHs hold the full file contents
       (staged version + HEAD version). Exits:
-        0 — no conflict (staged claim allowed)
+        0 — no conflict (staged claim allowed, or the current owner releases)
         2 — conflict (HEAD has a non-stale claim with a different
             session_id than the staged version's claim)
 
@@ -220,10 +220,10 @@ def cmd_arbitrate(args: argparse.Namespace) -> int:
   if _is_stale(hc, stale_sec):
     return 0  # HEAD's claim is stale; staged commit may reap/overwrite
   if not sc:
-    # Staged removes the claim. Only OK if staged session is same as HEAD's
-    # (release path) — otherwise it's a foreign clear.
-    # For phase 2 simplicity, also allow when there's no claim at all on
-    # staged AND HEAD claim is stale (reap path). We already handled stale.
+    # Staged removes the claim. Allow only the current owner (release path).
+    # Stale claims were already accepted above for the reap path.
+    if args.session and args.session == hc.get("session_id"):
+      return 0
     print(f"claim arbitrate: REJECT — staged commit clears non-stale claim "
           f"held by {hc.get('session_id')}", file=sys.stderr)
     return 2
@@ -281,6 +281,7 @@ def main() -> None:
   s.add_argument("--staged", required=True)
   s.add_argument("--head", required=True)
   s.add_argument("--stale-after", default="30m")
+  s.add_argument("--session", default=None)
   s.set_defaults(fn=cmd_arbitrate)
 
   s = sub.add_parser("project-stale-after")

@@ -82,6 +82,34 @@ rm "people/$LDAP/active/claim-style.md"
 echo "  ✓ sequence indentation preserved"
 
 echo ""
+echo "=== 2.0b: arbiter permits owner release and rejects foreign clear ==="
+head_claim="$TMPDIR/head-claim.md"
+staged_clear="$TMPDIR/staged-clear.md"
+cat > "$head_claim" <<'EOF'
+---
+slug: claim-arbitration
+claim:
+  session_id: codex:owner
+  lock_at: '2099-01-01T00:00:00Z'
+  heartbeat_at: '2099-01-01T00:00:00Z'
+---
+EOF
+cat > "$staged_clear" <<'EOF'
+---
+slug: claim-arbitration
+---
+EOF
+python3 "$WORKLOG_BIN/_claim.py" arbitrate \
+  --staged="$staged_clear" --head="$head_claim" --stale-after=30m \
+  --session=codex:owner
+if python3 "$WORKLOG_BIN/_claim.py" arbitrate \
+  --staged="$staged_clear" --head="$head_claim" --stale-after=30m \
+  --session=codex:foreign >/dev/null 2>&1; then
+  echo "FAIL: arbiter allowed foreign clear"; exit 1
+fi
+echo "  ✓ owner release allowed; foreign clear rejected"
+
+echo ""
 echo "=== 2.1: project new (2-task project, stale_after=10s) ==="
 TASKS='[{"slug":"p2-a"},{"slug":"p2-b"}]'
 echo "$TASKS" | "$WORKLOG_BIN/project.sh" new p2-proj \
