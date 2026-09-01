@@ -38,3 +38,4 @@ coverage/
 # Per-host secrets and identity overlays
 .envrc.github
 .gitconfig.local
+.shell_common.local
