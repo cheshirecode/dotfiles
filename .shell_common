@@ -209,3 +209,29 @@ fi
 if [ "${DOTFILES_QUIET:-0}" != "1" ]; then
     welcome
 fi
+
+# --- clear terminal reporting modes before each prompt ----------------------
+# A TUI killed abruptly (Ctrl+C, dropped SSH, laptop sleep) exits without
+# disabling the focus (1004) and mouse (1000/1002/1003 + SGR 1006) reporting
+# it turned on. Nothing then consumes those reports, so every mouse click and
+# focus change lands at the prompt as ^[[I / ^[[O / ^[[<35;..M. Resetting per
+# prompt makes a stranded terminal self-healing.
+#
+# Lives here rather than in .bashrc so zsh gets it too: zsh has no
+# PROMPT_COMMAND, it uses precmd hooks, and both shells source this file.
+# Cheap: one printf of a few bytes, interactive terminals only.
+if [ -t 1 ]; then
+    _reset_reporting() {
+        printf '\033[?1004l\033[?1003l\033[?1002l\033[?1000l\033[?1006l\033[?1015l\033[?1005l'
+    }
+    if [ -n "$ZSH_VERSION" ]; then
+        autoload -Uz add-zsh-hook 2>/dev/null && add-zsh-hook precmd _reset_reporting
+    elif [ -n "$BASH_VERSION" ]; then
+        case "$PROMPT_COMMAND" in
+            *_reset_reporting*) ;;
+            "") PROMPT_COMMAND="_reset_reporting" ;;
+            *)  PROMPT_COMMAND="_reset_reporting;$PROMPT_COMMAND" ;;
+        esac
+    fi
+fi
+# --- end reporting-mode reset ----------------------------------------------
