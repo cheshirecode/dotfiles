@@ -150,8 +150,6 @@ alias reload='source ~/.bashrc'
 # Show most popular commands (bash-specific syntax)
 top-commands() { history | awk "{print \$2}" | awk "{print \$1}" | sort | uniq -c | sort -rn | head -10; }
 . ~/.super-autocomplete.bash
-unset KUBERNETES_SERVICE_PORT
-unset KUBERNETES_SERVICE_HOST
 # --- datadog-vscode-autoinstall (super) ---
 DATADOG_ID="datadog.datadog-vscode"
 
