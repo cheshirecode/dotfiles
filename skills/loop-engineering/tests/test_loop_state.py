@@ -241,10 +241,11 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("current harness exposes it", routing)
         self.assertIn("data-policy gate", routing)
         self.assertIn("model lane, not an unverified exact", routing)
-        self.assertIn("If no dispatch tool exists in the harness", routing)
-        self.assertIn("target skill is unavailable", routing)
+        self.assertIn("If no dispatch tool, target skill, or required", routing)
         self.assertIn("model-routing: skipped", routing)
         self.assertIn("do not spend a cycle", routing)
+        self.assertIn("advisory-only", routing)
+        self.assertIn("never claim a model switch the harness cannot enforce", routing)
 
     def test_payload_transport_is_optional_recoverable_and_byte_preserving(self) -> None:
         skill_text = SKILL.read_text()
