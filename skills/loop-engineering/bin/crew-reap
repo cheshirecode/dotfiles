@@ -110,8 +110,18 @@ TARGET_WHEN=$(git -C "$ROOT" log -1 --format=%cI "$TARGET" 2>/dev/null | cut -c1
 # that left stdin open with nothing to say. GNU timeout is not on macOS; use
 # bash `read -t` (Bash 3+) and never fall back to unbounded cat.
 read_bounded_stdin() {
-  local line
-  while IFS= read -r -t 5 line || [ -n "$line" ]; do printf '%s\n' "$line"; done
+  # One 5s deadline for the whole stream: read -t resets per line, so a
+  # drip-feeding writer could otherwise hold reap open indefinitely.
+  local line remaining deadline=$((SECONDS + 5))
+  while :; do
+    remaining=$((deadline - SECONDS))
+    [ "$remaining" -gt 0 ] || break
+    line=""
+    if IFS= read -r -t "$remaining" line; then printf '%s\n' "$line"
+    elif [ -n "$line" ]; then printf '%s\n' "$line"; break
+    else break
+    fi
+  done
 }
 ROSTER=""; HAVE_ROSTER=0
 if [ -n "$ROSTER_SRC" ]; then

@@ -88,6 +88,22 @@ ck "roster accepts an inline list"    ''           'keep +wt-peer .*live agent' 
 ck "unreadable roster rejected"       ''           'cannot read roster'         --roster /nope/nope
 ck "bare-word roster fails closed"    ''           'cannot read roster'         --no-fetch --roster wt-peer-9d
 
+# Bare stdin is bounded across the whole stream, not five seconds per line.
+# A drip-feeding writer hits the closed pipe once the ~5s deadline lapses
+# (measured elapsed ~7s); the old per-line reset would ride all fifteen
+# writes (~15s). The threshold sits between with ~4s margin each way.
+started=$SECONDS
+slow_out=$(
+  seq 15 | while read -r i; do sleep 1; printf 'agent-%s\n' "$i"; done |
+    "$REAP" --target main --no-fetch "$TMP/r" 2>&1
+) || true
+elapsed=$((SECONDS - started))
+if [ "$elapsed" -le 11 ]; then
+  PASS=$((PASS+1)); printf '  PASS  bare stdin has one total timeout\n'
+else
+  FAIL=$((FAIL+1)); printf '  FAIL  bare stdin timeout reset per line (%ss)\n' "$elapsed"
+fi
+
 build
 ckjson "json: happy path" '.'       --target main --json "$TMP/r"
 ckjson "json: error path" '.error'  --json "$TMP/nope"
