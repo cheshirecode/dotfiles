@@ -62,6 +62,17 @@ KINDS = {
   "bug", "perf", "tooling",
 }
 STATUSES = {"draft", "in-progress", "in-review", "blocked", "shipping", "archived"}
+# Common wrong statuses → the intended FSM state. active/ is a directory,
+# not a status, so a fresh task shouldn't have to guess its way past the hook.
+STATUS_HINTS = {
+  "active": "the active/ directory is a location, not a status; "
+            "use 'in-progress' (ongoing) or 'draft' (not started)",
+  "complete": "use 'archived' and move the file to archive/",
+  "done": "use 'archived' and move the file to archive/",
+  "todo": "use 'draft'",
+  "proposal": "that's a kind, not a status; use 'draft'",
+  "wip": "use 'in-progress'",
+}
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 ISO_TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:?\d{2})?$")
 PROJECT_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
@@ -533,7 +544,11 @@ def _lint_file(
   if not status:
     errors.append("missing frontmatter key: status")
   elif status not in STATUSES:
-    errors.append(f"status '{status}' not in FSM: {sorted(STATUSES)}")
+    hint = STATUS_HINTS.get(status)
+    errors.append(
+      f"status '{status}' not in FSM: {sorted(STATUSES)}"
+      + (f" — {hint}" if hint else "")
+    )
 
   if state == "archive" and status and status != "archived":
     warnings.append(f"file under archive/ has status '{status}' (expected 'archived')")
