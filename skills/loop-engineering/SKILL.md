@@ -122,10 +122,11 @@ For a non-trivial loop, invoke `$which-model` before dispatch only when the
 current harness exposes it and the task has materially different capability,
 context, privacy, or cost needs. Ask for a model lane, not an unverified exact
 model. Apply its data-policy gate before delegation.
-If no dispatch tool exists in the harness, the target skill is unavailable,
-or a required supporting tool is missing, skip routing and record
-`model-routing: skipped — <reason>` as one-line evidence;
-do not spend a cycle on selection ceremony.
+If no dispatch tool, target skill, or required supporting tool exists, skip
+routing and record `model-routing: skipped — <reason>` as one-line evidence;
+do not spend a cycle on selection ceremony. If a delegate surface exists but
+no model selector does, treat the returned lane as advisory-only and use the
+host default; never claim a model switch the harness cannot enforce.
 
 ### Optional payload transport
 
