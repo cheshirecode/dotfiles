@@ -36,6 +36,8 @@ while [[ -L "$SELF" ]]; do
   esac
 done
 SKILL_BIN="$(cd "$(dirname "$SELF")/.." && pwd)"
+# shellcheck source=../_lib.sh
+. "$SKILL_BIN/_lib.sh"
 
 # Staged paths (added/copied/modified/renamed; deletes don't need checking).
 # Read into an array via while-read for bash 3.2 compatibility (macOS default).
@@ -210,10 +212,12 @@ for f in "${CHANGED[@]}"; do
 
   tmp_staged="$(mktemp)"
   tmp_head="$(mktemp)"
+  current_session="$(resolve_session_id)"
   git show ":$f"     > "$tmp_staged" 2>/dev/null || true
   git show "HEAD:$f" > "$tmp_head"   2>/dev/null || true
   if ! python3 "$SKILL_BIN/_claim.py" arbitrate \
-      --staged="$tmp_staged" --head="$tmp_head" --stale-after="$stale" 2>&1; then
+      --staged="$tmp_staged" --head="$tmp_head" --stale-after="$stale" \
+      --session="$current_session" 2>&1; then
     echo "pre-commit: claim arbitration rejected $f" >&2
     rm -f "$tmp_staged" "$tmp_head"
     exit 1
