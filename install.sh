@@ -150,4 +150,74 @@ if [ ! -e "$DEST/.gitconfig.local" ]; then
 EOF
 fi
 
+# Bootstrap ~/.shell_common.local (machine-local shell env, untracked). The
+# committed .shell_common sources it; .bashrc also sources it above the
+# interactive guard, so it applies to non-interactive shells too. Seeded with
+# the Kubernetes unsets: this workspace runs as a k8s pod, so the kubelet
+# injects KUBERNETES_* vars for the in-cluster API, and those make client-go
+# prefer in-cluster config over ~/.kube/config, silently pointing kubectl and
+# helm at the wrong API server. A no-op on a machine where they are not set.
+if [ ! -e "$DEST/.shell_common.local" ]; then
+  echo "Creating $DEST/.shell_common.local — machine-local shell env."
+  cat > "$DEST/.shell_common.local" <<'SCLEOF'
+# ~/.shell_common.local — machine-local shell env. NOT in the dotfiles repo.
+# Sourced from .bashrc above the interactive guard, so this applies to
+# non-interactive shells (bash -c from tools/hooks) as well.
+
+# --- drop Kubernetes service-discovery injection ---------------------------
+# Only meaningful when running as a k8s pod; a harmless no-op elsewhere.
+unset KUBERNETES_SERVICE_HOST
+unset KUBERNETES_SERVICE_PORT
+unset KUBERNETES_SERVICE_PORT_HTTPS
+unset KUBERNETES_PORT
+unset KUBERNETES_PORT_443_TCP
+unset KUBERNETES_PORT_443_TCP_ADDR
+unset KUBERNETES_PORT_443_TCP_PORT
+unset KUBERNETES_PORT_443_TCP_PROTO
+SCLEOF
+  chmod 600 "$DEST/.shell_common.local"
+fi
+
+# Install xterm-ghostty terminfo. ~/.terminfo sits on the ephemeral overlay
+# (only /workspace and a few ~/.* dirs are on the persistent disk), so a
+# rebuilt workspace loses it. Without this entry the session falls back to
+# xterm-256color, which has no XF/XM/xm capabilities — so focus (1004) and
+# SGR mouse (1003/1006) reporting enabled by a TUI can never be disabled and
+# leaks into the prompt as ^[[I / ^[[O / ^[[<35;..M on every mouse click.
+#
+# Prefers a system copy of the entry; otherwise derives one from
+# xterm-256color and adds the three missing capabilities. Non-fatal: a tic
+# failure must not abort the installer, and .bashrc has a TERM fallback guard.
+if ! infocmp xterm-ghostty >/dev/null 2>&1; then
+  (
+    set +e
+    if command -v tic >/dev/null 2>&1; then
+      echo "Installing xterm-ghostty terminfo into $DEST/.terminfo..."
+      mkdir -p "$DEST/.terminfo"
+      src=""
+      for cand in /usr/share/terminfo /usr/lib/terminfo /etc/terminfo; do
+        if [ -e "$cand/x/xterm-ghostty" ]; then src="$cand"; break; fi
+      done
+      if [ -n "$src" ]; then
+        infocmp -x -A "$src" xterm-ghostty | tic -x -o "$DEST/.terminfo" - 2>/dev/null
+      else
+        {
+          printf 'xterm-ghostty|ghostty|Ghostty,\n'
+          printf '\tXF,\n'
+          printf '\tXM=\\E[?1006;1000%%?%%p1%%{1}%%=%%th%%el%%;,\n'
+          printf '\txm=\\E[<%%i%%p3%%d;%%p1%%d;%%p2%%d;%%?%%p4%%tM%%em%%;,\n'
+          printf '\tuse=xterm-256color,\n'
+        } | tic -x -o "$DEST/.terminfo" - 2>/dev/null
+      fi
+      if infocmp -x -A "$DEST/.terminfo" xterm-ghostty >/dev/null 2>&1; then
+        echo "  xterm-ghostty terminfo installed."
+      else
+        echo "  xterm-ghostty terminfo install failed (non-fatal); .bashrc falls back to xterm-256color." >&2
+      fi
+    else
+      echo "  tic not available; skipping xterm-ghostty terminfo." >&2
+    fi
+  ) || true
+fi
+
 echo "Dotfiles installation complete."
