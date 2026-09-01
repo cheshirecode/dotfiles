@@ -828,6 +828,50 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("loop-state:", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
 
+    def test_validate_enforces_transition_invariants(self) -> None:
+        base = self.initialize()
+        cases = (
+            (
+                "running action",
+                "running",
+                " ",
+                0,
+                "",
+                "running requires non-empty next_action",
+            ),
+            (
+                "blocked action",
+                "blocked",
+                "",
+                0,
+                "",
+                "blocked requires non-empty next_action",
+            ),
+            (
+                "complete action",
+                "complete",
+                "stale follow-up",
+                0,
+                "test log",
+                "complete requires empty next_action",
+            ),
+        )
+        for name, status, next_action, used, verification, message in cases:
+            with self.subTest(name=name):
+                state = json.loads(json.dumps(base))
+                state["terminal_status"] = status
+                state["next_action"] = next_action
+                state["budget"]["used"] = used
+                state["verification"] = verification
+                self.state.write_text(json.dumps(state))
+                result = self.run_cli(
+                    "validate",
+                    "--state",
+                    str(self.state),
+                    expected_returncode=3,
+                )
+                self.assertIn(message, result.stderr)
+
     def test_annotate_corrects_terminal_evidence_without_reopening(self) -> None:
         self.initialize(limit=1)
         exhausted = json.loads(
