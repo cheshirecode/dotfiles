@@ -90,7 +90,7 @@ parse_git_branch() {
     fi
 }
 # nicer prompt
-PS1="\n\[\e[30;1m\](\[\e[34;1m\]\u@\h:\w\[\e[30;1m\]) (\[\e[32;1m\]$(/bin/ls -1 | /usr/bin/wc -l | /bin/sed 's: ::g') files, $(/bin/ls -lah | /bin/grep -m 1 total | /bin/sed 's/total //')b\[\e[30;1m\]) (\e[36m$(parse_git_branch))\] \n--> \[\e[0m\]"
+PS1='\n\[\e[30;1m\](\[\e[34;1m\]\u@\h:\w\[\e[30;1m\]) (\[\e[32;1m\]$(/bin/ls -1 | /usr/bin/wc -l | /bin/sed "s: ::g") files, $(/bin/ls -lah | /bin/grep -m 1 total | /bin/sed "s/total //")b\[\e[30;1m\]) (\[\e[36m\]$(parse_git_branch)\[\e[30;1m\])\n--> \[\e[0m\]'
 
 # enable color support of ls and also add handy aliases
 if [ -x /usr/bin/dircolors ]; then
@@ -196,3 +196,17 @@ if [ -n "$EDITOR_CLI" ] && ! "$EDITOR_CLI" --list-extensions 2>/dev/null | grep 
   fi
 fi
 # --- end claude-code-autoinstall (super) ---
+
+# --- ghostty terminfo guard -------------------------------------------------
+# Ghostty sends TERM=xterm-ghostty. If this workspace was rebuilt and no longer
+# has that terminfo entry, TERM would be unusable, so fall back to
+# xterm-256color for THIS session only. Do not set `term` in the Ghostty config
+# instead: xterm-256color lacks the XF/XM/xm capabilities, so stuck focus (1004)
+# and SGR mouse (1003/1006) reporting modes cannot be cleared and leak into the
+# prompt as ^[[I / ^[[O / ^[[<35;..M on every mouse click.
+# Reinstall properly from the Mac with:
+#   infocmp -x xterm-ghostty | ssh coder.jade-magpie-83 'tic -x -o ~/.terminfo -'
+if [ "$TERM" = "xterm-ghostty" ] && ! infocmp xterm-ghostty >/dev/null 2>&1; then
+    export TERM=xterm-256color
+fi
+# --- end ghostty terminfo guard --------------------------------------------
