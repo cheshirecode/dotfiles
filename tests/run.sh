@@ -413,13 +413,16 @@ PY
     fail "worklog PR reconciliation fixtures"
   fi
 
-  if python3 -m unittest \
-    skills/loop-engineering/tests/test_loop_state.py \
-    skills/loop-engineering/tests/test_install_audit.py \
-    skills/loop-engineering/tests/test_skill_budget.py >/dev/null; then
-    ok "loop-engineering state transition fixtures"
+  # Discovered, not listed: test_loop_run.py existed for a full session while
+  # this line named three files, so its 17 fixtures never ran here. A broken
+  # driver kept the runner green.
+  if python3 -m unittest discover \
+    -s skills/loop-engineering/tests \
+    -t skills/loop-engineering/tests \
+    -p "test_*.py" >/dev/null 2>&1; then
+    ok "loop-engineering python fixtures"
   else
-    fail "loop-engineering state transition fixtures"
+    fail "loop-engineering python fixtures"
   fi
 
   # Shell fixtures for the crew tools. Neither was reachable from this runner
