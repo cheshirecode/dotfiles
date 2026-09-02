@@ -35,7 +35,8 @@ the JSON.
   Annotation cannot add a next action to `complete` or `cancelled`.
 - `validate` checks the schema and transition invariants.
 - `show` prints the five-field contract; `--json` returns the full history.
-- `--quiet` (accepted by every subcommand) replaces the state document with
+- `--quiet` (accepted by every subcommand except `fingerprint`, which always
+  prints the digest) replaces the state document with
   one index line: `<status> <used>/<limit> <unit> — next: <action>` while
   `running`; a terminal line shows the verification instead of the next action
   (`<status> <used>/<limit> <unit>[ — <verification>]`), so read a resumable

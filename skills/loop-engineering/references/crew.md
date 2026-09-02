@@ -71,6 +71,10 @@ evidence that **the split was wrong**, not that a worker misbehaved.
 <skill-dir>/bin/crew-radar [--base <ref>] [--roster <file|list|->] [--json] [--quiet] [--strict] <repo>
 ```
 
+`--quiet` here means exit code only, no output at all — the opposite of `--quiet` on
+`loop_state.py`/`evidence_gate.py`, which still print an index line. Do not use it when
+you must record the verdict line.
+
 Exit `0` clean or info-only, `2` collision, `1` usage or repo error. It runs no model and
 costs no tokens. Run it before a parallel wave, after workers return, and before
 and after each serialized write. Record every boundary verdict; do not claim
@@ -147,7 +151,11 @@ as fresh as that ref. A stale one fails safe but silently, reporting
 "N commit(s) not in <target>", which reads as unlanded work when the ref simply
 predates the merge. `--no-fetch` stays offline and says so in the header.
 
-Exit `4` means `--apply` was refused because the ownership gate was inert.
+Exit `4` means `--apply` was refused because the ownership gate was inert: the roster
+matched 0 worktrees. An entry must equal a worktree basename or extend it with
+`-<suffix>`. Fix the roster and re-run, or escalate `needs_human` — do not bypass the gate.
+`OWNERSHIP_INERT_OK=1` overrides it, and is only honest when you have confirmed no
+worktree here is agent-owned; a roster you could not get right is not that confirmation.
 
 Two gates, both from real incidents:
 
