@@ -36,7 +36,7 @@ LAST_COMMIT_DAYS=$(git log -1 --format=%ct --author="$LDAP@" -- people/$LDAP/ 2>
 Read-only sync, no writes.
 
 1. `ls people/$LDAP/active/` — print slugs.
-2. For each known repo under `$PROJECTS_DIR` (`cheshirecode/<repo>`, `cheshirecode/<repo>`, `cheshirecode/<repo>`, `cheshirecode/<repo>`, `_worklog`), run `gh pr list --author @me --state open --json number,title,url,headRepository --limit 20` in parallel and cross-reference against active task files.
+2. Discover the repos to scan: `ls -d "$PROJECTS_DIR"/*/` (each clone is a candidate; `_worklog` is always included). Keep the ones that are git clones with a GitHub remote — `git -C <dir> remote get-url origin`. If `$PROJECTS_DIR` holds no clones, prompt the user for the repo list rather than guessing. For each, run `gh pr list --author @me --state open --json number,title,url,headRepository --limit 20` in parallel and cross-reference against active task files.
 3. Report drift lines if any. Do not write.
 
 Output:
@@ -81,11 +81,11 @@ Expensive: scans GitHub + Linear + Notion + Slack. Warn first:
 
 Wait for acknowledgement.
 
-1. **Verify auth in parallel.** Stop with a clear message if any fails:
-   - `gh auth status`
-   - Linear MCP: `mcp__claude_ai_Linear__get_user` (self)
-   - Notion MCP: `mcp__claude_ai_Notion__notion-get-users`
-   - Slack MCP: `mcp__claude_ai_Slack__slack_search_users` for the user's own LDAP/name (degrade gracefully — if Slack auth is missing, skip step 2's Slack pull and note it in the report; don't hard-fail the whole init).
+1. **Verify auth in parallel.** Only `gh auth status` is required — stop with a clear message if it fails. Linear, Notion, and Slack are OPTIONAL enrichment sources: degrade gracefully — if one's auth is missing, skip its step-2 pull and note the gap in the report; don't hard-fail the whole init.
+   - `gh auth status` — **required**
+   - Linear MCP: `mcp__claude_ai_Linear__get_user` (self) — optional
+   - Notion MCP: `mcp__claude_ai_Notion__notion-get-users` — optional
+   - Slack MCP: `mcp__claude_ai_Slack__slack_search_users` for the user's own LDAP/name — optional
 
 2. **Pull external state in parallel.**
    - **GitHub:** `gh pr list --author @me --state open --json number,title,url,headRepository,isDraft,reviewDecision` across known repos; `gh issue list --assignee @me --state open`.

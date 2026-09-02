@@ -3,7 +3,7 @@
 Run helpers from a shell that has the target clone's environment loaded. Prefer `direnv exec "$WORKLOG_REPO" ...` when the clone has `.envrc`; direct `source` is only safe for plain shell exports and may fail on direnv helpers such as `source_up`. Required shape:
 
 - `WORKLOG_REPO` points at the live data repo (`.../_worklog`). **Required for all modes except `help`.** If unset and the mode is not `help`, error with: `WORKLOG_REPO not set — run from a worklog clone or set it explicitly.`
-- `WORKLOG_BIN` points at this skill's `bin/` directory; if unset, use `$HOME/Documents/oss/dotfiles/skills/worklog/bin`.
+- `WORKLOG_BIN` points at this skill's `bin/` directory; if unset, use `$HOME/.claude/skills/worklog/bin`.
 - `WORKLOG_LDAP` is optional but authoritative when set; otherwise helpers fall back to git email, then `$USER`.
 - `--help` paths must not require any of those variables to be set.
 
