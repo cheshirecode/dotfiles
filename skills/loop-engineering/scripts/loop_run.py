@@ -20,6 +20,7 @@ Exit codes match loop_state.py: 0 success, 2 usage, 3 contract rejection.
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -33,6 +34,10 @@ CREW_RADAR = SKILL_DIR / "bin" / "crew-radar"
 from loop_state import RESUMABLE_STATUSES, TERMINAL_STATUSES  # noqa: E402
 
 TERMINAL = TERMINAL_STATUSES
+
+# A worklog task slug: one bare token. project.sh prints nothing else on
+# stdout when it finds one, so anything wider is a broken contract, not a task.
+QUEUE_SLUG = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 
 
 def loop_state(args):
@@ -59,7 +64,7 @@ def radar_line(repo):
     except (OSError, ValueError):
         return "radar: error=unrunnable"
     if data.get("error"):
-        return "radar: error=%s" % data["error"]
+        return "radar: error=%s" % cell(str(data["error"]))
     paths = [o.get("path", "?") for o in data.get("overlaps") or []]
     if proc.returncode == 0 and not paths:
         return "radar: clean"
@@ -67,6 +72,11 @@ def radar_line(repo):
         data.get("warn", "?"),
         ",".join(paths) or "-",
     )
+
+
+def cell(text):
+    """Collapse text into one driver-line cell: single line, no separator."""
+    return " ".join(text.split()).replace("|", "/")[:80]
 
 
 def queue_line(project):
@@ -80,13 +90,25 @@ def queue_line(project):
     proc = subprocess.run(
         [str(project_sh), "next", project], capture_output=True, text=True
     )
-    out = (proc.stdout + proc.stderr).strip()
-    if proc.returncode == 0 and out:
-        slug = out.splitlines()[-1].strip()
-        return "queue: %s" % slug, slug
-    if "nothing left" in out:
+    # The slug is stdout-only. project.sh writes warnings and every failure
+    # reason to stderr, so a merged stream hands the last warning back as a
+    # task name and the loop goes on to claim it.
+    if proc.returncode == 0:
+        lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+        slug = lines[-1] if lines else ""
+        if QUEUE_SLUG.match(slug):
+            return "queue: %s" % slug, slug
+        return "queue: error=%s" % cell(slug or "next printed no slug"), None
+    # Exit 1 alone is not proof of an empty or blocked queue (orchestrator.md):
+    # it also covers a missing, mistyped, or childless project. Only the two
+    # verdicts project.sh states in words are queue verdicts; anything else is
+    # a configuration failure the model must see rather than read as a lull.
+    reason = proc.stderr.strip() or proc.stdout.strip()
+    if "(nothing left)" in reason:
         return "queue: empty", None
-    return "queue: blocked", None
+    if "no claim-eligible task" in reason:
+        return "queue: blocked", None
+    return "queue: error=%s" % cell(reason or "rc %d" % proc.returncode), None
 
 
 def main():
