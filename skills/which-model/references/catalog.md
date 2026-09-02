@@ -51,6 +51,14 @@ Prefer official or harness-native, key-free sources:
   harness and against OpenAI's pricing page — never as a quotable source.
 - Cursor local `state.vscdb` reactive storage (`availableDefaultModels2`) for Cursor.
 - Public OpenRouter models API (`https://openrouter.ai/api/v1/models`) for OpenRouter.
-- For Claude, the helper's dated Anthropic docs snapshot enriched with pricing/limits. When live availability matters, let the running session inject model JSON through `WHICH_MODEL_CATALOG_SOURCE`; the skill must never hold an Anthropic API key.
+- For Claude, the helper's offline transcription of the bundled `claude-api` reference
+  (`shared/models.md`, `shared/model-migration.md`), which supplies ids, lifecycle
+  (active/deprecated/retired), and only those prices and limits the reference actually
+  states — anything it omits stays null with a caveat rather than being guessed. That
+  reference is undated, so the catalog reports `data_as_of: "unknown"` and always reads
+  as stale. When live availability matters, let the running session inject model JSON
+  through `WHICH_MODEL_CATALOG_SOURCE`; the skill must never hold an Anthropic API key.
+  Lifecycle is derived from the reference on both paths, so an injected Models API
+  payload (which carries no deprecation field) still demotes deprecated and retired lanes.
 
 Label prices or availability as unverified when the source cannot prove them. State whether each recommended route is selectable here, requires a wrapper, or is unavailable in the harness.
