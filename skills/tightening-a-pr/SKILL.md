@@ -24,7 +24,7 @@ When an agent finishes a PR, the code is the easy part to see and the hard part 
 This skill invokes worklog scripts via `$WORKLOG_BIN`. Resolve it the same way the worklog skill does:
 
 ```bash
-WORKLOG_BIN="${WORKLOG_BIN:-$HOME/Documents/oss/dotfiles/skills/worklog/bin}"
+WORKLOG_BIN="${WORKLOG_BIN:-$HOME/.claude/skills/worklog/bin}"
 ```
 
 All `checkpoint.sh` references below use this variable.
@@ -70,7 +70,7 @@ Before calling the PR ready, record the current head SHA, the focused validation
 
 ### 4. Compress + checkpoint the worklog
 
-Compress the decided iteration drama out of the task body (drop ToT/Reflexion scaffolding, verified "Assumptions", multi-row iteration tables — git log is the audit trail; keep the decision rationale, lessons, re-runnable commands, `next_action`), then checkpoint it **on its own**: `"$WORKLOG_BIN/checkpoint.sh" <slug>`. Use the plain command — its staged-scope guard *refuses* any staged path outside the task file, which is exactly what enforces the single-concern commit; do **not** pass `WORKLOG_CHECKPOINT_FORCE=1` (that bypasses the guard) unless you have a stated reason. Keep this separate from the step-2 codify commits — up to three concerns, up to three commits, never one bundle.
+Compress the decided iteration drama out of the task body (drop ToT/Reflexion scaffolding, verified "Assumptions", multi-row iteration tables — git log is the audit trail; keep the decision rationale, lessons, re-runnable commands, `next_action`), then checkpoint it **on its own**: `"$WORKLOG_BIN/checkpoint.sh" <slug>`. Use the plain command — its staged-scope guard *refuses* any staged path outside the task file (exit 1), which is exactly what enforces the single-concern commit. If a sibling path genuinely belongs to this slug, name it with `--include=<path>` (repeatable) — that is the sanctioned scoped mechanism, and the one the refusal message itself recommends. `WORKLOG_CHECKPOINT_FORCE=1` bypasses the guard wholesale and is the blunt last resort: only with an explicit, stated reason. Keep this separate from the step-2 codify commits — up to three concerns, up to three commits, never one bundle.
 
 **No worklog task:** if step 1 was single-pass distillation from the diff + PR body alone (no worklog task tracks this PR), skip this step — there's nothing to checkpoint. The codify commits from step 2 and the deslop from step 3 are sufficient.
 
