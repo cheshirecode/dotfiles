@@ -412,17 +412,24 @@ PY
 
   # Shell fixtures for the crew tools. Neither was reachable from this runner
   # before, so a regression in either only surfaced if someone ran it by hand.
-  if bash skills/loop-engineering/tests/test_crew_radar.sh >/dev/null 2>&1; then
+  #
+  # Every fixture below runs under WL_HERMETIC. A fixture that sandboxes itself
+  # with WORKLOG_REPO=$TMP has that assignment silently overridden, because
+  # BASH_ENV is sourced AFTER the per-command assignment and the developer
+  # profile exports WORKLOG_REPO/WORKLOG_LDAP unconditionally. Without the
+  # wrapper the worklog fixtures run against the real vault: the checkpoint
+  # ones drive git add/commit/push there, and six of them simply fail.
+  if "${WL_HERMETIC[@]}" bash skills/loop-engineering/tests/test_crew_radar.sh >/dev/null 2>&1; then
     ok "crew-radar conflict fixtures"
   else
     fail "crew-radar conflict fixtures"
   fi
-  if bash skills/loop-engineering/tests/test_crew_reap.sh >/dev/null 2>&1; then
+  if "${WL_HERMETIC[@]}" bash skills/loop-engineering/tests/test_crew_reap.sh >/dev/null 2>&1; then
     ok "crew-reap safety-gate fixtures"
   else
     fail "crew-reap safety-gate fixtures"
   fi
-  if bash skills/worklog/tests/verify_refs/test_verify_refs.sh >/dev/null 2>&1; then
+  if "${WL_HERMETIC[@]}" bash skills/worklog/tests/verify_refs/test_verify_refs.sh >/dev/null 2>&1; then
     ok "worklog verify-refs fixtures"
   else
     fail "worklog verify-refs fixtures"
@@ -431,12 +438,18 @@ PY
   # Lint fixtures were never reachable from this runner either, so a regression
   # in them only surfaced if someone ran them by hand.
   for t in skills/worklog/tests/lint/*.sh; do
-    if bash "$t" >/dev/null 2>&1; then
+    if "${WL_HERMETIC[@]}" bash "$t" >/dev/null 2>&1; then
       ok "worklog lint: $(basename "$t" .sh)"
     else
       fail "worklog lint: $(basename "$t" .sh)"
     fi
   done
+
+  if python3 -m unittest skills/loop-helpers/tests/test_helpers.py >/dev/null 2>&1; then
+    ok "loop-helpers transport gate fixtures"
+  else
+    fail "loop-helpers transport gate fixtures"
+  fi
 
   if python3 -m unittest skills/evidence-gate/tests/test_evidence_gate.py >/dev/null; then
     ok "evidence-gate coverage fixtures"
