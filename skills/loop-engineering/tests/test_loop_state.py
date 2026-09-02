@@ -16,6 +16,22 @@ import unittest
 SCRIPT = pathlib.Path(__file__).parents[1] / "scripts" / "loop_state.py"
 SKILL = SCRIPT.parents[1] / "SKILL.md"
 ORCHESTRATOR = SCRIPT.parents[1] / "references/orchestrator.md"
+
+# Heading anchors shared by multiple tests: a rename is one edit here, and a
+# missing heading fails with its name rather than a bare IndexError
+# (commit 44f3f78 repointed the same literal in three tests; cf. 81d4cd7).
+H_DRIVE = "## Drive the loop — one call per cycle"
+H_ORCHESTRATOR = "## Orchestrator mode"
+
+
+def section(text: str, start: str, end: str | None = None) -> str:
+    """Slice the document between two headings, naming any missing anchor."""
+    assert start in text, f"heading {start!r} not found in document"
+    body = text.split(start, 1)[1]
+    if end is None:
+        return body
+    assert end in body, f"heading {end!r} not found after {start!r}"
+    return body.split(end, 1)[0]
 SPEC = importlib.util.spec_from_file_location("loop_state_under_test", SCRIPT)
 assert SPEC and SPEC.loader
 LOOP_STATE = importlib.util.module_from_spec(SPEC)
@@ -82,9 +98,9 @@ class LoopStateTest(unittest.TestCase):
 
     def test_skill_routes_transient_artifacts_to_system_temp(self) -> None:
         skill_text = SKILL.read_text()
-        initialization = skill_text.split(
-            "## Drive the loop — one call per cycle", 1
-        )[1].split("### Optional model routing", 1)[0]
+        initialization = section(
+            skill_text, H_DRIVE, "### Optional model routing"
+        )
         self.assertIn("Keep transient loop state", initialization)
         self.assertIn("`/tmp`", initialization)
         self.assertIn("`$TMPDIR`", initialization)
@@ -118,9 +134,7 @@ class LoopStateTest(unittest.TestCase):
 
     def test_root_route_matrix_selects_minimum_context(self) -> None:
         skill_text = SKILL.read_text()
-        route = skill_text.split("## Route", 1)[1].split(
-            "## Drive the loop — one call per cycle", 1
-        )[0]
+        route = section(skill_text, "## Route", H_DRIVE)
         for signal in (
             "one action + one check",
             "repeated, resumable, or delegated work",
@@ -132,9 +146,9 @@ class LoopStateTest(unittest.TestCase):
 
     def test_compositional_route_declares_owner_trigger_handoff_and_skip(self) -> None:
         skill_text = SKILL.read_text()
-        routing = skill_text.split("## Compose with installed skills", 1)[1].split(
-            "## Drive the loop — one call per cycle", 1
-        )[0]
+        routing = section(
+            skill_text, "## Compose with installed skills", H_DRIVE
+        )
         for owner in (
             "$serena-rg-search",
             "$worklog",
@@ -300,9 +314,9 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("typed", output)
         self.assertIn("state/worklog artifact", output)
 
-        durable = skill_text.split("## Preserve durable context", 1)[1].split(
-            "## Orchestrator mode", 1
-        )[0]
+        durable = section(
+            skill_text, "## Preserve durable context", H_ORCHESTRATOR
+        )
         for field in (
             "objective",
             "known evidence",
@@ -333,9 +347,9 @@ class LoopStateTest(unittest.TestCase):
 
     def test_skill_makes_worklog_resume_and_local_fallback_executable(self) -> None:
         skill_text = SKILL.read_text()
-        durable = skill_text.split("## Preserve durable context", 1)[1].split(
-            "## Orchestrator mode", 1
-        )[0]
+        durable = section(
+            skill_text, "## Preserve durable context", H_ORCHESTRATOR
+        )
         self.assertIn("context.sh <slug> --for=resume", durable)
         self.assertIn("target clone's direnv", durable)
         self.assertIn("context <slug> --for=compact", durable)
@@ -343,7 +357,7 @@ class LoopStateTest(unittest.TestCase):
 
     def test_orchestrator_gates_optional_decomposition_and_delegate_output(self) -> None:
         skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
-        orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
+        orchestrator = section(skill_text, H_ORCHESTRATOR)
         self.assertIn("regular loop", orchestrator)
         self.assertIn("one or two tasks", orchestrator)
         self.assertIn("only when the task graph is not already explicit", orchestrator)
@@ -355,7 +369,7 @@ class LoopStateTest(unittest.TestCase):
 
     def test_orchestrator_checks_delegate_capability_before_dispatch(self) -> None:
         skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
-        orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
+        orchestrator = section(skill_text, H_ORCHESTRATOR)
         self.assertIn("current harness exposes the", orchestrator)
         self.assertIn("do not fabricate a delegate result", orchestrator)
         self.assertIn("finish `needs_human`", orchestrator)
@@ -363,7 +377,7 @@ class LoopStateTest(unittest.TestCase):
 
     def test_orchestrator_can_escalate_council_mid_run_without_archiving(self) -> None:
         skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
-        orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
+        orchestrator = section(skill_text, H_ORCHESTRATOR)
         self.assertIn("without a new user turn", orchestrator)
         self.assertIn("material uncertainty trigger", orchestrator)
         self.assertIn("replay check", orchestrator)
