@@ -17,16 +17,9 @@ Skip if: no delegate surface, or in-band work is sufficient for the task.
 
 ## Resolve the skill directory
 
-Resolve `<skill-dir>` to the directory containing this `SKILL.md`. All script and reference paths below are relative to it:
+The skill root is the directory this `SKILL.md` was loaded from; its location varies by install (repo checkout, `~/.claude/skills/`, agent-managed). Never hardcode a path.
 
-```bash
-# If the skill is in the dotfiles repo:
-SKILL_DIR="$HOME/Documents/oss/dotfiles/skills/which-model"
-# Or, if loaded by an agent that exposes the skill root:
-SKILL_DIR="<the directory the agent loaded this SKILL.md from>"
-```
-
-Script invocations use `python3 <skill-dir>/bin/model-catalog`. Reference reads use `<skill-dir>/references/routing.md` and `<skill-dir>/references/catalog.md`.
+Run helpers from that root as `bin/model-catalog ...`, and read references as `references/routing.md` and `references/catalog.md` — both relative to it. Use `cd` into the root once rather than prefixing each command with an absolute path.
 
 ## Route first
 

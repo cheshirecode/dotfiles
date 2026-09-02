@@ -37,14 +37,16 @@ Return up to three recommendations: best value, fallback, then premium/escalatio
    Availability: <selectable here | requires wrapper | not available in this harness>
 ```
 
-Concrete example:
+Concrete example (shape only — the model names and lane labels are illustrative,
+and the numbers are deliberately absent because none were verified through
+`catalog.md`):
 
 ```markdown
-1. qwen/qwen3-coder — best value for routine coding in this harness at $0.80/$3.20 per Mtok with 262k context
+1. cheap long-context code lane — best value for routine coding in this harness: low input cost, context comfortably above the repo slice
    Use for: targeted patches, refactors, and test writes under ~100k tokens of repo context
-   Avoid if: task needs vision input or >200k output
+   Avoid if: task needs vision input or very long output
    Availability: selectable here (openrouter)
-2. anthropic/claude-sonnet-4 — fallback when the task needs strong tool-use or long-horizon agentic coding
+2. claude-sonnet-5 — fallback when the task needs strong tool-use or long-horizon agentic coding
    Use for: multi-file refactors, ambiguous specs requiring judgment
    Avoid if: cost-sensitive bulk subagent work
    Availability: selectable here
