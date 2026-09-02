@@ -1,6 +1,6 @@
 ---
 name: loop-engineering
-description: "Design and run bounded, evidence-driven loops for repeated, resumable, delegated, or scheduled work. Use when iterating toward a verifiable condition, recovering across contexts, coordinating subagents, or deciding on loop vs worklog vs scheduler. Skip one-shot tasks. Orchestrator: multi-task dispatch across sub-agents. Crew: parallel delegates with isolation conflicts."
+description: "Design and run bounded, evidence-driven loops for repeated, resumable, delegated, or scheduled work. Use when iterating toward a verifiable condition, recovering across contexts, coordinating subagents, or deciding on loop vs worklog vs scheduler. Skip one-shot tasks. One invocation, no mode flags: scripts/loop_run.py defaults orchestrator (worklog queue) and crew (conflict radar); the model only decides continue vs stop."
 ---
 
 # loop-engineering
@@ -21,7 +21,8 @@ Convention: `$skill-name` means invoke installed skill `skill-name`; skip and re
 ## Route
 
 1. Skip this skill when one action plus one check is sufficient.
-2. For interactive, resumable, or delegated loops, use the state script below.
+2. For interactive, resumable, or delegated loops, use the driver below —
+   one `loop_run.py` call per cycle, no mode parameters.
 3. For concurrent delegates or workers, also read
    [references/crew.md](references/crew.md); prove the runtime's isolation or
    keep delegates read-only, and capture `bin/crew-radar` evidence.
@@ -38,9 +39,9 @@ Use this compact route matrix before loading references:
 | Signal | Route | Additional context |
 | --- | --- | --- |
 | one action + one check | one-shot | no loop state |
-| repeated, resumable, or delegated work | state CLI | initialize a bounded run |
-| delegates run concurrently | state CLI + crew | load crew.md; serialize writes unless proven isolation |
-| recurrence or installation drift | state CLI + hosts | verify host primitive or audit |
+| repeated, resumable, or delegated work | driver | one `loop_run.py` call per cycle |
+| delegates run concurrently | driver + crew | load crew.md; serialize writes unless proven isolation |
+| recurrence or installation drift | driver + hosts | verify host primitive or audit |
 | exact transition, effect, worklog, or handoff question | selected route + protocol | load only the needed rules |
 
 ## Compose with installed skills
@@ -87,27 +88,45 @@ SKILL_DIR="$(r=$(git rev-parse --show-toplevel 2>/dev/null); [ -n "$r" ] && prin
 SKILL_DIR="$(for r in ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills; do f=$(find -L "$r" -name loop_state.py -print -quit 2>/dev/null); [ -n "$f" ] && { dirname "$(dirname "$f")"; break; }; done)"
 ```
 
-All script invocations below use `python3 <skill-dir>/scripts/loop_state.py`.
+The driver below wraps `scripts/loop_state.py`; every cycle is one call to
+`python3 <skill-dir>/scripts/loop_run.py`.
 
-## Initialize through the script
+## Drive the loop — one call per cycle
 
-Choose an explicit, authorized state path; do not hand-edit its JSON.
+Invoke with `Use loop-engineering. Goal: <goal>.` — no mode parameters.
+Orchestrator and crew mechanics are defaulted by the driver; do not hand-edit
+its state JSON.
 
 ```bash
-python3 <skill-dir>/scripts/loop_state.py init \
-  --state <state-file> \
-  --goal "<observable success condition>" \
-  --evidence "<current fact or artifact>" \
-  --budget-unit "<turns|hypotheses|retries|minutes>" \
-  --budget-limit <positive-integer> \
-  --next-action "<smallest discriminating action>"
+# First call — auto-initializes a bounded run (default budget 20 turns):
+python3 <skill-dir>/scripts/loop_run.py <run-dir> --goal "<observable success condition>"
+# Every later call — advance with one typed evidence line, or stop:
+python3 <skill-dir>/scripts/loop_run.py <run-dir> --evidence "command: <ref> — <result>"
+python3 <skill-dir>/scripts/loop_run.py <run-dir> --stop complete --verification "<gate result>"
 ```
 
-Add `--allowed-effect` and `--approval-boundary` whenever writes or external
-effects are possible. If `python3` is unavailable, preserve these five fields
-manually in a JSON file and label the run as a non-deterministic fallback:
-`goal`, `progress_evidence` (list), `budget` (unit/limit/used), `next_action`,
-and `terminal_status`.
+Each call prints exactly one line with the script-run mechanics folded in:
+`running 3/20 turns — next: <action> | radar: clean | queue: <slug> | decide: continue or stop`
+
+- **Crew, defaulted:** when a repo is known (`--repo`, or the cwd's git
+  toplevel at init), `bin/crew-radar` runs every cycle and its verdict lands
+  in the line. Serialize writes unless isolation is proven (crew.md).
+- **Orchestrator, defaulted:** pass `--project <slug>` once when 3+ worklog
+  tasks exist; the driver reports the next eligible child every cycle
+  (orchestrator.md carries the claim/archive rules).
+- **The model decides one thing per cycle:** continue — spend the cycle,
+  usually by delegating the queue task — or stop
+  (`--stop complete|blocked|needs_human|...`). State, budget, radar, and
+  queue are script-run; the decision exists to stop delegating and save
+  tokens as soon as the goal or a terminal condition is met.
+
+Override defaults (`--budget`, `--allowed-effect`, `--approval-boundary`, or
+raw `loop_state.py` subcommands) only when the run needs it; declare
+`--allowed-effect` and `--approval-boundary` whenever writes or external
+effects are possible. If `python3` is unavailable, preserve `goal`,
+`progress_evidence` (list), `budget` (unit/limit/used), `next_action`, and
+`terminal_status` manually in JSON and label the run a non-deterministic
+fallback.
 
 Keep transient loop state and verbose evidence out of the skill or repository
 worktree. Use `/tmp`, `$TMPDIR`, or another host-provided system temporary
@@ -130,32 +149,11 @@ host default; never claim a model switch the harness cannot enforce.
 
 ### Optional payload transport
 
-At a provider or tool-output boundary, choose a capability-gated,
-fail-open, recoverable representation. Measure after selection; if the result
-is not both smaller and more legible, send the original bytes.
-
-1. For noisy command output or tool catalogs, an authorized Caveman install may
-    use `caveman shrink -- <command>` before using Caveman Pixel Mode. Preserve producer status with
-   `set -o pipefail`; keep the original in an artifact store (`/tmp`,
-   `$TMPDIR`, or your harness's upload area) and retain its recovery handle.
-   Do not install an output-only response skill for input savings: it can add
-   prompt overhead while leaving provider input unchanged.
-2. Use [Caveman Pixel Mode](https://github.com/juliusbrussee/caveman#pixel-mode)
-   only for dense, long-line payloads. Require a legible model and a measured
-   win before `caveman wrap --pixel <agent>`. Never pixel sparse code, normal
-   Markdown, loop state, evidence, diffs, or small payloads.
-3. For installed skill bodies, use `caveman convert --dry-run` first and convert
-   only profitable installed copies; keep frontmatter text, preserve the
-   byte-identical `--revert` path (the Caveman CLI subcommand), and never rewrite canonical source here.
-4. Check `command -v caveman` and authorization first. On missing capability,
-   decline, failure, or recovery/verification trouble, record
-   `pixel-transport: skipped — <reason>` and pass bytes unchanged.
-5. Label token/size estimates `inferred`; call them `verified` only after real
-   traffic and an evaluation gate. Do not install Caveman or change agent
-   configuration unless the effect boundary authorizes it.
-
-One compact example: `dense long-line log + authorized CLI + measured win` may
-use shrink or Pixel; `sparse code`, missing CLI, or no win keeps the original.
+At a provider or tool-output boundary, a capability-gated, fail-open,
+recoverable compression (Caveman shrink/Pixel) may be used; read
+[references/transport.md](references/transport.md) before doing so. On missing
+capability or no measured win, record `pixel-transport: skipped — <reason>`
+and pass bytes unchanged.
 
 ### Compaction-friendly output
 
@@ -179,17 +177,16 @@ errors, and typed evidence.
 4. Execute and verify. A model's prose claim is not evidence.
 5. On apparent success, invoke `$evidence-gate`. Map every observable goal
    clause to typed evidence and require its `check` command to pass.
-6. Only then run `finish --status complete --verification "<evidence-gate verification value>" --evidence "<result>"` (use `--consume N` if the final cycle spent N budget units). This is a terminal outcome — do not continue looping.
-7. Otherwise (apparent failure or incomplete) run `advance --evidence "<result>" --next-action "<next check>"`. The script transitions to `budget_exhausted` when the declared ceiling is consumed.
+6. Only then run `loop_run.py <run-dir> --stop complete --verification "<evidence-gate verification value>" --evidence "<result>"`. This is a terminal outcome — do not continue looping.
+7. Otherwise (apparent failure or incomplete) run `loop_run.py <run-dir> --evidence "<result>" --next-action "<next check>"`. The state transitions to `budget_exhausted` when the declared ceiling is consumed.
 
-Pass `--quiet` to every `loop_state.py` call so it emits only the index line
-(`running 3/12 turns — next: <action>`). The `evidence_gate.py` from the
+The driver already emits one index line per call. The `evidence_gate.py` from the
 installed `evidence-gate` skill exposes `--quiet` only on `check` and `show`:
 redirect successful `init`/`record` stdout to `/dev/null` when compact output is needed,
 preserve stderr, and run the final `check` **without** `--quiet` — its index line omits the
 verification value step 6 requires. Never trade away exit codes to reduce output.
 
-**Exit codes:** The state CLI exits `0` on success, `2` with a `usage:` error
+**Exit codes:** The driver and state CLI exit `0` on success, `2` with a `usage:` error
 for malformed CLI usage, and `3` with a `loop-state:` error when the state
 contract rejects the transition. See
 [references/protocol.md](references/protocol.md) for transition rules.
@@ -207,9 +204,10 @@ If later evidence contradicts a recorded fact, capture `fingerprint --state
 <state-file>`, then use `annotate --expect-sha256 <fingerprint> --evidence
 "<correction>"`. Preserve the audit trail; do not reopen terminal state.
 
-Use `finish` for `blocked`, `needs_human`, `cancelled`, or
+Use `--stop` for `blocked`, `needs_human`, `cancelled`, or
 `continue_scheduled`. Never translate those states or `budget_exhausted` into
-`complete`.
+`complete`. (`fingerprint`, `annotate`, `resume` remain raw `loop_state.py`
+subcommands.)
 
 After intervention clears a resumable terminal condition, use `resume` to
 create a bound successor state, replay the blocked check, and continue while
@@ -254,7 +252,8 @@ Read [references/orchestrator.md](references/orchestrator.md) before creating a
 project; it carries the decomposition, queue, cycle, and terminal rules. Use the
 regular loop for one or two tasks instead of creating a project.
 
-Invoke it with: `Use loop-engineering orchestrator mode. Goal: <goal>.`
+No separate invocation exists: the same `Use loop-engineering. Goal: <goal>.`
+plus `--project <slug>` on the driver engages it.
 
 For concurrent delegates or isolated worktree workers, read
 [references/crew.md](references/crew.md) — orchestrator mode plus capability-gated concurrency.
