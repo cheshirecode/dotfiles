@@ -35,6 +35,41 @@ if work starts there, port or merge the exact changes back into the primary
 there. Do not let "detached HEAD" in a temporary worktree silently turn a
 direct-main request into a side branch.
 
+## Test discipline (lesson from the 2026-09-02 skills audit)
+
+**Prove a new test red before shipping it.** Run it against the unfixed code,
+confirm it fails, and confirm *which* assertions fail. A test that passes both
+ways is worse than no test: it certifies the bug.
+
+This is mechanical, not a principle to keep in mind. During the audit that
+produced this rule, three separate assertions were written that matched a
+summary line (`0 stale, 0 live, ...`) instead of a table row, so they passed
+against the very code they were meant to catch — each one written *after* the
+previous had been caught the same way.
+
+The recurring defect shape in this repo is **a pattern that matches something
+adjacent to what was meant**:
+
+- a greedy `sed 's/.*"state":"\([a-z]*\)".*/\1/p'` taking the *last* `"state"`
+  in a one-line payload (a nested `author.state`) rather than the object's own
+- `people/[a-z]+/active` failing to match any LDAP containing a dot
+- a sort key whose `deprecated` term sat after `fit`, so retired models still
+  outranked current ones — the test asserted only the top two and passed
+- an unanchored `![0-9]{4}` matching the first four digits of five-digit refs
+
+All of them fail silent rather than loud, and a suite that only asserts "runs
+clean" stays green while the tool is wrong. Measured cost of one instance: a
+stale-ref checker reported 19 stale refs where the truth was 45, missing 58%
+with no error surfaced.
+
+Two corollaries:
+
+- **Prefer the silent failure when building a fixture.** If a wrong input can
+  either 404 loudly or return a confident wrong value, build the fixture around
+  the confident wrong value; the loud path proves much less.
+- **A check nothing runs is not coverage.** Glob test directories in the runner
+  rather than listing files, so a new fixture is wired up by existing.
+
 ## Reading posture (apply before treating any section as a recipe)
 
 This is a guidance document, not a runnable checklist. When an agent reads
