@@ -85,7 +85,9 @@ lookup() {  # lookup <kind> <ref> <project> -> prints state
   if [ "$1" = mr ] && [ -n "$TOKEN" ]; then
     state=$(curl -sf --max-time 10 -H "PRIVATE-TOKEN: $TOKEN" \
       "https://$GL_HOST/api/v4/projects/$(printf '%s' "$3" | sed 's|/|%2F|g')/merge_requests/${2#!}" 2>/dev/null \
-      | sed -n 's/.*"state":"\([a-z]*\)".*/\1/p' | head -1) || state=""
+      | python3 -c 'import json,sys
+try: print(json.load(sys.stdin)["state"])
+except Exception: print("")' 2>/dev/null) || state=""
     [ -z "$state" ] && state="unchecked"
   elif [ "$1" = issue ] && [ -n "$JIRA_TOKEN" ] && [ -n "$JIRA_USER" ]; then
     state=$(curl -sf --max-time 10 -u "$JIRA_USER:$JIRA_TOKEN" -H "Accept: application/json" \
