@@ -159,6 +159,7 @@ radar = (skill / "bin/crew-radar").read_text()
 # Prose references are hard-wrapped, so multi-word contracts match a flattened
 # copy; that keeps them robust to reflowing the paragraph.
 crew_flat = " ".join(crew.split())
+root_flat = " ".join(root.split())
 state_script = (skill / "scripts/loop_state.py").read_text()
 install_script = (skill / "scripts/install_audit.py").read_text()
 references = {path.name for path in (skill / "references").glob("*.md")}
@@ -167,9 +168,15 @@ checks = {
     # size budget while testing its routing contracts directly.
     "portable root budget": len(root.splitlines()) <= 260,
     "standard frontmatter only": root.split("---", 2)[1].count("\n") == 3,
-    "script-first route": "scripts/loop_state.py init" in root,
+    # The root now routes to the single-invocation driver rather than a manual
+    # loop_state.py init recipe. The contract follows the content: pin the
+    # runnable first call, not a bare mention of the filename (the frontmatter
+    # names it too).
+    "script-first route": "scripts/loop_run.py <run-dir> --goal" in root_flat,
     "route matrix": "load only the needed rules" in root,
-    "no hand-edited state": "do not hand-edit its JSON" in root,
+    # Flattened: the sentence is hard-wrapped, and two separate substrings
+    # would pass on any root that merely mentions both halves.
+    "no hand-edited state": "do not hand-edit its state JSON" in root_flat,
     "worklog context route": "<slug> --for=resume" in protocol,
     "tracker hydration route": "hydrate the host tracker from the" in protocol,
     "worklog delegation route": "<slug> --for=compact" in protocol and "spawn <slug>" not in protocol,
@@ -231,7 +238,8 @@ checks = {
         and "state fingerprint changed" in state_script
         and "verify state ownership" in protocol
     ),
-    "host differences deferred": references == {"crew.md", "examples.md", "handover.md", "hosts.md", "orchestrator.md", "protocol.md"},
+    # Exact-set, so a legitimately added reference must be declared here.
+    "host differences deferred": references == {"crew.md", "examples.md", "handover.md", "hosts.md", "orchestrator.md", "protocol.md", "transport.md"},
     # Crew mode must capability-gate host primitives. Codex has shared files,
     # no isolation flag, and mailbox waits rather than a file Monitor.
     "crew mode matches Codex collaboration": (
