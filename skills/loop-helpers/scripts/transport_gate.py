@@ -28,9 +28,10 @@ def parser() -> argparse.ArgumentParser:
     return result
 
 
-def emit(decision: str, mode: str, reason: str) -> int:
+def emit(decision: str, mode: str, reason: str, hint: str = "") -> int:
+    remedy = f" hint={hint}" if hint else ""
     fallback = " original-bytes" if decision == "skip" else ""
-    print(f"decision={decision} mode={mode} reason={reason}{fallback}")
+    print(f"decision={decision} mode={mode} reason={reason}{remedy}{fallback}")
     return 0
 
 
@@ -62,7 +63,9 @@ def main() -> int:
             if value.strip()
         }
         if not args.model or args.model not in configured:
-            return emit("skip", args.mode, "model-not-configured")
+            return emit(
+                "skip", args.mode, "model-not-configured", "set-CAVE_PIXEL_MODELS"
+            )
 
     return emit("use", args.mode, "all-gates-passed")
 
