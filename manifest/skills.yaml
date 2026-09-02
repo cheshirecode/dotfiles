@@ -18,7 +18,7 @@ version: 1
 # High-value user-installed skills (cross-cutting, not project-specific).
 skills:
   - name: council
-    description: Karpathy-council multi-agent research → discussion → synthesis → verification.
+    description: Karpathy-council multi-angle research → discussion → collation → independent voting → tally.
     source:
       type: subpath  # checkout a single subdir of the source repo
       ref: HEAD  # tracking; pin to SHA once upstreamed
@@ -27,6 +27,18 @@ skills:
     # Council ships in this dotfiles repo (skills/council/SKILL.md) until it
     # graduates to a standalone repo. install-skills.sh treats subpath as
     # "copy this directory" rather than "clone whole repo".
+
+  # Personal, not cross-cutting, so it ships here without installing by
+  # default — but it is declared, so check-manifest's coverage rule passes and
+  # the next skill added to skills/ cannot go missing silently.
+  - name: job-application
+    description: Tailored resume + cover letter package for one job description.
+    optional: true
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/job-application
+    install_to: ~/.claude/skills/job-application
 
   - name: worklog
     description: Cross-machine work journal — the /worklog command surface.
