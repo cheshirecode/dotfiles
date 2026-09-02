@@ -439,6 +439,31 @@ PY
     fail "worklog verify-refs fixtures"
   fi
 
+  # Everything else under skills/worklog/tests/. Before this, the runner reached
+  # exactly three of ~20 fixture directories: reconcile_pr, verify_refs and
+  # lint/. The other 19 ran only if someone invoked them by hand, so a
+  # regression in autosave, project, frontmatter, hooks, okf, scrape-slack,
+  # status, surface, transcript or worklog-manager surfaced nowhere. Glob the
+  # directory rather than listing files, so a new fixture is wired up by
+  # existing rather than by being remembered.
+  #
+  # log_compact/test_squash.sh is deliberately excluded: it clones SOURCE (a
+  # populated worklog vault) and rewrites its history, so it needs real
+  # autosave commits as input and cannot run hermetically. Invoke it directly
+  # with SOURCE=/path/to/vault when changing log-compact.sh.
+  for t in skills/worklog/tests/*/test_*.sh; do
+    case "$t" in
+      */lint/*|*/verify_refs/*|*/reconcile_pr/*) continue ;;
+      */log_compact/test_squash.sh) continue ;;
+    esac
+    name="worklog $(basename "$(dirname "$t")")/$(basename "$t" .sh)"
+    if timeout 180 "${WL_HERMETIC[@]}" bash "$t" >/dev/null 2>&1; then
+      ok "$name"
+    else
+      fail "$name"
+    fi
+  done
+
   # Lint fixtures were never reachable from this runner either, so a regression
   # in them only surfaced if someone ran them by hand.
   for t in skills/worklog/tests/lint/*.sh; do
