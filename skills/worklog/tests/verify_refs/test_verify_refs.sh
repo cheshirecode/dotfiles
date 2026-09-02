@@ -95,5 +95,34 @@ printf 'stale|s|!1|p|merged\n' > "$TMP/probe"
   else FAIL=$((FAIL+1)); printf '  FAIL  harness sanity\n'; fi
 )
 
+# A SUCCESSFUL lookup, which the unroutable-host fixtures above never reach —
+# and so never caught that the MR half could not report a merged MR at all.
+# GitLab returns the whole object on one line, and the old
+#   sed -n 's/.*"state":"\([a-z]*\)".*/\1/p'
+# is greedy, so it took the LAST "state" in the document (a nested author's
+# "active") rather than the MR's own. Every resolvable MR came back live, which
+# is exactly the "merged weeks ago and nothing notices" case this tool exists
+# to catch. The fixture is the point: state:merged early, state:active trailing.
+mkdir -p "$TMP/stub"
+cat > "$TMP/stub/curl" <<'STUB'
+#!/usr/bin/env bash
+for a in "$@"; do
+  case "$a" in
+    *merge_requests*) printf '%s' '{"iid":1682,"state":"merged","author":{"state":"active"},"merged_by":{"state":"active"}}'; exit 0 ;;
+    *rest/api/3/issue*) printf '%s' '{"fields":{"status":{"statusCategory":{"key":"done"}}}}'; exit 0 ;;
+  esac
+done
+exit 22
+STUB
+chmod +x "$TMP/stub/curl"
+
+OUT=$(cd "$TMP/wl" && PATH="$TMP/stub:$PATH" WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP=tester \
+      GITLAB_HOST=gitlab.example JIRA_HOST=jira.example \
+      GITLAB_PAT=fake MCP_JIRA_EMAIL=t@t.t MCP_JIRA_API_TOKEN=fake \
+      "$BIN/verify-refs.sh" with-refs 2>&1)
+ck "merged MR is reported stale, not live" 'stale.*!1234.*merged'
+no "merged MR is not counted live"         '1 live'
+ck "nested author state does not win"      '!1234'
+
 printf '\n  %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
