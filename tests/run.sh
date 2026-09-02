@@ -1313,11 +1313,16 @@ PY
 
   local claude_fixture
   claude_fixture="$catalog_home/claude.json"
+  # Shaped exactly like a live Models API page: ids and display names only, no
+  # lifecycle field. Everything about deprecation must therefore be derived locally.
   cat >"$claude_fixture" <<'EOF'
 {
   "data": [
     {"type": "model", "id": "claude-haiku-4-5-20251001", "display_name": "Claude Haiku 4.5", "created_at": "2025-10-01T00:00:00Z"},
     {"type": "model", "id": "claude-opus-4-1-20250805", "display_name": "Claude Opus 4.1", "created_at": "2025-08-05T00:00:00Z"},
+    {"type": "model", "id": "claude-fable-5", "display_name": "Claude Fable 5", "created_at": "2026-03-01T00:00:00Z"},
+    {"type": "model", "id": "claude-mythos-5-1", "display_name": "Claude Mythos 5.1", "created_at": "2026-05-01T00:00:00Z"},
+    {"type": "model", "id": "claude-3-opus-20240229", "display_name": "Claude Opus 3", "created_at": "2024-02-29T00:00:00Z"},
     {"type": "model", "id": "claude-future-unknown-1", "display_name": "Claude Future Unknown", "created_at": "2026-01-01T00:00:00Z"}
   ],
   "has_more": false
@@ -1326,7 +1331,7 @@ EOF
   catalog_json=$(
     WHICH_MODEL_CACHE_HOME="$catalog_home/cache-claude" \
     WHICH_MODEL_CATALOG_SOURCE="$claude_fixture" \
-    skills/which-model/bin/model-catalog --env claude --refresh-if-stale --task routine_coding --top 3
+    skills/which-model/bin/model-catalog --env claude --refresh-if-stale --task routine_coding --top 6
   )
   if python3 - "$catalog_home/cache-claude/catalog.claude.json" "$catalog_json" <<'PY'
 import json
@@ -1343,41 +1348,80 @@ by_id = {model["id"]: model for model in catalog["models"]}
 assert set(by_id) == {
     "claude-haiku-4-5-20251001",
     "claude-opus-4-1-20250805",
+    "claude-fable-5",
+    "claude-mythos-5-1",
+    "claude-3-opus-20240229",
     "claude-future-unknown-1",
 }
 haiku = by_id["claude-haiku-4-5-20251001"]
-# Models API supplies id/display_name; docs snapshot fills price/limits/capabilities.
+# Models API supplies id/display_name; the reference fills limits/capabilities.
 assert haiku["display_name"] == "Claude Haiku 4.5"
 assert haiku["provider"] == "anthropic"
 assert haiku["availability"] == "selectable_if_configured"
-assert haiku["input_price_per_mtok"] == 1.0, haiku["input_price_per_mtok"]
-assert haiku["output_price_per_mtok"] == 5.0, haiku["output_price_per_mtok"]
+assert haiku["lifecycle"] == "active"
+assert haiku["deprecated"] is False
 assert haiku["context_window"] == 200000
 assert haiku["max_output"] == 64000
+# The reference states Haiku 4.5's limits but never its per-token price, so the price
+# stays null and says so rather than carrying an invented figure.
+assert haiku["input_price_per_mtok"] is None, haiku["input_price_per_mtok"]
+assert haiku["output_price_per_mtok"] is None, haiku["output_price_per_mtok"]
+assert any("no per-token price" in c for c in haiku["caveats"]), haiku["caveats"]
 assert "image_input" in haiku["capabilities"]
 assert "reasoning" in haiku["capabilities"]
 assert haiku["confidence"] == "fixture"
-assert any("docs snapshot" in c for c in haiku["caveats"])
-opus = by_id["claude-opus-4-1-20250805"]
-assert opus["input_price_per_mtok"] == 15.0
-assert opus["output_price_per_mtok"] == 75.0
-assert opus["max_output"] == 32000
+assert any("claude-api reference" in c for c in haiku["caveats"])
+# Lifecycle is derived from the reference, not from the payload: the payload carries no
+# deprecation field at all, yet the deprecated and retired lanes must still be marked.
+opus41 = by_id["claude-opus-4-1-20250805"]
+assert opus41["lifecycle"] == "deprecated", opus41["lifecycle"]
+assert opus41["deprecated"] is True
+assert any("2026-08-05" in c for c in opus41["caveats"]), opus41["caveats"]
+# The reference's legacy tables state no price or limits for it; nothing is inferred.
+assert opus41["input_price_per_mtok"] is None
+assert opus41["output_price_per_mtok"] is None
+assert opus41["context_window"] is None
+assert opus41["max_output"] is None
+retired = by_id["claude-3-opus-20240229"]
+assert retired["lifecycle"] == "retired", retired["lifecycle"]
+assert retired["deprecated"] is True
+assert retired["availability"] == "retired_unavailable", retired["availability"]
+assert any("cannot be selected" in c for c in retired["caveats"]), retired["caveats"]
+# Fable and Mythos match real rules, so they carry a generation and cannot score as
+# unknown lanes; Mythos is access-gated rather than freely selectable.
+fable5 = by_id["claude-fable-5"]
+assert fable5["generation"] == 5.0, fable5["generation"]
+assert fable5["input_price_per_mtok"] == 10.0
+assert fable5["output_price_per_mtok"] == 50.0
+mythos = by_id["claude-mythos-5-1"]
+assert mythos["generation"] == 5.1, mythos["generation"]
+assert mythos["availability"] == "requires_program_enrollment", mythos["availability"]
+assert mythos["deprecated"] is False
 # Unmatched model id keeps prices null and flags the gap rather than inventing numbers.
 unknown = by_id["claude-future-unknown-1"]
 assert unknown["input_price_per_mtok"] is None
 assert unknown["output_price_per_mtok"] is None
-assert any("No pricing/limits metadata match" in c for c in unknown["caveats"])
-# Cheapest fitting lane ranks first for routine_coding.
-assert payload["recommendations"][0]["id"] == "claude-haiku-4-5-20251001"
+assert any("No lifecycle/pricing/limits metadata match" in c for c in unknown["caveats"])
+# Cheapest fitting current lane ranks first for routine_coding, and on this live-shaped
+# payload no deprecated or retired lane may appear above a current one.
+ranked = payload["recommendations"]
+assert ranked[0]["id"] == "claude-haiku-4-5-20251001", ranked[0]["id"]
+assert ranked[-1]["id"] == "claude-3-opus-20240229", ranked[-1]["id"]
+seen_deprecated = False
+for model in ranked:
+    if model["deprecated"]:
+        seen_deprecated = True
+    else:
+        assert not seen_deprecated, f"{model['id']} ranked below a deprecated lane"
 PY
   then ok "which-model claude catalog enriches Models-API metadata"; else fail "which-model claude catalog enriches Models-API metadata"; fi
 
-  # No injected source and no network: the docs snapshot builds a real catalog with
+  # No injected source and no network: the bundled reference builds a real catalog with
   # no Anthropic API key required (WHICH_MODEL_OFFLINE proves no network dependency).
   catalog_json=$(
     WHICH_MODEL_CACHE_HOME="$catalog_home/cache-claude-snapshot" \
     WHICH_MODEL_OFFLINE=1 \
-    skills/which-model/bin/model-catalog --env claude --force-refresh --task routine_coding --top 3
+    skills/which-model/bin/model-catalog --env claude --force-refresh --task routine_coding --top 40
   )
   if ANTHROPIC_API_KEY="" ANTHROPIC_AUTH_TOKEN="" python3 - "$catalog_home/cache-claude-snapshot/catalog.claude.json" "$catalog_json" <<'PY'
 import json
@@ -1389,33 +1433,69 @@ payload = json.loads(sys.argv[2])
 catalog = payload["catalog"]
 assert cache_path.is_file(), "claude snapshot cache not written"
 assert catalog["environment"] == "claude"
-# Snapshot source used; no key-based API fetch, no seed fallback.
-assert any(source.get("kind") == "anthropic-docs-snapshot" for source in catalog["sources"])
+# Reference snapshot used; no key-based API fetch, no seed fallback.
+assert any(source.get("kind") == "anthropic-reference-snapshot" for source in catalog["sources"])
 assert not any(source.get("kind") == "seed" for source in catalog["sources"])
 by_id = {model["id"]: model for model in catalog["models"]}
 assert "claude-haiku-4-5" in by_id and "claude-opus-4-1" in by_id
-haiku = by_id["claude-haiku-4-5"]
-# Real enriched pricing from the docs snapshot, not null seed placeholders.
-assert haiku["input_price_per_mtok"] == 1.0, haiku["input_price_per_mtok"]
-assert haiku["output_price_per_mtok"] == 5.0, haiku["output_price_per_mtok"]
-assert haiku["provider"] == "anthropic"
 for model in catalog["models"]:
     assert model["confidence"] == "snapshot"
-    assert any("docs snapshot" in c for c in model["caveats"])
-# The snapshot must carry current lanes, not only retired ones.
-for current in ("claude-fable-5-1", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"):
+    assert any("claude-api reference" in c for c in model["caveats"])
+# Real enriched pricing the reference actually states, not null placeholders.
+assert by_id["claude-opus-5"]["input_price_per_mtok"] == 5.0
+assert by_id["claude-opus-5"]["output_price_per_mtok"] == 25.0
+assert by_id["claude-sonnet-5"]["input_price_per_mtok"] == 2.0
+assert by_id["claude-sonnet-5"]["output_price_per_mtok"] == 10.0
+assert by_id["claude-fable-5-1"]["context_window"] == 1000000
+assert by_id["claude-fable-5-1"]["max_output"] == 128000
+# Figures the reference does not state stay null and say why.
+haiku = by_id["claude-haiku-4-5"]
+assert haiku["input_price_per_mtok"] is None and haiku["output_price_per_mtok"] is None
+assert any("no per-token price" in c for c in haiku["caveats"])
+# Every model the reference lists as active is present and marked current.
+for current in (
+    "claude-fable-5-1", "claude-fable-5", "claude-opus-5", "claude-opus-4-8",
+    "claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5", "claude-sonnet-5",
+    "claude-sonnet-4-6", "claude-sonnet-4-5", "claude-haiku-4-5", "claude-mythos-5-1",
+):
     assert current in by_id, f"snapshot missing current model {current}"
     assert not by_id[current]["deprecated"], current
-# Retired lanes stay listed but are flagged, so they can never be quoted as current.
-for retired in ("claude-3-haiku-20240307", "claude-opus-4-1", "claude-3-opus-latest"):
+    assert by_id[current]["lifecycle"] == "active", current
+# Retired lanes stay listed but cannot be read as selectable.
+for retired in ("claude-3-7-sonnet-latest", "claude-3-5-sonnet-latest",
+                "claude-3-5-haiku-latest", "claude-3-opus-latest"):
+    assert by_id[retired]["lifecycle"] == "retired", retired
     assert by_id[retired]["deprecated"] is True, retired
+    assert by_id[retired]["availability"] == "retired_unavailable", retired
+for deprecated in ("claude-opus-4-1", "claude-opus-4-0", "claude-sonnet-4-0",
+                   "claude-3-haiku-20240307"):
+    assert by_id[deprecated]["deprecated"] is True, deprecated
+    assert by_id[deprecated]["lifecycle"] == "deprecated", deprecated
 # Recency outranks price: the cheap retired Haiku 3 must not win routine_coding.
-top = payload["recommendations"][0]
+ranked = payload["recommendations"]
+top = ranked[0]
 assert top["deprecated"] is False, top["id"]
 assert top["id"] == "claude-sonnet-5", top["id"]
-assert all(not model["deprecated"] for model in payload["recommendations"][:2])
-# Static snapshot data reports its own age, so the stale warning can actually fire.
-assert catalog["data_as_of"] == "2026-06-24", catalog["data_as_of"]
+assert all(not model["deprecated"] for model in ranked[:2])
+# No deprecated or retired lane may be listed above any current one, anywhere.
+seen_deprecated = False
+for model in ranked:
+    if model["deprecated"]:
+        seen_deprecated = True
+    else:
+        assert not seen_deprecated, f"{model['id']} ranked below a deprecated lane"
+# An older sibling never outranks its own successor, even carrying the requested tag.
+order = [model["id"] for model in ranked]
+for older, newer in (
+    ("claude-sonnet-4-5", "claude-sonnet-5"),
+    ("claude-opus-4-8", "claude-opus-5"),
+    ("claude-fable-5", "claude-fable-5-1"),
+):
+    assert order.index(newer) < order.index(older), f"{older} outranked {newer}"
+# The reference carries no publication date, so the catalog reports the data age as
+# unknown rather than stamping one, and unknown age always reads as stale.
+assert catalog["data_as_of"] == "unknown", catalog["data_as_of"]
+assert catalog["stale_after"] is None, catalog["stale_after"]
 assert payload["stale"] is True and payload["very_stale"] is True
 PY
   then ok "which-model claude builds key-free docs snapshot"; else fail "which-model claude builds key-free docs snapshot"; fi
