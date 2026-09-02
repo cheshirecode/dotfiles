@@ -24,12 +24,15 @@ def fail(message: str) -> None:
 
 
 def parse_ids(value: str) -> set[int]:
-  if not value:
+  # "none" and "" are the documented ways to say "no UNRESOLVED MATERIAL items".
+  # The flag itself stays required so an orchestrator cannot silently skip the
+  # APPROVE-over-UNRESOLVED-MATERIAL check by forgetting it.
+  if not value or value.strip().lower() == "none":
     return set()
   try:
     return {int(item) for item in value.split(",")}
   except ValueError:
-    fail("--unresolved must be a comma-separated list of item numbers")
+    fail("--unresolved must be a comma-separated list of item numbers, or 'none'")
   raise AssertionError("unreachable")
 
 
@@ -47,7 +50,11 @@ def validate_reject(item: int, value: str) -> None:
 def main() -> None:
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument("--items", type=int, required=True, help="number of collated items")
-  parser.add_argument("--unresolved", default="", help="comma-separated UNRESOLVED MATERIAL items")
+  parser.add_argument(
+    "--unresolved",
+    required=True,
+    help="comma-separated Stage 4 positions of UNRESOLVED MATERIAL items, or 'none'",
+  )
   parser.add_argument("ballot", type=pathlib.Path)
   args = parser.parse_args()
 
