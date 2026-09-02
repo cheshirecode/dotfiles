@@ -25,9 +25,8 @@ agent contexts, this is the path from which the skill was loaded. If uncertain,
 search for `evidence_gate.py` under the skill root:
 
 ```bash
-SKILL_DIR="$(dirname "$(find ~/.claude/skills -name evidence_gate.py -print -quit 2>/dev/null)")/.."
-# Or, if the skill is in the current repo:
-SKILL_DIR="./skills/evidence-gate"
+# Roots checked in order; empty when absent — never a bogus "./..":
+SKILL_DIR="$(for r in ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills; do f=$(find -L "$r" -name evidence_gate.py -print -quit 2>/dev/null); [ -n "$f" ] && { dirname "$(dirname "$f")"; break; }; done)"
 ```
 
 All script invocations below use `python3 <skill-dir>/scripts/evidence_gate.py`.
@@ -39,7 +38,8 @@ Initialize with `python3 <skill-dir>/scripts/evidence_gate.py init`; see
 ## Record verified evidence
 
 **Evidence kinds:** `command`, `artifact`, `git`, `github`, `url`. Never
-record model prose as evidence.
+record model prose as evidence. Evidence of a change is not evidence of its
+health — see [references/health-evidence.md](references/health-evidence.md).
 
 See [references/recording.md](references/recording.md) for the record
 subcommand, evidence kinds, and worked examples.
