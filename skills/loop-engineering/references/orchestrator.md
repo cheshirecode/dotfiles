@@ -35,7 +35,7 @@ and the conflict radar.
 
 To invoke this mode, give the agent this prompt:
 
-> Use loop-engineering orchestrator mode. Goal: <goal>.
+> Use loop-engineering. Goal: <goal>.
 
 The agent resolves the rest from the documentation below. No flags, no syntax,
 no setup instructions needed. The loop runs until the project queue is empty

@@ -157,7 +157,7 @@ OUTPUT (agent decomposes, creates project, cycles through tasks)
 
 Same prompt in natural language:
 
-> Use loop-engineering orchestrator mode. Goal: audit skills for shellcheck
+> Use loop-engineering. Goal: audit skills for shellcheck
 > regressions.
 
 Mid-run escalation is resumable, not terminal:

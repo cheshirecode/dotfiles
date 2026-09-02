@@ -83,7 +83,7 @@ class LoopStateTest(unittest.TestCase):
     def test_skill_routes_transient_artifacts_to_system_temp(self) -> None:
         skill_text = SKILL.read_text()
         initialization = skill_text.split(
-            "## Initialize through the script", 1
+            "## Drive the loop — one call per cycle", 1
         )[1].split("### Optional model routing", 1)[0]
         self.assertIn("Keep transient loop state", initialization)
         self.assertIn("`/tmp`", initialization)
@@ -119,7 +119,7 @@ class LoopStateTest(unittest.TestCase):
     def test_root_route_matrix_selects_minimum_context(self) -> None:
         skill_text = SKILL.read_text()
         route = skill_text.split("## Route", 1)[1].split(
-            "## Initialize through the script", 1
+            "## Drive the loop — one call per cycle", 1
         )[0]
         for signal in (
             "one action + one check",
@@ -133,7 +133,7 @@ class LoopStateTest(unittest.TestCase):
     def test_compositional_route_declares_owner_trigger_handoff_and_skip(self) -> None:
         skill_text = SKILL.read_text()
         routing = skill_text.split("## Compose with installed skills", 1)[1].split(
-            "## Initialize through the script", 1
+            "## Drive the loop — one call per cycle", 1
         )[0]
         for owner in (
             "$serena-rg-search",
@@ -249,9 +249,13 @@ class LoopStateTest(unittest.TestCase):
 
     def test_payload_transport_is_optional_recoverable_and_byte_preserving(self) -> None:
         skill_text = SKILL.read_text()
-        transport = skill_text.split("### Optional payload transport", 1)[1].split(
+        pointer = skill_text.split("### Optional payload transport", 1)[1].split(
             "### Compaction-friendly output", 1
         )[0]
+        self.assertIn("references/transport.md", pointer)
+        self.assertIn("pixel-transport: skipped", pointer)
+        self.assertIn("bytes unchanged", pointer)
+        transport = (SKILL.parent / "references/transport.md").read_text()
         for requirement in (
             "command -v caveman",
             "pixel-transport: skipped",
