@@ -683,6 +683,31 @@ ANTHROPIC_MODEL_METADATA: list[tuple[tuple[str, ...], dict]] = [
             "planning", "routine_coding", "visual_design",
         ],
     }),
+    (("opus-4-8", "opus-4.8"), {
+        "input_price_per_mtok": 5.0, "output_price_per_mtok": 25.0,
+        "context_window": 1_000_000, "max_output": 128_000,
+        "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
+        "generation": 4.8,
+    }),
+    # Opus 4.7 / 4.6 context and max-output come from the docs snapshot; their
+    # per-token prices are not stated there, so leave them null rather than
+    # inheriting the Opus 4.0/4.1 figures below.
+    (("opus-4-7", "opus-4.7"), {
+        "context_window": 1_000_000, "max_output": 128_000,
+        "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
+        "generation": 4.7,
+    }),
+    (("opus-4-6", "opus-4.6"), {
+        "context_window": 1_000_000, "max_output": 128_000,
+        "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
+        "generation": 4.6,
+    }),
+    (("sonnet-4-6", "sonnet-4.6"), {
+        "input_price_per_mtok": 3.0, "output_price_per_mtok": 15.0,
+        "context_window": 1_000_000, "max_output": 128_000,
+        "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
+        "generation": 4.6,
+    }),
     (("haiku-4",), {
         "input_price_per_mtok": 1.0, "output_price_per_mtok": 5.0,
         "context_window": 200_000, "max_output": 64_000,
@@ -758,7 +783,7 @@ ANTHROPIC_CATALOG_SNAPSHOT: list[dict] = [
     {"id": "claude-sonnet-5", "display_name": "Claude Sonnet 5"},
     {"id": "claude-haiku-4-5", "display_name": "Claude Haiku 4.5"},
     {"id": "claude-opus-4-1", "display_name": "Claude Opus 4.1", "deprecated": True},
-    {"id": "claude-sonnet-4-5", "display_name": "Claude Sonnet 4.5", "deprecated": True},
+    {"id": "claude-sonnet-4-5", "display_name": "Claude Sonnet 4.5"},
     {"id": "claude-3-7-sonnet-latest", "display_name": "Claude Sonnet 3.7", "deprecated": True},
     {"id": "claude-3-5-sonnet-latest", "display_name": "Claude Sonnet 3.5", "deprecated": True},
     {"id": "claude-3-5-haiku-latest", "display_name": "Claude Haiku 3.5", "deprecated": True},
@@ -798,6 +823,11 @@ def from_anthropic(payload: object, env: str, *, confidence: str = "fresh") -> l
                 f"Pricing/context/limits from Anthropic docs snapshot {ANTHROPIC_PRICING_SNAPSHOT}; "
                 "verify against current pricing before billing decisions."
             )
+            if metadata.get("input_price_per_mtok") is None:
+                caveats.append(
+                    "The docs snapshot states no per-token price for this model id; "
+                    "prices are null on purpose — look them up before quoting dollars."
+                )
         else:
             caveats.append(
                 "No pricing/limits metadata match for this model id; refresh the docs snapshot "
@@ -1277,12 +1307,14 @@ def rank_models(catalog: dict, task: str | None, top: int) -> list[dict]:
         fit_penalty = 0 if tag and tag in fits else 1
         availability_penalty = 0 if availability in {"selectable_here", "selectable_if_configured"} else 1
         # Recency outranks price: a retired lane being cheap is not a reason to
-        # recommend it, and its own caveats usually say not to use it.
+        # recommend it, and its own caveats usually say not to use it. This ranks
+        # ahead of task fit: a deprecated model that happens to carry the requested
+        # tag must still not be offered above a current lane that does not.
         deprecated_penalty = 1 if model.get("deprecated") else 0
         return (
             availability_penalty,
-            fit_penalty,
             deprecated_penalty,
+            fit_penalty,
             generation_score(model),
             price_score(model),
             model.get("id", ""),
