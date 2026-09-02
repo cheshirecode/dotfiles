@@ -8,7 +8,7 @@ Pure dispatch. Read-only (except `--fix-related`).
 cd "$WORKLOG_REPO" && "$WORKLOG_BIN/lint.sh" "$@"
 ```
 
-Pass-through flags (see `"$WORKLOG_BIN/lint.sh" --help`): `--cross-task`, `--fix-related`, `--file=<path>`, `--format=markdown|json`.
+Pass-through flags (see `"$WORKLOG_BIN/lint.sh" --help`): `--cross-task`, `--fix-related`, `--file=<path>`, `--format=markdown|json`, `--okf`.
 
 `--fix-related` writes (auto-stubs `related:` entries from body slug mentions); everything else is read-only. Render output verbatim. Exit code propagates.
 

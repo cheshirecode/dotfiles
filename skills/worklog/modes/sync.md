@@ -56,4 +56,5 @@ pushed at <short-sha>
 
 - Surface the warnings to the user briefly (don't swallow them) — they often point at FSM drift, missing relations, or YAML shape problems that future tooling will trip on.
 - Do **not** retry, revert, or block the sync because of lint output. The commit is already pushed by the time you see it.
+- **Advisory lint output is not the same as a checkpoint refusal.** `checkpoint.sh` has two hard pre-commit exits, and on either one *nothing was committed or pushed* — fix and re-run: **exit 1** = staged paths outside the slug's scope (re-run with `--include=<path>` per path that belongs with this slug, or `git restore --staged <path>`); **exit 2** = `--status=blocked` without a `Waiting on ...` next_action (supply `--next="Waiting on <who or what>"`). Never read a non-zero exit as advisory.
 - For deeper drift checks (stale review, undeclared body refs), suggest `"$WORKLOG_BIN/lint.sh" --cross-task` — opt-in, slower, intended as a periodic sweep before archive.

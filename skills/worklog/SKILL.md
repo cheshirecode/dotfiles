@@ -24,9 +24,10 @@ skills/worklog/
 │   ├── init.md, sync.md, status.md, context.md, plan.md, spawn.md,
 │   │   export.md, import.md, lint.md, project.md, scrape-slack.md, review.md
 ├── references/
-│   └── protocol.md       # compact task-writing and helper reference
+│   ├── protocol.md       # compact task-writing and helper reference
+│   └── preamble.md       # environment bootstrap + preamble invocation contract
 ├── bin/                  # helper scripts (WORKLOG_BIN)
-├── lib/                  # shared shell libraries
+├── lib/                  # worklog-manager Node modules (lib/worklog-manager/*.mjs)
 ├── templates/            # AGENTS.md template, docs/, cheatsheets
 └── tests/                # e2e harness
 ```
@@ -63,7 +64,7 @@ Once a known mode is parsed: run preamble (per table), read `modes/<mode>.md`, f
 
 | Mode    | Preamble | `references/protocol.md` | Reads AGENTS.md? | lessons.md? |
 |---------|----------|--------------------------|------------------|-------------|
-| init    | `--minimal` (default and `--light`); `--full` (explicit `--full`) | no | yes | quickref (limit=15) |
+| init    | `--minimal` (default and `--light`); `--full` (explicit `--full`) | no | yes | no |
 | sync    | `--full` | only when creating or hand-editing a task | only for an edge case the reference does not answer | no |
 | status  | `--minimal` | no                    | no               | no |
 | context | `--minimal` | no                    | no               | no |
@@ -74,14 +75,14 @@ Once a known mode is parsed: run preamble (per table), read `modes/<mode>.md`, f
 | lint    | none     | no                       | no               | no |
 | project | `--minimal` (read-only subs: `list`, `verify`, `next`); `--full` (mutating: `new`, `claim`, `release`, `reap`) | no | no | no |
 | scrape-slack | none | no                      | no               | no |
-| review  | `--full` | no                       | yes              | full |
+| review  | none     | no                       | yes              | full |
 
 ## Paths — single source of truth
 
 Scripts live in the dotfiles skill, NOT in the data repo:
 
 ```bash
-WORKLOG_BIN="${WORKLOG_BIN:-$HOME/Documents/oss/dotfiles/skills/worklog/bin}"
+WORKLOG_BIN="${WORKLOG_BIN:-$HOME/.claude/skills/worklog/bin}"
 WORKLOG_REPO="${WORKLOG_REPO:?per-clone .envrc must export this}"
 ```
 
