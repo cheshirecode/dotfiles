@@ -116,6 +116,31 @@ class LoopRunTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("blocked", r.stdout)
 
+    def test_stop_is_terminal_for_every_status(self):
+        # Partial enum coverage let the cancelled bug reach a live smoke:
+        # exercise every terminal status the driver's --stop accepts.
+        statuses = (
+            "blocked", "budget_exhausted", "cancelled",
+            "complete", "continue_scheduled", "needs_human",
+        )
+        for status in statuses:
+            with self.subTest(status=status):
+                run_dir = str(Path(self._tmp.name) / ("stop-" + status))
+                run([run_dir, "--goal", "test goal"], cwd=self.cwd)
+                args = [
+                    run_dir,
+                    "--stop", status,
+                    "--evidence", "command: stop probe — %s" % status,
+                ]
+                if status == "complete":
+                    args += ["--verification", "command: probe — rc 0"]
+                r = run(args, cwd=self.cwd)
+                self.assertEqual(r.returncode, 0, "%s: %s" % (status, r.stderr))
+                self.assertIn(status, r.stdout)
+                self.assertTrue(
+                    r.stdout.strip().endswith("decide: stopped"), r.stdout
+                )
+
     def test_stop_cancelled_is_terminal_without_next_action(self):
         # cancelled is non-resumable: loop_state rejects any next_action,
         # so the driver must not default one in.

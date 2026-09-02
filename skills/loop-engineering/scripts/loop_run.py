@@ -28,14 +28,11 @@ SKILL_DIR = Path(__file__).resolve().parent.parent
 LOOP_STATE = SKILL_DIR / "scripts" / "loop_state.py"
 CREW_RADAR = SKILL_DIR / "bin" / "crew-radar"
 
-TERMINAL = {
-    "blocked",
-    "budget_exhausted",
-    "cancelled",
-    "complete",
-    "continue_scheduled",
-    "needs_human",
-}
+# Single source of truth for status classification; a hand-copy here already
+# caused one live bug (--stop cancelled rejected a defaulted next_action).
+from loop_state import RESUMABLE_STATUSES, TERMINAL_STATUSES  # noqa: E402
+
+TERMINAL = TERMINAL_STATUSES
 
 
 def loop_state(args):
@@ -166,11 +163,7 @@ def main():
                 args += ["--verification", ns.verification]
             # Resumable stops need a replay action; non-resumable ones
             # (complete, cancelled) reject any next_action.
-            resumable = {
-                "blocked", "needs_human",
-                "budget_exhausted", "continue_scheduled",
-            }
-            if ns.stop in resumable:
+            if ns.stop in RESUMABLE_STATUSES:
                 args += ["--next-action", ns.next_action
                          or "replay the check that stopped this run"]
             rc, line = loop_state(args)
