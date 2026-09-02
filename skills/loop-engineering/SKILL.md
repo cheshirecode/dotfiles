@@ -113,7 +113,8 @@ Each call prints exactly one line with the script-run mechanics folded in:
   in the line. Serialize writes unless isolation is proven (crew.md).
 - **Orchestrator, defaulted:** pass `--project <slug>` once when 3+ worklog
   tasks exist; the driver reports the next eligible child every cycle
-  (orchestrator.md carries the claim/archive rules).
+  (orchestrator.md carries the claim/archive rules). `queue: empty|blocked`
+  are verdicts; `queue: error=<reason>` is a broken project, not an idle queue.
 - **The model decides one thing per cycle:** continue — spend the cycle,
   usually by delegating the queue task — or stop
   (`--stop complete|blocked|needs_human|...`). State, budget, radar, and

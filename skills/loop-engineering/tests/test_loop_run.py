@@ -225,6 +225,80 @@ class LoopRunTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("queue: empty", r.stdout)
 
+    def _stub(self, body):
+        """Write a project.sh stub and return its bin dir."""
+        stub_bin = Path(self._tmp.name) / "wbin"
+        stub_bin.mkdir(exist_ok=True)
+        stub = stub_bin / "project.sh"
+        stub.write_text(body)
+        stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+        return str(stub_bin)
+
+    def _queue_cell(self, stdout):
+        for cell in stdout.strip().split(" | "):
+            if cell.startswith("queue:"):
+                return cell
+        self.fail("no queue cell in: %r" % stdout)
+
+    def init_with_stub(self, body):
+        return run(
+            [self.run_dir, "--goal", "test goal", "--project", "prog-x"],
+            env_extra={"WORKLOG_BIN": self._stub(body)},
+            cwd=self.cwd,
+        )
+
+    def test_queue_slug_is_read_from_stdout_only(self):
+        # project.sh prints the slug on stdout and warnings on stderr. Reading
+        # a merged stream hands the last warning back as a task name.
+        r = self.init_with_stub(
+            "#!/bin/sh\necho task-alpha\n"
+            "echo 'warning: vault is behind origin' >&2\n"
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self._queue_cell(r.stdout), "queue: task-alpha")
+
+    def test_queue_rejects_output_that_is_not_a_slug(self):
+        # A zero exit carrying prose is a broken contract, not a task name.
+        r = self.init_with_stub("#!/bin/sh\necho 'up to date, nothing to do'\n")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(
+            self._queue_cell(r.stdout).startswith("queue: error="),
+            self._queue_cell(r.stdout),
+        )
+        # The cell must not break the one-line contract.
+        body = [ln for ln in r.stdout.splitlines() if ln.strip()]
+        self.assertEqual(len(body), 1)
+
+    def test_queue_blocked_only_for_the_dependency_verdict(self):
+        r = self.init_with_stub(
+            "#!/bin/sh\necho \"project next: no claim-eligible task;"
+            " b: blocked on a\" >&2\nexit 1\n"
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self._queue_cell(r.stdout), "queue: blocked")
+
+    def test_queue_configuration_failure_is_an_error_not_a_lull(self):
+        # orchestrator.md: exit 1 alone is not proof of an empty or blocked
+        # queue -- it also covers a missing or misconfigured project. Reporting
+        # those as `blocked` lets a loop spin forever claiming nothing.
+        for stderr_line in (
+            "project next: no task file for 'prog-x'",
+            "project next: 'prog-x' has no tasks: block",
+            "_lib.sh::resolve_worklog_repo: cannot locate a worklog data repo.",
+        ):
+            with self.subTest(stderr_line):
+                self._tmp.cleanup()
+                self._tmp = tempfile.TemporaryDirectory()
+                self.run_dir = str(Path(self._tmp.name) / "run")
+                self.cwd = self._tmp.name
+                r = self.init_with_stub(
+                    "#!/bin/sh\necho \"%s\" >&2\nexit 1\n" % stderr_line
+                )
+                self.assertEqual(r.returncode, 0, r.stderr)
+                cell = self._queue_cell(r.stdout)
+                self.assertTrue(cell.startswith("queue: error="), cell)
+                self.assertNotIn("blocked", cell)
+
 
 if __name__ == "__main__":
     unittest.main()
