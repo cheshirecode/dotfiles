@@ -39,7 +39,7 @@ Step 3 — check for regressions (each grep feeds a Step 4 clause):
 Step 4 — decide:
   - If ANY rc above is nonzero OR the non-dict guard line printed 0 OR the
     stale-skill grep printed matches OR the route-matrix grep printed
-    "(not found)" OR frontmatter > 450 chars OR unittest ran fewer than 68
+    "(not found)" OR frontmatter > 450 chars OR unittest ran fewer than 70
     tests OR radar reported fewer than 31 passed OR reap fewer than 40 passed:
     BEGIN IMPROVEMENT LOOP (use bounded cycles via loop_state.py advance/finish).
   - If everything is clean AND you have nothing new to add:
@@ -61,6 +61,10 @@ Return exactly one final line:
 where <status> is CLEAN or IMPROVED, and <evidence> names each changed file
 and its test result. Keep all detail in the state artifact, not your output.
 ```
+
+Do not maintain hand-synced copies of this prompt outside the repo
+(e.g. under /tmp): they drift silently. Regenerate on demand from
+this file.
 
 ## Parallel-session notes
 
