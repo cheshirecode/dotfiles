@@ -53,6 +53,23 @@ Block-form repos:. The first entry is not midas.
 - [ ] Chase !4321
 EOF
 
+task no-repos <<'EOF'
+---
+slug: no-repos
+owner: tester
+status: in-progress
+kind: impl
+---
+
+## Context
+
+No repos: field at all. The project is unknown, not midas.
+
+## Next
+
+- [ ] Chase !4321
+EOF
+
 task no-next <<'EOF'
 ---
 slug: no-next
@@ -174,6 +191,15 @@ OUT=$(cd "$TMP/wl" && PATH="$TMP/stub:$PATH" WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP
 ck "block-form repos resolves to its own repo" 'stale.*!4321.*merged'
 no "block-form repos does not default to midas" '(unchecked|live).*!4321'
 no "wrong project cannot yield a confident live verdict" '1 live'
+
+# A missing repos: must not be guessed. The stub answers for BOTH projects, so
+# a default-to-midas would resolve and print a confident verdict; only refusing
+# to guess yields unchecked.
+OUT=$(cd "$TMP/wl" && PATH="$TMP/stub:$PATH" WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP=tester \
+      GITLAB_HOST=gitlab.example JIRA_HOST=127.0.0.1:1 GITLAB_PAT=fake \
+      "$BIN/verify-refs.sh" no-repos 2>&1)
+ck "absent repos: reports unchecked, not a guess" 'unchecked.*!4321'
+no "absent repos: does not silently resolve"      '(stale.*!4321|[1-9][0-9]* live)'
 
 printf '\n  %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
