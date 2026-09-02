@@ -33,6 +33,26 @@ Body cites !9999 and SPLUS-1 but the body is not scope.
 - [ ] Also SPLUS-4321
 EOF
 
+task block-repos <<'EOF'
+---
+slug: block-repos
+owner: tester
+status: in-progress
+kind: impl
+repos:
+  - monorepo
+  - midas
+---
+
+## Context
+
+Block-form repos:. The first entry is not midas.
+
+## Next
+
+- [ ] Chase !4321
+EOF
+
 task no-next <<'EOF'
 ---
 slug: no-next
@@ -123,6 +143,37 @@ OUT=$(cd "$TMP/wl" && PATH="$TMP/stub:$PATH" WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP
 ck "merged MR is reported stale, not live" 'stale.*!1234.*merged'
 no "merged MR is not counted live"         '1 live'
 ck "nested author state does not win"      '!1234'
+
+# repos: block form. Only the inline shape was parsed, so every block-form
+# task silently resolved to textemma/midas whatever its repos: actually said —
+# measured 62 block-form tasks in one namespace, 15 naming another repo first.
+# The stub answers only for monorepo, so a midas lookup falls through to
+# unchecked and the assertion below fails, which is exactly the old behaviour.
+# The two projects answer with DIFFERENT states for the SAME id. A stub where
+# the wrong project merely 404s would only prove the loud failure; the one that
+# matters is a low MR number that exists in both repos, resolves against the
+# wrong one, and returns a confident wrong verdict with no signal. Here midas
+# says opened, monorepo says merged: reading the wrong project yields "live".
+cat > "$TMP/stub/curl" <<'STUB'
+#!/usr/bin/env bash
+for a in "$@"; do
+  case "$a" in
+    *textemma%2Fmonorepo*merge_requests*) printf '%s' '{"iid":4321,"state":"merged","author":{"state":"active"}}'; exit 0 ;;
+    *textemma%2Fmidas*merge_requests*)    printf '%s' '{"iid":4321,"state":"opened","author":{"state":"active"}}'; exit 0 ;;
+    *merge_requests*) exit 22 ;;
+  esac
+done
+exit 22
+STUB
+chmod +x "$TMP/stub/curl"
+
+OUT=$(cd "$TMP/wl" && PATH="$TMP/stub:$PATH" WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP=tester \
+      GITLAB_HOST=gitlab.example JIRA_HOST=127.0.0.1:1 \
+      GITLAB_PAT=fake \
+      "$BIN/verify-refs.sh" block-repos 2>&1)
+ck "block-form repos resolves to its own repo" 'stale.*!4321.*merged'
+no "block-form repos does not default to midas" '(unchecked|live).*!4321'
+no "wrong project cannot yield a confident live verdict" '1 live'
 
 printf '\n  %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

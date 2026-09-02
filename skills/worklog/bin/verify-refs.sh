@@ -103,7 +103,31 @@ except Exception: print("")' 2>/dev/null) || state=""
 
 for f in "${files[@]}"; do
   slug=$(basename "$f" .md)
-  proj=$(sed -n 's/^repos:[[:space:]]*\[\([^],]*\).*/\1/p' "$f" | head -1 | tr -d ' ')
+  # repos: comes in two YAML shapes and both are in active use. Reading only
+  # the inline one silently defaulted every block-form task to midas: measured
+  # 94 inline vs 62 block in one namespace, 15 of those block tasks naming a
+  # different repo first. A wrong project 404s (loud, reported unchecked) —
+  # but 4-digit MR numbers exist in several repos, so it can also return a
+  # confident wrong state for an MR that merely shares an id.
+  proj=$(awk '
+    /^repos:[[:space:]]*\[/ {
+      line = $0
+      sub(/^repos:[[:space:]]*\[/, "", line)
+      sub(/[],].*$/, "", line)
+      gsub(/[\047"[:space:]]/, "", line)
+      if (length(line)) { print line; exit }
+      next
+    }
+    /^repos:[[:space:]]*$/ { inblock = 1; next }
+    inblock && /^[[:space:]]*-[[:space:]]*/ {
+      line = $0
+      sub(/^[[:space:]]*-[[:space:]]*/, "", line)
+      gsub(/[\047"[:space:]]/, "", line)
+      if (length(line)) { print line; exit }
+      next
+    }
+    inblock && /^[^[:space:]#-]/ { inblock = 0 }
+  ' "$f")
   [ -z "$proj" ] && proj=midas
   case "$proj" in */*) ;; *) proj="textemma/$proj" ;; esac
   # only unchecked items under ## Next
