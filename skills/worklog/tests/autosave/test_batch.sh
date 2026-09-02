@@ -12,8 +12,8 @@ export TMPDIR="$SCRATCH_ROOT/tmp"
 mkdir -p "$TMPDIR"
 trap 'rm -rf "$SCRATCH_ROOT"' EXIT
 
-git init -q --bare "$UPSTREAM"
-git init -q "$SCRATCH"
+git init -q --bare --initial-branch=main "$UPSTREAM"
+git init -q --initial-branch=main "$SCRATCH"
 cp -R "$WORKLOG_BIN" "$SCRATCH/bin"
 rm -rf "$SCRATCH/bin/__pycache__"
 chmod +x "$SCRATCH"/bin/*.sh
