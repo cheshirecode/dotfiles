@@ -1,6 +1,6 @@
 ---
 name: karpathy-guidelines
-description: Reduce common LLM coding mistakes. Use when writing, reviewing, or refactoring code to avoid overcomplication, make surgical changes, surface assumptions, and define verifiable success criteria.
+description: Reduce common LLM coding mistakes. Use before non-trivial edits, multi-step changes, or refactors — when scope is ambiguous, a simpler approach may exist, or success criteria are unstated. Skip for single-line or mechanical edits.
 license: MIT
 ---
 
@@ -13,7 +13,7 @@ Behavioral guidelines to reduce common LLM coding mistakes, derived from [Andrej
 - Writing, reviewing, or refactoring code
 - Avoiding overcomplication, making surgical changes, surfacing assumptions, defining verifiable success criteria
 
-Skip if: read-only work with no code changes.
+Skip if: read-only exploration/search with no code being produced or judged.
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
@@ -28,6 +28,9 @@ Before implementing:
 - If multiple interpretations exist, present them - don't pick silently.
 - If a simpler approach exists, say so. Push back when warranted.
 - If something is unclear, stop. Name what's confusing. Ask.
+- If no user is reachable (sub-agent, background loop, scheduled run), do not
+  stall: state the assumption explicitly in your output, choose the most
+  reversible option, and flag it for the caller.
 
 ## 2. Simplicity First
 
@@ -97,6 +100,6 @@ If observed evidence contradicts a load-bearing assumption or a planned expected
 3. Revise the hypothesis and plan before continuing.
 4. Rerun the original reproduction plus affected regression checks.
 
-For an apparent blocker, replay it from a trusted vantage point and use a cause-specific discriminating check before stopping. Do not generalize a shared blocker classifier until three independent incidents exhibit the same machine-detectable cause.
+For an apparent blocker, replay it from a trusted vantage point — a context you control end to end, where the inputs, environment, and command are all visible to you rather than reported by another agent or a cached log — and use a cause-specific discriminating check before stopping. Do not generalize a shared blocker classifier — one reusable rule that labels future failures by cause — until three independent incidents (separate runs that do not share a root cause chain, not three symptoms of one run) exhibit the same machine-detectable cause (one a command's exit code, matched output string, or file state can identify without human judgment).
 
 Do not require this three-field block for trivial, single-path tasks with no meaningful uncertainty.
