@@ -12,10 +12,10 @@ A periodic sweep skill. Three surfaces share the same staleness pattern: a workl
 This skill invokes worklog scripts via `$WORKLOG_BIN`. Resolve it the same way the worklog skill does:
 
 ```bash
-WORKLOG_BIN="${WORKLOG_BIN:-$HOME/Documents/oss/dotfiles/skills/worklog/bin}"
+WORKLOG_BIN="${WORKLOG_BIN:-$HOME/.claude/skills/worklog/bin}"
 ```
 
-All `checkpoint.sh` / `archive.sh` references below use this variable.
+All `checkpoint.sh` references below use this variable.
 
 ## When to use
 
@@ -46,13 +46,13 @@ Skip if: only one PR open, body is short, no recent worklog activity. Overhead n
    **7a. Size flag.** PRs with body >5KB: read for stale checklists, ASCII art, duplicate context.
 
    **7b. Internal-ref leak scan.** Run both greps below — they are not redundant (a worklog path in the diff is a leaked *code comment*; the same string in the body is a leaked *PR description*; a body under 5KB skips the size flag but still needs this scan):
-   - Title + body: `gh pr view <n> --json title,body -q '.title + "\n" + .body' | grep -inE 'worklog:|\[POST-MERGE|next_action|/ship-hygiene|/impeccable|/worklog|people/[a-z]+/active|iteration [0-9]|per the (audit|critique)|scope chosen'`
-   - Code comments (added lines only): `gh pr diff <n> | grep -nE '^\+' | grep -iE 'worklog:|\[POST-MERGE|next_action|/ship-hygiene|/impeccable|/worklog|people/[a-z]+/active|iteration [0-9]|per the (audit|critique)|scope chosen'`
+   - Title + body: `gh pr view <n> --json title,body -q '.title + "\n" + .body' | grep -inE 'worklog:|\[POST-MERGE|next_action|/ship-hygiene|/worklog|people/[A-Za-z0-9._-]+/active|iteration [0-9]|per the (audit|critique)|scope chosen'`
+   - Code comments (added lines only): `gh pr diff <n> | grep -nE '^\+' | grep -iE 'worklog:|\[POST-MERGE|next_action|/ship-hygiene|/worklog|people/[A-Za-z0-9._-]+/active|iteration [0-9]|per the (audit|critique)|scope chosen'`
 
    **7c. Fix.** For title/body: **fix in place** — rewrite product-first, drop the internal refs. For code comments: surface and fix only if genuinely leaked process notes; keep durable why-comments.
 
    **Leak-token notes:**
-   - The token is `worklog:` (the trailer form), not bare `worklog` — a PR describing worklog *tooling* uses "worklog" as product vocabulary. The leaked forms (`Worklog:` trailer, worklog *paths*) are still caught (the latter by `people/[a-z]+/active`).
+   - The token is `worklog:` (the trailer form), not bare `worklog` — a PR describing worklog *tooling* uses "worklog" as product vocabulary. The leaked forms (`Worklog:` trailer, worklog *paths*) are still caught (the latter by `people/[A-Za-z0-9._-]+/active`, which matches dotted/hyphenated/numeric LDAPs such as `people/fred.tran/active/...`).
    - If the PR changes `skills/**`, `manifest/skills.yaml`, or skill docs: allow the relevant skill command names; still purge worklog paths, `next_action`, and agent-process chatter.
    - Pure-engineering exception: technical framing is fine; internal-tooling chatter still goes.
 8. **CI triage:** group failed checks by name. If the same check fails on N>1 PRs → systemic (workflow config bug, not per-PR). Surface the systemic finding as ONE actionable line.
@@ -62,7 +62,11 @@ Skip if: only one PR open, body is short, no recent worklog activity. Overhead n
     - worktree: `git worktree remove <path>`
     - branch: usually auto-deleted on squash-merge; otherwise `git push origin --delete <branch>` + `git branch -D <branch>`
    If a `[POST-MERGE-CLEANUP]` note for this PR already exists, refresh it rather than duplicating.
-11. **Checkpoint** the worklog body change(s): `"$WORKLOG_BIN/checkpoint.sh" <slug>`. Don't bundle unrelated working-tree changes. Use `WORKLOG_CHECKPOINT_FORCE=1` only as an explicit, stated-reason override when intentionally checkpointing extra paths; default ship-hygiene must preserve the staged-scope guard.
+11. **Checkpoint** the worklog body change(s): `"$WORKLOG_BIN/checkpoint.sh" <slug>`. Don't bundle unrelated working-tree changes. If a sibling path genuinely belongs to this slug, add it with `--include=<path>` (repeatable) — that is the sanctioned scoped mechanism and the one checkpoint.sh itself recommends. `WORKLOG_CHECKPOINT_FORCE=1` is the blunt last resort: use it only as an explicit, stated-reason override; default ship-hygiene must preserve the staged-scope guard.
+
+    **Hard failures** (nothing was committed — fix and re-run):
+    - **exit 1** — staged paths outside the slug's scope. Re-run with `--include=<path>` for each path that belongs with this slug, or `git restore --staged <path>` for the ones that belong to a different commit.
+    - **exit 2** — `--status=blocked` without a `Waiting on ...` next_action. Supply `--next="Waiting on <who or what>"`.
 
 ## Output format
 
