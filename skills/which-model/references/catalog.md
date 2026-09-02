@@ -17,7 +17,8 @@ Catalog paths:
 
 ## Helper
 
-Run `bin/model-catalog` from the skill root before recommending exact models:
+Run `bin/model-catalog` from the skill root (the directory holding `SKILL.md`)
+before recommending exact models:
 
 ```bash
 bin/model-catalog --env auto --refresh-if-stale
@@ -31,6 +32,9 @@ Refresh rules:
 - Less than three days old: use silently for routine routing.
 - Three to five days old: use for rough routing; refresh before exact prices or material billing decisions.
 - More than five days old: refresh first; if refresh fails, use it only with a stale warning.
+- Age is measured from `data_as_of` (the date of the underlying data), not from when
+  the cache file was written. Rebuilding a static snapshot or seed profile does not
+  make it fresh, so `stale`/`very_stale` stay true until the source data itself moves.
 - Always refresh for current/latest/live availability or pricing.
 
 ## Record and source requirements
@@ -40,7 +44,11 @@ Catalog records should include model id, provider, current-harness availability,
 Prefer official or harness-native, key-free sources:
 
 - OpenCode configured models and Models.dev for OpenCode.
-- OpenAI model docs/API surfaces for Codex/OpenAI.
+- Codex/OpenAI: **no live source is wired up.** `--env codex` (and `--provider codex`)
+  always falls through to the hand-written `ENV_SEEDS["codex"]` records, which are
+  marked `requires_harness_check` and carry an unverified-provenance caveat. Treat
+  their IDs, prices, and context windows as a starting shortlist to confirm in the
+  harness and against OpenAI's pricing page — never as a quotable source.
 - Cursor local `state.vscdb` reactive storage (`availableDefaultModels2`) for Cursor.
 - Public OpenRouter models API (`https://openrouter.ai/api/v1/models`) for OpenRouter.
 - For Claude, the helper's dated Anthropic docs snapshot enriched with pricing/limits. When live availability matters, let the running session inject model JSON through `WHICH_MODEL_CATALOG_SOURCE`; the skill must never hold an Anthropic API key.
