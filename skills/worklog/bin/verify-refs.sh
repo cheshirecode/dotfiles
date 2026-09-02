@@ -82,7 +82,7 @@ lookup() {  # lookup <kind> <ref> <project> -> prints state
   local key="$1|$2|$3" hit
   hit=$(grep -m1 -F "$key=" "$CACHE" 2>/dev/null) && { printf '%s' "${hit#*=}"; return; }
   local state="unchecked"
-  if [ "$1" = mr ] && [ -n "$TOKEN" ]; then
+  if [ "$1" = mr ] && [ -n "$TOKEN" ] && [ -n "$3" ]; then
     state=$(curl -sf --max-time 10 -H "PRIVATE-TOKEN: $TOKEN" \
       "https://$GL_HOST/api/v4/projects/$(printf '%s' "$3" | sed 's|/|%2F|g')/merge_requests/${2#!}" 2>/dev/null \
       | python3 -c 'import json,sys
@@ -128,8 +128,12 @@ for f in "${files[@]}"; do
     }
     inblock && /^[^[:space:]#-]/ { inblock = 0 }
   ' "$f")
-  [ -z "$proj" ] && proj=midas
-  case "$proj" in */*) ;; *) proj="textemma/$proj" ;; esac
+  # No repos: at all means the project is unknown, not midas. Guessing turns a
+  # missing field into a confident verdict about some other repo's MR; an empty
+  # proj skips the lookup and reports unchecked, which is a gap you can see.
+  # (0 of 156 active tasks lack the field today, so this changes no current
+  # result — it removes the way a future one could be silently wrong.)
+  case "$proj" in "") ;; */*) ;; *) proj="textemma/$proj" ;; esac
   # only unchecked items under ## Next
   items=$(awk '/^## Next/{n=1;next} /^## /{n=0} n' "$f" | grep -E '^\s*-\s*\[ \]' || true)
   [ -n "$items" ] || continue
@@ -141,7 +145,7 @@ for f in "${files[@]}"; do
     esac
     case "$st" in
       merged|closed|done) printf 'stale|%s|%s|%s|%s\n' "$slug" "$ref" "$proj" "$st" >>"$ROWS"; stale=$((stale+1)) ;;
-      unchecked)          printf 'unchecked|%s|%s|%s|%s\n' "$slug" "$ref" "$proj" "no token or unreachable" >>"$ROWS"; unchecked=$((unchecked+1)) ;;
+      unchecked)          printf 'unchecked|%s|%s|%s|%s\n' "$slug" "$ref" "$proj" "no token, unresolved repo, or unreachable" >>"$ROWS"; unchecked=$((unchecked+1)) ;;
       *)                  live=$((live+1)) ;;
     esac
   done < <(printf '%s' "$items" | grep -ohE '![0-9]{3,5}|[A-Z]{2,6}-[0-9]+' | sort -u)
