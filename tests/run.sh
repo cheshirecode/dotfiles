@@ -315,6 +315,10 @@ import re
 
 text = pathlib.Path("skills/council/SKILL.md").read_text()
 checks = {
+    # Council was the last root with no size ceiling and had grown to 353
+    # lines; the prompt templates and tiering table now live in references/.
+    # Pin the root so dispatch-time payload does not creep back into it.
+    "thin root": len(text.splitlines()) <= 280,
     "support formula": "APPROVE_count + (0.5 * QUALIFY_count)" in text,
     "formula text": "ceil(M_returned / 2 + 1)" in text,
     "threshold name": "majority-plus-one" in text,
@@ -444,6 +448,21 @@ PY
       fail "worklog lint: $(basename "$t" .sh)"
     fi
   done
+
+  # Red fixture: a skill directory with no manifest entry must fail
+  # check-manifest. install.sh symlinks every skills/*/ dir regardless, so
+  # without this rule a skill is installed by one path, missing from the
+  # other, and no test notices (job-application sat that way).
+  probe_dir="$REPO_ROOT/skills/zz-manifest-probe"
+  rm -rf "$probe_dir"
+  mkdir -p "$probe_dir"
+  printf -- '---\nname: zz-manifest-probe\ndescription: probe\n---\n' > "$probe_dir/SKILL.md"
+  if ./tools/check-manifest.sh >/dev/null 2>&1; then
+    fail "check-manifest rejects unlisted skill dir"
+  else
+    ok "check-manifest rejects unlisted skill dir"
+  fi
+  rm -rf "$probe_dir"
 
   if python3 -m unittest skills/loop-helpers/tests/test_helpers.py >/dev/null 2>&1; then
     ok "loop-helpers transport gate fixtures"

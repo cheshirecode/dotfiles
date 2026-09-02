@@ -75,6 +75,23 @@ for s in m.get("skills", []):
         problems.append(f"{name}: install_to '{inst}' collides with '{seen_install_to[inst]}'")
     seen_install_to[inst] = name
 
+# Coverage runs the other way too. A skill directory that never reaches the
+# manifest is still installed by install.sh's blanket symlink loop, but it is
+# invisible to bin/install-skills.sh and to every manifest-derived test — the
+# canonical set those tests iterate is built FROM this file. So the skill
+# drifts silently: present on one install path, absent from the other, with no
+# signal. Require an explicit entry, and let optional: true be the way to say
+# "ships here, not installed by default".
+skills_dir = repo_root / "skills"
+if skills_dir.is_dir():
+    for skill_md in sorted(skills_dir.glob("*/SKILL.md")):
+        dir_name = skill_md.parent.name
+        if dir_name not in seen_names:
+            problems.append(
+                f"{dir_name}: skills/{dir_name}/ has no manifest entry "
+                "(add one; use optional: true if it should not install by default)"
+            )
+
 if problems:
     print("check-manifest: FAIL")
     for p in problems:
