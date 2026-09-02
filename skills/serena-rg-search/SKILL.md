@@ -58,7 +58,12 @@ Exact symbol lookup, references, file overview before editing.
 - `find_symbol` — known function/class/hook
 - `find_referencing_symbols` — usages
 - `get_symbols_overview` — file map
-- `search_for_pattern` — scoped regex/substring search within Serena's index; use when `rg` returns too many hits and you need symbol-boundary awareness, or when you want to restrict to a specific file/directory that Serena has indexed. Falls back gracefully if the index is stale.
+- `search_for_pattern` — plain regex scan over project files. **Not** symbol-aware and not
+  index-backed: it is `rg` with a different scoping vocabulary (`relative_path` to limit to a
+  file or subtree, `paths_include_glob` / `paths_exclude_glob` to filter, and
+  `restrict_search_to_code_files` to skip docs and fixtures). Reach for it because you are
+  already in Serena and want the hit in the same tool surface as the symbol calls — not
+  because it understands symbol boundaries. If you are out of Serena, `rg` is equivalent.
 
 ## Prefer `jq` For
 
@@ -124,5 +129,7 @@ command -v rg jq
 ```
 
 If missing: `brew install ripgrep jq` (macOS) · `apt-get install ripgrep jq` (Debian) · `dnf install ripgrep jq` (Fedora) · `pacman -S ripgrep jq` (Arch). `git` is assumed present in any repo.
+
+Serena is an MCP server, not a binary — `command -v` will never find it. Check the session's tool list for a tool whose name ends in `serena__find_symbol` (Claude Code exposes it as `mcp__serena__find_symbol`); if no such tool is listed, Serena is not activated for this project — use `rg` and do not attempt setup mid-task.
 
 **Serena MCP setup:** Serena is provided by the MCP server — if it isn't activated for the project, fall back to `rg` and don't block on it. To set up the Serena MCP server for Claude Code, Cursor, or OpenCode, read `references/mcp-setup.md`.
