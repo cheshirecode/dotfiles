@@ -1370,8 +1370,21 @@ assert haiku["provider"] == "anthropic"
 for model in catalog["models"]:
     assert model["confidence"] == "snapshot"
     assert any("docs snapshot" in c for c in model["caveats"])
-# Cheapest fitting lane ranks first (Haiku 3 at 0.25/1.25 undercuts newer Haikus).
-assert payload["recommendations"][0]["id"] == "claude-3-haiku-20240307"
+# The snapshot must carry current lanes, not only retired ones.
+for current in ("claude-fable-5-1", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"):
+    assert current in by_id, f"snapshot missing current model {current}"
+    assert not by_id[current]["deprecated"], current
+# Retired lanes stay listed but are flagged, so they can never be quoted as current.
+for retired in ("claude-3-haiku-20240307", "claude-opus-4-1", "claude-3-opus-latest"):
+    assert by_id[retired]["deprecated"] is True, retired
+# Recency outranks price: the cheap retired Haiku 3 must not win routine_coding.
+top = payload["recommendations"][0]
+assert top["deprecated"] is False, top["id"]
+assert top["id"] == "claude-sonnet-5", top["id"]
+assert all(not model["deprecated"] for model in payload["recommendations"][:2])
+# Static snapshot data reports its own age, so the stale warning can actually fire.
+assert catalog["data_as_of"] == "2026-06-24", catalog["data_as_of"]
+assert payload["stale"] is True and payload["very_stale"] is True
 PY
   then ok "which-model claude builds key-free docs snapshot"; else fail "which-model claude builds key-free docs snapshot"; fi
 
