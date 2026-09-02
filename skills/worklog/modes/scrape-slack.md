@@ -16,7 +16,7 @@ direnv exec "$WORKLOG_REPO" "$WORKLOG_BIN/scrape-slack.sh" --format=json "$@"
 ```
 
 If `WORKLOG_BIN` is unset, use the skill source default:
-`$HOME/Documents/oss/dotfiles/skills/worklog/bin`.
+`$HOME/.claude/skills/worklog/bin`.
 
 ## Provider boundary
 

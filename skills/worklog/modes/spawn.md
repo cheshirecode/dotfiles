@@ -24,7 +24,7 @@ Relevant repos:
   - <$PROJECTS_DIR>/<repo-b>
 
 Worklog env (required before any $WORKLOG_BIN helper):
-  export WORKLOG_BIN="${WORKLOG_BIN:-$HOME/Documents/oss/dotfiles/skills/worklog/bin}"
+  export WORKLOG_BIN="${WORKLOG_BIN:-$HOME/.claude/skills/worklog/bin}"
   export WORKLOG_REPO="${WORKLOG_REPO:-<$PROJECTS_DIR>/_worklog}"
   export WORKLOG_LDAP=<ldap-for-this-task>   # e.g. fredtran — omit --ldap on search sweeps to see all namespaces
   # Prefer: direnv exec "$WORKLOG_REPO" env WORKLOG_LDAP=<ldap> "$WORKLOG_BIN/<helper>.sh" …
