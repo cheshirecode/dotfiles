@@ -28,14 +28,18 @@ fi
 # pipefail -- so a namespace with no archive/ yet (every new one) killed the
 # probe. Building the list first makes "nothing to search" a stated condition
 # rather than an accident of glob expansion.
-mapfile -t SCOPE < <(find "$here" -type d \( -name active -o -name archive \) 2>/dev/null | sort)
+SCOPE=()
+while IFS= read -r path; do SCOPE+=("$path"); done \
+  < <(find "$here" -type d \( -name active -o -name archive \) 2>/dev/null | sort)
 if [ "${#SCOPE[@]}" -eq 0 ]; then
   echo "$(basename "$0"): no active/ or archive/ directories under $here" >&2
   exit 1
 fi
 
 if [ "${1:-}" = "--projects" ]; then
-  mapfile -t FILES < <(find "${SCOPE[@]}" -name '*.md' -type f 2>/dev/null | sort)
+  FILES=()
+  while IFS= read -r path; do FILES+=("$path"); done \
+    < <(find "${SCOPE[@]}" -name '*.md' -type f 2>/dev/null | sort)
   # awk with an empty argument list would read stdin and hang.
   [ "${#FILES[@]}" -eq 0 ] && exit 0
   awk '/^project:/{print $2}' "${FILES[@]}" | sort -u
