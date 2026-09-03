@@ -113,7 +113,11 @@ cmd_list() {
     return 0
   fi
 
-  local dir url forge slug reason user rows
+  # Two clones of one project (a worktree-style sibling checkout, e.g.
+  # midas and midas-wt-mockfix) would otherwise query it twice and report every
+  # MR twice, which reads as drift that is not there. Plain string, not an
+  # associative array: macOS ships Bash 3.
+  local dir url forge slug reason user rows seen=""
   for dir in "${dirs[@]}"; do
     url="$(git -C "$dir" remote get-url origin 2>/dev/null)" || continue
     [[ -z "$url" ]] && continue
@@ -122,6 +126,8 @@ cmd_list() {
       emit_gap unknown "${slug:-$dir}" "unrecognized-forge-host"
       continue
     fi
+    case " $seen " in *" $forge/$slug "*) continue ;; esac
+    seen="$seen $forge/$slug"
     reason="$(forge_unavailable "$forge")"
     if [[ -n "$reason" ]]; then
       emit_gap "$forge" "$slug" "$reason"

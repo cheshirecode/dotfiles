@@ -118,5 +118,18 @@ check "no-CLI case names the GitLab repo it could not check" $?
 printf '%s' "$out2" | grep -q $'^gap\tgithub\tcheshirecode/dotfiles\tgh-not-installed$'
 check "no-CLI case names the GitHub repo it could not check" $?
 
+# ------------------------------------- two clones of one project = one report
+# /workspace/midas and /workspace/midas-wt-mockfix are both clones of
+# textemma/midas, so a per-clone loop queries the project twice and every MR is
+# reported twice. A reader cross-referencing 10 rows against 5 tracked MRs sees
+# drift that is not there.
+export PATH="$TMP/stub:/usr/bin:/bin"
+git init -q "$TMP/clones/midas-wt" 2>/dev/null
+git -C "$TMP/clones/midas-wt" remote add origin "https://gitlab.com/textemma/midas.git"
+dup="$("$FORGE" list --author fred.tran "$TMP/clones/midas" "$TMP/clones/midas-wt" 2>/dev/null \
+       | grep -c $'^open\tgitlab\ttextemma/midas\t1770\t' || true)"
+[[ "$dup" == 1 ]]
+check "one project cloned twice reports each MR once (got $dup rows)" $?
+
 [[ $fails -eq 0 ]] || { echo "$fails assertion(s) failed"; exit 1; }
 echo "ok: init light-path drift check is forge-aware"
