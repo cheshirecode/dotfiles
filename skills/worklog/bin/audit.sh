@@ -113,9 +113,19 @@ try:
   data = json.load(sys.stdin)
 except Exception:
   sys.exit(1)
+# "Clean" has to carry the size of what was read. A report over zero task
+# files has no issues either, and printed the same "(clean)" as a healthy
+# corpus -- so running audit.sh against the wrong repo returned a clean bill
+# of health for a corpus it never opened.
+scanned = data.get("total_files")
+if scanned is None:
+  sys.exit(1)
+if scanned == 0:
+  print("  (no task files scanned — is WORKLOG_REPO pointing at the right clone?)")
+  sys.exit(0)
 issues = data.get("issues", [])
 if not issues:
-  print("  (clean)")
+  print(f"  (clean — {scanned} file(s) scanned)")
   sys.exit(0)
 total_errors = data.get("total_errors", 0)
 total_warnings = data.get("total_warnings", 0)
