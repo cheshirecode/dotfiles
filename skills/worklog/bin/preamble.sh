@@ -99,29 +99,60 @@ printf '\n### roster\n'
 if [[ -f .cache/compact-kernels.json ]]; then
   kernel_mtime="$(stat -c %Y .cache/compact-kernels.json 2>/dev/null || stat -f %m .cache/compact-kernels.json 2>/dev/null || echo 0)"
   kernel_age=$(( $(date +%s) - kernel_mtime ))
-  kernel_count="$(python3 - .cache/compact-kernels.json <<'PY' 2>/dev/null || echo invalid
+  # Counts alone cannot detect drift: archive one task and create another inside
+  # the freshness window and the totals still match while the roster is wrong
+  # (missing the new task, listing the archived one). Compare the slug *sets*.
+  # Prints "<count>\t<missing>\t<extra>" — missing = active on disk but absent
+  # from the cache (includes tasks compact-kernels.sh silently skipped for
+  # unparseable frontmatter), extra = cached but no longer active.
+  kernel_probe="$(python3 - .cache/compact-kernels.json "people/$LDAP/active" <<'PY' 2>/dev/null || echo invalid
 import json
+import pathlib
+import re
 import sys
 
 with open(sys.argv[1]) as fh:
     value = json.load(fh)
 if not isinstance(value, list):
     raise ValueError("kernel cache must be a list")
-print(len(value))
+cached = {str(record.get("slug", "")) for record in value if isinstance(record, dict)}
+
+# Same slug derivation as compact-kernels.sh, so a task whose frontmatter slug
+# differs from its filename does not read as permanent drift.
+live = set()
+for path in sorted(pathlib.Path(sys.argv[2]).glob("*.md")):
+    match = re.match(r"^---\n(.*?)\n---\n", path.read_text(errors="replace"), re.DOTALL)
+    slug = ""
+    if match:
+        for line in match.group(1).split("\n"):
+            field = re.match(r"^slug:\s*(.+)$", line)
+            if field:
+                slug = field.group(1).strip().strip('"')
+                break
+    live.add(slug or path.stem)
+
+print("%d\t%d\t%d" % (len(value), len(live - cached), len(cached - live)))
 PY
 )"
   roster_mode="kernels"
   if [[ "$kernel_age" -gt 3600 ]]; then
-    printf '# roster-health: stale age=%ss active_namespace=%s active_total=%s\n' "$kernel_age" "${active_namespace:-0}" "${active_total:-0}"
+    printf '!! roster-health: stale age=%ss active_namespace=%s active_total=%s\n' "$kernel_age" "${active_namespace:-0}" "${active_total:-0}"
     roster_mode="raw"
-  elif [[ "$kernel_count" == "invalid" ]]; then
-    printf '# roster-health: invalid kernels active_namespace=%s active_total=%s\n' "${active_namespace:-0}" "${active_total:-0}"
-    roster_mode="raw"
-  elif [[ "$kernel_count" != "${active_namespace:-0}" ]]; then
-    printf '# roster-health: mismatch kernels=%s active_namespace=%s active_total=%s\n' "$kernel_count" "${active_namespace:-0}" "${active_total:-0}"
+  elif [[ "$kernel_probe" == "invalid" ]]; then
+    printf '!! roster-health: invalid kernels active_namespace=%s active_total=%s\n' "${active_namespace:-0}" "${active_total:-0}"
     roster_mode="raw"
   else
-    printf '# roster-health: fresh kernels=%s active_namespace=%s active_total=%s\n' "$kernel_count" "${active_namespace:-0}" "${active_total:-0}"
+    kernel_count="${kernel_probe%%$'\t'*}"
+    kernel_drift="${kernel_probe#*$'\t'}"
+    kernel_missing="${kernel_drift%%$'\t'*}"
+    kernel_extra="${kernel_drift##*$'\t'}"
+    if [[ "$kernel_count" != "${active_namespace:-0}" ]] || (( kernel_missing + kernel_extra > 0 )); then
+      printf '!! roster-health: mismatch kernels=%s active_namespace=%s active_total=%s missing=%s extra=%s\n' \
+        "$kernel_count" "${active_namespace:-0}" "${active_total:-0}" "$kernel_missing" "$kernel_extra"
+      roster_mode="raw"
+    else
+      printf '# roster-health: fresh kernels=%s active_namespace=%s active_total=%s\n' "$kernel_count" "${active_namespace:-0}" "${active_total:-0}"
+    fi
   fi
   if [[ "$roster_mode" == "raw" ]]; then
     bash "$SCRIPT_DIR/kernels-roster.sh" --raw
@@ -129,6 +160,6 @@ PY
     bash "$SCRIPT_DIR/kernels-roster.sh"
   fi
 else
-  printf '# roster-health: missing active_namespace=%s active_total=%s\n' "${active_namespace:-0}" "${active_total:-0}"
+  printf '!! roster-health: missing active_namespace=%s active_total=%s\n' "${active_namespace:-0}" "${active_total:-0}"
   bash "$SCRIPT_DIR/kernels-roster.sh" --raw
 fi
