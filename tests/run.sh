@@ -33,6 +33,18 @@ WL_HERMETIC=(env -u BASH_ENV -u WORKLOG_BIN -u WORKLOG_LDAP -u WORKLOG_NS -u WOR
 # Carry the site path explicitly; a per-line PYTHONPATH still overrides this one.
 WL_SITE=$(python3 -c 'import pathlib, yaml; print(pathlib.Path(yaml.__file__).resolve().parents[1])' 2>/dev/null || true)
 [[ -n "$WL_SITE" ]] && WL_HERMETIC+=("PYTHONPATH=$WL_SITE")
+# macOS has no `timeout` (and often no coreutils `gtimeout`). A bare
+# `timeout 180 cmd` there exits 127 before the fixture starts, so every
+# fixture in the loop reads FAIL for one missing wrapper. Resolve a portable
+# form once; perl ships with macOS and `alarm` kills a hung fixture the same
+# way.
+if command -v timeout >/dev/null 2>&1; then
+  WL_TIMEOUT=(timeout 180)
+elif command -v gtimeout >/dev/null 2>&1; then
+  WL_TIMEOUT=(gtimeout 180)
+else
+  WL_TIMEOUT=(perl -e 'alarm shift; exec @ARGV' 180)
+fi
 say() { printf "  %-5s %s\n" "$1" "$2"; }
 ok()   { say PASS "$1"; PASS=$((PASS+1)); }
 fail() { say FAIL "$1"; FAIL=$((FAIL+1)); }
@@ -552,7 +564,7 @@ PY
       *) runner=(bash) ;;
     esac
     name="worklog $(basename "$(dirname "$t")")/$(basename "${t%.*}")"
-    if timeout 180 "${WL_HERMETIC[@]}" "${runner[@]}" "$t" >/dev/null 2>&1; then
+    if "${WL_TIMEOUT[@]}" "${WL_HERMETIC[@]}" "${runner[@]}" "$t" >/dev/null 2>&1; then
       ok "$name"
     else
       fail "$name"
