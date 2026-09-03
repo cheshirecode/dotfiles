@@ -377,7 +377,13 @@ class LoopRunTest(unittest.TestCase):
         # RED before the fix: this printed "queue: off (no WORKLOG_BIN)".
         # WORKLOG_BIN set but pointing at a directory with no project.sh --
         # the "two copies that can drift" case, pointed at the wrong copy.
-        empty = Path(self._tmp.name) / "not-worklog"
+        # A deliberately long name, so the reason exceeds cell()'s cap on
+        # every platform. macOS /var/folders tmp roots did that on their own
+        # and this assertion caught the clipping there; Linux /tmp paths are
+        # short enough to fit under any plausible cap, so on this platform the
+        # regression was invisible and the cap could be lowered back to 80
+        # with the suite still green.
+        empty = Path(self._tmp.name) / ("not-worklog-" + "d" * 120)
         empty.mkdir()
         r = run(
             [self.run_dir, "--goal", "test goal", "--project", "prog-x"],
