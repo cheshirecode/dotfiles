@@ -19,6 +19,12 @@ tracking.
 - For duplicate installations, run
   `python3 <skill-dir>/scripts/install_audit.py --canonical <skill-dir>`.
   `--link-identical` replaces only byte-identical directories;
+
+Pass the clone the roots actually load from as `--canonical` — the installed
+clone, not the one you edit in. Naming the editing clone reports every root as
+`divergent-symlink` and exits 1 while nothing is stale, which reads as drift and
+is not.
+
   any divergent root fails the whole preflight before writes.
   `--root <dir>` (repeatable) overrides the four default roots — use it to
   scope the audit or test against fixtures. Exit `0` all roots clean or
