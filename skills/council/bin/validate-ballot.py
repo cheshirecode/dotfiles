@@ -43,7 +43,12 @@ def validate_reject(item: int, value: str) -> None:
     if part not in CRITERIA:
       break
     criterion_count += 1
-  if criterion_count == 0 or criterion_count == len(parts):
+  # Count the reason's CONTENT, not the number of comma-separated fields.
+  # `criterion_count == len(parts)` treated a trailing comma as a reason, so
+  # "REJECT: TRACES," and "REJECT: TRACES,,,," both satisfied the one rule
+  # this function exists to enforce.
+  reason = [part for part in parts[criterion_count:] if part]
+  if criterion_count == 0 or not reason:
     fail(f"item {item} REJECT must name a valid criterion and give a reason")
 
 
