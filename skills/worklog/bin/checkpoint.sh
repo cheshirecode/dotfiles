@@ -190,20 +190,45 @@ fi
 
 # Soft lint gate — single-file scope. Stderr-only, never blocks the checkpoint.
 # Bypass with WORKLOG_NO_LINT=1 (e.g. in hooks / non-interactive contexts).
+#
+# Soft means "does not block". It does not mean "silent when it fails to run".
+# This used to swallow the status with `|| true`, discard lint.sh's stderr,
+# and exit 0 on unparseable JSON — so a lint that crashed, hit a missing
+# dependency, or printed nothing looked exactly like a lint that found no
+# issues. A lint that printed nothing is not a clean lint, and the checkpoint
+# went on to record the task as verified either way.
+#
+# `total_files` is the scanned-count the real report always carries; its
+# absence is the difference between "ran and found nothing" and "never ran".
 if [[ -z "${WORKLOG_NO_LINT:-}" ]] && [[ -x "$SCRIPT_DIR/lint.sh" ]]; then
-  lint_json="$("$SCRIPT_DIR/lint.sh" --file="$FILE" --format=json 2>/dev/null || true)"
-  printf '%s' "$lint_json" | python3 -c '
-import json, sys
+  lint_err="$(mktemp)"
+  lint_json="$("$SCRIPT_DIR/lint.sh" --file="$FILE" --format=json 2>"$lint_err" || true)"
+  printf '%s' "$lint_json" | LINT_ERR="$lint_err" python3 -c '
+import json, os, sys
+
+raw = sys.stdin.read()
 try:
-  data = json.load(sys.stdin)
-except Exception:
+  data = json.loads(raw)
+  scanned = data["total_files"]
+except Exception as exc:
+  detail = str(exc) if raw.strip() else "lint.sh produced no output"
+  try:
+    with open(os.environ["LINT_ERR"], encoding="utf-8", errors="replace") as fh:
+      stderr_tail = fh.read().strip().splitlines()[-1:]
+  except OSError:
+    stderr_tail = []
+  if stderr_tail:
+    detail = "%s (%s)" % (detail, stderr_tail[0])
+  # Still non-blocking: report the gap and let the checkpoint proceed.
+  print("checkpoint: lint SKIPPED — %s" % detail, file=sys.stderr)
   sys.exit(0)
 for item in data.get("issues", []):
   for e in item.get("errors", []):
-    print(f"checkpoint: lint ERROR  {e}")
+    print(f"checkpoint: lint ERROR  {e}", file=sys.stderr)
   for w in item.get("warnings", []):
-    print(f"checkpoint: lint warn   {w}")
-' >&2 || true
+    print(f"checkpoint: lint warn   {w}", file=sys.stderr)
+' || true
+  rm -f "$lint_err"
 fi
 
 git pull --no-rebase --autostash -q
