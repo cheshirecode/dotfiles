@@ -351,9 +351,19 @@ class LoopStateTest(unittest.TestCase):
             skill_text, "## Preserve durable context", H_ORCHESTRATOR
         )
         self.assertIn("context.sh <slug> --for=resume", durable)
-        self.assertIn("target clone's direnv", durable)
         self.assertIn("context <slug> --for=compact", durable)
         self.assertIn("worklog-checkpoint: unavailable", durable)
+        # This used to pin the phrase "target clone's direnv", which asserted
+        # only that the direnv form was mentioned. Measured 2026-09-03:
+        # `direnv exec DIR CMD` does NOT chdir into DIR -- it loads that
+        # directory's direnv environment and nothing else. So when the clone
+        # has no .envrc (the state of a vault that was cloned rather than
+        # created with init-new-data-repo.sh), the wrapper contributes
+        # nothing and the slug resolves against whatever repo the caller
+        # happens to be standing in. Pin the caveat and the explicit-target
+        # fallback, not the mention.
+        self.assertIn("does **not** change directory", durable)
+        self.assertIn('WORKLOG_REPO=<clone-dir>', durable)
 
     def test_orchestrator_gates_optional_decomposition_and_delegate_output(self) -> None:
         skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
