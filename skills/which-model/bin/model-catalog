@@ -382,6 +382,23 @@ def parse_iso(value: str) -> float:
     return datetime.fromisoformat(text).timestamp()
 
 
+def parse_iso_or_none(value: object) -> float | None:
+    """parse_iso, but unusable input is None rather than an exception.
+
+    Every caller below treats unknown age as stale. Three unusable cases --
+    absent, null, and the UNKNOWN_DATA_AGE sentinel -- already read that way;
+    a corrupt stamp instead raised ValueError out of is_stale(), so a damaged
+    cache crashed the tool rather than being refreshed, and --refresh-if-stale
+    could not recover without deleting the file by hand.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return parse_iso(value)
+    except ValueError:
+        return None
+
+
 def cache_root() -> pathlib.Path:
     base = os.environ.get("WHICH_MODEL_CACHE_HOME")
     if base:
@@ -872,7 +889,7 @@ def from_anthropic(payload: object, env: str, *, confidence: str = "fresh") -> l
             when = f"retirement stated as {retires}" if retires else "retirement date not stated"
             passed = (
                 " — that date has already passed, so assume it is gone until the API says otherwise"
-                if retires and parse_iso(retires) < time.time()
+                if retires and (parse_iso_or_none(retires) or float("inf")) < time.time()
                 else ""
             )
             caveats.append(
@@ -1314,8 +1331,8 @@ def build_catalog(env: str, provider: str) -> dict:
         # Undated data has no expiry to compute; a null stale_after reads as stale.
         stale_after = None
     else:
-        data_epoch = parse_iso(data_as_of) if data_as_of else generated
-        stale_after = (
+        data_epoch = parse_iso_or_none(data_as_of) if data_as_of else generated
+        stale_after = None if data_epoch is None else (
             datetime.fromtimestamp(data_epoch + STALE_AFTER_SECONDS, timezone.utc)
             .replace(microsecond=0)
             .isoformat()
@@ -1350,7 +1367,10 @@ def is_stale(catalog: dict) -> bool:
     stale_after = catalog.get("stale_after")
     if not stale_after:
         return True
-    return parse_iso(stale_after) <= time.time()
+    expiry = parse_iso_or_none(stale_after)
+    if expiry is None:
+        return True
+    return expiry <= time.time()
 
 
 def is_very_stale(catalog: dict) -> bool:
@@ -1360,7 +1380,10 @@ def is_very_stale(catalog: dict) -> bool:
     if not stamp or stamp == UNKNOWN_DATA_AGE:
         # Data of unknown age can never be shown as recent.
         return True
-    return time.time() - parse_iso(stamp) > VERY_STALE_AFTER_SECONDS
+    epoch = parse_iso_or_none(stamp)
+    if epoch is None:
+        return True
+    return time.time() - epoch > VERY_STALE_AFTER_SECONDS
 
 
 def price_score(model: dict) -> float:
