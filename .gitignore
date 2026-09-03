@@ -39,3 +39,5 @@ coverage/
 .envrc.github
 .gitconfig.local
 .shell_common.local
+# Agent worktrees + any install residue; harness-created, never source.
+.claude/
