@@ -66,10 +66,26 @@ Each mode has one extra requirement and the flag that satisfies it:
   --legible --model <id>`
 
 `CAVE_PIXEL_MODELS` is the comma-separated allowlist of model ids that read
-pixel payloads. It defaults to `claude-fable-5,gpt-5.6`, which no current model
-id matches, so set it to the ids actually in use:
+pixel payloads, and it is a real Caveman variable: the CLI applies it to
+`think.pixel.models`. It defaults here to `claude-fable-5,gpt-5.6`; both are
+current ids that Caveman's engine recognises, so the defaults are usable as
+they stand. Add the ids actually in use rather than replacing them:
 `CAVE_PIXEL_MODELS="<id>,<id>"`. An unlisted `--model` returns
 `decision=skip reason=model-not-configured hint=set-CAVE_PIXEL_MODELS`.
+
+**`decision=use` is not sufficient on its own.** Caveman ships pixel *off*:
+`think.pixel.models` is `[]` by default, and an empty list passes no allowlist
+to the proxy at all. This gate answers "should we attempt pixel", using its own
+list; Caveman must be configured separately or it will not pixel whatever this
+returns. `caveman tools config set` also accepts an unknown model id without
+complaint, so a typo there is caught by nothing — this gate's `skip` is the
+only place a wrong id is reported.
+
+Verified 2026-09-03 against `@caveman-ai/cli` 1.3.1 / binaries `bin-v1.1.4`:
+`caveman-engine pixel simulate --model` gives `claude-fable-5` and `gpt-5.6`
+their own pixel geometry, while an unknown id, a bogus id and an empty id all
+collapse to one identical fallback — which is what makes the first two
+*recognised* rather than merely accepted.
 
 The helper never claims a token saving is verified: the caller supplies
 measured evidence.
