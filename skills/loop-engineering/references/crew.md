@@ -45,6 +45,16 @@ Two mechanical guards, because "remember the cwd" is not one:
   returning `blocked <slug> wrong-repo worktree` on a mismatch. A worker that
   checks first costs one tool call; a worker that improvises costs a wave.
 
+### Keep the lead working while delegates run
+
+Per the Fable 5.1 prompting guide, don't idle the orchestrator while
+delegates run: dispatch returns immediately, so continue with work that
+cannot conflict with any live delegate — read-only observation, queue
+grooming, evidence writing in the orchestrator's own artifacts — and use the
+host's wait primitive only when the next step depends on a delegate's
+result. The serialize-writes rule below is unchanged: continuing never means
+writing into a surface a delegate may touch.
+
 ### Shared-filesystem boundary
 
 Codex subagents share the same filesystem and current directory. Concurrent
