@@ -82,8 +82,26 @@ fi
 exit 1
 EOF
 chmod +x "$STUB/glab"
-# NOTE: no `gh` stub — this machine's exact condition.
-export PATH="$STUB:/usr/bin:/bin"
+# Construct the absence of the forge CLIs; do not inherit it. This used to say
+# "no `gh` stub -- this machine's exact condition" and pin
+# PATH="$STUB:/usr/bin:/bin", which asserts `gh` is absent while leaving
+# /usr/bin on PATH. It passed only because this box happened to have no gh.
+# Installing gh (it is in install-runtime-deps.sh's REQUIRED list, so any
+# properly provisioned machine has it) turned three assertions red at once.
+# MIRROR is /usr/bin + /bin with the forge CLIs subtracted, so "no gh" is a
+# property of the fixture rather than of the host.
+MIRROR="$TMP/nobin"
+mkdir -p "$MIRROR"
+for d in /usr/bin /bin; do
+  [ -d "$d" ] || continue
+  for f in "$d"/*; do
+    [ -x "$f" ] && [ ! -d "$f" ] || continue
+    base="${f##*/}"
+    case "$base" in gh|glab) continue ;; esac
+    [ -e "$MIRROR/$base" ] || ln -sf "$f" "$MIRROR/$base"
+  done
+done
+export PATH="$STUB:$MIRROR"
 
 # Self-check: if PATH pinning did not take, every assertion below would be
 # measuring the live forge instead of the stubs and could pass for wrong reasons.
@@ -110,7 +128,9 @@ st="$("$FORGE" state "$TMP/clones/midas" 1770 2>/dev/null)"
 check "in-review drift: MR state parsed as 'merged' (got '$st'; nested author.state=active must not win)" $?
 
 # --------------------------------------------- no forge CLI at all → all gaps
-export PATH="/usr/bin:/bin"
+# MIRROR excludes gh AND glab, so this really is "no forge CLI" rather than
+# "whichever of the two this host lacks today".
+export PATH="$MIRROR"
 out2="$("$FORGE" list --author fred.tran "$TMP/clones/midas" "$TMP/clones/dotfiles" 2>/dev/null)"
 [[ -n "$out2" ]]; check "no-CLI case still produces output instead of an empty drift block" $?
 printf '%s' "$out2" | grep -q $'^gap\tgitlab\ttextemma/midas\tglab-not-installed$'
@@ -123,7 +143,7 @@ check "no-CLI case names the GitHub repo it could not check" $?
 # textemma/midas, so a per-clone loop queries the project twice and every MR is
 # reported twice. A reader cross-referencing 10 rows against 5 tracked MRs sees
 # drift that is not there.
-export PATH="$TMP/stub:/usr/bin:/bin"
+export PATH="$TMP/stub:$MIRROR"
 git init -q "$TMP/clones/midas-wt" 2>/dev/null
 git -C "$TMP/clones/midas-wt" remote add origin "https://gitlab.com/textemma/midas.git"
 dup="$("$FORGE" list --author fred.tran "$TMP/clones/midas" "$TMP/clones/midas-wt" 2>/dev/null \
