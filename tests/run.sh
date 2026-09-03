@@ -17,7 +17,17 @@ PASS=0; FAIL=0
 # protocol itself requires — is sourced AFTER the per-command assignment, so it
 # silently overrides them and the fixtures test the real vault instead of the
 # throwaway one. Neutralize that inheritance; CI has nothing to unset.
-WL_HERMETIC=(env -u BASH_ENV -u WORKLOG_LDAP -u WORKLOG_NS -u WORKLOG_REPO)
+#
+# WORKLOG_BIN is unset for a sharper reason: it decides WHICH ARTIFACT the suite
+# grades. A developer profile exports WORKLOG_BIN=~/.claude/skills/worklog/bin,
+# a symlink into the *installed* clone — a different checkout from this tree. A
+# fixture written as `WORKLOG_BIN="${WORKLOG_BIN:-<derived>}"` then ran the
+# installed helpers, so a change in the working tree could read green without
+# ever being executed, and a "proved red" claim was worthless. Fixtures now pin
+# the path from their own location (see archive/_vault.sh); this unset is the
+# belt to those braces, and the static check "fixtures pin WORKLOG_BIN to the
+# tree under test" keeps the pattern from coming back.
+WL_HERMETIC=(env -u BASH_ENV -u WORKLOG_BIN -u WORKLOG_LDAP -u WORKLOG_NS -u WORKLOG_REPO)
 # Dropping BASH_ENV also drops any PYTHONPATH it exported, and fixtures that pin
 # PATH=/usr/bin:/bin to force a fallback then hit a system python without PyYAML.
 # Carry the site path explicitly; a per-line PYTHONPATH still overrides this one.
@@ -411,6 +421,37 @@ if missing:
     raise SystemExit(1)
 PY
   then ok "Karpathy contradiction invalidation contract"; else fail "Karpathy contradiction invalidation contract"; fi
+  # Which artifact does the suite grade? A fixture that reads its helper path
+  # out of the environment grades whatever the ambient WORKLOG_BIN names —
+  # in a developer shell, the *installed* clone, not this tree. WL_HERMETIC
+  # unsets the variable, but an env-defaulted assignment
+  # (`WORKLOG_BIN="${WORKLOG_BIN:-...}"`) is still wrong: run by hand it
+  # silently grades the wrong checkout, and the fallback hides it. Every
+  # fixture must derive the path from its own location instead. Assignments
+  # only -- the prose in the fixtures explains the ban and must stay legible.
+  if python3 - <<'PY'
+import pathlib
+import re
+
+# Matches an assignment whose value falls back to the ambient variable, with or
+# without `export`, and both the `:-` and `-` default forms. Comments are
+# skipped so the fixtures can keep explaining why the pattern is banned.
+bad = re.compile(r'^\s*(?:export\s+)?WORKLOG_BIN=.*\$\{WORKLOG_BIN:?-')
+offenders = []
+for tests_dir in sorted(pathlib.Path("skills").glob("*/tests")):
+    for path in sorted(tests_dir.rglob("*.sh")):
+        for lineno, line in enumerate(path.read_text().splitlines(), 1):
+            if line.lstrip().startswith("#"):
+                continue
+            if bad.search(line):
+                offenders.append(f"{path}:{lineno}: {line.strip()}")
+if offenders:
+    print("fixtures resolve WORKLOG_BIN from the environment, so they can grade")
+    print("the installed skill instead of the tree under test:")
+    print("\n".join(offenders))
+    raise SystemExit(1)
+PY
+  then ok "fixtures pin WORKLOG_BIN to the tree under test"; else fail "fixtures pin WORKLOG_BIN to the tree under test"; fi
 }
 
 # Council items #1, #6: fixture-driven red-path tests for guardrails.
