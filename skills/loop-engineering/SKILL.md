@@ -227,7 +227,7 @@ When the installed `worklog` protocol is available, hydrate resume context
 before initialization and checkpoint verified state at compaction, delegation,
 retry exhaustion, scheduled handoff, or termination. Resolve `$WORKLOG_BIN` to
 the worklog skill's `bin/` directory (`~/.claude/skills/worklog/bin`, `~/.agents/skills/worklog/bin`, or the repo's `skills/worklog/bin`). For an existing task, run
-`direnv exec <clone-dir> "$WORKLOG_BIN"/context.sh <slug> --for=resume`, where `<clone-dir>` is the target repo clone whose `.envrc` sets `WORKLOG_REPO`, so the target clone's direnv variables are active; if `direnv` is absent, run `context.sh` directly and label the run `worklog-checkpoint: unavailable — local fallback`.
+`direnv exec <clone-dir> "$WORKLOG_BIN"/context.sh <slug> --for=resume`, where `<clone-dir>` is the target repo clone whose `.envrc` sets `WORKLOG_REPO`. `direnv exec` loads that env but does **not** change directory (measured), so with no `.envrc` it adds nothing and the slug resolves against your *current* repo — the wrong vault, silently. If `direnv` or the `.envrc` is missing, pass the target explicitly: `WORKLOG_REPO=<clone-dir> "$WORKLOG_BIN"/context.sh <slug> --for=resume`, and label the run `worklog-checkpoint: unavailable — local fallback`.
 Before cold delegation, pass the returned
 `context <slug> --for=compact` pack directly; do not pass the parent transcript
 or imply that `spawn` enriches the pack. If Worklog or its environment is not
