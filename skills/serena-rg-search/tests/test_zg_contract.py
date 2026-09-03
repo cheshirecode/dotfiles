@@ -114,6 +114,58 @@ class ZgContractTest(unittest.TestCase):
         # measured against so the next reader can tell whether it still holds.
         self.assertRegex(self.text, r"zvec-grep 0\.\d+\.\d+")
 
+    # --- the second copy -------------------------------------------------
+    # The zg guidance lives twice: here, and in the repo-root CLAUDE.md that
+    # every agent loads automatically. Fixing only this file left the
+    # higher-traffic copy still telling agents to "use [zg query --rg]
+    # wherever you would type rg" and describing --fts with no index
+    # requirement -- both measurably wrong. Two copies, one fixed.
+
+    @property
+    def root_claude_md(self) -> pathlib.Path:
+        return SKILL.parents[2] / "CLAUDE.md"
+
+    def test_root_claude_md_exists_and_covers_zg(self) -> None:
+        # Guard against this pair going vacuous: if CLAUDE.md stops mentioning
+        # zg, the assertions below would pass over an empty subject.
+        self.assertTrue(self.root_claude_md.is_file(), self.root_claude_md)
+        self.assertIn("zg query", self.root_claude_md.read_text())
+
+    def test_root_claude_md_does_not_repeat_the_same_flags_claim(self) -> None:
+        text = self.root_claude_md.read_text()
+        self.assertNotIn("wherever you would type", text)
+        self.assertNotIn("same flags", text)
+
+    def test_root_claude_md_states_the_exit_divergence(self) -> None:
+        text = self.root_claude_md.read_text()
+        self.assertIn("exits 0 when it finds nothing", text)
+        self.assertIn("`rg` exits 1", text)
+
+    def test_root_claude_md_marks_fts_as_needing_the_index(self) -> None:
+        self.assertIn("WORKSPACE_INDEX_NOT_FOUND", self.root_claude_md.read_text())
+
+    def test_root_claude_md_warns_the_ranked_lanes_cannot_prove_absence(self) -> None:
+        text = self.root_claude_md.read_text()
+        self.assertIn("cannot say", text)
+        self.assertIn("confirm an absence with", text.lower())
+
+    def test_both_copies_carry_the_measured_version(self) -> None:
+        # A claim about another tool's behaviour goes stale silently. Both
+        # copies name what they were measured against, or neither can be
+        # re-checked.
+        for path in (SKILL, self.root_claude_md):
+            with self.subTest(path.name):
+                self.assertRegex(path.read_text(), r"zvec-grep 0\.\d+\.\d+")
+
+    def test_root_claude_md_scopes_the_gitignore_claim(self) -> None:
+        # It said ".zvec-grep/, gitignored" unqualified. True in this repo,
+        # false in /workspace/midas and /workspace/worklog -- the repos an
+        # agent actually indexes. Following the guidance there leaves a ~15M
+        # untracked directory one `git add -A` from a commit.
+        text = self.root_claude_md.read_text()
+        self.assertIn("THIS repo only", text)
+        self.assertIn("git check-ignore .zvec-grep", text)
+
     def test_every_documented_zg_command_is_still_covered_here(self) -> None:
         # Guard against the pin going vacuous: if the examples block is
         # rewritten or removed, this suite must not silently pass over an
