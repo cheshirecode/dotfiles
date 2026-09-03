@@ -17,9 +17,18 @@ is not both smaller and more legible, send the original bytes.
    Markdown, loop state, evidence, diffs, or small payloads.
 3. For installed skill bodies, use `caveman tools convert --dry-run` first and
    convert only copies that are NOT symlinks into a source checkout (under this
-   repo's layout `~/.claude/skills/*` are symlinks, so converting the
-   "installed" copy rewrites canonical source); keep frontmatter text, preserve the
-   byte-identical `--revert` path (the Caveman CLI subcommand), and never rewrite canonical source here.
+   repo's layout `~/.claude/skills/*` are symlinks into the clone the loader
+   reads); keep frontmatter text, preserve the byte-identical `--revert` path
+   (the Caveman CLI subcommand), and never rewrite canonical source here.
+   Measured 2026-09-03 (CLI 1.3.1 / `bin-v1.1.4`): Caveman does not traverse
+   symlinked skills at all — `convert --dry-run --dir ~/.claude/skills` prints
+   **`no skills found`, rc=0**, while the same command on a real directory
+   reports a token delta. So the rewrite hazard does not materialise; the
+   hazard that remains is the message. `no skills found` is the same output as
+   the engine-missing case in item 4 and as a genuinely empty directory, so
+   read it as "measured nothing", never as "nothing to gain". Distinguish them
+   with a control run against a real directory copy before concluding anything
+   from it.
 4. Check `command -v caveman` and authorization first, and note the engine is a
    separate binary — with only the npm CLI present, `convert` reports
    `caveman-engine not found` and skips every skill, which reads as "nothing to
