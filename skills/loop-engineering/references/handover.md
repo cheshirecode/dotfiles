@@ -39,7 +39,7 @@ Step 3 — check for regressions (each grep feeds a Step 4 clause):
 Step 4 — decide:
   - If ANY rc above is nonzero OR the non-dict guard line printed 0 OR the
     stale-skill grep printed matches OR the route-matrix grep printed
-    "(not found)" OR frontmatter > 450 chars OR unittest ran fewer than 70
+    "(not found)" OR frontmatter > 450 chars OR unittest ran fewer than 84
     tests OR radar reported fewer than 31 passed OR reap fewer than 40 passed:
     BEGIN IMPROVEMENT LOOP (use bounded cycles via loop_state.py advance/finish).
   - If everything is clean AND you have nothing new to add:
