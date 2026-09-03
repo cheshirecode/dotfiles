@@ -6,6 +6,12 @@
 #                             Reads optional tasks-JSON from stdin or --tasks-json=.
 #                             Required: --goal, --objective. Optional:
 #                             --stale-after=30m, --adopt, --dry-run.
+#   add-child <project> <child>
+#                             Add ONE child to an EXISTING project: writes the
+#                             stub AND the parent's tasks: entry in one commit.
+#                             Optional: --kind=impl, --title=, --depends-on=a,b,
+#                             --repos=, --dry-run. Idempotent: re-running for a
+#                             child already declared is a no-op.
 #   next <slug>               Print the first declaration-order claim-eligible
 #                             child task slug. Exit 0 with slug; exit 1 if none.
 #   claim <child-slug>        Phase 2: claim a child task (writes claim: block).
@@ -24,7 +30,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
-  sed -n '3,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '3,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 if [[ $# -eq 0 ]]; then
@@ -165,6 +171,115 @@ for p in json.load(sys.stdin)["paths"]: print(p)')
   local NCHILD
   NCHILD="$(echo "$PLAN" | python3 -c 'import json,sys;print(len(json.load(sys.stdin)["children"]))')"
   echo "project new: created $SLUG with $NCHILD child task(s)"
+}
+
+# ---------- sub: add-child ----------
+#
+# A separate verb rather than a flag on `new`. `new` is defined by the two
+# things add-child must not need — --goal and --objective — and by a guard that
+# refuses when the project slug already exists, which is add-child's entire
+# precondition. Overloading it would mean a mode where three of its required
+# inputs are forbidden. --adopt is also already taken and means something else:
+# it pulls existing child FILES into a project being created.
+
+cmd_add_child() {
+  local PROJECT="" CHILD="" KIND="" TITLE="" DEPENDS="" REPOS="" DRY=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --kind=*)        KIND="${1#--kind=}" ;;
+      --title=*)       TITLE="${1#--title=}" ;;
+      --depends-on=*)  DEPENDS="${1#--depends-on=}" ;;
+      --repos=*)       REPOS="${1#--repos=}" ;;
+      --dry-run)       DRY=1 ;;
+      --kind)          KIND="$2"; shift ;;
+      --title)         TITLE="$2"; shift ;;
+      --depends-on)    DEPENDS="$2"; shift ;;
+      --repos)         REPOS="$2"; shift ;;
+      -h|--help)
+        cat <<'EOF'
+usage: project.sh add-child <project-slug> <child-slug> [--kind=impl] [--title="..."]
+                            [--depends-on=slug-a,slug-b] [--repos=owner/repo,...] [--dry-run]
+
+Adds ONE child task to an EXISTING project. Writes the child stub and the
+parent's tasks:/related:/## Tasks entries, then commits both together — the
+half-done version of this by hand is an orphan child that `project next` can
+never hand out. `project.sh new` cannot do this: it requires --goal/--objective
+and refuses a project slug that already exists on disk.
+
+Existing child slug: IDEMPOTENT ADOPT, not refusal. A scheduled job re-running
+its "create today's child" step must not fail on the second run.
+  - child file exists, unowned or already this project's -> adopted in place
+    (project:/parent_slug: set, body never rewritten)
+  - child already in the parent's tasks: -> no-op, exit 0, no commit
+  - child owned by a DIFFERENT project -> refused, exit non-zero
+  - --kind conflicting with the existing file's kind -> refused
+
+--depends-on entries must already be declared in the parent's tasks:; if the
+child is already declared with different deps the call is refused rather than
+silently rewriting them.
+EOF
+        return 0 ;;
+      -*) echo "project add-child: unknown flag '$1'" >&2; return 2 ;;
+      *)
+        if [[ -z "$PROJECT" ]]; then PROJECT="$1"
+        elif [[ -z "$CHILD" ]]; then CHILD="$1"
+        else echo "project add-child: unexpected argument '$1'" >&2; return 2
+        fi ;;
+    esac
+    shift
+  done
+  [[ -z "$PROJECT" ]] && { echo "project add-child: project slug required" >&2; return 2; }
+  [[ -z "$CHILD" ]] && { echo "project add-child: child slug required" >&2; return 2; }
+
+  local LDAP TODAY PLAN
+  LDAP="$(resolve_ldap)"
+  TODAY="$(date +%Y-%m-%d)"
+
+  PLAN="$(PROJECT_SLUG="$PROJECT" CHILD_SLUG="$CHILD" KIND="$KIND" TITLE="$TITLE" \
+          DEPENDS_ON="$DEPENDS" REPOS="$REPOS" LDAP="$LDAP" TODAY="$TODAY" \
+          python3 "$SCRIPT_DIR/_project.py" plan-add-child)" || return 1
+
+  local MODE
+  MODE="$(echo "$PLAN" | python3 -c 'import json,sys;print(json.load(sys.stdin)["mode"])')"
+
+  if (( DRY )); then
+    echo "$PLAN" | python3 "$SCRIPT_DIR/_project.py" print-add-child-plan
+    return 0
+  fi
+
+  if [[ "$MODE" == "noop" ]]; then
+    echo "project add-child: $(echo "$PLAN" | python3 -c 'import json,sys;print(json.load(sys.stdin)["reason"])') (no-op)"
+    return 0
+  fi
+
+  echo "$PLAN" | python3 "$SCRIPT_DIR/_project.py" materialize-add-child || return 1
+
+  verify_provenance || return 1
+  git pull --no-rebase --autostash -q || true
+
+  while IFS= read -r path; do
+    [[ -z "$path" ]] && continue
+    git add "$path"
+  done < <(echo "$PLAN" | python3 -c 'import json,sys
+for p in json.load(sys.stdin)["paths"]: print(p)')
+
+  if git diff --cached --quiet; then
+    echo "project add-child: nothing to commit ($CHILD already wired)"
+    return 0
+  fi
+
+  local SUBJECT BODY TRAILERS
+  SUBJECT="$(echo "$PLAN" | python3 -c 'import json,sys;print(json.load(sys.stdin)["subject"])')"
+  BODY="$(echo "$PLAN" | python3 -c 'import json,sys;print(json.load(sys.stdin)["body"])')"
+  TRAILERS="$(echo "$PLAN" | python3 -c 'import json,sys;print(json.load(sys.stdin)["trailers"])')"
+  git commit -q -m "$SUBJECT" -m "$BODY" -m "$TRAILERS"
+  push_with_retry || return 1
+  record_session_touch "$CHILD" "project-add-child"
+  if [[ "$MODE" == "adopt" ]]; then
+    echo "project add-child: adopted $CHILD into $PROJECT"
+  else
+    echo "project add-child: created $CHILD under $PROJECT"
+  fi
 }
 
 # ---------- sub: next ----------
@@ -441,7 +556,8 @@ cmd_list() {
 # ---------- dispatch ----------
 
 case "$SUB" in
-  new)     cmd_new "$@" ;;
+  new)       cmd_new "$@" ;;
+  add-child) cmd_add_child "$@" ;;
   next)    cmd_next "$@" ;;
   claim|release|reap)
     # Same-machine atomicity for the mutex ops.

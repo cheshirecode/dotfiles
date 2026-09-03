@@ -312,6 +312,247 @@ def _adopt_child(path: pathlib.Path, project_slug: str) -> None:
   path.write_text("---\n" + fm + "---\n" + body)
 
 
+# ---------- add-child ----------
+#
+# `plan-new` can only build a project from nothing: it dies on
+# "project slug already exists on disk", and --adopt adopts child FILES into a
+# NEW project rather than adding to a live one. Adding one child to an existing
+# project therefore had no code path at all, and the hand-rolled substitute
+# (write the stub, then remember to hand-edit the parent) fails open — forget
+# the second half and the child is an orphan that `project next` can never hand
+# out while `project verify` still reports clean. The parent edit below is
+# textual, not a YAML round-trip, so an existing project file keeps its
+# comments, quoting and key order.
+
+
+def _split_task_file(text: str, path: pathlib.Path) -> tuple[str, str]:
+  """Return (frontmatter_text, body_text) for a `---\\n...\\n---\\n` file."""
+  if not text.startswith("---\n"):
+    die(f"add-child: {path} has no frontmatter")
+  parts = text.split("---\n", 2)
+  if len(parts) < 3:
+    die(f"add-child: {path} has an unterminated frontmatter block")
+  return parts[1], parts[2]
+
+
+def _block_bounds(lines: list[str], key: str) -> tuple[int, int] | None:
+  """Locate a top-level `key:` block. Returns (header_idx, end_idx_exclusive)."""
+  for i, line in enumerate(lines):
+    if line.strip() != f"{key}:":
+      continue
+    j = i + 1
+    while j < len(lines) and (lines[j].startswith((" ", "\t")) or not lines[j].strip()):
+      j += 1
+    # Don't swallow trailing blank lines into the block.
+    while j > i + 1 and not lines[j - 1].strip():
+      j -= 1
+    return i, j
+  return None
+
+
+def _task_entry_lines(child_slug: str, deps: list[str], kind: str | None) -> list[str]:
+  out = [f"  - slug: {child_slug}"]
+  if deps:
+    out.append(f"    depends_on: [{', '.join(deps)}]")
+  if kind:
+    out.append(f"    kind: {kind}")
+  return out
+
+
+def _add_child_to_parent(text: str, path: pathlib.Path, child_slug: str,
+                         deps: list[str], kind: str | None, today: str) -> str:
+  fm_text, body = _split_task_file(text, path)
+  lines = fm_text.split("\n")
+  if lines and lines[-1] == "":
+    lines.pop()
+
+  entry = _task_entry_lines(child_slug, deps, kind)
+  bounds = _block_bounds(lines, "tasks")
+  if bounds is None:
+    # A kind:project with no tasks: block yet. Put it where render_project_body
+    # puts it — immediately before related:, else at the end of frontmatter.
+    rel = _block_bounds(lines, "related")
+    at = rel[0] if rel else len(lines)
+    lines[at:at] = ["tasks:"] + entry
+    index = 0
+  else:
+    header, end = bounds
+    index = sum(1 for ln in lines[header + 1:end] if ln.startswith("  - slug: "))
+    lines[end:end] = entry
+
+  # Mirror the new entry into related: so cross-task lint sees the relation.
+  rel = _block_bounds(lines, "related")
+  note = yaml_quote(f"Child task (tasks[{index}] in this project's tasks block).")
+  rel_entry = [f"  - slug: {child_slug}", f"    note: {note}"]
+  if rel is None:
+    tb = _block_bounds(lines, "tasks")
+    at = tb[1] if tb else len(lines)
+    lines[at:at] = ["related:"] + rel_entry
+  else:
+    lines[rel[1]:rel[1]] = rel_entry
+
+  for i, ln in enumerate(lines):
+    if ln.startswith("last_updated:"):
+      lines[i] = f"last_updated: {today}"
+      break
+
+  # Body checklist under ## Tasks, so the rendered file matches what
+  # render_project_body would have produced had the child been there at create.
+  deps_str = f" (depends on: {', '.join(deps)})" if deps else ""
+  blines = body.split("\n")
+  start = next((i for i, ln in enumerate(blines) if ln.strip() == "## Tasks"), None)
+  if start is not None:
+    j = start + 1
+    last = None
+    while j < len(blines) and not blines[j].startswith("## "):
+      if blines[j].startswith("- ["):
+        last = j
+      j += 1
+    at = (last + 1) if last is not None else j
+    blines[at:at] = [f"- [ ] [[{child_slug}]]{deps_str}"]
+    body = "\n".join(blines)
+
+  return "---\n" + "\n".join(lines) + "\n---\n" + body
+
+
+def cmd_plan_add_child() -> None:
+  proj_slug = os.environ["PROJECT_SLUG"]
+  child_slug = os.environ["CHILD_SLUG"]
+  kind_raw = os.environ.get("KIND", "")
+  title = os.environ.get("TITLE", "") or None
+  ldap = os.environ["LDAP"]
+  today = os.environ["TODAY"]
+  deps = [d.strip() for d in os.environ.get("DEPENDS_ON", "").split(",") if d.strip()]
+  repos = [r.strip() for r in os.environ.get("REPOS", "").split(",") if r.strip()]
+
+  for s in (proj_slug, child_slug):
+    if not SLUG_RE.match(s):
+      die(f"add-child: invalid slug '{s}'")
+  if child_slug == proj_slug:
+    die(f"add-child: child slug equals project slug '{proj_slug}'")
+
+  kind = kind_raw or "impl"
+  if kind not in KINDS:
+    die(f"add-child: unknown kind '{kind}'; valid kinds: {sorted(KINDS)}")
+
+  proj_path = find_task_path(proj_slug)
+  if proj_path is None:
+    die(f"add-child: no task file for project '{proj_slug}'")
+  pfm = parse_frontmatter(proj_path)
+  if pfm.get("kind") != "project":
+    die(f"add-child: '{proj_slug}' is kind:{pfm.get('kind')} not kind:project")
+
+  tasks = pfm.get("tasks") or []
+  if not isinstance(tasks, list):
+    die(f"add-child: '{proj_slug}' has a tasks: block that is not a list")
+  declared = {t["slug"]: t for t in tasks if isinstance(t, dict) and "slug" in t}
+
+  # A dep must already be declared on this project, or verify would fail with
+  # "depends_on '<d>' which is not declared in tasks:" the moment we commit.
+  for d in deps:
+    if d == child_slug:
+      die(f"add-child: '{child_slug}' cannot depend on itself")
+    if d not in declared:
+      die(f"add-child: depends_on '{d}' is not declared in {proj_slug}'s tasks:"
+          " — add that child first")
+
+  # Existing child file: adopt it in place if it is unowned or already ours,
+  # refuse if another project owns it. Never rewrite an adopted body.
+  child_path = find_task_path(child_slug)
+  adopt = child_path is not None
+  if adopt:
+    cfm = parse_frontmatter(child_path)
+    owner_parent = cfm.get("parent_slug")
+    owner_project = cfm.get("project")
+    for key, val in (("parent_slug", owner_parent), ("project", owner_project)):
+      if val and val not in ("none", proj_slug):
+        die(f"add-child: '{child_slug}' already has {key}: {val} —"
+            f" it belongs to another project, not '{proj_slug}'")
+    if kind_raw and (cfm.get("kind") or "impl") != kind_raw:
+      die(f"add-child: '{child_slug}' exists with kind:{cfm.get('kind')};"
+          f" refusing to rewrite it to kind:{kind_raw}")
+  else:
+    child_path = pathlib.Path("people") / ldap / "active" / f"{child_slug}.md"
+
+  if child_slug in declared:
+    # Already wired. Idempotent no-op — unless the caller asked for a
+    # depends_on that contradicts what is on disk, which we will not silently
+    # drop or silently rewrite.
+    existing_deps = list(declared[child_slug].get("depends_on") or [])
+    if deps and deps != existing_deps:
+      die(f"add-child: '{child_slug}' is already declared with"
+          f" depends_on {existing_deps}; refusing to change it to {deps}")
+    plan = {
+      "mode": "noop",
+      "project_slug": proj_slug,
+      "child_slug": child_slug,
+      "reason": f"'{child_slug}' is already a declared child of '{proj_slug}'",
+      # Adopt is still worth running: the entry can exist while the child file
+      # is missing its back-reference.
+      "adopt": adopt,
+      "child_path": str(child_path),
+      "paths": [],
+    }
+    if adopt and parse_frontmatter(child_path).get("parent_slug") != proj_slug:
+      plan["mode"] = "adopt"
+      plan["paths"] = [str(child_path)]
+    print(json.dumps(plan))
+    return
+
+  parent_text = _add_child_to_parent(proj_path.read_text(), proj_path,
+                                     child_slug, deps,
+                                     kind_raw or None, today)
+  child_repos = repos or (pfm.get("repos") if isinstance(pfm.get("repos"), list) else [])
+  plan = {
+    "mode": "adopt" if adopt else "create",
+    "project_slug": proj_slug,
+    "child_slug": child_slug,
+    "kind": kind,
+    "depends_on": deps,
+    "adopt": adopt,
+    "project_path": str(proj_path),
+    "project_body": parent_text,
+    "child_path": str(child_path),
+    "paths": [str(proj_path), str(child_path)],
+    "subject": f"{proj_slug}: add child {child_slug}",
+    "body": (
+      f"child: {child_slug}\n"
+      f"kind: {kind}\n"
+      + (f"depends_on: {', '.join(deps)}\n" if deps else "")
+      + ("adopted an existing task file in place\n" if adopt else "")
+    ).rstrip("\n"),
+    "trailers": "\n".join([
+      f"Worklog-Slug: {proj_slug}",
+      "Worklog-Kind: project",
+      f"Worklog-Slug: {child_slug}",
+      f"Worklog-Kind: {kind}",
+      "Worklog-Status: draft",
+    ]),
+  }
+  if not adopt:
+    plan["child_body"] = render_child_body(child_slug, proj_slug, ldap, today,
+                                           title, deps, kind, child_repos)
+  print(json.dumps(plan))
+
+
+def cmd_materialize_add_child() -> None:
+  plan = json.load(sys.stdin)
+  if plan["mode"] == "noop":
+    return
+  if "project_body" in plan:
+    pathlib.Path(plan["project_path"]).write_text(plan["project_body"])
+  cp = pathlib.Path(plan["child_path"])
+  if plan.get("adopt"):
+    if not cp.exists():
+      die(f"add-child: adopted child vanished from disk: {cp}")
+    _adopt_child(cp, plan["project_slug"])
+    return
+  if cp.exists():
+    die(f"add-child: refusing to overwrite {cp}")
+  cp.parent.mkdir(parents=True, exist_ok=True)
+  cp.write_text(plan["child_body"])
+
+
 def _eligible_list(slug: str) -> list[str]:
   proj_path = find_task_path(slug)
   if proj_path is None:
@@ -575,6 +816,22 @@ def main() -> None:
     cmd_plan_new()
   elif cmd == "materialize-new":
     cmd_materialize_new()
+  elif cmd == "plan-add-child":
+    cmd_plan_add_child()
+  elif cmd == "materialize-add-child":
+    cmd_materialize_add_child()
+  elif cmd == "print-add-child-plan":
+    plan = json.load(sys.stdin)
+    if plan["mode"] == "noop":
+      print(f"-- DRY-RUN: no-op ({plan['reason']})")
+    else:
+      print(f"-- DRY-RUN: would rewrite project file: {plan['project_path']}")
+      print(plan["project_body"])
+      if plan.get("adopt"):
+        print(f"-- DRY-RUN: would adopt existing child in place: {plan['child_path']}")
+      else:
+        print(f"-- DRY-RUN: would write child stub: {plan['child_path']}")
+        print(plan["child_body"])
   elif cmd == "next":
     cmd_next()
   elif cmd == "eligible-list":
