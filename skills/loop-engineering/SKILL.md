@@ -69,24 +69,7 @@ Routing example: `multi-repo search with uncertain ownership` →
 `serena-rg-search` → compact candidate paths plus one replay command;
 `one known-file lookup` → `optional-skill: skipped — single literal lookup`.
 
-## Resolve the skill directory
-
-Resolve `<skill-dir>` to the directory containing this `SKILL.md`. In most
-agent contexts, this is the path from which the skill was loaded. If uncertain,
-search for `loop_state.py` under the skill root:
-
-```bash
-# Claude Code (empty when absent — never a bogus "./.."):
-SKILL_DIR="$(f=$(find -L ~/.claude/skills -name loop_state.py -print -quit 2>/dev/null); [ -n "$f" ] && dirname "$(dirname "$f")")"
-# Codex:
-SKILL_DIR="$(f=$(find -L ~/.agents/skills -name loop_state.py -print -quit 2>/dev/null); [ -n "$f" ] && dirname "$(dirname "$f")")"
-# Cursor:
-SKILL_DIR="$(f=$(find -L ~/.cursor/skills -name loop_state.py -print -quit 2>/dev/null); [ -n "$f" ] && dirname "$(dirname "$f")")"
-# Opencode / git worktree (empty unless the repo really carries the skill):
-SKILL_DIR="$(r=$(git rev-parse --show-toplevel 2>/dev/null); [ -d "$r/skills/loop-engineering" ] && printf '%s' "$r/skills/loop-engineering")"
-# Fallback — roots checked in order (a parallel find races -quit across roots):
-SKILL_DIR="$(for r in ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills; do f=$(find -L "$r" -name loop_state.py -print -quit 2>/dev/null); [ -n "$f" ] && { dirname "$(dirname "$f")"; break; }; done)"
-```
+Resolve `<skill-dir>` per your harness convention: Claude Code → `~/.claude/skills/<skill-name>`; Codex → `~/.agents/skills/<skill-name>`; Cursor → `~/.cursor/skills/<skill-name>`; Opencode → project-local `./skills/<skill-name>`. Fallback: search common roots with `find -L ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills -name loop_state.py -print -quit 2>/dev/null | head -1 | xargs dirname/../`.
 
 The driver below wraps `scripts/loop_state.py`; every cycle is one call to
 `python3 <skill-dir>/scripts/loop_run.py`.
@@ -155,6 +138,10 @@ recoverable compression (Caveman shrink/Pixel) may be used; read
 [references/transport.md](references/transport.md) before doing so. On missing
 capability or no measured win, record `pixel-transport: skipped — <reason>`
 and pass bytes unchanged.
+
+### Search tool routing
+
+For multi-faceted search (symbols, text, JSON, history, logs), invoke `$serena-rg-search` which uses `zg` (zvec-grep, version ≥ 0.2.1, installed via `npm install -g @zvec/zvec-grep`). If `command -v zg` fails, fall back to `rg` (ripgrep) or your host's native search tool. Record `search-tool: skipped — no zg/rg available` as evidence when search is unavailable.
 
 ### Compaction-friendly output
 
