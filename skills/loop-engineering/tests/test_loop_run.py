@@ -8,14 +8,21 @@ configured, and prints exactly one line whose tail is the only LLM decision
 """
 
 import os
+import shlex
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 LOOP_RUN = SKILL_DIR / "scripts" / "loop_run.py"
+
+# radar_line is exercised in-process: crew-radar's path is a module constant,
+# so a stub cannot be reached through PATH the way project.sh can.
+sys.path.insert(0, str(SKILL_DIR / "scripts"))
+import loop_run  # noqa: E402
 
 
 def run(args, env_extra=None, cwd=None):
@@ -189,6 +196,64 @@ class LoopRunTest(unittest.TestCase):
             [self.run_dir, "--evidence", "command: true — ok"], cwd=self.cwd
         )
         self.assertIn("radar: clean", r2.stdout)
+
+    def _radar_cell(self, code, stdout, stderr=""):
+        """Run radar_line against a crew-radar stub with a fixed exit code."""
+        stub = Path(self._tmp.name) / "crew-radar-stub"
+        body = "#!/bin/sh\nprintf '%%s' %s\n" % shlex.quote(stdout)
+        if stderr:
+            body += "printf '%%s' %s >&2\n" % shlex.quote(stderr)
+        body += "exit %d\n" % code
+        stub.write_text(body)
+        stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+        real = loop_run.CREW_RADAR
+        loop_run.CREW_RADAR = stub
+        self.addCleanup(setattr, loop_run, "CREW_RADAR", real)
+        return loop_run.radar_line(str(Path(self._tmp.name)))
+
+    def test_radar_usage_or_repo_error_is_not_a_conflict_verdict(self):
+        # crew.md: exit 1 is a usage or repo error, exit 2 the collision
+        # verdict. A radar that could not inspect the repo must never render
+        # as a `warn=` cell -- that reads as "the radar ran and found N".
+        cell = self._radar_cell(
+            1,
+            '{"base":"HEAD","worktrees":0,"warn":0,"info":0,"overlaps":[]}',
+            "crew-radar: repo unreadable",
+        )
+        self.assertTrue(cell.startswith("radar: error="), cell)
+        self.assertNotIn("warn=", cell)
+
+    def test_radar_never_renders_an_unknown_verdict_label(self):
+        # A payload with no warn count cannot be reported as a verdict at all;
+        # `warn=?` is indistinguishable from a real verdict whose label is
+        # unknown, so the unknown must surface as an error.
+        for code in (1, 2, 3):
+            with self.subTest(code=code):
+                cell = self._radar_cell(code, "{}")
+                self.assertNotIn("warn=?", cell)
+                self.assertTrue(cell.startswith("radar: error="), cell)
+
+    def test_radar_info_only_overlap_is_not_reported_as_a_warn(self):
+        # Exit 0 with overlaps is the info-only (stacked-branch) case. Sharing
+        # the `warn=` prefix with the exit-2 collision cell makes a clean run
+        # look like a graded conflict.
+        cell = self._radar_cell(
+            0,
+            '{"base":"HEAD","worktrees":2,"warn":0,"info":1,'
+            '"overlaps":[{"sev":"info","path":"a.py","owners":"f-a"}]}',
+        )
+        self.assertEqual(cell, "radar: info paths=a.py")
+
+    def test_radar_collision_reports_count_and_paths(self):
+        # Pin (passes before and after the fix): exit 2 stays the one cell
+        # that carries a warn count.
+        cell = self._radar_cell(
+            2,
+            '{"base":"HEAD","worktrees":2,"warn":1,"info":0,'
+            '"overlaps":[{"sev":"warn","path":"a.py","owners":"f-a"},'
+            '{"sev":"warn","path":"b.py","owners":"f-b"}]}',
+        )
+        self.assertEqual(cell, "radar: warn=1 paths=a.py,b.py")
 
     def test_queue_off_without_project(self):
         r = self.init_run()
