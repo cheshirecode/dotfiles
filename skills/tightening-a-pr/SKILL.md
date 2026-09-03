@@ -31,7 +31,7 @@ All `checkpoint.sh` references below use this variable.
 
 ## Relationship to ship-hygiene (read this — the overlap is real)
 
-`ship-hygiene` is a **periodic, multi-PR** sweep (CI triage across the stack, "clean my open PRs"). This skill is a **single-PR, post-completion retrospective**. They share exactly one surface — the PR title/body deslop + internal-reference purge — and this skill **delegates that step to ship-hygiene's rules rather than re-deriving the grep patterns.** Do not duplicate ship-hygiene's leak greps here; invoke its guidance for step 3. What this skill adds on top: the council-driven learning distillation (step 1) and the codify triage (step 2), which ship-hygiene has no concept of.
+`ship-hygiene` is a **periodic, multi-PR** sweep (CI triage across the stack, "clean my open PRs"). This skill is a **single-PR, post-completion retrospective**. They share exactly one surface — the PR title/body deslop + internal-reference purge — and this skill **delegates that step to ship-hygiene's rules rather than re-deriving the pattern.** Do not duplicate ship-hygiene's leak pattern here; run its `bin/leak-scan.sh` for step 3. What this skill adds on top: the council-driven learning distillation (step 1) and the codify triage (step 2), which ship-hygiene has no concept of.
 
 ## The pipeline (ordered — do not reorder)
 
@@ -64,7 +64,7 @@ Council gates whether a *learning* is kept — not its *destination*. Before wri
 
 ### 3. Deslop the PR title/body + tracking tasks — via `ship-hygiene`
 
-Load the `ship-hygiene` skill and apply its step 7 (body + comment audit) to this one PR. Specifically: run ship-hygiene's two leak greps (title/body + diff added-lines) from its SKILL.md, fix any leaks in place, then apply the same purge to the tracking worklog task's public-facing fields (title, Context section — not the frontmatter). `ship-hygiene` **owns** the authoritative leak-token list — do not re-derive the grep patterns here. Rewrite product-first (what changed for users + why) unless it's pure engineering/infra; skill command names are a leak *unless* the PR changes skill files, where they're product surface.
+Load the `ship-hygiene` skill and apply its step 7 (body + comment audit) to this one PR. Specifically: run ship-hygiene's two leak scans (title/body + diff added-lines) through its `bin/leak-scan.sh`, fix any leaks in place, then apply the same purge to the tracking worklog task's public-facing fields (title, Context section — not the frontmatter). `ship-hygiene` **owns** the authoritative leak-token list, in `bin/leak-scan.sh` — do not re-derive the pattern here. That script exits 2 rather than reporting clean on empty input, so a failed `gh` call cannot pass for a clean PR. Rewrite product-first (what changed for users + why) unless it's pure engineering/infra; skill command names are a leak *unless* the PR changes skill files, where they're product surface.
 
 Before calling the PR ready, record the current head SHA, the focused validation commands with pass/fail results, and the green CI run or check set in the PR body or a final PR comment. Keep "evidence complete" distinct from "ready for review": a draft PR is not ready until it is explicitly marked ready after those facts are current.
 
@@ -87,7 +87,7 @@ Compress the decided iteration drama out of the task body (drop ToT/Reflexion sc
 
 ## Anti-patterns
 
-- Re-deriving ship-hygiene's leak greps inline instead of invoking ship-hygiene for step 3.
+- Re-deriving ship-hygiene's leak pattern inline instead of running its `bin/leak-scan.sh` for step 3.
 - Running a full multi-PR CI/comment sweep — that's ship-hygiene's job, not this single-PR close-out.
 - Turning every learning into a follow-up task by default (the safe-looking option that codifies nothing durable).
 - Running a heavyweight council on a trivial one-commit PR — downgrade to single-pass distillation.
