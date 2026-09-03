@@ -136,6 +136,34 @@ else
   fail "audit.sh exited $rc; its documented contract is always 0"
 fi
 
+echo "=== 7. the (none) verdicts say none OF WHAT ==="
+# Same shape as case 1, one section over. "No blocked tasks" and "the index
+# holds no tasks at all" both produced a bare "(none)".
+section() {
+  WORKLOG_REPO="$REPO" WORKLOG_LDAP=tester \
+    "$ROOT/bin/audit.sh" --section="$1" 2>&1 || true
+}
+for sec in blocked in-review; do
+  out="$(section "$sec")"
+  if grep -qE '\(none of [0-9]+ active tasks\)' <<<"$out"; then
+    pass "$sec reports the corpus size with its (none)"
+  elif grep -q '(none)' <<<"$out"; then
+    fail "$sec printed a bare (none): $(tr '\n' '/' <<<"$out")"
+  else
+    fail "$sec produced no (none) verdict at all: $(tr '\n' '/' <<<"$out")"
+  fi
+done
+
+echo "=== 8. the corpus size is the real one, not a constant ==="
+# A count hard-wired to 0 -- or to any constant -- would satisfy case 7. The
+# scratch repo holds exactly one active task.
+out="$(section blocked)"
+if grep -q '(none of 1 active tasks)' <<<"$out"; then
+  pass "the count matches the one seeded active task"
+else
+  fail "expected a count of 1: $(tr '\n' '/' <<<"$out")"
+fi
+
 echo
 [ "$FAIL" -eq 0 ] && echo "audit drift section: all cases passed" || echo "audit drift section: FAILURES above" >&2
 exit "$FAIL"
