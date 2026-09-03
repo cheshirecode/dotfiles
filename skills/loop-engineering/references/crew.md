@@ -21,6 +21,30 @@ Map available primitives by capability, not by a different host's tool names:
 | overlapping worktree edits | run deterministic conflict evidence | `bin/crew-radar` (below) | `bin/crew-radar` (below) — same repo, same radar |
 | durable claim, stale reap, resume | use the Worklog claim lifecycle | `project.sh claim` / `reap` / `context.sh --for=resume` | `$WORKLOG_BIN/project.sh` / `context.sh` — host-agnostic paths |
 
+### Isolation follows the shell, not the flag
+
+A harness that creates a private worktree per worker builds it from the
+**dispatching session's current working directory**, not from the repo the loop
+declared with `--repo`. Shell cwd persists across tool calls, so a `cd` several
+calls earlier — claiming a worklog task, reading another clone — silently
+retargets every later dispatch.
+
+Observed 2026-09-03: a `cd "$WORKLOG_REPO"` before `project.sh claim` sent three
+crew workers into worktrees of the worklog data repo instead of the code repo.
+Their target files did not exist and code-repo git operations were refused by
+isolation. The radar cell still read `clean`, because it inspects the declared
+`--repo` and never sees which worktree the delegate actually got. Isolation was
+real; it was isolation of the adjacent thing.
+
+Two mechanical guards, because "remember the cwd" is not one:
+
+- Run every directory-changing helper in a subshell — `(cd "$WORKLOG_REPO" && ...)`
+  — so the dispatching session's cwd never moves.
+- Give each worker a first-command identity check and a instruction to stop:
+  `git rev-parse --show-toplevel && ls <expected-dir> && git remote get-url origin`,
+  returning `blocked <slug> wrong-repo worktree` on a mismatch. A worker that
+  checks first costs one tool call; a worker that improvises costs a wave.
+
 ### Shared-filesystem boundary
 
 Codex subagents share the same filesystem and current directory. Concurrent
