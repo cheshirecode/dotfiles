@@ -4,7 +4,7 @@
 Reads `git log` records from stdin (separator-encoded), groups same-slug
 `<slug>: checkpoint` commits into bursts within --burst-window, and writes:
   - a markdown plan file (human-readable; review before --apply)
-  - a sidecar TSV (machine-readable; consumed by the filter-repo step)
+  - a sidecar TSV (machine-readable; consumed by the rebase todo builder)
 
 Stdin format (one record per commit, records separated by 0x1e, fields by 0x1f):
   <sha> 0x1f <iso8601> 0x1f <author> 0x1f <subject> 0x1f <body> 0x1e

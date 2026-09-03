@@ -29,7 +29,11 @@
 #   - Eligibility is exact `^<slug>: checkpoint$` — meaningful subjects
 #     (post-Improvement-1) are never squashed.
 #
-# Requires: git-filter-repo (brew install git-filter-repo on macOS).
+# Requires: git only. The filter-repo dependency was dropped with the
+# filter-repo --apply path on 2026-04-27; the preflight demanding it
+# outlived it and blocked this script -- including --dry-run, and so
+# tests/log_compact/test_squash.sh, the gate that exists because of that
+# very incident -- on every machine without a tool it no longer calls.
 #
 # See: people/cheshirecode/active/worklog-log-compaction-squash.md
 
@@ -68,11 +72,6 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Pre-flight
-if ! command -v git-filter-repo >/dev/null 2>&1; then
-  echo "log-compact: git-filter-repo not installed (try: brew install git-filter-repo)" >&2
-  exit 2
-fi
-
 if [[ "$APPLY" -eq 1 ]]; then
   if ! git diff --quiet || ! git diff --cached --quiet; then
     echo "log-compact: working tree dirty; commit or stash first" >&2

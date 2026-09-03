@@ -37,7 +37,28 @@ cd "$(dirname "$0")/../.."
 # so SOURCE must be a clonable worklog *data* repo. Post-relocation the skill dir
 # (pwd) is no longer that repo; default to $WORKLOG_REPO (the real vault) — the
 # bare TEST_ORIGIN clone keeps the real origin untouched.
-SOURCE="${SOURCE:-${WORKLOG_REPO:-$(pwd)}}"
+SOURCE="${SOURCE:-${WORKLOG_REPO:-}}"
+
+# Validate before doing any work. The old default was $(pwd) -- the skill
+# directory -- which is never a worklog data repo, so an unset WORKLOG_REPO
+# produced a bare `git clone` fatal naming a path the reader has no reason to
+# connect to the missing variable. Check the argument first and say what to
+# set, rather than discovering it three commands into a rewrite.
+if [ -z "$SOURCE" ]; then
+  echo "$(basename "$0"): no source repo." >&2
+  echo "  This gate rewrites history on a clone of a worklog DATA repo." >&2
+  echo "  Set WORKLOG_REPO (or SOURCE=/path/to/repo) and re-run." >&2
+  exit 1
+fi
+if [ ! -e "$SOURCE/.git" ]; then
+  echo "$(basename "$0"): SOURCE=$SOURCE is not a git repo." >&2
+  exit 1
+fi
+if [ ! -d "$SOURCE/people" ]; then
+  echo "$(basename "$0"): SOURCE=$SOURCE has no people/ -- not a worklog data repo." >&2
+  echo "  The skill directory is not the data repo; they were split." >&2
+  exit 1
+fi
 
 SCRATCH_ROOT="$(mktemp -d -t log-compact-test-XXXXXX)"
 SCRATCH="$SCRATCH_ROOT/repo"
