@@ -407,23 +407,31 @@ print(pathlib.Path(yaml.__file__).resolve().parents[1])
 PY
 )
 
-  if "${WL_HERMETIC[@]}" skills/worklog/tests/reconcile_pr/test_reconcile_pr.sh >/dev/null; then
-    ok "worklog PR reconciliation fixtures"
-  else
-    fail "worklog PR reconciliation fixtures"
-  fi
+  # reconcile_pr/ is invoked here rather than from the worklog loop below so
+  # it keeps its own label and runs first. Glob the directory, not the file:
+  # a second reconcile fixture must run by existing, not by being remembered.
+  for t in skills/worklog/tests/reconcile_pr/test_*.sh; do
+    [[ -e "$t" ]] || continue
+    if "${WL_HERMETIC[@]}" bash "$t" >/dev/null 2>&1; then
+      ok "worklog PR reconciliation: $(basename "$t" .sh)"
+    else
+      fail "worklog PR reconciliation: $(basename "$t" .sh)"
+    fi
+  done
 
   # Discovered, not listed: test_loop_run.py existed for a full session while
   # this line named three files, so its 17 fixtures never ran here. A broken
-  # driver kept the runner green.
-  if python3 -m unittest discover \
-    -s skills/loop-engineering/tests \
-    -t skills/loop-engineering/tests \
-    -p "test_*.py" >/dev/null 2>&1; then
-    ok "loop-engineering python fixtures"
-  else
-    fail "loop-engineering python fixtures"
-  fi
+  # driver kept the runner green. The skill directory is the unit now, and the
+  # set of skills is globbed too -- a new skills/<name>/tests/test_*.py is wired
+  # up by existing rather than by someone remembering to add a line here.
+  for d in skills/*/tests; do
+    compgen -G "$d/test_*.py" >/dev/null || continue
+    if python3 -m unittest discover -s "$d" -t "$d" -p "test_*.py" >/dev/null 2>&1; then
+      ok "$(basename "$(dirname "$d")") python fixtures"
+    else
+      fail "$(basename "$(dirname "$d")") python fixtures"
+    fi
+  done
 
   # Shell fixtures for the crew tools. Neither was reachable from this runner
   # before, so a regression in either only surfaced if someone ran it by hand.
@@ -434,21 +442,23 @@ PY
   # profile exports WORKLOG_REPO/WORKLOG_LDAP unconditionally. Without the
   # wrapper the worklog fixtures run against the real vault: the checkpoint
   # ones drive git add/commit/push there, and six of them simply fail.
-  if "${WL_HERMETIC[@]}" bash skills/loop-engineering/tests/test_crew_radar.sh >/dev/null 2>&1; then
-    ok "crew-radar conflict fixtures"
-  else
-    fail "crew-radar conflict fixtures"
-  fi
-  if "${WL_HERMETIC[@]}" bash skills/loop-engineering/tests/test_crew_reap.sh >/dev/null 2>&1; then
-    ok "crew-reap safety-gate fixtures"
-  else
-    fail "crew-reap safety-gate fixtures"
-  fi
-  if "${WL_HERMETIC[@]}" bash skills/worklog/tests/verify_refs/test_verify_refs.sh >/dev/null 2>&1; then
-    ok "worklog verify-refs fixtures"
-  else
-    fail "worklog verify-refs fixtures"
-  fi
+  for t in skills/loop-engineering/tests/test_*.sh; do
+    [[ -e "$t" ]] || continue
+    if "${WL_HERMETIC[@]}" bash "$t" >/dev/null 2>&1; then
+      ok "loop-engineering $(basename "$t" .sh)"
+    else
+      fail "loop-engineering $(basename "$t" .sh)"
+    fi
+  done
+  # verify_refs/ likewise keeps its own label and is skipped by the loop below.
+  for t in skills/worklog/tests/verify_refs/test_*.sh; do
+    [[ -e "$t" ]] || continue
+    if "${WL_HERMETIC[@]}" bash "$t" >/dev/null 2>&1; then
+      ok "worklog verify-refs: $(basename "$t" .sh)"
+    else
+      fail "worklog verify-refs: $(basename "$t" .sh)"
+    fi
+  done
 
   # Everything else under skills/worklog/tests/. Before this, the runner reached
   # exactly three of ~20 fixture directories: reconcile_pr, verify_refs and
@@ -462,13 +472,21 @@ PY
   # populated worklog vault) and rewrites its history, so it needs real
   # autosave commits as input and cannot run hermetically. Invoke it directly
   # with SOURCE=/path/to/vault when changing log-compact.sh.
-  for t in skills/worklog/tests/*/test_*.sh; do
+  #
+  # .mjs is globbed alongside .sh: worklog_manager/test_units.mjs was named by
+  # hand in test_worklog_skill() only, so `run.sh fixtures` never ran it.
+  for t in skills/worklog/tests/*/test_*.sh skills/worklog/tests/*/test_*.mjs; do
+    [[ -e "$t" ]] || continue
     case "$t" in
       */lint/*|*/verify_refs/*|*/reconcile_pr/*) continue ;;
       */log_compact/test_squash.sh) continue ;;
     esac
-    name="worklog $(basename "$(dirname "$t")")/$(basename "$t" .sh)"
-    if timeout 180 "${WL_HERMETIC[@]}" bash "$t" >/dev/null 2>&1; then
+    case "$t" in
+      *.mjs) runner=(node) ;;
+      *) runner=(bash) ;;
+    esac
+    name="worklog $(basename "$(dirname "$t")")/$(basename "${t%.*}")"
+    if timeout 180 "${WL_HERMETIC[@]}" "${runner[@]}" "$t" >/dev/null 2>&1; then
       ok "$name"
     else
       fail "$name"
@@ -500,17 +518,8 @@ PY
   fi
   rm -rf "$probe_dir"
 
-  if python3 -m unittest skills/loop-helpers/tests/test_helpers.py >/dev/null 2>&1; then
-    ok "loop-helpers transport gate fixtures"
-  else
-    fail "loop-helpers transport gate fixtures"
-  fi
-
-  if python3 -m unittest skills/evidence-gate/tests/test_evidence_gate.py >/dev/null; then
-    ok "evidence-gate coverage fixtures"
-  else
-    fail "evidence-gate coverage fixtures"
-  fi
+  # loop-helpers and evidence-gate used to be two more hand-listed .py files
+  # here; both are covered by the skills/*/tests discovery loop above.
 
   if python3 - <<'PY'
 import pathlib
@@ -1790,35 +1799,24 @@ test_worklog_skill() {
     fail "expected hard-fail outside clone, got: $(echo "$out" | head -1)"
   fi
 
-  if "${WL_HERMETIC[@]}" bash "$skill/tests/worklog_manager/test_graph.sh" >/dev/null 2>&1; then
-    ok "worklog-manager graph fixture"
-  else
-    fail "worklog-manager graph fixture"
-  fi
-
-  if "${WL_HERMETIC[@]}" bash "$skill/tests/worklog_manager/test_dispatch.sh" >/dev/null 2>&1; then
-    ok "worklog-manager dispatch fixture"
-  else
-    fail "worklog-manager dispatch fixture"
-  fi
-
-  if "${WL_HERMETIC[@]}" bash "$skill/tests/worklog_manager/test_poll.sh" >/dev/null 2>&1; then
-    ok "worklog-manager poll fixture"
-  else
-    fail "worklog-manager poll fixture"
-  fi
-
-  if "${WL_HERMETIC[@]}" node "$skill/tests/worklog_manager/test_units.mjs" >/dev/null 2>&1; then
-    ok "worklog-manager unit fixtures"
-  else
-    fail "worklog-manager unit fixtures"
-  fi
-
-  if "${WL_HERMETIC[@]}" bash "$skill/tests/context/test_context.sh" >/dev/null 2>&1; then
-    ok "context current Next + unique slug fixture"
-  else
-    fail "context current Next + unique slug fixture"
-  fi
+  # These five used to be named file by file. Glob the two directories instead,
+  # so a new worklog_manager or context fixture runs in `run.sh worklog-skill`
+  # by existing. Both directories are also covered by test_fixtures(); this mode
+  # is separately invocable, so it must reach them on its own.
+  for t in "$skill"/tests/worklog_manager/test_* "$skill"/tests/context/test_*; do
+    [[ -f "$t" ]] || continue
+    case "$t" in
+      *.sh) runner=(bash) ;;
+      *.mjs) runner=(node) ;;
+      *) continue ;;
+    esac
+    name="$(basename "$(dirname "$t")")/$(basename "${t%.*}")"
+    if "${WL_HERMETIC[@]}" "${runner[@]}" "$t" >/dev/null 2>&1; then
+      ok "$name fixture"
+    else
+      fail "$name fixture"
+    fi
+  done
 
   if "${WL_HERMETIC[@]}" WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap CODEX_SKILL_PATH="$skill/SKILL.md" bash "$sb/codex-surface-check.sh" >/dev/null 2>&1; then
     ok "codex-surface-check accepts Codex-native skill"
