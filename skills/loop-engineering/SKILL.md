@@ -109,8 +109,8 @@ Each call prints exactly one line with the script-run mechanics folded in:
 `running 3/20 turns — next: <action> | radar: clean | queue: <slug> | decide: continue or stop`
 
 - **Crew, defaulted:** when a repo is known (`--repo`, or the cwd's git
-  toplevel at init), `bin/crew-radar` runs every cycle and its verdict lands
-  in the line. Serialize writes unless isolation is proven (crew.md).
+  toplevel at init), `bin/crew-radar` runs every cycle: `clean|info|warn=<n>`
+  are verdicts, `error=` a radar that never ran. Serialize writes (crew.md).
 - **Orchestrator, defaulted:** pass `--project <slug>` once when 3+ worklog
   tasks exist; the driver reports the next eligible child every cycle
   (orchestrator.md carries the claim/archive rules). `queue: empty|blocked`
