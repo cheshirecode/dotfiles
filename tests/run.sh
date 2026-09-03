@@ -852,17 +852,30 @@ PYD
   # bin/install-skills.sh resolves /tmp→/private/tmp (Python Path.resolve).
   # install.sh derives REPO_DIR via pwd which may not resolve /tmp.
   # If the comparison fails, install.sh backs up existing symlinks to .bak.
-  local resolve_home
+  #
+  # Both installers run against a copy of the repo with .claude/ omitted. An
+  # agent worktree harness materializes a repo-local .claude/ (worktrees/ plus a
+  # rewritten skills mirror); install.sh's top-level dotfile loop then symlinks
+  # it over $DEST/.claude, which install-skills.sh has just created as a real
+  # directory — one .bak that has nothing to do with path resolution, and skill
+  # symlinks written back into the repo through the new .claude symlink. The
+  # copy keeps every skill root in the comparison; the counted .bak items still
+  # come from the two installers disagreeing on a symlink target.
+  local resolve_home resolve_repo_parent resolve_repo
   resolve_home=$(mktemp -d)
-  HOME="$resolve_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" ./bin/install-skills.sh >/dev/null 2>&1
-  CODER_SYMLINK_DIR="$resolve_home" ./install.sh >/dev/null 2>&1
+  resolve_repo_parent=$(mktemp -d)
+  resolve_repo="$resolve_repo_parent/repo"
+  mkdir -p "$resolve_repo"
+  tar -C "$REPO_ROOT" --exclude=./.git --exclude=./.claude -cf - . | tar -C "$resolve_repo" -xf -
+  HOME="$resolve_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" "$resolve_repo/bin/install-skills.sh" >/dev/null 2>&1
+  CODER_SYMLINK_DIR="$resolve_home" "$resolve_repo/install.sh" >/dev/null 2>&1
   bak_count=$(find "$resolve_home" -name "*.bak" 2>/dev/null | wc -l)
   if [[ $bak_count -eq 0 ]]; then
     ok "install.sh preserves existing skill symlinks (no .bak accumulation)"
   else
     fail "install.sh created $bak_count .bak items (path resolution mismatch)"
   fi
-  rm -rf "$resolve_home"
+  rm -rf "$resolve_home" "$resolve_repo_parent"
 
   if python3 - <<'PY'
 import re
