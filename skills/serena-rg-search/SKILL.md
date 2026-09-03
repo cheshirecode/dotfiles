@@ -18,10 +18,25 @@ Skip if: one literal or known-file lookup is sufficient.
 ## Route first
 
 Text-lane searches go through `zg` (zvec-grep) when installed: `zg query --rg`
-is managed ripgrep (use it wherever you would type `rg`), `--fts` adds BM25
-ranking, and the bare form adds semantic search. If `command -v zg` is empty,
-every `zg query --rg` below degrades to plain `rg` — fall back and continue,
-don't block on setup.
+is managed ripgrep, `--fts` adds BM25 ranking, and the bare form adds semantic
+search. If `command -v zg` is empty, every `zg query --rg` below degrades to
+plain `rg` — fall back and continue, don't block on setup.
+
+**Three differences from `rg` that bite, all measured against zvec-grep 0.2.1:**
+
+1. **`zg query --rg` exits 0 when it finds nothing; `rg` exits 1.** So
+   `rg PATTERN || echo absent` fires the absent branch and
+   `zg query --rg PATTERN || echo absent` never does. It prints `No matches.`
+   instead. Read the output, not `$?` — and do not swap `zg query --rg` into an
+   existing script that branches on rg's exit status.
+2. **The indexed lanes always return hits.** `--fts` and the bare semantic form
+   return the top N nearest by ranking, so a query for something absent still
+   comes back full: `zg query --fts "xyzzy plugh frotz nitfol"` returns 10 hits.
+   **These lanes cannot express "not here."** Confirm an absence with
+   `--rg`/`rg`, which can; use the ranked lanes to find candidates, never to
+   prove something does not exist.
+3. **`--fts` needs the index too**, not just the semantic form: without one both
+   fail `WORKSPACE_INDEX_NOT_FOUND`. Only `--rg` works unindexed.
 
 - Concept known but exact terms unknown ("where is X validated?"): `zg query
   "natural language"` — semantic + FTS hybrid, needs `zg index` once per
@@ -55,8 +70,10 @@ Unknown locations, string/regex, non-code files, broad scans, quick file
 listing — and anything where you know the concept but not the tokens.
 
 ```bash
-zg query --rg -n "useUserTaskQuotaStats" frontend/react/src   # managed rg: same flags
-zg query --rg --files | rg 'announcement'
+zg query --rg -n "useUserTaskQuotaStats" frontend/react/src   # managed rg; note exit 0 on no match
+rg --files | rg 'announcement'                # NOT `zg query --rg --files`:
+                                              # "--files changes rg output and
+                                              # cannot be used with managed --rg"
 zg query --fts "announcement text banner"     # BM25-ranked keyword search
 zg query "where user quota limits are enforced"   # semantic (needs `zg index`)
 zg index                                       # build/refresh workspace index
