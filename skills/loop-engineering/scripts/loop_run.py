@@ -65,13 +65,24 @@ def radar_line(repo):
         return "radar: error=unrunnable"
     if data.get("error"):
         return "radar: error=%s" % cell(str(data["error"]))
-    paths = [o.get("path", "?") for o in data.get("overlaps") or []]
-    if proc.returncode == 0 and not paths:
-        return "radar: clean"
-    return "radar: warn=%s paths=%s" % (
-        data.get("warn", "?"),
-        ",".join(paths) or "-",
-    )
+    # crew.md states the whole contract: exit 0 clean or info-only, 2 the
+    # collision verdict, 1 a usage or repo error. Only 0 and 2 are verdicts.
+    # A radar that never inspected the repo rendered as `warn=... paths=-`,
+    # which reads as "it ran and graded the wave" -- the one reading that
+    # makes a caller skip serializing writes.
+    if proc.returncode not in (0, 2):
+        reason = proc.stderr.strip() or "exit %d, no reason given" % proc.returncode
+        return "radar: error=%s" % cell(reason)
+    paths = ",".join(o.get("path", "?") for o in data.get("overlaps") or [])
+    if proc.returncode == 0:
+        # Exit 0 with overlaps is info-only (stacked branches), not a warn.
+        return "radar: info paths=%s" % cell(paths) if paths else "radar: clean"
+    warn = data.get("warn")
+    if not isinstance(warn, int) or isinstance(warn, bool):
+        # No count to report. `warn=?` was indistinguishable from a graded
+        # verdict whose label happened to be unknown, so say error instead.
+        return "radar: error=%s" % cell("exit 2 carried no warn count")
+    return "radar: warn=%d paths=%s" % (warn, cell(paths) or "-")
 
 
 def cell(text):
