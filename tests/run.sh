@@ -279,6 +279,24 @@ checks = {
         "answer another session's permission prompt" in crew_flat
         and "never edit a worker's worktree" in crew_flat.lower()
     ),
+    # Worktree isolation is built from the DISPATCHING shell's cwd, not from the
+    # declared `--repo`, and the radar cannot see the mismatch. Pin the two
+    # mechanical guards rather than the prose around them: match load-bearing
+    # tokens so the section stays free to be retitled, reworded, or reflowed,
+    # but not to lose a guard.
+    "crew cwd guard is a subshell": (
+        "subshell" in crew_flat
+        # A parenthesised cd on a shell variable. Survives renaming the example
+        # variable; fails if the cd is unwrapped back to a bare one.
+        and '(cd "$' in crew_flat
+        and "current working directory" in crew_flat
+    ),
+    "crew worker identity precheck": (
+        "rev-parse --show-toplevel" in crew_flat
+        and "remote get-url origin" in crew_flat
+        # The precheck is worthless without the stop it authorises.
+        and "wrong-repo worktree" in crew_flat
+    ),
     "cross-host continuation": (
         hosts.count("while state is `running`") >= 3
         and "A prompt cannot manufacture background execution" in hosts
