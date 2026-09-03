@@ -144,8 +144,13 @@ For deep interactive exploration consider `lnav`, but `rg` + a time filter usual
 `zg`, `rg`, and `jq` aren't preinstalled everywhere. Check before use:
 
 ```bash
-command -v zg rg jq
+for t in zg rg jq; do command -v "$t" >/dev/null 2>&1 || echo "missing: $t"; done
 ```
+
+`command -v zg rg jq` looks like the same check and is not: it prints only the
+tools it finds and **exits 0 as long as any one of them exists**, so a missing
+`zg` reads as a clean result unless you count the lines. The loop names what is
+absent and prints nothing when all three are present.
 
 If `zg` is missing: `npm install -g @zvec/zvec-grep` (Node 22+) — or skip it
 and use `rg`; never block a task on installing it. If `rg`/`jq` are missing:
