@@ -90,14 +90,49 @@ def cell(text):
     return " ".join(text.split()).replace("|", "/")[:80]
 
 
+def resolve_project_sh():
+    """Locate the worklog skill's project.sh, or return (None, reason).
+
+    $WORKLOG_BIN is the source of truth, but two worklog checkouts can exist
+    on one machine (an installed skill and a working tree) and a profile can
+    export the variable at the wrong one. Honour the variable first, then fall
+    back to the installed skill roots so the driver works in development, and
+    say which candidates were tried when none resolves -- "not found" and
+    "found the other copy" must not read the same.
+    """
+    env_bin = os.environ.get("WORKLOG_BIN")
+    if env_bin:
+        candidate = Path(env_bin) / "project.sh"
+        if candidate.exists():
+            return candidate, None
+        return None, "WORKLOG_BIN=%s has no project.sh" % env_bin
+    home = Path(os.path.expanduser("~"))
+    roots = [
+        home / ".claude/skills/worklog/bin",
+        home / ".agents/skills/worklog/bin",
+        home / ".cursor/skills/worklog/bin",
+        SKILL_DIR.parent / "worklog/bin",
+    ]
+    for root in roots:
+        candidate = root / "project.sh"
+        if candidate.exists():
+            return candidate, None
+    return None, "no WORKLOG_BIN and no worklog skill at %s" % ", ".join(
+        str(r) for r in roots
+    )
+
+
 def queue_line(project):
     """One project-queue cell; never fails the cycle."""
     if not project:
         return "queue: off", None
-    worklog_bin = os.environ.get("WORKLOG_BIN")
-    project_sh = Path(worklog_bin) / "project.sh" if worklog_bin else None
-    if not project_sh or not project_sh.exists():
-        return "queue: off (no WORKLOG_BIN)", None
+    # A queue the caller asked for and did not get is a configuration failure,
+    # not an idle one. Reporting it as "off" -- the same word used when no
+    # --project was passed -- hides a mistyped or wrongly-pointed WORKLOG_BIN
+    # behind a cell that reads as "nothing to do here".
+    project_sh, why = resolve_project_sh()
+    if project_sh is None:
+        return "queue: error=%s" % cell(why), None
     proc = subprocess.run(
         [str(project_sh), "next", project], capture_output=True, text=True
     )

@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
@@ -363,6 +364,74 @@ class LoopRunTest(unittest.TestCase):
                 cell = self._queue_cell(r.stdout)
                 self.assertTrue(cell.startswith("queue: error="), cell)
                 self.assertNotIn("blocked", cell)
+
+    # --- WORKLOG_BIN resolution -------------------------------------------
+    # A queue the caller asked for and did not get used to print
+    # "queue: off (no WORKLOG_BIN)" -- the same word the driver uses when no
+    # --project was passed at all. Two worklog checkouts can exist on one
+    # machine, so a profile exporting WORKLOG_BIN at the wrong one is the
+    # expected failure, not an exotic one. Each test below is RED against the
+    # pre-fix driver.
+
+    def test_requested_queue_with_wrong_worklog_bin_is_an_error(self):
+        # RED before the fix: this printed "queue: off (no WORKLOG_BIN)".
+        # WORKLOG_BIN set but pointing at a directory with no project.sh --
+        # the "two copies that can drift" case, pointed at the wrong copy.
+        empty = Path(self._tmp.name) / "not-worklog"
+        empty.mkdir()
+        r = run(
+            [self.run_dir, "--goal", "test goal", "--project", "prog-x"],
+            env_extra={"WORKLOG_BIN": str(empty)},
+            cwd=self.cwd,
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        cell = self._queue_cell(r.stdout)
+        self.assertTrue(cell.startswith("queue: error="), cell)
+        # The reason must name the path, so "wrong copy" is distinguishable
+        # from "no copy" without re-running anything.
+        self.assertIn(str(empty), cell)
+        # An asked-for queue must never be reported with the idle word.
+        self.assertNotIn("off", cell)
+        body = [ln for ln in r.stdout.splitlines() if ln.strip()]
+        self.assertEqual(len(body), 1)
+
+    def test_requested_queue_with_no_worklog_anywhere_is_an_error(self):
+        # RED before the fix: also printed "queue: off (no WORKLOG_BIN)".
+        # In-process so both fallback roots can be emptied: $HOME and the
+        # skill's own sibling directory are real on a dev box, and a
+        # subprocess would resolve the developer's installed worklog and
+        # pass for the wrong reason.
+        home = Path(self._tmp.name) / "home"
+        (home / ".claude/skills").mkdir(parents=True)
+        siblings = Path(self._tmp.name) / "skills"
+        siblings.mkdir()
+        with mock.patch.dict(os.environ, {"HOME": str(home)}, clear=False), \
+                mock.patch.object(loop_run, "SKILL_DIR", siblings / "loop-engineering"):
+            os.environ.pop("WORKLOG_BIN", None)
+            found, why = loop_run.resolve_project_sh()
+            self.assertIsNone(found)
+            self.assertIn("no WORKLOG_BIN", why)
+            cell, slug = loop_run.queue_line("prog-x")
+        self.assertIsNone(slug)
+        self.assertTrue(cell.startswith("queue: error="), cell)
+        self.assertNotIn("off", cell)
+
+    def test_installed_worklog_resolves_without_worklog_bin(self):
+        # GREEN half of the pair: the fallback must actually find an installed
+        # skill, or the two RED cases above would pass on a resolver that can
+        # only ever fail.
+        home = Path(self._tmp.name) / "home"
+        bin_dir = home / ".claude/skills/worklog/bin"
+        bin_dir.mkdir(parents=True)
+        (bin_dir / "project.sh").write_text("#!/bin/sh\necho task-alpha\n")
+        siblings = Path(self._tmp.name) / "skills"
+        siblings.mkdir()
+        with mock.patch.dict(os.environ, {"HOME": str(home)}, clear=False), \
+                mock.patch.object(loop_run, "SKILL_DIR", siblings / "loop-engineering"):
+            os.environ.pop("WORKLOG_BIN", None)
+            found, why = loop_run.resolve_project_sh()
+        self.assertIsNone(why)
+        self.assertEqual(found, bin_dir / "project.sh")
 
 
 if __name__ == "__main__":
