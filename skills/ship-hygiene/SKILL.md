@@ -45,14 +45,22 @@ Skip if: only one PR open, body is short, no recent worklog activity. Overhead n
 
    **7a. Size flag.** PRs with body >5KB: read for stale checklists, ASCII art, duplicate context.
 
-   **7b. Internal-ref leak scan.** Run both greps below — they are not redundant (a worklog path in the diff is a leaked *code comment*; the same string in the body is a leaked *PR description*; a body under 5KB skips the size flag but still needs this scan):
-   - Title + body: `gh pr view <n> --json title,body -q '.title + "\n" + .body' | grep -inE 'worklog:|\[POST-MERGE|next_action|/ship-hygiene|/worklog|people/[A-Za-z0-9._-]+/active|iteration [0-9]|per the (audit|critique)|scope chosen'`
-   - Code comments (added lines only): `gh pr diff <n> | grep -nE '^\+' | grep -iE 'worklog:|\[POST-MERGE|next_action|/ship-hygiene|/worklog|people/[A-Za-z0-9._-]+/active|iteration [0-9]|per the (audit|critique)|scope chosen'`
+   **7b. Internal-ref leak scan.** Run both scans below — they are not redundant (a worklog path in the diff is a leaked *code comment*; the same string in the body is a leaked *PR description*; a body under 5KB skips the size flag but still needs this scan):
+   Resolve `<skill-dir>` to the directory holding this SKILL.md (empty when absent, never a bogus path):
+   `SKILL_DIR="$(f=$(find -L ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills -name leak-scan.sh -print -quit 2>/dev/null); [ -n "$f" ] && dirname "$(dirname "$f")")"`
+   - Title + body: `gh pr view <n> --json title,body -q '.title + "\n" + .body' | "$SKILL_DIR"/bin/leak-scan.sh --label body`
+   - Code comments (added lines only): `gh pr diff <n> | grep -E '^\+' | "$SKILL_DIR"/bin/leak-scan.sh --label diff`
+
+   `leak-scan.sh` owns the pattern (`--print-pattern` to see it). Exit **0** clean,
+   **1** leaks found — a verdict, printed — **2** usage, or a refusal to judge.
+   Capture the status before parsing; do not read a pipeline's status as the verdict.
+   It exits 2 rather than reporting clean when stdin is empty, because a failed
+   `gh` call and a leak-free PR otherwise produce identical output.
 
    **7c. Fix.** For title/body: **fix in place** — rewrite product-first, drop the internal refs. For code comments: surface and fix only if genuinely leaked process notes; keep durable why-comments.
 
    **Leak-token notes:**
-   - The token is `worklog:` (the trailer form), not bare `worklog` — a PR describing worklog *tooling* uses "worklog" as product vocabulary. The leaked forms (`Worklog:` trailer, worklog *paths*) are still caught (the latter by `people/[A-Za-z0-9._-]+/active`, which matches dotted/hyphenated/numeric LDAPs such as `people/fred.tran/active/...`).
+   - The token is `worklog:` (the trailer form), not bare `worklog` — a PR describing worklog *tooling* uses "worklog" as product vocabulary. The leaked forms are still caught: the `Worklog:` trailer, task paths under `active/` **and `archive/`** (dotted/hyphenated/numeric LDAPs included, e.g. `people/fred.tran/archive/...`), and the `worklog/<ldap>/<slug>` id form. Every sibling skill's command name is a token too — `tests/test_leak_scan.sh` fails if a new skill is added without one, so that gap is caught when the skill lands rather than when its name ships inside a PR body.
    - If the PR changes `skills/**`, `manifest/skills.yaml`, or skill docs: allow the relevant skill command names; still purge worklog paths, `next_action`, and agent-process chatter.
    - Pure-engineering exception: technical framing is fine; internal-tooling chatter still goes.
 8. **CI triage:** group failed checks by name. If the same check fails on N>1 PRs → systemic (workflow config bug, not per-PR). Surface the systemic finding as ONE actionable line.
