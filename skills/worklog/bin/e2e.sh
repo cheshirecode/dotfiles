@@ -55,8 +55,20 @@ LDAP="${USER:-ldap-test}"
 NS="people/$LDAP/active"
 
 # --- 1. namespace + tools -----------------------------------------------
+# `command -v a b c` prints only what it finds and exits 0 if ANY one exists,
+# so the multi-arg form passed this preflight with ripgrep absent -- a check
+# named for six tools that could only ever fail if all six were missing.
+# Verified 2026-09-03: `command -v bash python3 perl git rg jq` returned 0 on a
+# box with no rg binary. Loop and name the gap instead.
 run "preflight: bash + python3 + perl + git + ripgrep + jq present" bash -c '
-  command -v bash python3 perl git rg jq >/dev/null'
+  missing=""
+  for t in bash python3 perl git rg jq; do
+    command -v "$t" >/dev/null 2>&1 || missing="$missing $t"
+  done
+  if [ -n "$missing" ]; then
+    echo "e2e preflight: missing required tools:$missing" >&2
+    exit 1
+  fi'
 
 run "namespace: create people/$LDAP/{active,archive}" bash -c "
   mkdir -p people/$LDAP/active people/$LDAP/archive
