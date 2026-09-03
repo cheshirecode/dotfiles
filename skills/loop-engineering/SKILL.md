@@ -65,14 +65,27 @@ a cycle.
 | multiple PRs or stale worklog/PR/CI surfaces need a pre-handoff sweep | `$ship-hygiene` | audit only triggered surfaces and replay the hygiene checks | one short PR with no recent worklog activity |
 | one just-finished PR needs learning distillation before handoff | `$tightening-a-pr` | pass the finished diff and task context; replay the handoff checks | implementation is unfinished or the change is trivial |
 
-Routing example: `multi-repo search with uncertain ownership` →
-`serena-rg-search` → compact candidate paths plus one replay command;
+Routing example: `multi-repo search with uncertain ownership` → `serena-rg-search` → compact candidate paths plus one replay command;
 `one known-file lookup` → `optional-skill: skipped — single literal lookup`.
 
-Resolve `<skill-dir>` per your harness convention: Claude Code → `~/.claude/skills/<skill-name>`; Codex → `~/.agents/skills/<skill-name>`; Cursor → `~/.cursor/skills/<skill-name>`; Opencode → project-local `./skills/<skill-name>`. Fallback: search common roots with `find -L ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills -name loop_state.py -print -quit 2>/dev/null | head -1 | xargs dirname/../`.
+## Resolve the skill directory
 
-The driver below wraps `scripts/loop_state.py`; every cycle is one call to
-`python3 <skill-dir>/scripts/loop_run.py`.
+Resolve `<skill-dir>` to this `SKILL.md`'s directory (usually the load path). When unsure, run your host's line — tests/test_skill_dir_resolvers.py executes each one:
+
+```bash
+# Claude Code (empty when absent — never a bogus "./.."):
+SKILL_DIR="$(f=$(find -L ~/.claude/skills -name loop_state.py -print -quit 2>/dev/null); [ -n "$f" ] && dirname "$(dirname "$f")")"
+# Codex:
+SKILL_DIR="$(f=$(find -L ~/.agents/skills -name loop_state.py -print -quit 2>/dev/null); [ -n "$f" ] && dirname "$(dirname "$f")")"
+# Cursor:
+SKILL_DIR="$(f=$(find -L ~/.cursor/skills -name loop_state.py -print -quit 2>/dev/null); [ -n "$f" ] && dirname "$(dirname "$f")")"
+# Opencode / git worktree (empty unless the repo really carries the skill):
+SKILL_DIR="$(r=$(git rev-parse --show-toplevel 2>/dev/null); [ -d "$r/skills/loop-engineering" ] && printf '%s' "$r/skills/loop-engineering")"
+# Fallback — roots checked in order (a parallel find races -quit across roots):
+SKILL_DIR="$(for r in ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills; do f=$(find -L "$r" -name loop_state.py -print -quit 2>/dev/null); [ -n "$f" ] && { dirname "$(dirname "$f")"; break; }; done)"
+```
+
+The driver below wraps `scripts/loop_state.py`; every cycle is one call to `python3 <skill-dir>/scripts/loop_run.py`.
 
 ## Drive the loop — one call per cycle
 

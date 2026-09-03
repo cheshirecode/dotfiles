@@ -26,7 +26,7 @@ alone would report the pipeline's status, the exact trap examples.md §6 documen
 
 Step 2 — run the Python test suite (capture, don't pipe: ${PIPESTATUS[0]} is
 bash-only and silently empty under zsh, the Claude Code harness shell):
-  out=$(cd <skill-dir> && python3 -m unittest tests.test_loop_state tests.test_skill_budget tests.test_install_audit tests.test_loop_run 2>&1); echo "unittest rc=$?"; printf '%s\n' "$out" | grep -E '^Ran [0-9]+ tests|^OK|^FAILED'
+  out=$(cd <skill-dir> && python3 -m unittest discover -s tests -t tests -p 'test_*.py' 2>&1); echo "unittest rc=$?"; printf '%s\n' "$out" | grep -E '^Ran [0-9]+ tests|^OK|^FAILED'
 
 Step 3 — check for regressions (each grep feeds a Step 4 clause):
   echo "--- non-existent skill references ---"
@@ -39,7 +39,7 @@ Step 3 — check for regressions (each grep feeds a Step 4 clause):
 Step 4 — decide:
   - If ANY rc above is nonzero OR the non-dict guard line printed 0 OR the
     stale-skill grep printed matches OR the route-matrix grep printed
-    "(not found)" OR frontmatter > 450 chars OR unittest ran fewer than 84
+    "(not found)" OR frontmatter > 450 chars OR unittest ran fewer than 88
     tests OR radar reported fewer than 31 passed OR reap fewer than 40 passed:
     BEGIN IMPROVEMENT LOOP (use bounded cycles via loop_state.py advance/finish).
   - If everything is clean AND you have nothing new to add:
