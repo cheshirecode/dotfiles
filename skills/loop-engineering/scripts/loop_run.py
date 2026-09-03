@@ -86,8 +86,13 @@ def radar_line(repo):
 
 
 def cell(text):
-    """Collapse text into one driver-line cell: single line, no separator."""
-    return " ".join(text.split()).replace("|", "/")[:80]
+    """Collapse text into one driver-line cell: single line, no separator.
+
+    The cap exists to keep the driver line compact, but error reasons must
+    keep whole filesystem paths: at 80, macOS's /var/folders tmp roots were
+    clipped out of queue errors, making "wrong copy" read like "no copy".
+    """
+    return " ".join(text.split()).replace("|", "/")[:200]
 
 
 def resolve_project_sh():
