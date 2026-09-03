@@ -197,6 +197,13 @@ checks = {
     "optional model route": "$which-model" in root and "model-routing: skipped" in root,
     # Orchestrator-only rules moved to references/orchestrator.md with the mode;
     # the contract follows the content rather than pinning it to the root.
+    # d835104 shipped `project.sh add-child`; three docs kept describing the
+    # world before it for a day because nothing checked. Negative half is the
+    # load-bearing one — it catches the stale claim coming back.
+    "add-child route is current": (
+        "project.sh add-child" in orchestrator
+        and "has no add-child" not in orchestrator
+    ),
     "council replay pack": (
         "affected mutation" in orchestrator
         and "one decision" in orchestrator
