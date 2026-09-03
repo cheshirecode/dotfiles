@@ -35,28 +35,50 @@ mtime=$(stat -c %Y "$STAMP" 2>/dev/null || stat -f %m "$STAMP" 2>/dev/null || ec
 now=$(date +%s)
 (( now - mtime > TTL )) || exit 0
 
-"$SKILL_BIN/lint.sh" --cross-task --format=json 2>/dev/null | python3 -c "
-import json, sys
+# Two things this must not do: block the commit, and go quiet when the lint
+# did not run. `2>/dev/null` plus `except Exception: pass` used to do the
+# second -- a crashed lint, a missing dependency or unparseable JSON printed
+# nothing, which is exactly what a clean repo prints. Stderr is kept and the
+# parse failure is reported; the hook still always exits 0.
+LINT_ERR="$(mktemp)"
+"$SKILL_BIN/lint.sh" --cross-task --format=json 2>"$LINT_ERR" | LINT_ERR="$LINT_ERR" python3 -c "
+import json, os, sys
+
+raw = sys.stdin.read()
 try:
-  d = json.load(sys.stdin)
-  e = d.get('total_errors', 0)
-  w = d.get('total_warnings', 0)
-  if e or w:
-    print(f'post-commit: cross-task — {e} error(s), {w} warning(s)  (run $SKILL_BIN/lint.sh --cross-task to inspect)', file=sys.stderr)
-  # If any warning is the body-mention shape (the most common, repeatedly hit
-  # during 2026-04 sessions), suggest the auto-stub fix-up. Cheap one-line nudge
-  # at the moment of friction. See worklog-review-2026-04 Tier-1 #1.
-  body_mention = sum(
-    1
-    for item in d.get('issues', [])
-    for warn in item.get('warnings', [])
-    if 'body mentions slug' in warn
-  )
-  if body_mention:
-    print(f'post-commit: {body_mention} body-mention warning(s) — run $SKILL_BIN/lint.sh --fix-related to auto-stub', file=sys.stderr)
-except Exception:
-  pass
+  d = json.loads(raw)
+  scanned = d['total_files']
+except Exception as exc:
+  detail = str(exc) if raw.strip() else 'lint.sh produced no output'
+  try:
+    with open(os.environ['LINT_ERR'], encoding='utf-8', errors='replace') as fh:
+      tail = fh.read().strip().splitlines()[-1:]
+  except OSError:
+    tail = []
+  if tail:
+    detail = '%s (%s)' % (detail, tail[0])
+  print(f'post-commit: cross-task lint SKIPPED — {detail}', file=sys.stderr)
+  sys.exit(0)
+e = d.get('total_errors', 0)
+w = d.get('total_warnings', 0)
+# Say WHOSE. This runs after committing one file but lints the whole repo, so
+# a bare count reads as 'your commit caused these'. Most are pre-existing and
+# in other people's tasks.
+if e or w:
+  print(f'post-commit: cross-task — {e} error(s), {w} warning(s) across {scanned} task file(s), repo-wide, not only this commit  (run $SKILL_BIN/lint.sh --cross-task to inspect)', file=sys.stderr)
+# If any warning is the body-mention shape (the most common, repeatedly hit
+# during 2026-04 sessions), suggest the auto-stub fix-up. Cheap one-line nudge
+# at the moment of friction. See worklog-review-2026-04 Tier-1 #1.
+body_mention = sum(
+  1
+  for item in d.get('issues', [])
+  for warn in item.get('warnings', [])
+  if 'body mentions slug' in warn
+)
+if body_mention:
+  print(f'post-commit: {body_mention} of those are body-mention warning(s) — run $SKILL_BIN/lint.sh --fix-related to auto-stub', file=sys.stderr)
 " || true
+rm -f "$LINT_ERR"
 
 mkdir -p .cache && touch "$STAMP"
 exit 0
