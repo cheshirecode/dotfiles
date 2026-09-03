@@ -5,8 +5,14 @@
 # Usage:
 #   bin/archive.sh <slug>
 #   bin/archive.sh <slug> --pr=10997
-#   bin/archive.sh <slug> --reason="shipped"          # default: shipped
-#   bin/archive.sh <slug> --reason="superseded by eng-1600-foo"
+#   bin/archive.sh <slug> --reason="<enum>"           # default: shipped
+#   bin/archive.sh <slug> --summary="<2-3 line recap>"
+#
+# --reason is one of: shipped | declined | abandoned | superseded | merged |
+# obsolete (or the "superseded by <slug>" form). --summary is written into
+# frontmatter summary: for archive browsability and is recommended on every
+# archive. Keep this block in sync with --help below; readers reach for the
+# header before they run the tool.
 
 set -euo pipefail
 
@@ -73,6 +79,21 @@ if [[ ! -f "$SRC" ]]; then
   exit 1
 fi
 
+# Refuse before anything is written if the move cannot succeed. The body-edit
+# below rewrites $SRC in place (status: archived) and only then runs `git mv`.
+# On an untracked file that mv dies with `fatal: not under version control`,
+# but the rewrite has already landed — the task sits in active/ marked
+# archived, and the next lint blames the file instead of this tool. Checking
+# tracked-ness up front covers every mv failure mode, not just this one, and
+# leaves the file byte-identical when it refuses.
+if ! git ls-files --error-unmatch "$SRC" >/dev/null 2>&1; then
+  echo "archive: $SRC is not tracked by git — refusing to archive." >&2
+  echo "archive: git mv would fail after the body was already rewritten," >&2
+  echo "archive: leaving the task in active/ marked status: archived." >&2
+  echo "archive: stage it first (git add \"$SRC\"), then re-run." >&2
+  exit 1
+fi
+
 # Orphan check: refuse if any active task points at this slug via a
 # directional relation (parent_slug / supersedes / reopens) — those imply
 # durable structural dependence and the child should be reparented first.
@@ -99,11 +120,6 @@ if [[ -x "$SCRIPT_DIR/index.sh" ]]; then
       echo "archive: WORKLOG_ARCHIVE_FORCE=1 set, proceeding anyway." >&2
     fi
   fi
-fi
-
-if [[ -z "$SUMMARY" ]]; then
-  echo "archive: WARNING — no --summary provided. Archive browsability suffers." >&2
-  echo "archive: consider re-running with --summary=\"<2-3 line recap>\"." >&2
 fi
 
 TODAY="$(date +%Y-%m-%d)"
@@ -226,6 +242,27 @@ if [[ -x "$SCRIPT_DIR/autosave-flush.sh" ]]; then
 fi
 record_session_touch "$SLUG" "archive"
 echo "archive: pushed $SLUG"
+
+# Missing --summary is worth saying out loud, but this used to be said *before*
+# any of the work — and a warning printed only to a suppressed stream does not
+# exist. One session archived five tasks in a loop under `>/dev/null 2>&1`,
+# never saw five copies of it, and five tasks reached archive/ with no summary.
+# So it is said last, after the push line, where a single interactive archive
+# leaves it on screen; and when stderr is not a terminal — the redirected-batch
+# case — it is also written to the controlling terminal, a channel redirecting
+# this process's own streams cannot swallow. WORKLOG_TTY overrides that target.
+#
+# Deliberately NOT a non-zero exit: the archive genuinely succeeded (committed
+# and pushed), and every existing caller — project.sh flows, tests/ fixtures —
+# runs archive.sh under `set -e` and would abort on a successful archive.
+if [[ -z "$SUMMARY" ]]; then
+  echo "archive: WARNING — $SLUG archived with no --summary. Archive browsability suffers." >&2
+  echo "archive: add a summary: line to $DST, or re-run future archives with --summary=\"<2-3 line recap>\"." >&2
+  if [[ ! -t 2 ]]; then
+    printf 'archive: WARNING — %s archived with no --summary (stderr was redirected).\n' \
+      "$SLUG" >> "${WORKLOG_TTY:-/dev/tty}" 2>/dev/null || true
+  fi
+fi
 
 # Soft retro prompt — archive is the natural end-of-arc moment. Stderr only,
 # silence is a valid response. Suppress with WORKLOG_NO_RETRO=1.
