@@ -166,8 +166,13 @@ returns (`wait_agent` on Codex) and before the serialized write/archive step;
 do not imply continuous observation.
 After it lands, compare `gh pr view --json headRefOid` to the SHA in the archive
 summary; mismatch → claim a pre-declared `review-pr-N-r2` child (or start a new
-wave project). Do not spawn an orphan `review-pr-N` with `project:` set but
-missing from the parent's `tasks:` block — `project.sh` has no add-child.
+wave project), or add one with `project.sh add-child <project> <child>`. Do not
+hand-write an orphan `review-pr-N` with `project:` set but missing from the
+parent's `tasks:` block: `project verify` does **not** catch that. It walks only
+the parent's `tasks:` block, so it stays exit 0 while `project next` can never
+hand the task out — the work exists and is unreachable. The loud half is the
+mirror image (declared in `tasks:`, file never written): exit 2. Both are pinned
+by `skills/worklog/tests/project/test_add_child.sh`.
 `project verify` must exit 0 before the rereview claim.
 
 ### 4. Terminal

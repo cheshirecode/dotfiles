@@ -48,7 +48,7 @@ Parse the first argument. If empty, `help`, `-h`, `--help`, or unknown, print th
   export                   sanitized setup prompt → /tmp/worklog-setup-<ts>.txt
   import <path>            merge an export artifact into this machine
   lint [--cross-task]      validate task files; --cross-task adds drift checks
-  project <subcommand>     multi-task projects with per-task mutex (new|next|claim|release|reap|verify|list)
+  project <subcommand>     multi-task projects with per-task mutex (new|add-child|next|claim|release|reap|verify|list)
   scrape-slack [flags]     preview Slack-derived task context enrichments
   review                   periodic protocol review (structure / skills / commands / perf)
   help                     this menu
