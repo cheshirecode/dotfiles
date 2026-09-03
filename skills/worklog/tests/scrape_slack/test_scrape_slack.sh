@@ -8,6 +8,10 @@ set -euo pipefail
 # read green against unfixed code. tests/run.sh unsets the variable, and
 # deriving it here keeps the fixture honest when run by hand too.
 WORKLOG_BIN="$(cd "$(dirname "$0")/../../bin" && pwd)"
+# A real Slack token in the invoking shell (e.g. exported for MCP) turns the
+# "unavailable provider" branch into an env-provider run against the live
+# API. Scrub it here too, so a hand-run fixture is as safe as tests/run.sh.
+unset SLACK_BOT_TOKEN SLACK_TOKEN SLACK_TEAM_ID
 SCRATCH_ROOT="$(mktemp -d -t worklog-scrape-slack-test-XXXXXX)"
 SCRATCH="$SCRATCH_ROOT/repo"
 export TMPDIR="$SCRATCH_ROOT/tmp"
