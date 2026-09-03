@@ -91,6 +91,23 @@ Commands shown below are illustrative. Destructive ones (`git reset --hard`,
 in their respective sections; agents must honor those guardrails as
 preconditions, not skip past them.
 
+## Search tooling (zvec-grep first)
+
+`zg` (zvec-grep) replaces bare `rg` for shell-level search in this repo. One
+CLI, three lanes; results keep file:line locations:
+
+- `zg query --rg <rg-args>` — managed ripgrep; use wherever you would type `rg`.
+- `zg query --fts "terms"` — BM25 keyword ranking when literal hits are noisy.
+- `zg query "natural language"` — semantic + FTS hybrid when you don't know
+  the exact terms. Requires the workspace index (`zg index`; stored in
+  `.zvec-grep/`, gitignored; rebuild after large refactors).
+
+Gate on availability and fail open: if `command -v zg` is empty, use `rg` and
+continue — never block on setup mid-task. Install: `npm install -g
+@zvec/zvec-grep` (Node 22+). This governs Bash searches only; the harness
+Grep/Glob tools are unchanged. Full facet routing (symbols, JSON, history,
+logs) lives in `skills/serena-rg-search`.
+
 ---
 
 ## Table of Contents
