@@ -141,6 +141,12 @@ Then either:
 - **Execute in-band** — do the work yourself if it is small and well-scoped.
   Write evidence to the task file, checkpoint, and archive.
 
+Fable 5.1 delegates in coding loops may issue one tool call per turn when the
+next independent calls are implied rather than requested; end each delegate
+prompt with the official batching nudge: "First privately list what you need
+next; then request every item that doesn't depend on another's result in this
+one response."
+
 Either way, the sub-agent or in-band execution must call `archive.sh` to
 release the claim and push evidence to the worklog. The orchestrator then
 only confirms the task is no longer in the active directory:
