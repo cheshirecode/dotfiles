@@ -88,11 +88,12 @@ def radar_line(repo):
 def cell(text):
     """Collapse text into one driver-line cell: single line, no separator.
 
-    The cap exists to keep the driver line compact, but error reasons must
-    keep whole filesystem paths: at 80, macOS's /var/folders tmp roots were
-    clipped out of queue errors, making "wrong copy" read like "no copy".
+    No length cap: a capped cell clipped filesystem paths out of queue
+    errors (macOS /var/folders tmp roots at 80; any fixed cap loses to a
+    long enough path), making "wrong copy" read like "no copy". Line
+    integrity comes from the collapse and the pipe swap, not from length.
     """
-    return " ".join(text.split()).replace("|", "/")[:200]
+    return " ".join(text.split()).replace("|", "/")
 
 
 def resolve_project_sh():
