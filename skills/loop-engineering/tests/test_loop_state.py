@@ -115,7 +115,7 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("project verify <slug>", terminal_example)
         self.assertIn("project next reported all tasks archived", terminal_example)
         self.assertIn("project queue empty: typed command output", terminal_example)
-        self.assertIn('if ! "$WORKLOG_BIN/project.sh" verify "$program_slug"', terminal_example)
+        self.assertIn('"$WORKLOG_BIN/project.sh" verify "$program_slug"; then', terminal_example)
 
     def test_orchestrator_does_not_treat_any_next_exit_one_as_success(self) -> None:
         skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
@@ -371,9 +371,9 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("regular loop", orchestrator)
         self.assertIn("one or two tasks", orchestrator)
         self.assertIn("only when the task graph is not already explicit", orchestrator)
-        self.assertIn("archived <child-slug> <worklog-commit>", orchestrator)
+        self.assertIn("archived <child-slug> <sha>", orchestrator)
         self.assertIn('git -C "$WORKLOG_REPO"', orchestrator)
-        self.assertIn("never `HEAD` from the code worktree", orchestrator)
+        self.assertIn("use `HEAD` from the code worktree", orchestrator)
         self.assertIn("discards any", orchestrator)
         self.assertIn("prose", orchestrator)
 

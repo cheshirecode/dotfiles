@@ -127,17 +127,23 @@ when it is safe, or finish `needs_human` with the missing capability and replay
 check. Record `model-routing: skipped — no delegate surface` when routing was
 not used.
 
+An orchestrator must verify effect boundaries before dispatching mutations. Every
+sub-agent that writes must run the protocol's effect preflight (§2,
+[references/protocol.md](references/protocol.md)) to confirm target, authority,
+and read-only proof before writing. If any answer is unknown, finish
+`needs_human` with the missing authority named. Record `model-routing: skipped
+— no delegate surface` when routing was unavailable.
+
 Then either:
 - **Delegate** to a sub-agent via `task` tool — pass the compact context pack
   directly; do not pass the parent transcript. Instruct the sub-agent to
   commit its evidence, uncertainty, and proposed next action to the worklog
-  task file and call `archive.sh`, then capture the SHA via `git -C "$WORKLOG_REPO" log -1 --format=%H`, and emit `archived <child-slug> <sha>` as the one-line return. After that, return exactly one status line:
-  `archived <child-slug> <worklog-commit>` (or `blocked|needs_human|failed
-  <child-slug> <reason>`); the orchestrator parses that line and discards any
-  prose. The SHA is `git -C "$WORKLOG_REPO" log -1 --format=%H` after
-  `archive.sh` succeeds — never `HEAD` from the code worktree and never
-  `gh pr view --json headRefOid`. Reject a return whose `log -1 --format=%s`
-  does not start with `<child-slug>:`.
+  task file and call `archive.sh`, then capture the SHA via `git -C "$WORKLOG_REPO" log -1 --format=%H` and emit exactly one status line:
+  `archived <child-slug> <sha>` (or `blocked|needs_human|failed
+  <child-slug> <reason>`). The orchestrator discards any prose beyond that
+  line. Never use `HEAD` from the code worktree or `gh pr view --json headRefOid`;
+  the SHA must come from `git -C "$WORKLOG_REPO" log -1 --format=%H`. Reject a
+  return whose `log -1 --format=%s` does not start with `<child-slug>:`.
 - **Execute in-band** — do the work yourself if it is small and well-scoped.
   Write evidence to the task file, checkpoint, and archive.
 
@@ -158,6 +164,12 @@ python3 <skill-dir>/scripts/loop_state.py advance \
   --evidence "<slug>: archived" \
   --next-action "Claim next project task"
 ```
+
+Cycle decision record: Before any action that changes the hypothesis, write a
+compact three-part record (`hypothesis: <claim>`, `falsifier: <observable result
+that would reject it>`, `replay: <exact check after fix>`). See §Cycle decision
+record in [references/protocol.md](references/protocol.md) for the full contract.
+This prevents false positives when fixes are applied incrementally.
 
 That's it. The diff, the findings, the verification — all in the worklog
 commit, not in the orchestrator's loop state. This keeps the orchestrator's
@@ -196,20 +208,37 @@ child work, so `project verify` warns and exits 1 on a legitimately finished
 project (verified live 2026-08-31). Archive the parent after the gate passes.
 
 ```bash
-program_slug="<program-slug>"
+# Rewrite parent project next_action so verify doesn't warn on a finished project
+"$WORKLOG_BIN/project.sh" set-next-action "$program_slug" complete || true
+"$WORKLOG_BIN/project.sh" checkpoint "$program_slug" || true
+
 next_output="$("$WORKLOG_BIN/project.sh" next "$program_slug" 2>&1)" || true
-if ! grep -Fq "all tasks for '$program_slug' are archived (nothing left)" <<<"$next_output"; then
+if grep -Fq "all tasks for '$program_slug' are archived (nothing left)" <<<"$next_output"; then
+  if "$WORKLOG_BIN/project.sh" verify "$program_slug"; then
+    python3 <skill-dir>/scripts/loop_state.py finish \
+      --state <state-file> --status complete \
+      --verification "project next reported all tasks archived; project verify exited 0" \
+      --evidence "project queue empty: typed command output and project verification"
+  else
+    echo "project verification failed" >&2
+    exit 1
+  fi
+elif grep -Fq "blocked\|missing" <<<"$next_output"; then
+  echo "$next_output" >&2
+  python3 <skill-dir>/scripts/loop_state.py finish \
+    --state <state-file> --status needs_human \
+    --verification "project next reported blocked or missing work" \
+    --evidence "$next_output"
+elif [ "$budget_remaining" -le 0 ] && ! grep -Fq "all tasks.*are archived" <<<"$next_output"; then
+  echo "budget exhausted, queue still has tasks" >&2
+  python3 <skill-dir>/scripts/loop_state.py finish \
+    --state <state-file> --status budget_exhausted \
+    --verification "budget consumed; queue not empty" \
+    --evidence "$next_output"
+else
   echo "$next_output" >&2
   exit 1
 fi
-if ! "$WORKLOG_BIN/project.sh" verify "$program_slug"; then
-  echo "project verification failed" >&2
-  exit 1
-fi
-python3 <skill-dir>/scripts/loop_state.py finish \
-  --state <state-file> --status complete \
-  --verification "project next reported all tasks archived; project verify exited 0" \
-  --evidence "project queue empty: typed command output and project verification"
 ```
 
 If `next_output` reports blocked or missing work, keep the state running or

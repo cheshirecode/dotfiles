@@ -221,8 +221,10 @@ before making a new claim.
   orchestrator tokens.
 - Include the objective, evidence, constraints, budget, and requested return.
 - Require evidence, uncertainty, and one proposed next action.
+- Each delegate must call `archive.sh` after writing its result, then emit exactly one status line: `archived <child-slug> <sha>` (where `<sha>` comes from `git -C "$WORKLOG_REPO" log -1 --format=%H`) or `blocked|needs_human|failed <child-slug> <reason>`.
 - Reconcile returns into the parent state before any write.
 
+Pass the following headings on the first line of your response: objective, known evidence, constraints, budget. The rest goes after a blank line.
 For a cold delegate, pass a compact pack with exactly these headings:
 `objective`, `known evidence`, `constraints`, `budget`, and `requested return`.
 Do not pass the parent transcript. Require the delegate to return exactly
@@ -240,9 +242,7 @@ after checking the evidence against the parent goal.
   context, trigger, affected mutation, evidence, constraints, one decision
   question, and replay check. Never pass the full parent transcript.
 - A council result is advisory. On `verified`, persist its artifact, replay the
-  discriminating check, and only then resume normal task progression. On
-  `UNVERIFIED`, use `blocked` or `needs_human` with the exact replay check.
-  Council cannot archive a task or prove loop completion by itself.
+  discriminating check, and only then resume normal task progression. The verdict must include `decision: <one-sentence answer>` specifying the chosen path and the exact replay command. On `UNVERIFIED`, use `blocked` or `needs_human` with the exact replay check. Council cannot archive a task or prove loop completion by itself.
 - Count escalation as part of the current declared cycle unless the state
   budget explicitly declares it as a separate unit; never advance twice for
   one cycle.
