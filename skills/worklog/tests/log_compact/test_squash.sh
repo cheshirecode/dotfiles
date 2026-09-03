@@ -20,6 +20,11 @@
 #   SOURCE=/path/to/repo tests/log_compact/test_squash.sh
 #
 # Run BEFORE every bin/log-compact.sh --apply on real main.
+#
+# runner: requires-data-repo
+# (tests/run.sh reads the marker above: this gate needs a real worklog data
+# repo, so the suite reports it as an explicit SKIP unless SOURCE is set —
+# it must never inherit the developer's WORKLOG_REPO through ambient env.)
 
 set -euo pipefail
 
