@@ -1,6 +1,6 @@
 ---
 name: serena-rg-search
-description: Pick the right tool for multi-faceted code search across symbols, text, JSON, git history, and logs. Use when finding definitions, references, files, strings, structured config, when-it-changed, or log events; or when planning a search workflow before reading code.
+description: Pick the right tool for multi-faceted code search across symbols, text, semantic meaning, JSON, git history, and logs. Use when finding definitions, references, files, strings, concepts without known terms, structured config, when-it-changed, or log events; or when planning a search workflow before reading code.
 ---
 
 # serena-rg-search
@@ -17,7 +17,17 @@ Skip if: one literal or known-file lookup is sufficient.
 
 ## Route first
 
-- Unfamiliar codebase or broad discovery: start with `rg`, then escalate to Serena for symbol-aware follow-up.
+Text-lane searches go through `zg` (zvec-grep) when installed: `zg query --rg`
+is managed ripgrep (use it wherever you would type `rg`), `--fts` adds BM25
+ranking, and the bare form adds semantic search. If `command -v zg` is empty,
+every `zg query --rg` below degrades to plain `rg` — fall back and continue,
+don't block on setup.
+
+- Concept known but exact terms unknown ("where is X validated?"): `zg query
+  "natural language"` — semantic + FTS hybrid, needs `zg index` once per
+  workspace (index lives in `.zvec-grep/`, keep it gitignored).
+- Unfamiliar codebase or broad discovery: start with `zg query --rg` (or `rg`),
+  then escalate to Serena for symbol-aware follow-up.
 - Known symbol, references, or file overview: start with Serena (`find_symbol`, `find_referencing_symbols`, `get_symbols_overview`).
 - Structured JSON shape (keys, nesting, API payloads): use `jq`, optionally piped from `rg --files` to locate files.
 - History-aware ("when did this appear/change"): use `git log -S` / `-G` / `-p`.
@@ -30,7 +40,8 @@ Match the question to the facet, then the tool:
 
 | Facet | Tool |
 |---|---|
-| Literal text, regex, filenames, broad discovery | `rg` / `rg --files` |
+| Literal text, regex, filenames, broad discovery | `zg query --rg` (fallback `rg` / `rg --files`) |
+| Concept or behavior, exact terms unknown | `zg query "natural language"` (semantic; `--fts` for keyword-ranked) |
 | Known symbol, references, file structure | Serena (`find_symbol`, `find_referencing_symbols`, `get_symbols_overview`) |
 | Structured JSON (OpenAPI, package.json, API payloads) | `jq` (often piped from `rg --files`) |
 | "When did this appear / disappear / change" | `git log -S` (pickaxe), `git log -G` (regex), `git log -p -- path` |
@@ -38,18 +49,24 @@ Match the question to the facet, then the tool:
 
 Default hybrid flow for unfamiliar code: `rg` to find candidates → Serena for the symbol → `git log -S` to see how it got there. Fall back to `rg` if Serena isn't activated for the project.
 
-## Prefer `rg` For
+## Prefer `zg` For
 
-Unknown locations, string/regex, non-code files, broad scans, quick file listing.
+Unknown locations, string/regex, non-code files, broad scans, quick file
+listing — and anything where you know the concept but not the tokens.
 
 ```bash
-rg -n "useUserTaskQuotaStats" frontend/react/src
-rg -n "announcement_text" openapi packages/api-client/src
-rg --files | rg 'announcement'
-rg -U 'pattern\n.*other' path/   # multiline
-rg -t py -t ts "class User"      # restrict by file type
-rg -g '!*.test.*' "TODO"         # exclude by glob
+zg query --rg -n "useUserTaskQuotaStats" frontend/react/src   # managed rg: same flags
+zg query --rg --files | rg 'announcement'
+zg query --fts "announcement text banner"     # BM25-ranked keyword search
+zg query "where user quota limits are enforced"   # semantic (needs `zg index`)
+zg index                                       # build/refresh workspace index
+zg status                                      # index freshness
 ```
+
+Semantic hits come back ranked with `file:line` spans and the matching lane
+(`matchedBy=fts+vector`), so they chain into Serena/`git log` like rg hits do.
+Without `zg`, use plain `rg` — every `--rg` example above takes identical
+flags (`-U` multiline, `-t` type, `-g` glob).
 
 ## Prefer Serena For
 
@@ -103,7 +120,9 @@ For deep interactive exploration consider `lnav`, but `rg` + a time filter usual
 
 ## Practical Heuristics
 
-- `rg` is the best first pass; Serena the best second pass.
+- `zg` (or `rg`) is the best first pass; Serena the best second pass. When a
+  literal first pass returns nothing, try the semantic lane before concluding
+  the thing doesn't exist — the term may simply be named differently.
 - On noisy `rg` hits: narrow with `-t` (type) or `-g` (glob), then switch to Serena for symbol-aware filtering.
 - Stay in `rg` for YAML/generated artifacts; switch to `jq` only when shape matters.
 - `git log -S` beats guessing — use it before claiming "this used to work."
@@ -122,13 +141,18 @@ For deep interactive exploration consider `lnav`, but `rg` + a time filter usual
 
 ## Tool Availability
 
-`rg` and `jq` aren't preinstalled everywhere. Check before use:
+`zg`, `rg`, and `jq` aren't preinstalled everywhere. Check before use:
 
 ```bash
-command -v rg jq
+command -v zg rg jq
 ```
 
-If missing: `brew install ripgrep jq` (macOS) · `apt-get install ripgrep jq` (Debian) · `dnf install ripgrep jq` (Fedora) · `pacman -S ripgrep jq` (Arch). `git` is assumed present in any repo.
+If `zg` is missing: `npm install -g @zvec/zvec-grep` (Node 22+) — or skip it
+and use `rg`; never block a task on installing it. If `rg`/`jq` are missing:
+`brew install ripgrep jq` (macOS) · `apt-get install ripgrep jq` (Debian) ·
+`dnf install ripgrep jq` (Fedora) · `pacman -S ripgrep jq` (Arch). `git` is
+assumed present in any repo. `zg`'s semantic lane also needs a one-time
+`zg index`; its `.zvec-grep/` directory belongs in `.gitignore`.
 
 Serena is an MCP server, not a binary — `command -v` will never find it. Check the session's tool list for a tool whose name ends in `serena__find_symbol` (Claude Code exposes it as `mcp__serena__find_symbol`); if no such tool is listed, Serena is not activated for this project — use `rg` and do not attempt setup mid-task.
 
