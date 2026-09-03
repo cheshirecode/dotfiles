@@ -188,6 +188,9 @@ references = {path.name for path in (skill / "references").glob("*.md")}
 checks = {
     # Orchestrator mode is intentionally portable in the root; keep a bounded
     # size budget while testing its routing contracts directly.
+    # Duplicate of BUDGET in skills/loop-engineering/tests/test_skill_budget.py.
+    # Two places pin one number: change one and the suite goes red under the
+    # other's name, which reads as an unrelated failure. Keep them in step.
     "portable root budget": len(root.splitlines()) <= 260,
     "standard frontmatter only": root.split("---", 2)[1].count("\n") == 3,
     # The root now routes to the single-invocation driver rather than a manual
@@ -1956,7 +1959,23 @@ EOF
       fail "search.sh failed with no extra rg arguments (got: $out)"
     fi
   fi
-  out=$("${WL_HERMETIC[@]}" PATH=/usr/bin:/bin WORKLOG_REPO="$vault" bash "$sb/search.sh" 'Borrow|Schema' --active 2>&1)
+  # Construct rg's absence; do not inherit it. These two cases pinned
+  # PATH=/usr/bin:/bin to force the grep fallback, but rg installs to
+  # /usr/bin/rg — so on any machine that actually has ripgrep (it is what the
+  # repo tells you to use) rg stayed on PATH, the fallback never ran, and the
+  # last assertion went green against code it never reached. Same fix as
+  # 6f32ea3 used for the forge CLIs: mirror /usr/bin + /bin minus rg.
+  NORG="$(mktemp -d)"
+  for d in /usr/bin /bin; do
+    [ -d "$d" ] || continue
+    for f in "$d"/*; do
+      [ -x "$f" ] && [ ! -d "$f" ] || continue
+      base="${f##*/}"
+      [ "$base" = rg ] && continue
+      [ -e "$NORG/$base" ] || ln -sf "$f" "$NORG/$base"
+    done
+  done
+  out=$("${WL_HERMETIC[@]}" PATH="$NORG" WORKLOG_REPO="$vault" bash "$sb/search.sh" 'Borrow|Schema' --active 2>&1)
   if echo "$out" | grep -q 'Borrow Schema fallback evidence'; then
     ok "search.sh grep fallback preserves common regex alternation"
   else
@@ -1964,7 +1983,7 @@ EOF
   fi
 
   set +e
-  out=$("${WL_HERMETIC[@]}" PATH=/usr/bin:/bin WORKLOG_REPO="$vault" bash "$sb/search.sh" 'BORROW SCHEMA' --active -- -i 2>&1)
+  out=$("${WL_HERMETIC[@]}" PATH="$NORG" WORKLOG_REPO="$vault" bash "$sb/search.sh" 'BORROW SCHEMA' --active -- -i 2>&1)
   rc=$?
   set -e
   if [[ $rc -eq 2 && "$out" == *"extra rg arguments require ripgrep"* ]]; then
@@ -1973,7 +1992,7 @@ EOF
     fail "search.sh grep fallback silently ignored rg arguments (rc=$rc, output=$out)"
   fi
 
-  rm -rf "$(dirname "$vault")"
+  rm -rf "$(dirname "$vault")" "$NORG"
 }
 
 case "${1:-all}" in
