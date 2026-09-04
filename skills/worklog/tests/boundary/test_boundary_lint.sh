@@ -36,12 +36,12 @@ next_action: Fix boundary drift
 This accidentally mentions foreign-system.
 EOF
 
-if WORKLOG_REPO="$TMP" "$WORKLOG_BIN/boundary-lint.sh" >/tmp/worklog-boundary.out 2>&1; then
+if WORKLOG_REPO="$TMP" "$WORKLOG_BIN/boundary-lint.sh" >"$TMP/boundary.out" 2>&1; then
   echo "FAIL: boundary-lint should reject the fixture"
   exit 1
 fi
-grep -q 'bad-task.md:11' /tmp/worklog-boundary.out
-grep -q 'belongs elsewhere' /tmp/worklog-boundary.out
+grep -q 'bad-task.md:11' "$TMP/boundary.out"
+grep -q 'belongs elsewhere' "$TMP/boundary.out"
 
 python3 - "$WORKLOG_BIN" "$TMP" <<'PY'
 import json
