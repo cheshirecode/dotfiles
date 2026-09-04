@@ -11,8 +11,13 @@ DEST="${CODER_SYMLINK_DIR:-$HOME}"
 backup() {
   local target="$1"
   if [ -e "$target" ] || [ -L "$target" ]; then
-    mv "$target" "$target.bak"
-    echo "Moved $target to $target.bak..."
+    if mv "$target" "$target.bak"; then
+      echo "Moved $target to $target.bak..."
+    else
+      # Non-fatal: an unmovable target (mountpoint, EBUSY) must not abort the
+      # installer. The ln -sfn calls below replace it in place instead.
+      echo "warning: could not back up $target; leaving it in place." >&2
+    fi
   fi
 }
 
@@ -32,7 +37,15 @@ for src in "$REPO_DIR"/.*; do
   fi
   backup "$target"
   echo "Symlinking $src to $target..."
-  ln -s "$src" "$target"
+  # -f because a concurrent writer can recreate $target in the window between
+  # backup() and here. Coder runs its own bashrc-appender script
+  # (`cat >> $HOME/.bashrc`) in PARALLEL with `coder dotfiles`; on 2026-09-04 it
+  # recreated ~/.bashrc ~1ms after the mv, plain `ln -s` failed EEXIST, and
+  # `set -e` aborted the whole installer on its second file -- so .shell_common,
+  # .profile, .zshrc, the skills links, super-ruler and terminfo never ran, and
+  # the shell silently came up with none of these dotfiles loaded.
+  # -n so a symlinked-directory target is replaced rather than written through.
+  ln -sfn "$src" "$target" || echo "warning: could not link $target; skipping." >&2
 done
 
 # .config: link children individually. Coder clones this repo into
@@ -59,7 +72,7 @@ if [ -d "$REPO_DIR/.config" ]; then
     fi
     backup "$etarget"
     echo "Symlinking $entry to $etarget..."
-    ln -s "$entry" "$etarget"
+    ln -sfn "$entry" "$etarget" || echo "warning: could not link $etarget; skipping." >&2
   done
 fi
 
@@ -85,7 +98,7 @@ if [ -d "$REPO_DIR/skills" ]; then
       fi
       backup "$starget"
       echo "Symlinking skill $sname into $starget..."
-      ln -s "${skill%/}" "$starget"
+      ln -sfn "${skill%/}" "$starget" || echo "warning: could not link $starget; skipping." >&2
     done
   done
 fi
