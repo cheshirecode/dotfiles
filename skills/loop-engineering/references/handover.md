@@ -39,8 +39,11 @@ Step 3 — check for regressions (each grep feeds a Step 4 clause):
 Step 4 — decide:
   - If ANY rc above is nonzero OR the non-dict guard line printed 0 OR the
     stale-skill grep printed matches OR the route-matrix grep printed
-    "(not found)" OR frontmatter > 450 chars OR unittest ran fewer than 88
-    tests OR radar reported fewer than 31 passed OR reap fewer than 40 passed:
+    "(not found)" OR frontmatter > 450 chars OR unittest printed FAILED (or
+    printed no OK line) OR radar or reap reported any failed:
+    (There are no test-count floors. Suites grow; do not compare counts to a
+    pinned number. Trust each suite's own pass/fail line and exit code, and
+    always collect the unittest count via discover, never by listing modules.)
     BEGIN IMPROVEMENT LOOP (use bounded cycles via loop_state.py advance/finish).
   - If everything is clean AND you have nothing new to add:
     Report "CLEAN: <test-count> tests, <skill-line>-line SKILL.md, 0 issues."
