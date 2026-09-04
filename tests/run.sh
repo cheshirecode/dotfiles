@@ -271,7 +271,7 @@ checks = {
         and "verify state ownership" in protocol
     ),
     # Exact-set, so a legitimately added reference must be declared here.
-    "host differences deferred": references == {"crew.md", "examples.md", "handover.md", "hosts.md", "orchestrator.md", "protocol.md", "transport.md"},
+    "host differences deferred": references == {"crew.md", "examples.md", "handover.md", "hosts.md", "interrogate.md", "orchestrator.md", "protocol.md", "transport.md"},
     # Crew mode must capability-gate host primitives. Codex has shared files,
     # no isolation flag, and mailbox waits rather than a file Monitor.
     "crew mode matches Codex collaboration": (
