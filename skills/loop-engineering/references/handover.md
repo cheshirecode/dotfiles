@@ -35,11 +35,16 @@ Step 3 — check for regressions (each grep feeds a Step 4 clause):
   grep 'delegates run concurrently.*serialize writes' <skill-dir>/SKILL.md || echo "(not found)"
   echo "--- frontmatter description length ---"
   sed -n '3p' <skill-dir>/SKILL.md | wc -c
+  echo "--- interrogation gate routed and intact ---"
+  grep -c 'references/interrogate.md' <skill-dir>/SKILL.md
+  grep -c 'one question at a time' <skill-dir>/references/interrogate.md
+  grep -c 'interrogation: skipped' <skill-dir>/references/interrogate.md
 
 Step 4 — decide:
   - If ANY rc above is nonzero OR the non-dict guard line printed 0 OR the
     stale-skill grep printed matches OR the route-matrix grep printed
-    "(not found)" OR frontmatter > 450 chars OR unittest printed FAILED (or
+    "(not found)" OR frontmatter > 450 chars OR any interrogation-gate count
+    printed 0 OR unittest printed FAILED (or
     printed no OK line) OR radar or reap reported any failed:
     (There are no test-count floors. Suites grow; do not compare counts to a
     pinned number. Trust each suite's own pass/fail line and exit code, and
@@ -60,9 +65,12 @@ Step 5 — if improving:
   Finish with `finish --status complete --verification "<test-result>"`.
 
 Return exactly one final line:
-  <status>: <evidence>
-where <status> is CLEAN or IMPROVED, and <evidence> names each changed file
-and its test result. Keep all detail in the state artifact, not your output.
+  <status> [<harness>/<model>]: <evidence>
+where <status> is CLEAN or IMPROVED, <harness>/<model> names the runtime that
+ran this audit (e.g. codex/gpt-5, claude-code/fable-5, cursor/sonnet-5 — so
+cross-model verifications are distinguishable), and <evidence> names each
+changed file and its test result. Keep all detail in the state artifact, not
+your output.
 ```
 
 Do not maintain hand-synced copies of this prompt outside the repo
