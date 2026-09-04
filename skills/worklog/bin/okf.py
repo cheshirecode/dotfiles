@@ -137,7 +137,10 @@ def _git_last_timestamp(root: pathlib.Path, rel: pathlib.Path) -> str | None:
   value = out.strip()
   if not value:
     return None
-  return value
+  # git %cI renders UTC as "Z" (newer git) or "+00:00" (older git, and any
+  # container running UTC). The checker normalizes to "Z"; emit the same
+  # form here or apply/check oscillates forever on older gits.
+  return value[:-6] + "Z" if value.endswith("+00:00") else value
 
 
 def _tracked_markdown(root: pathlib.Path) -> list[pathlib.Path]:
