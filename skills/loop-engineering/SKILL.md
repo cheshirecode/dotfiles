@@ -5,8 +5,7 @@ description: "Design and run bounded, evidence-driven loops for repeated, resuma
 
 # loop-engineering
 
-Use deterministic state transitions around agent judgment. Repeated prompting is
-not a loop design.
+Use deterministic state transitions around agent judgment. Repeated prompting is not a loop design.
 
 Convention: `$skill-name` means invoke installed skill `skill-name`; skip and record reason if unavailable.
 
@@ -21,17 +20,20 @@ Convention: `$skill-name` means invoke installed skill `skill-name`; skip and re
 ## Route
 
 1. Skip this skill when one action plus one check is sufficient.
-2. For interactive, resumable, or delegated loops, use the driver below —
+2. For a fuzzy, thin, or irreversible-effect goal, interrogate the plan
+   before init — [references/interrogate.md](references/interrogate.md);
+   self-review by default, `$council` on its escalation triggers.
+3. For interactive, resumable, or delegated loops, use the driver below —
    one `loop_run.py` call per cycle, no mode parameters.
-3. For concurrent delegates or workers, also read
+4. For concurrent delegates or workers, also read
    [references/crew.md](references/crew.md); prove the runtime's isolation or
    keep delegates read-only, and capture `bin/crew-radar` evidence.
-4. For scheduled loops or installation drift, also read
+5. For scheduled loops or installation drift, also read
    [references/hosts.md](references/hosts.md); require a real recurrence
    primitive for scheduling and use its audit command for duplicate copies.
-5. For exact transition, effect, worklog, or handoff rules, read
+6. For exact transition, effect, worklog, or handoff rules, read
    [references/protocol.md](references/protocol.md).
-6. To re-verify or improve an installed copy of this skill, use the prompt in
+7. To re-verify or improve an installed copy of this skill, use the prompt in
    [references/handover.md](references/handover.md).
 
 Use this compact route matrix before loading references:
@@ -39,6 +41,7 @@ Use this compact route matrix before loading references:
 | Signal | Route | Additional context |
 | --- | --- | --- |
 | one action + one check | one-shot | no loop state |
+| fuzzy goal, thin repo, or irreversible effects | interrogate first | load interrogate.md; init only on a Ready verdict |
 | repeated, resumable, or delegated work | driver | one `loop_run.py` call per cycle |
 | delegates run concurrently | driver + crew | load crew.md; serialize writes unless proven isolation |
 | recurrence or installation drift | driver + hosts | verify host primitive or audit |
@@ -46,12 +49,10 @@ Use this compact route matrix before loading references:
 
 ## Compose with installed skills
 
-Within a running loop, select the most specific installed owner whose trigger is
-true. The owner skill supplies its procedure; loop-engineering supplies the
-budget, effect boundary, one-line evidence, and replay check. Do not preload every skill or duplicate an owner's rules. When invoking the owner skill, pass only a compact objective,
-known evidence, constraints, budget, and requested return; if no trigger is
-true, record `optional-skill: skipped — <reason>` and continue without spending
-a cycle.
+Within a running loop, select the most specific installed owner whose trigger is true.
+The owner skill supplies its procedure; loop-engineering supplies the budget, effect boundary, one-line evidence, and replay check.
+Do not preload every skill or duplicate an owner's rules. When invoking the owner skill, pass only a compact objective, known evidence, constraints, budget, and requested return;
+if no trigger is true, record `optional-skill: skipped — <reason>` and continue without spending a cycle.
 
 | Trigger | Owner | Handoff and replay | Skip when |
 | --- | --- | --- | --- |
@@ -65,8 +66,7 @@ a cycle.
 | multiple PRs or stale worklog/PR/CI surfaces need a pre-handoff sweep | `$ship-hygiene` | audit only triggered surfaces and replay the hygiene checks | one short PR with no recent worklog activity |
 | one just-finished PR needs learning distillation before handoff | `$tightening-a-pr` | pass the finished diff and task context; replay the handoff checks | implementation is unfinished or the change is trivial |
 
-Routing example: `multi-repo search with uncertain ownership` → `serena-rg-search` → compact candidate paths plus one replay command;
-`one known-file lookup` → `optional-skill: skipped — single literal lookup`.
+Routing example: `multi-repo search with uncertain ownership` → `serena-rg-search` → compact candidate paths plus one replay command; `one known-file lookup` → `optional-skill: skipped — single literal lookup`.
 
 ## Resolve the skill directory
 
