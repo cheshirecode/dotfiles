@@ -28,9 +28,10 @@ check. Record the skip as one evidence line:
 - **`$council`.** Escalate on the compose-table triggers — independent
   results disagree, a counterexample appears, retries fail, scope or
   dependencies are ambiguous — or when the plan authorizes an irreversible
-  effect. Pass the smallest escalation pack (objective, evidence,
-  constraints, the specific contested question) and replay its decision
-  check. If `$council` is unavailable, record
+  effect. Pass the smallest escalation pack — the compose contract in
+  SKILL.md (compact objective, known evidence, constraints, budget,
+  requested return), with the contested question as the objective — and
+  replay its decision check. If `$council` is unavailable, record
   `optional-skill: skipped — <reason>` and fall back to self-review.
 
 ## Interrogation protocol (a user is present)
@@ -54,9 +55,11 @@ Ask one question at a time; never batch. For each iteration:
 
 ## Self-review protocol (no user available)
 
-Ask the same questions of the code and the constraints. Answer each with
-the most defensible option and record it as one evidence line:
-`assumption: <decision> — <why this option>`. Two hard limits:
+Ask the same questions of the code and the constraints. Assumption
+discipline is owned by `$karpathy-guidelines` (Think Before Coding: state
+assumptions, choose the most reversible option, flag it for the caller);
+do not restate it. Record each answer as one evidence line:
+`assumption: <decision> — <why this option>`. Two loop-specific limits:
 
 - Do not widen scope by assumption. An assumption that changes effects,
   cost, or data policy is a `--stop needs_human` boundary, not a guess.
@@ -94,7 +97,9 @@ at the boundary with `needs_human`.
 On Ready, feed the verdict pack straight into the driver flags: `--goal`,
 `--budget`, `--allowed-effect`, `--approval-boundary`. Keep the pack in the
 run directory (system temp), not the worktree, and keep it compact — the
-loop state is an index, not a log.
+loop state is an index, not a log. When the work also gets a durable task
+file, hand the Ready pack to `$worklog` plan mode for the CoT/ToT task
+body; that template lives there, not here.
 
 ## Mid-loop replan review
 

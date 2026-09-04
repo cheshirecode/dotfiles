@@ -40,6 +40,8 @@ If `~/.claude/skills/council/SKILL.md` exists AND the task hits either trigger:
 
 **Fallback:** if `~/.claude/skills/council/SKILL.md` doesn't exist (or you'd run `find-skills` and not find it), fall through to the in-head CoT/ToT/Reflexion pass below — no behavior change. Council escalation is a strict upgrade when available, optional otherwise.
 
+**Loop-side counterpart:** loop-engineering's pre-init interrogation gate (`references/interrogate.md` there) escalates to council on its own triggers. When a task gets both a loop run and a plan, run council once and share the verdict — do not convene two councils for one decision.
+
 ## The three passes
 
 ### 1. CoT — decompose into verifiable steps
