@@ -101,10 +101,11 @@ echo ""
 
 # Dry-run first to capture expected counts.
 echo "=== Dry-run ==="
-WORKLOG_NO_LINT=1 WORKLOG_NO_HOOK=1 "$WORKLOG_BIN/log-compact.sh" > /tmp/dryrun-out 2>&1 || cat /tmp/dryrun-out
-cat /tmp/dryrun-out
-EXPECTED_DROPPED="$(grep -E '^bursts:' /tmp/dryrun-out | awk '{print $NF}')"
-EXPECTED_BURSTS="$(grep -E '^bursts:' /tmp/dryrun-out | awk '{print $2}')"
+DRYRUN_OUT="$SCRATCH_ROOT/dryrun-out"
+WORKLOG_NO_LINT=1 WORKLOG_NO_HOOK=1 "$WORKLOG_BIN/log-compact.sh" > "$DRYRUN_OUT" 2>&1 || cat "$DRYRUN_OUT"
+cat "$DRYRUN_OUT"
+EXPECTED_DROPPED="$(grep -E '^bursts:' "$DRYRUN_OUT" | awk '{print $NF}')"
+EXPECTED_BURSTS="$(grep -E '^bursts:' "$DRYRUN_OUT" | awk '{print $2}')"
 EXPECTED_POST_COUNT=$((PRE_COUNT - EXPECTED_DROPPED + EXPECTED_BURSTS))
 # dropped = total_burst_members - num_bursts ⇒ post = pre - dropped + bursts
 echo "Expected post-rewrite commits = $PRE_COUNT - $EXPECTED_DROPPED + $EXPECTED_BURSTS = $EXPECTED_POST_COUNT"

@@ -42,9 +42,9 @@ git branch -M main
 git push -q -u origin main
 
 printf '[{"slug":"batch-task","pr":2,"next":"Review PR 2"}]\n' \
-  | WORKLOG_LDAP=tester WORKLOG_NO_HOOK=1 "$WORKLOG_BIN/checkpoint-batch.sh" >/tmp/worklog-batch-pr-merge.out
+  | WORKLOG_LDAP=tester WORKLOG_NO_HOOK=1 "$WORKLOG_BIN/checkpoint-batch.sh" >"$TMP/batch-pr-merge.out"
 
-grep -q "checkpoint-batch: pushed 1 tasks" /tmp/worklog-batch-pr-merge.out
+grep -q "checkpoint-batch: pushed 1 tasks" "$TMP/batch-pr-merge.out"
 grep -q '^pr: \[1, 2\]$' people/tester/active/batch-task.md
 git log -1 --format=%B | grep -q 'Worklog-Slug: batch-task'
 

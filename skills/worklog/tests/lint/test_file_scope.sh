@@ -74,11 +74,11 @@ assert d["issues"][0]["file"] == "people/tester/active/bad-task.md", d
 assert "status" in d["issues"][0]["errors"][0], d
 '
 
-if "$WORKLOG_BIN/lint.sh" --file=people/tester/active/missing-task.md >/tmp/worklog-lint-missing.out 2>&1; then
+if "$WORKLOG_BIN/lint.sh" --file=people/tester/active/missing-task.md >"$TMP/lint-missing.out" 2>&1; then
   echo "FAIL: missing --file path should fail"
   exit 1
 fi
-grep -q 'is not a tracked task file' /tmp/worklog-lint-missing.out
+grep -q 'is not a tracked task file' "$TMP/lint-missing.out"
 
 mkdir -p people/tester/archived
 cat > people/tester/archived/good-task.md <<'EOF'

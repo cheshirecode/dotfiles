@@ -11,7 +11,10 @@ set -euo pipefail
 # deriving it here keeps the fixture honest when run by hand too.
 WORKLOG_BIN="$(cd "$(dirname "$0")/../../bin" && pwd)"
 SCRATCH="$(mktemp -d -t worklog-okf-test-XXXXXX)"
-trap 'rm -rf "$SCRATCH"' EXIT
+# Command outputs live outside SCRATCH: SCRATCH is the fixture git repo,
+# and stray files there would leak into the lint and hook assertions.
+OUT="$(mktemp -d -t worklog-okf-out-XXXXXX)"
+trap 'rm -rf "$SCRATCH" "$OUT"' EXIT
 
 mkdir -p "$SCRATCH/people/alice/active" "$SCRATCH/people/alice/archive" "$SCRATCH/projects" "$SCRATCH/docs"
 git -C "$SCRATCH" init -q
@@ -70,10 +73,10 @@ git -C "$SCRATCH" add .
 git -C "$SCRATCH" commit -q -m "fixture"
 git -C "$SCRATCH" config core.hooksPath "$WORKLOG_BIN/git-hooks"
 
-python3 "$WORKLOG_BIN/okf.py" migrate --repo "$SCRATCH" --apply >/tmp/worklog-okf-migrate.json
-python3 "$WORKLOG_BIN/okf.py" migrate --repo "$SCRATCH" --check >/tmp/worklog-okf-check.json
+python3 "$WORKLOG_BIN/okf.py" migrate --repo "$SCRATCH" --apply >"$OUT/migrate.json"
+python3 "$WORKLOG_BIN/okf.py" migrate --repo "$SCRATCH" --check >"$OUT/check.json"
 
-python3 - "$SCRATCH" "$WORKLOG_BIN" <<'PY'
+python3 - "$SCRATCH" "$WORKLOG_BIN" "$OUT" <<'PY'
 import json
 import pathlib
 import re
@@ -83,7 +86,7 @@ import yaml
 
 root = pathlib.Path(sys.argv[1])
 bin_dir = pathlib.Path(sys.argv[2])
-check = json.loads(pathlib.Path("/tmp/worklog-okf-check.json").read_text())
+check = json.loads((pathlib.Path(sys.argv[3]) / "check.json").read_text())
 assert check["changed"] == 0, check
 
 task_text = (root / "people/alice/active/task-alpha.md").read_text()
@@ -120,7 +123,7 @@ report = json.loads(lint.stdout)
 assert report["total_errors"] == 0, report
 PY
 
-WORKLOG_REPO="$SCRATCH" "$WORKLOG_BIN/auto-slug-link.py" --apply --file=people/alice/active/task-alpha.md >/tmp/worklog-auto-slug-link.txt
+WORKLOG_REPO="$SCRATCH" "$WORKLOG_BIN/auto-slug-link.py" --apply --file=people/alice/active/task-alpha.md >"$OUT/auto-slug-link.txt"
 grep -q '\[\[task-beta\]\]' "$SCRATCH/people/alice/active/task-alpha.md"
 
 echo "okf: migration and repo-root auto-link tests passed"
