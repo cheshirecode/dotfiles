@@ -177,6 +177,8 @@ protocol = (skill / "references/protocol.md").read_text()
 orchestrator = (skill / "references/orchestrator.md").read_text()
 crew = (skill / "references/crew.md").read_text()
 handover = (skill / "references/handover.md").read_text()
+interrogate = (skill / "references/interrogate.md").read_text()
+interrogate_flat = " ".join(interrogate.split())
 radar = (skill / "bin/crew-radar").read_text()
 # Prose references are hard-wrapped, so multi-word contracts match a flattened
 # copy; that keeps them robust to reflowing the paragraph.
@@ -272,6 +274,17 @@ checks = {
     ),
     # Exact-set, so a legitimately added reference must be declared here.
     "host differences deferred": references == {"crew.md", "examples.md", "handover.md", "hosts.md", "interrogate.md", "orchestrator.md", "protocol.md", "transport.md"},
+    # Plan interrogation is a gate, not a vibe: the root must route to it, the
+    # reference must keep the one-question protocol, the skip line, the council
+    # escalation, and a verdict that can refuse init.
+    "plan interrogation gate": (
+        "references/interrogate.md" in root
+        and "one question at a time" in interrogate_flat
+        and "interrogation: skipped" in interrogate_flat
+        and "Not Ready" in interrogate
+        and "$council" in interrogate
+        and "needs_human" in interrogate
+    ),
     # Crew mode must capability-gate host primitives. Codex has shared files,
     # no isolation flag, and mailbox waits rather than a file Monitor.
     "crew mode matches Codex collaboration": (
