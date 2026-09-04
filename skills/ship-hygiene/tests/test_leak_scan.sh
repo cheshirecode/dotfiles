@@ -37,6 +37,8 @@ LEAKS=(
   'see people/fred.tran/active/my-task.md'
   'see people/fred.tran/archive/my-task.md'
   'tracked in worklog/fred.tran/some-slug'
+  'Tracked in worklog mini-app-preview-gallery-image-memory.'
+  'see worklog responsive-image-pipeline-design for the decision'
   'Iteration 3 of the refactor'
   'run /ship-hygiene after'
   'ran /tightening-a-pr on this'
