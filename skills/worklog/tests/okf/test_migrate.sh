@@ -70,7 +70,11 @@ Human-authored protocol notes.
 EOF
 
 git -C "$SCRATCH" add .
-git -C "$SCRATCH" commit -q -m "fixture"
+# UTC committer date on purpose: git %cI renders UTC as +00:00, and an
+# unnormalized timestamp writer oscillates against the checker's Z form.
+# Containers run UTC, so without this pin the bug only shows in CI/sandbox.
+GIT_AUTHOR_DATE="2026-05-10T09:00:00+00:00" GIT_COMMITTER_DATE="2026-05-10T09:00:00+00:00" \
+  git -C "$SCRATCH" commit -q -m "fixture"
 git -C "$SCRATCH" config core.hooksPath "$WORKLOG_BIN/git-hooks"
 
 python3 "$WORKLOG_BIN/okf.py" migrate --repo "$SCRATCH" --apply >"$OUT/migrate.json"
