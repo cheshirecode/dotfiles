@@ -32,6 +32,11 @@ Before implementing:
   stall: state the assumption explicitly in your output, choose the most
   reversible option, and flag it for the caller.
 
+These rules own code-level assumption discipline. Plan-level interrogation
+(one question at a time, options with tradeoffs, a readiness verdict that
+gates a loop) is owned by loop-engineering's `references/interrogate.md`;
+route there instead of restating it.
+
 ## 2. Simplicity First
 
 **Minimum code that solves the problem. Nothing speculative.**
