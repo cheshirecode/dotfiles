@@ -11,6 +11,7 @@ WORK="$TMP/work"
 git init -q --bare "$UPSTREAM"
 git init -q "$WORK"
 cd "$WORK"
+export WORKLOG_REPO="$WORK"
 git config user.email tester@example.com
 git config user.name Tester
 git remote add origin "$UPSTREAM"
