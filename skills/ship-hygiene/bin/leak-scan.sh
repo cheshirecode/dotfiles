@@ -28,6 +28,7 @@ PROG=${0##*/}
 # on a legitimate link trains people to ignore the scan.
 TOKENS=(
   'worklog:'                          # the trailer form, not bare "worklog"
+  'worklog [a-z0-9]+(-[a-z0-9]+){2,}'  # prose "worklog <slug>", no colon, no slash
   '\[POST-MERGE'
   'next_action'
   'people/[A-Za-z0-9._-]+/(active|archive)'   # task paths, either state
