@@ -64,7 +64,26 @@ Council gates whether a *learning* is kept — not its *destination*. Before wri
 
 ### 3. Deslop the PR title/body + tracking tasks — via `ship-hygiene`
 
-Load the `ship-hygiene` skill and apply its step 7 (body + comment audit) to this one PR. Specifically: run ship-hygiene's two leak scans (title/body + diff added-lines) through its `bin/leak-scan.sh`, fix any leaks in place, then apply the same purge to the tracking worklog task's public-facing fields (title, Context section — not the frontmatter). `ship-hygiene` **owns** the authoritative leak-token list, in `bin/leak-scan.sh` — do not re-derive the pattern here. That script exits 2 rather than reporting clean on empty input, so a failed `gh` call cannot pass for a clean PR. Rewrite product-first (what changed for users + why) unless it's pure engineering/infra; skill command names are a leak *unless* the PR changes skill files, where they're product surface.
+Load the `ship-hygiene` skill and apply **both** its step 6 (title audit) and its step 7 (body + comment audit) to this one PR.
+
+**Step 6 is not optional and is the one most often skipped.** A PR that accreted work after it was opened almost always carries the title of its *first* commit. A valid Conv-Commit prefix is not a passing title: `fix(preview):` on a branch whose ten commits are mostly `perf(ci)` is a *stale* prefix, which is exactly what step 6 covers. Re-derive the title from the final commit set (`git log --format='%s' origin/main..HEAD | grep -oE '^[a-z]+\([a-z-]+\)' | sort | uniq -c | sort -rn`) and make the title describe the whole PR, leading with its largest change.
+
+Then run ship-hygiene's two leak scans (title/body + diff added-lines) through its `bin/leak-scan.sh`, fix any leaks in place, then apply the same purge to the tracking worklog task's public-facing fields (title, Context section — not the frontmatter). `ship-hygiene` **owns** the authoritative leak-token list, in `bin/leak-scan.sh` — do not re-derive the pattern here. That script exits 2 rather than reporting clean on empty input, so a failed `gh` call cannot pass for a clean PR.
+
+**A clean leak scan does not mean the deslop is done.** `leak-scan.sh` answers one narrow question — are there internal references — and has no opinion on whether the title describes the PR or the body reads coherently. Those are judgment sub-steps (6, 7a, 7c) that no script reports on. Do not write the step's summary line off a green scan; a mechanical check passing is not the same as the step completing. Rewrite product-first (what changed for users + why) unless it's pure engineering/infra; skill command names are a leak *unless* the PR changes skill files, where they're product surface.
+
+After any fix round that amends the branch, re-read the PR body for claims the amendment falsified — quantified facts (test counts, timeout values, TTLs) and absolutes ("never", "always", "no X anywhere") rot first, but the **scope** claim rots hardest and is the easiest to miss because it is not a number — re-ask "does the title, and the opening paragraph, still describe everything this PR now contains?", and a body that contradicts its own evidence comments burns reviewer trust. Correct them in the body, not in a trailing comment.
+
+**Synthesise multiple work streams into one narrative.** A PR that grew a second stream tends to
+keep the first one's structure and bolt the rest on as `## Also: …` sections. That ordering encodes
+the order *you* did the work, not what the reviewer needs. It is the PR-body form of the iteration
+log this skill exists to remove. Rewrite it as one piece of work: open with what the PR delivers as
+a whole, order the sections by weight to the reviewer (largest or riskiest change first, regardless
+of which came first chronologically), and drop `Also:`/`Additionally:` framing. If the streams
+genuinely share no rationale, say so in one line near the top and still order by weight — do not
+leave the reviewer to infer it from section order. If they cannot be told as one story *and* the
+user has not asked for them together, that is the signal to propose splitting the PR, not to paper
+over it with headings.
 
 Before calling the PR ready, record the current head SHA, the focused validation commands with pass/fail results, and the green CI run or check set in the PR body or a final PR comment. Keep "evidence complete" distinct from "ready for review": a draft PR is not ready until it is explicitly marked ready after those facts are current.
 
@@ -81,6 +100,8 @@ Compress the decided iteration drama out of the task body (drop ToT/Reflexion sc
 | "The lessons are obvious, I'll just list them in the worklog" | That's the baseline failure. Obvious-to-you lessons still evaporate uncodified. Run the distill + codify triage. |
 | "Codifying is overkill for this" | Then council would have REJECTED the learning — drop it explicitly, don't skip the triage. |
 | "I'll deslop the PR and call it done" | Deslop alone is ship-hygiene. You skipped distill + codify — the durable half. |
+| "leak-scan came back clean, the body is fine" | It only checks internal references. It cannot see a stale title or a body that reads as two bolted-together streams. Steps 6, 7a and 7c are judgment work no script reports on. |
+| "The title has a Conv-Commit prefix, so it passes" | A prefix can be valid and stale. `fix(preview):` on a branch that is mostly `perf(ci)` describes one commit of ten. Re-derive it from the final commit set. |
 | "I'll put the post-merge/cleanup note in the PR body" | Reviewer-facing text dies on merge. It belongs in the worklog. |
 | "One commit for all of it is cleaner" | Guard + guidance + worklog are different diff lenses. Split them (CLAUDE.md commit-hygiene rule). |
 | "I'll compress the worklog first, then find the lessons" | Compression drops the rows the lessons live in. Distill FIRST. |
@@ -115,7 +136,9 @@ Compress the decided iteration drama out of the task body (drop ToT/Reflexion sc
   dropped:  <n1 learnings, reason>
 
 === PR deslop (ship-hygiene) ===
-  #N title/body: <de-internalized | clean>. Leak grep: <clean | fixed at ...>.
+  #N title: <kept | rewritten: "<new title>"> (derived from <N> commits: <type counts>)
+  #N body:  <single-narrative | restructured: dropped N "Also:" sections>
+  Leak grep: <clean | fixed at ...>.  Scope re-check: <title+intro cover all streams | corrected>
 
 === checkpoint ===
   <slug>: N → M lines. Commit <sha>. (separate from codify commits)
