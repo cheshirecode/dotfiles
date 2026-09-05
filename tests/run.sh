@@ -79,6 +79,11 @@ for skill_md in sorted(pathlib.Path("skills").glob("*/SKILL.md")):
     expected = skill_md.parent.name
     if fm.get("name") != expected:
         problems.append(f"{skill_md}: name={fm.get('name')!r}, expected {expected!r}")
+    description = fm.get("description")
+    if not isinstance(description, str) or not description.strip():
+        problems.append(f"{skill_md}: description must be a non-empty string")
+    elif "<" in description or ">" in description:
+        problems.append(f"{skill_md}: description cannot contain angle brackets")
 if problems:
     print("\n".join(problems))
     raise SystemExit(1)
