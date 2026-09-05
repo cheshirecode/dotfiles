@@ -59,7 +59,7 @@ RUN echo "=== Stage 2: dry-run install-skills ===" \
 # contexts (council item #11 — refuse silent sudo install). CI is exactly
 # that intentional opt-in.
 RUN echo "=== Stage 3: real install ===" \
- && INSTALL_RUNTIME_DEPS_YES=1 bin/install.sh --no-worklog
+ && INSTALL_RUNTIME_DEPS_YES=1 bin/install.sh --no-worklog --no-gws
 
 # --- Stage 4: doctor ------------------------------------------------------
 # Worklog repo not cloned → doctor will WARN, not FAIL. Exit must be 0.
