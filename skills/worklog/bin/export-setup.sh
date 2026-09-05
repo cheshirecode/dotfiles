@@ -57,6 +57,14 @@ scrub() {
     s{glpat-[A-Za-z0-9_-]{20,}}{<REDACTED:SECRET>}g;
     s{AT[AC]TT3[A-Za-z0-9_-]{10,}}{<REDACTED:SECRET>}g;
     s{ddpat_[A-Za-z0-9]{20,}}{<REDACTED:SECRET>}g;
+    s{npm_[A-Za-z0-9]{30,}}{<REDACTED:SECRET>}g;
+    # JWT: three dot-joined base64url segments starting eyJ ({"…). The 8+
+    # floor keeps short non-token eyJ prefixes from matching (gap found by
+    # transcript-export 2026-09-05: planted JWT survived this scrub).
+    s{\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b}{<REDACTED:SECRET>}g;
+    # PEM private-key blocks: perl -pe is line-wise, so use the range
+    # operator to redact every line from BEGIN to END inclusive.
+    s{.*}{<REDACTED:SECRET>} if /-----BEGIN [A-Z ]*PRIVATE KEY-----/ .. /-----END [A-Z ]*PRIVATE KEY-----/;
     # 40-hex unprefixed token pattern removed: legacy GitHub PATs (deprecated
     # since 2021) were the only real-world hit; full git SHAs in commit
     # permalinks are the dominant clean-content collision. Modern secrets
@@ -235,7 +243,7 @@ check_residue() {
 }
 check_residue "$DRAFT" "[Ii]deogram|@ideogram\\.ai"                                     "org-identifier"
 check_residue "$DRAFT" "(^|[^A-Za-z0-9_])${LDAP}([^A-Za-z0-9_]|$)"                       "ldap"
-check_residue "$DRAFT" "sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|AIza[A-Za-z0-9_-]{35}|AKIA[0-9A-Z]{16}|github_pat_[A-Za-z0-9_]{20,}|xox[abpros]-[A-Za-z0-9-]{10,}|glpat-[A-Za-z0-9_-]{20,}|AT[AC]TT3[A-Za-z0-9_-]{10,}|ddpat_[A-Za-z0-9]{20,}" "secret"
+check_residue "$DRAFT" "sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|AIza[A-Za-z0-9_-]{35}|AKIA[0-9A-Z]{16}|github_pat_[A-Za-z0-9_]{20,}|xox[abpros]-[A-Za-z0-9-]{10,}|glpat-[A-Za-z0-9_-]{20,}|AT[AC]TT3[A-Za-z0-9_-]{10,}|ddpat_[A-Za-z0-9]{20,}|npm_[A-Za-z0-9]{30,}|eyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}|-----BEGIN [A-Z ]*PRIVATE KEY-----" "secret"
 
 SIZE=$(wc -c <"$DRAFT" | tr -d ' ')
 FILES=$(grep -c '^=====WORKLOG-EXPORT-FILE=====' "$DRAFT" || true)
