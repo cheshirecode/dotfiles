@@ -33,8 +33,6 @@ Convention: `$skill-name` means invoke installed skill `skill-name`; skip and re
    primitive for scheduling and use its audit command for duplicate copies.
 6. For exact transition, effect, worklog, or handoff rules, read
    [references/protocol.md](references/protocol.md).
-7. To re-verify or improve an installed copy of this skill, use the prompt in
-   [references/handover.md](references/handover.md).
 
 Use this compact route matrix before loading references:
 
