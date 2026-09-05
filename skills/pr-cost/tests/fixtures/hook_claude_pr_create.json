@@ -1,5 +1,7 @@
 {
   "session_id": "claude-session-fixture",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Bash",
   "model": "claude-opus-4-8",
   "tool_input": {
     "command": "gh pr create --title \"Fixture\" --body \"n\""
@@ -8,5 +10,6 @@
     "exit_code": 0,
     "stdout": "https://github.com/cheshirecode/dotfiles/pull/124\n",
     "stderr": ""
-  }
+  },
+  "cwd": "/tmp/example"
 }

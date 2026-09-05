@@ -1,5 +1,7 @@
-#!/usr/bin/env python3
-"""Tests for the pr-cost collector CLI."""
+"""Collector tests. Every negative case here was proven red by mutation:
+gutting validate_payload, forcing detect_harness constant, or corrupting a
+merge field makes a named assertion below fail (PR-31 council items 1, 7, 9
+lineage — this suite replaces one that stayed green through all three)."""
 
 from __future__ import annotations
 
@@ -12,118 +14,140 @@ import sys
 import tempfile
 import unittest
 
+SKILL = pathlib.Path(__file__).resolve().parents[1]
+COLLECT = SKILL / "scripts" / "pr_cost_collect.py"
+FIXTURES = pathlib.Path(__file__).resolve().parent / "fixtures"
 
-SKILL_DIR = pathlib.Path(__file__).parents[1]
-SCRIPT = SKILL_DIR / "scripts" / "pr_cost_collect.py"
-FIXTURES = SKILL_DIR / "tests" / "fixtures"
+
+def run_collect(args, stdin=None, env=None):
+    merged_env = {**os.environ, **(env or {})}
+    merged_env.pop("PR_COST_HOOK_LIVE", None)
+    if env and "PR_COST_HOOK_LIVE" in env:
+        merged_env["PR_COST_HOOK_LIVE"] = env["PR_COST_HOOK_LIVE"]
+    return subprocess.run(
+        [sys.executable, str(COLLECT), *args],
+        input=stdin, capture_output=True, text=True, env=merged_env,
+    )
 
 
-class PrCostCollectTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self.temporary_directory = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temporary_directory.cleanup)
-        self.temporary_path = pathlib.Path(self.temporary_directory.name)
-        self.ledger = self.temporary_path / "ledger.jsonl"
+class EmitTest(unittest.TestCase):
+    def test_emit_valid_fixture_round_trips_every_field(self):
+        expected = json.loads((FIXTURES / "emit_valid.json").read_text())
+        r = run_collect(["emit", "--fixture", str(FIXTURES / "emit_valid.json")])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        payload = json.loads(r.stdout)
+        # Full-dict equality: a merge bug in ANY field fails here, not just
+        # the four fields the old test spot-checked.
+        self.assertEqual(payload, expected)
 
-    def run_cli(
-        self,
-        *arguments: str,
-        stdin_text: str | None = None,
-        env: dict[str, str] | None = None,
-        expected_returncode: int = 0,
-    ) -> subprocess.CompletedProcess[str]:
-        result = subprocess.run(
-            [sys.executable, str(SCRIPT), *arguments],
-            input=stdin_text,
-            capture_output=True,
-            text=True,
-            env=env,
-            check=False,
-        )
-        self.assertEqual(
-            result.returncode,
-            expected_returncode,
-            msg=f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
-        )
-        return result
+    def test_invalid_harness_is_rejected(self):
+        r = run_collect(["emit", "--fixture", str(FIXTURES / "emit_valid.json"),
+                         "--harness", "vibes"])
+        self.assertEqual(r.returncode, 2)
 
-    def make_failing_gh_stub(self) -> tuple[pathlib.Path, pathlib.Path]:
-        stub_directory = self.temporary_path / "bin"
-        stub_directory.mkdir()
-        marker = self.temporary_path / "gh-called.txt"
-        script = stub_directory / "gh"
-        script.write_text(
-            "#!/bin/sh\n"
-            f"echo called > {marker}\n"
-            "exit 99\n",
-            encoding="utf-8",
-        )
-        script.chmod(script.stat().st_mode | stat.S_IXUSR)
-        return stub_directory, marker
+    def test_wrong_typed_field_is_rejected(self):
+        # A deleted window_start gets legitimately defaulted by emit, so the
+        # discriminating negative is a type violation the merge cannot heal.
+        broken = json.loads((FIXTURES / "emit_valid.json").read_text())
+        broken["tokens_in"] = "lots"
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump(broken, f)
+        try:
+            r = run_collect(["emit", "--fixture", f.name])
+            self.assertEqual(r.returncode, 2, r.stdout)
+            self.assertIn("tokens_in", r.stderr)
+        finally:
+            os.unlink(f.name)
 
-    def test_emit_valid_fixture(self) -> None:
-        result = self.run_cli(
-            "emit",
-            "--fixture",
-            str(FIXTURES / "emit_valid.json"),
-        )
-        payload = json.loads(result.stdout)
-        self.assertEqual(payload["schema_version"], "pr-cost/v1")
-        self.assertEqual(payload["harness"], "claude")
-        self.assertEqual(payload["confidence"], "estimated")
-        self.assertEqual(payload["usd"], 1.23)
+    def test_bad_pr_url_is_rejected(self):
+        broken = json.loads((FIXTURES / "emit_valid.json").read_text())
+        broken["pr_url"] = "https://example.com/not-a-pr"
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump(broken, f)
+        try:
+            r = run_collect(["emit", "--fixture", f.name])
+            self.assertEqual(r.returncode, 2)
+            self.assertIn("pr_url", r.stderr)
+        finally:
+            os.unlink(f.name)
 
-    def test_from_hook_rejects_gh_pr_view(self) -> None:
-        result = self.run_cli(
-            "from-hook",
-            "--harness",
-            "cursor",
-            "--ledger",
-            str(self.ledger),
-            stdin_text=(FIXTURES / "hook_cursor_pr_view.json").read_text(),
-        )
-        response = json.loads(result.stdout)
-        self.assertEqual(response["status"], "ignored")
-        self.assertEqual(response["reason"], "not-pr-create")
-        self.assertFalse(self.ledger.exists())
 
-    def test_from_hook_writes_ledger_without_calling_gh_when_live_unset(self) -> None:
-        stub_directory, marker = self.make_failing_gh_stub()
-        env = os.environ.copy()
-        env["PATH"] = f"{stub_directory}:{env.get('PATH', '')}"
-        result = self.run_cli(
-            "from-hook",
-            "--harness",
-            "cursor",
-            "--ledger",
-            str(self.ledger),
-            stdin_text=(FIXTURES / "hook_cursor_pr_create.json").read_text(),
-            env=env,
-        )
-        response = json.loads(result.stdout)
-        self.assertEqual(response["status"], "annotated")
-        self.assertFalse(response["commented"])
-        self.assertTrue(self.ledger.exists())
-        rows = [json.loads(line) for line in self.ledger.read_text().splitlines() if line.strip()]
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["harness"], "cursor")
-        self.assertEqual(rows[0]["pr_url"], "https://github.com/cheshirecode/dotfiles/pull/123")
-        self.assertFalse(marker.exists(), "gh should not run when PR_COST_HOOK_LIVE is unset")
+class FromHookTest(unittest.TestCase):
+    def hook(self, ledger, extra_args=(), env=None, payload_path=None):
+        payload = (payload_path or (FIXTURES / "hook_claude_pr_create.json")).read_text()
+        return run_collect(["from-hook", "--ledger", str(ledger), *extra_args],
+                           stdin=payload, env=env)
 
-    def test_annotate_is_idempotent_for_same_pr_and_session(self) -> None:
-        base_arguments = (
-            "annotate",
-            "--fixture",
-            str(FIXTURES / "emit_valid.json"),
-            "--ledger",
-            str(self.ledger),
-        )
-        first = json.loads(self.run_cli(*base_arguments).stdout)
-        second = json.loads(self.run_cli(*base_arguments).stdout)
-        self.assertEqual(first["status"], "annotated")
-        self.assertEqual(second["status"], "duplicate")
-        rows = [json.loads(line) for line in self.ledger.read_text().splitlines() if line.strip()]
-        self.assertEqual(len(rows), 1)
+    def test_raw_claude_payload_autodetects_harness(self):
+        # No --harness flag on purpose: this drives detect_harness and the
+        # native Bash branch (the branch shipped dead as "Shell" — item 1).
+        with tempfile.TemporaryDirectory() as d:
+            ledger = pathlib.Path(d) / "ledger.jsonl"
+            r = self.hook(ledger)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            out = json.loads(r.stdout)
+            self.assertEqual(out["status"], "annotated", out)
+            self.assertEqual(out["payload"]["harness"], "claude")
+            self.assertEqual(out["payload"]["pr_url"],
+                             "https://github.com/cheshirecode/dotfiles/pull/124")
+
+    def test_shape_without_harness_marker_fails_open_as_unknown(self):
+        with tempfile.TemporaryDirectory() as d:
+            ledger = pathlib.Path(d) / "ledger.jsonl"
+            r = run_collect(["from-hook", "--ledger", str(ledger)],
+                            stdin=json.dumps({"mystery": True}))
+            self.assertEqual(r.returncode, 0)
+            self.assertEqual(json.loads(r.stdout)["status"], "ignored")
+            self.assertFalse(ledger.exists())
+
+    def test_duplicate_session_pr_pair_is_not_reannotated(self):
+        with tempfile.TemporaryDirectory() as d:
+            ledger = pathlib.Path(d) / "ledger.jsonl"
+            self.hook(ledger)
+            r = self.hook(ledger)
+            self.assertEqual(json.loads(r.stdout)["status"], "duplicate")
+            self.assertEqual(len(ledger.read_text().splitlines()), 1)
+
+
+class LiveCommentTest(unittest.TestCase):
+    """End-to-end with a PATH-stubbed gh (council item 13): prove the
+    annotation call actually happens in live mode with the marker body, and
+    never happens otherwise."""
+
+    def run_with_stub_gh(self, live):
+        with tempfile.TemporaryDirectory() as d:
+            d = pathlib.Path(d)
+            capture = d / "gh-args.json"
+            stub = d / "gh"
+            stub.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, sys, pathlib\n"
+                f"pathlib.Path({str(capture)!r}).write_text(json.dumps(sys.argv[1:]))\n"
+            )
+            stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+            env = {"PATH": f"{d}:{os.environ['PATH']}"}
+            if live:
+                env["PR_COST_HOOK_LIVE"] = "1"
+            ledger = d / "ledger.jsonl"
+            r = run_collect(["from-hook", "--ledger", str(ledger)],
+                            stdin=(FIXTURES / "hook_claude_pr_create.json").read_text(),
+                            env=env)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            return json.loads(r.stdout), (json.loads(capture.read_text()) if capture.exists() else None)
+
+    def test_live_mode_posts_marker_comment(self):
+        out, gh_args = self.run_with_stub_gh(live=True)
+        self.assertTrue(out["commented"], out)
+        self.assertIsNotNone(gh_args, "gh was never invoked in live mode")
+        self.assertEqual(gh_args[:3], ["pr", "comment",
+                         "https://github.com/cheshirecode/dotfiles/pull/124"])
+        body = gh_args[gh_args.index("--body") + 1]
+        self.assertIn("<!-- pr-cost:claude-session-fixture -->", body)
+
+    def test_dry_mode_never_touches_gh(self):
+        out, gh_args = self.run_with_stub_gh(live=False)
+        self.assertFalse(out["commented"])
+        self.assertIsNone(gh_args, f"gh was invoked in dry mode: {gh_args}")
 
 
 if __name__ == "__main__":

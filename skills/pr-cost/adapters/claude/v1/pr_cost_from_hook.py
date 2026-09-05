@@ -1,16 +1,20 @@
-#!/opt/homebrew/bin/python3
+#!/usr/bin/env python3
 """Normalize Claude PostToolUse payloads for the shared PR cost collector."""
 
 from __future__ import annotations
 
 import json
+import pathlib
 import subprocess
 import sys
 from typing import Any
 
 
-PYTHON = "/opt/homebrew/bin/python3"
-COLLECTOR = "/Users/fredtran/Documents/oss/dotfiles/skills/pr-cost/scripts/pr_cost_collect.py"
+# Portable resolution (council PR-31 item 2): the interpreter is whichever
+# python runs this adapter, and the collector lives at a fixed relative
+# position inside the skill — no hardcoded machine paths.
+PYTHON = sys.executable
+COLLECTOR = str(pathlib.Path(__file__).resolve().parents[3] / "scripts" / "pr_cost_collect.py")
 
 
 def _clean_string(value: Any) -> str | None:

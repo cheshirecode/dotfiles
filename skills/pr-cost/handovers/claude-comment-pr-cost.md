@@ -1,12 +1,12 @@
 You're picking up a task cold. Assume no prior session memory.
 
-Project root: /Users/fredtran/Documents/oss
+Project root: <workspace>
 Relevant repos:
-  - /Users/fredtran/Documents/oss/dotfiles
+  - <workspace>/dotfiles
 
 Read these first:
-  - /Users/fredtran/Documents/oss/dotfiles/skills/pr-cost/SKILL.md
-  - /Users/fredtran/Documents/oss/dotfiles/skills/pr-cost/INSTALL.md
+  - <dotfiles-checkout>/skills/pr-cost/SKILL.md
+  - <dotfiles-checkout>/skills/pr-cost/INSTALL.md
 
 Task:
   Comment the **Claude Code** AI cost for this PR onto the PR itself. Do not
@@ -20,16 +20,16 @@ Task:
      session id. If several files match, use the one whose `sessionId` matches
      this conversation.
   3. Run:
-     `/opt/homebrew/bin/python3 /Users/fredtran/Documents/oss/dotfiles/skills/pr-cost/scripts/claude_session_usage.py --jsonl <that-file>`
+     `python3 <dotfiles-checkout>/skills/pr-cost/scripts/claude_session_usage.py --jsonl <that-file>`
   4. Live-annotate (this is an explicit write to GitHub):
 
 ```bash
 export VIRTUAL_ENV=
-export PATH="/opt/homebrew/bin:/usr/bin:/bin:$PATH"
+# PATH: rely on the invoking shell; no machine-specific prefixes.
 export PR_COST_HOOK_LIVE=1
 PR_URL="$(gh pr view 31 --repo cheshirecode/dotfiles --json url -q .url)"
-USAGE="$(/opt/homebrew/bin/python3 /Users/fredtran/Documents/oss/dotfiles/skills/pr-cost/scripts/claude_session_usage.py --jsonl "$JSONL")"
-/opt/homebrew/bin/python3 /Users/fredtran/Documents/oss/dotfiles/skills/pr-cost/scripts/pr_cost_collect.py annotate \
+USAGE="$(python3 <dotfiles-checkout>/skills/pr-cost/scripts/claude_session_usage.py --jsonl "$JSONL")"
+python3 <dotfiles-checkout>/skills/pr-cost/scripts/pr_cost_collect.py annotate \
   --harness claude \
   --confidence estimated \
   --usd "$(python3 -c 'import json,sys; print(json.load(sys.stdin)["usd_estimated"])' <<<"$USAGE")" \

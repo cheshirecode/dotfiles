@@ -1,115 +1,72 @@
 ---
 name: pr-cost
-description: Collect a typed AI cost payload for a newly created GitHub PR, persist it to a local ledger, and optionally post an idempotent PR comment when live writes are explicitly enabled.
+description: Record a typed AI cost payload for a newly created GitHub PR in a local ledger, and post an idempotent PR comment when live writes are explicitly enabled. Claude Code only; manual session-usage flow carries the real numbers.
 ---
 
 # pr-cost
 
-Use this skill from harness-specific hook adapters after a successful `gh pr create`.
-It is dry by default: it always prefers the local ledger, and it only writes a
-GitHub PR comment when `PR_COST_HOOK_LIVE=1`.
+Attach "what did this PR cost in AI usage" to the PR itself: a typed JSON
+payload in a local ledger (`~/.local/share/pr-cost/ledger.jsonl`), and — only
+with `PR_COST_HOOK_LIVE=1` — an idempotent `gh pr comment`.
 
-Install and verify: [INSTALL.md](INSTALL.md). Adapters live in `adapters/{cursor,claude,codex}/`.
+## What is real and what is not
 
-To comment Claude cost on an already-open PR, paste
-[handovers/claude-comment-pr-cost.md](handovers/claude-comment-pr-cost.md) into a
-fresh Claude Code session.
+Two paths exist, and they are honest about different things (this section
+exists because the 2026-09-05 review council proved the earlier framing
+wrong — items 10 and 13):
 
-## Files
+1. **Automatic (hook)**: a Claude Code `PostToolUse` hook pipes the payload
+   of a successful `gh pr create` through the adapter. Hook payloads carry
+   **no usage fields** — no config changes that — so the automatic entry
+   records the PR/session pairing with `confidence: unavailable`, never
+   invented numbers. It is a placeholder that something happened, keyed for
+   dedup by `(pr_url, session_id)`.
+2. **Manual (real numbers)**: `scripts/claude_session_usage.py --jsonl
+   <session file>` sums the session's unique assistant-message usage; feed
+   its output to `annotate`. **Caveat**: this sums the whole session — a
+   session that opened two PRs or did unrelated work will over-attribute.
+   Bound the window yourself (`--window-start/--window-end`) when it matters.
 
-- Collector: `scripts/pr_cost_collect.py`
-- Tests: `tests/test_pr_cost_collect.py`
-- Fixtures: `tests/fixtures/`
+## Layout
 
-## Contract
+- `scripts/pr_cost_collect.py` — schema validation (`pr-cost/v1`), ledger
+  append with dedup, `emit` / `annotate` / `from-hook` subcommands.
+- `scripts/claude_session_usage.py` — the manual flow's engine.
+- `adapters/claude/v1/pr_cost_from_hook.py` — PostToolUse normalizer; resolves
+  the collector relative to itself and runs under `sys.executable` (no
+  machine-specific paths).
+- `tests/` — every negative case proven red by mutation; `from-hook` is
+  exercised with the raw fixture and no `--harness` flag; live mode is proven
+  end-to-end against a PATH-stubbed `gh`.
 
-The collector emits one JSON object with this required shape:
+Cursor and Codex adapters were removed by the same council: Cursor exposes no
+usage data at all, and the Codex path required an uninstalled `gh`-shadowing
+wrapper — speculative scaffolding for data that cannot exist. Re-add an
+adapter only with a demonstrated data source.
+
+## Install (Claude Code)
+
+The skill installs like every other one here (`manifest/skills.yaml` →
+`bin/install-skills.sh`). Wire the hook in `~/.claude/settings.json`:
 
 ```json
-{
-  "schema_version": "pr-cost/v1",
-  "harness": "claude | cursor | codex",
-  "confidence": "metered | estimated | unavailable",
-  "usd": 1.23,
-  "tokens_in": 1200,
-  "tokens_out": 3400,
-  "model": "claude-sonnet-4-20250514",
-  "session_id": "session-123",
-  "window_start": "2026-08-20T19:00:00+00:00",
-  "window_end": "2026-08-20T19:05:00+00:00",
-  "pr_url": "https://github.com/owner/repo/pull/123",
-  "generated_at": "2026-08-20T19:05:01+00:00",
-  "notes": "optional"
-}
+{ "hooks": { "PostToolUse": [{ "matcher": "Bash(gh pr create:*)",
+  "hooks": [{ "type": "command",
+    "command": "python3 ~/.claude/skills/pr-cost/adapters/claude/v1/pr_cost_from_hook.py" }] }] } }
 ```
 
-`usd`, `tokens_in`, `tokens_out`, `model`, `session_id`, `pr_url`, and `notes`
-may be `null` when the harness cannot supply them. The keys still remain
-present so downstream adapters receive a stable typed contract.
+Dry by default. `PR_COST_HOOK_LIVE=1` enables the PR comment;
+`PR_COST_LEDGER` overrides the ledger path. Those two env vars are defined
+here and only here.
 
-## Privacy rules
-
-- Never copy prompts, responses, file contents, or shell output beyond the PR URL.
-- Never store API keys, tokens, auth headers, or repo-local secrets.
-- Prefer safe metadata only: harness, model, token counts, session identifier,
-  bounded timestamps, PR URL, and a short note about confidence.
-- Cursor and Codex adapters should treat unavailable data as `null`, not as a
-  reason to scrape unrelated local state.
-
-## Harness guidance
-
-- `cursor`: hook payload can detect `gh pr create`, but it does not expose
-  token or USD usage. Default confidence is `unavailable`.
-- `claude`: `PostToolUse` can observe `gh pr create`. If an adapter already has
-  token or pricing inputs, pass them as CLI flags so the collector can emit an
-  `estimated` payload. Otherwise it will fall back to `unavailable`.
-- `codex`: there is no native PR creation hook. Use a wrapper that feeds a
-  matching hook JSON shape to `from-hook`, or call `emit` / `annotate`
-  directly with explicit payload fields.
-
-## Environment
-
-- `PR_COST_LEDGER`: optional ledger override. Defaults to
-  `~/.local/share/pr-cost/ledger.jsonl`.
-- `PR_COST_HOOK_LIVE=1`: enables live `gh pr comment` writes. Unset keeps the
-  collector dry and ledger-only.
-
-## Commands
-
-Validate and print a payload:
+## Manual flow
 
 ```bash
-/opt/homebrew/bin/python3 scripts/pr_cost_collect.py emit \
-  --harness claude \
-  --confidence estimated \
-  --usd 1.23 \
-  --tokens-in 1200 \
-  --tokens-out 3400 \
-  --model claude-sonnet-4-20250514 \
-  --session-id session-123 \
-  --window-start 2026-08-20T19:00:00+00:00 \
-  --window-end 2026-08-20T19:05:00+00:00 \
-  --pr-url https://github.com/owner/repo/pull/123
+python3 scripts/claude_session_usage.py --jsonl ~/.claude/projects/<proj>/<session>.jsonl \
+  | python3 scripts/pr_cost_collect.py annotate --fixture /dev/stdin --harness claude \
+      --pr-url https://github.com/<owner>/<repo>/pull/<n>
+PR_COST_HOOK_LIVE=1  # add to actually post the comment
 ```
 
-Append to the ledger and optionally comment on the PR:
-
-```bash
-/opt/homebrew/bin/python3 scripts/pr_cost_collect.py annotate \
-  --fixture tests/fixtures/emit_valid.json
-```
-
-Run from a hook adapter by piping the native hook JSON to stdin:
-
-```bash
-printf '%s\n' '{"command":"gh pr create ...","exit_code":0,"stdout":"https://github.com/owner/repo/pull/123"}' \
-  | /opt/homebrew/bin/python3 scripts/pr_cost_collect.py from-hook \
-      --harness cursor
-```
-
-`from-hook` is fail-open by design:
-
-- It ignores `gh pr view`, `gh pr comment`, and unrelated commands.
-- It exits `0` on parse failures so the harness never blocks PR creation.
-- It skips duplicate annotations when the ledger already contains the same
-  `pr_url` and `session_id`.
+Exit codes: `0` ok (including fail-open `{"status": "ignored"}` from
+`from-hook`), `2` invalid payload.
