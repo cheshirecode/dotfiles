@@ -2020,6 +2020,13 @@ test_packages() {
     fail "loop-run package unittest failed"
   fi
 
+  # pr-cost skill suite (13 tests; negative cases mutation-proven).
+  if (cd skills/pr-cost && python3 -m unittest discover -s tests -t tests -p 'test_*.py' 2>&1 | tail -1 | grep -q '^OK'); then
+    ok "pr-cost suite OK"
+  else
+    fail "pr-cost suite failed"
+  fi
+
   # worklog-memory-mcp: two-session round trip against a synthetic vault.
   if command -v node >/dev/null && [ -d packages/worklog-memory-mcp/node_modules ]; then
     local mini

@@ -40,6 +40,13 @@ skills:
       path: skills/job-application
     install_to: ~/.claude/skills/job-application
 
+  - name: pr-cost
+    description: Typed AI-cost payloads for new PRs — local ledger + optional idempotent PR comment (Claude Code).
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/pr-cost
+    install_to: ~/.claude/skills/pr-cost
   - name: worklog
     description: Cross-machine work journal — the /worklog command surface.
     source:
