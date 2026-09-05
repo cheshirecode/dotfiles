@@ -1,0 +1,15 @@
+{
+  "schema_version": "pr-cost/v1",
+  "harness": "claude",
+  "confidence": "estimated",
+  "usd": 1.23,
+  "tokens_in": 1200,
+  "tokens_out": 3400,
+  "model": "claude-sonnet-4-20250514",
+  "session_id": "session-123",
+  "window_start": "2026-08-20T19:00:00+00:00",
+  "window_end": "2026-08-20T19:05:00+00:00",
+  "pr_url": "https://github.com/cheshirecode/dotfiles/pull/123",
+  "generated_at": "2026-08-20T19:05:01+00:00",
+  "notes": "Fixture payload for validation."
+}
