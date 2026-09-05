@@ -2008,11 +2008,48 @@ EOF
   rm -rf "$(dirname "$vault")" "$NORG"
 }
 
+
+# --- packages/ (products folded into this repo) ------------------------------
+test_packages() {
+  echo "=== packages ==="
+
+  # loop-run: the skill is canonical; the package must be a clean render.
+  if python3 packages/loop-run/tools/sync-from-skill.py --check; then
+    ok "loop-run package in sync with the skill"
+  else
+    fail "loop-run package drifted from skills/loop-engineering"
+  fi
+  if (cd packages/loop-run && python3 -m unittest discover -s tests -t tests -p 'test_*.py' 2>&1 | tail -1 | grep -q '^OK'); then
+    ok "loop-run package unittest OK"
+  else
+    fail "loop-run package unittest failed"
+  fi
+
+  # worklog-memory-mcp: two-session round trip against a synthetic vault.
+  if command -v node >/dev/null && [ -d packages/worklog-memory-mcp/node_modules ]; then
+    local mini
+    mini="$(mktemp -d)/mini"
+    git init -q "$mini" && mkdir -p "$mini/people/oss/active" "$mini/people/oss/archive"
+    echo "# mini vault" > "$mini/README.md"
+    git -C "$mini" -c user.name=t -c user.email=t@t add -A
+    git -C "$mini" -c user.name=t -c user.email=t@t commit -qm init
+    if (cd packages/worklog-memory-mcp && WORKLOG_SOURCE="$mini" node test/e2e.js | grep -q 'e2e: 5 pass, 0 fail'); then
+      ok "worklog-memory-mcp e2e 5/5"
+    else
+      fail "worklog-memory-mcp e2e failed"
+    fi
+    rm -rf "$(dirname "$mini")"
+  else
+    say SKIP "worklog-memory-mcp e2e (node or node_modules missing — run npm install in packages/worklog-memory-mcp)"
+  fi
+}
+
 case "${1:-all}" in
   static)         test_static ;;
   fixtures)       test_fixtures ;;
   worklog-skill)  test_worklog_skill ;;
-  all)            test_static; test_fixtures; test_worklog_skill ;;
+  packages)       test_packages ;;
+  all)            test_static; test_fixtures; test_worklog_skill; test_packages ;;
   *) echo "usage: $0 {static|fixtures|worklog-skill|all}" >&2; exit 2 ;;
 esac
 
