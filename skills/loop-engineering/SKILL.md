@@ -61,6 +61,7 @@ if no trigger is true, record `optional-skill: skipped — <reason>` and continu
 | code is written, reviewed, or refactored | `$karpathy-guidelines` | state assumptions, make the smallest change, and replay goal-driven checks | read-only work |
 | completion has multiple observable clauses or providers | `$evidence-gate` | map each clause to typed evidence and replay the gate command | one action with one sufficient check |
 | a reusable instruction has a brittle format or recurring classification error | `$example-led-instructions` | apply the 0/1/few-shot gate and test the smallest example set | prose is obvious and examples add context cost |
+| open-ended idea generation with a kept-ideas threshold | `$brainstorm` | pass seed sources, exclusions, and target K; replay the council tally and vault refs | one predetermined idea needs evaluation — use `$council` |
 | multiple PRs or stale worklog/PR/CI surfaces need a pre-handoff sweep | `$ship-hygiene` | audit only triggered surfaces and replay the hygiene checks | one short PR with no recent worklog activity |
 | one just-finished PR needs learning distillation before handoff | `$tightening-a-pr` | pass the finished diff and task context; replay the handoff checks | implementation is unfinished or the change is trivial |
 
