@@ -14,7 +14,6 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from unittest import mock
 from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
@@ -65,7 +64,7 @@ class LoopRunTest(unittest.TestCase):
     def test_init_creates_state_and_prints_one_decide_line(self):
         r = self.init_run()
         self.assertEqual(r.returncode, 0, r.stderr)
-        lines = [l for l in r.stdout.splitlines() if l.strip()]
+        lines = [line for line in r.stdout.splitlines() if line.strip()]
         self.assertEqual(len(lines), 1)
         self.assertIn("running 0/20", lines[0])
         self.assertTrue(lines[0].endswith("decide: continue or stop"), lines[0])
@@ -358,4 +357,3 @@ class LoopRunTest(unittest.TestCase):
         self.assertNotIn("off", cell)
         body = [ln for ln in r.stdout.splitlines() if ln.strip()]
         self.assertEqual(len(body), 1)
-
