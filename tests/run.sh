@@ -182,6 +182,8 @@ protocol = (skill / "references/protocol.md").read_text()
 orchestrator = (skill / "references/orchestrator.md").read_text()
 crew = (skill / "references/crew.md").read_text()
 handover = (skill / "references/handover.md").read_text()
+audit_handover = pathlib.Path("docs/handover-skills-self-improve.md").read_text()
+audit_handover_flat = " ".join(audit_handover.split())
 interrogate = (skill / "references/interrogate.md").read_text()
 interrogate_flat = " ".join(interrogate.split())
 radar = (skill / "bin/crew-radar").read_text()
@@ -317,6 +319,22 @@ checks = {
         and "bash <skill-dir>/tests/test_crew_reap.sh" in handover
         and "python3 <skill-dir>/tests/test_crew_radar.sh" not in handover
     ),
+    "tracked audit handover is executable": (
+        'RUN_DIR="$(mktemp -d)"' in audit_handover
+        and "set RUN_DIR=" not in audit_handover
+        and "references/recording.md for worked examples instead of guessing flags" in audit_handover_flat
+    ),
+    "tracked audit handover preserves exact gates": (
+        "'[$][a-z-]*(thinking|helpers|sequential)'" in audit_handover
+        and "'^[\\$][a-z-]*(thinking|helpers|sequential)'" not in audit_handover
+        and "<= 261" not in audit_handover
+        and "<= 451" not in audit_handover
+    ),
+    "tracked audit handover reads shrink as a signal": (
+        "exact ratio is not an invariant" in audit_handover_flat
+        and "skip it when the result is not a useful win" in audit_handover_flat
+    ),
+    "tracked audit handover names its location": "lives outside the repo" not in audit_handover,
     "crew radar contract is stated": (
         "bin/crew-radar" in crew_flat
         and "`2` collision" in crew_flat

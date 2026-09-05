@@ -2,9 +2,9 @@
 
 Copy-paste the block below into a fresh agent session on any harness
 (Claude Code, Codex, Cursor, Opencode) and any model. It is self-contained.
-The repo contains only skill content and its tests/checks; this shareable
-prompt lives outside the repo on purpose. Update this file when the audit
-rules change; the repo's tests are the ground truth when they disagree.
+This shareable prompt is tracked in the repo. Temporary copies can drift;
+regenerate them from this file after audit rules change. The repo's tests are
+the ground truth when they disagree.
 
 ```
 Goal: audit and self-improve the skills in the dotfiles repo. Fix what is
@@ -42,7 +42,10 @@ Step 1 — install and verify BOTH dependencies. Do not skip either one.
       Verify against skills/loop-engineering/references/transport.md:
         seq 1 800 | sed 's/^/INFO heartbeat seq=/' > "$(mktemp -d)/rep.log"  # then shrink that file
         caveman tools shrink -- cat <that-file>      # expect a large token cut
-        caveman tools shrink -- git log --oneline -20  # expect ratio 0, no fake win
+        caveman tools shrink -- git log --oneline -20  # expect little/no cut;
+                                                       # exact ratio is not an invariant;
+                                                       # do not call a tiny elision
+                                                       # a useful win
         caveman retrieve <handle-from-first-shrink>  # expect all 800 lines back
       Do NOT run `caveman tools convert` on installed skills: they are
       symlinks into this repo, and convert on symlinks measures nothing.
@@ -50,8 +53,8 @@ Step 1 — install and verify BOTH dependencies. Do not skip either one.
 Step 2 — use the tools during the audit. zg is the search tool for every
   shell search in this repo (fall back to rg only if zg cannot install).
   Use `caveman tools shrink` on any command output you expect to be large
-  and repetitive; keep the recovery handle; skip it when the measured
-  ratio is 0.
+  and repetitive; keep the recovery handle; skip it when the result is not a
+  useful win.
 
 Step 3 — run the audit gates. There are NO test-count floors: suites grow,
   so never compare counts to a pinned number. Trust each suite's own
@@ -72,16 +75,15 @@ Step 3 — run the audit gates. There are NO test-count floors: suites grow,
        and /Users/fredtran/Documents/projects/_worklog work; the test
        clones and never touches the source repo)
    c. Regression greps on skills/loop-engineering (each 0/missing is a fail):
-      no '^[\$][a-z-]*(thinking|helpers|sequential)' hits in SKILL.md or
-        references/orchestrator.md      # anchor ^ so only leading $VAR patterns match
+      no '[$][a-z-]*(thinking|helpers|sequential)' hits in SKILL.md or
+        references/orchestrator.md
       'delegates run concurrently.*serialize writes' present in SKILL.md
       'references/interrogate.md' present in SKILL.md (the pre-init
         interrogation gate is routed)
       'one question at a time' and 'interrogation: skipped' present in
         references/interrogate.md
       SKILL.md is 260 lines or fewer; frontmatter description line is 450
-        bytes or fewer (sed -n '3p' SKILL.md | wc -c); note: wc -c counts
-        the trailing newline so compare line count <= 261, desc bytes <= 451
+        bytes or fewer (sed -n '3p' SKILL.md | wc -c)
 
 Step 4 — decide:
   If every gate passes and you have nothing real to add, report exactly:
@@ -96,17 +98,18 @@ Step 5 — improve with the skill's own driver, one call per cycle. The goal
   --allowed-effect "git commit and push to main" and
   --approval-boundary "force-push, history rewrite, file deletion",
   and init only on a Ready verdict. Then (generate run-dir via mktemp -d):
-  set RUN_DIR="$(mktemp -d)" && python3 <skill-dir>/scripts/loop_run.py "$RUN_DIR" --goal "<goal>" --budget 20
+  RUN_DIR="$(mktemp -d)"
+  python3 <skill-dir>/scripts/loop_run.py "$RUN_DIR" --goal "<goal>" --budget 20
   Each cycle: fix ONE issue; prove any new test red before the fix
   (run it against the unfixed code and watch it fail — a guard that
   passes both ways certifies the bug); re-run the affected gate; then:
   python3 <skill-dir>/scripts/loop_run.py "$RUN_DIR" --evidence "command: <ref> — <result>"
-   On apparent success, run the evidence-gate skill
-   (scripts/evidence_gate.py): init --gate --goal --criterion "id=desc"...,
-   then record every criterion per references/recording.md (not from memory):
-     python3 scripts/evidence_gate.py record --gate <id> --criterion <id> --kind <kind> --ref <url-or-file> --result pass/fail
-   then finish ONLY via:
-   python3 <skill-dir>/scripts/loop_run.py "$RUN_DIR" --stop complete --verification "<evidence-gate verification value>"
+  On apparent success, run the evidence-gate skill
+  (scripts/evidence_gate.py: init --gate --goal --criterion "id=desc"...,
+  record --gate --criterion --kind --ref --result, check --gate — read
+  references/recording.md for worked examples instead of guessing flags),
+  then finish ONLY via:
+  python3 <skill-dir>/scripts/loop_run.py "$RUN_DIR" --stop complete --verification "<evidence-gate verification value>"
   Never report blocked, budget_exhausted, or cancelled as complete.
   Keep run dirs and gate JSON in system temp (mktemp -d), never in the
   worktree.
