@@ -76,3 +76,21 @@ jobs:
         run: |
           ruff --version
           bash tests/run.sh worklog-skill
+
+  packages:
+    name: packages — loop-run sync+unittest, worklog-memory-mcp e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: deps
+        run: cd packages/worklog-memory-mcp && npm install
+      - name: git identity for e2e fixture vault
+        run: |
+          git config --global user.email "ci@cheshirecode.test"
+          git config --global user.name "ci-fixture"
+          git config --global init.defaultBranch main
+      - run: bash tests/run.sh packages
