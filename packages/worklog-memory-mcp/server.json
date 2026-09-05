@@ -5,11 +5,12 @@
   "description": "Agent memory over a git worklog vault: FSM task files with typed evidence, not embeddings soup.",
   "version": "0.1.0",
   "repository": {
-    "url": "https://github.com/cheshirecode/worklog-memory-mcp",
+    "url": "https://github.com/cheshirecode/dotfiles",
     "source": "github",
-    "id": "1357854433"
+    "id": "1357854433",
+    "subfolder": "packages/worklog-memory-mcp"
   },
-  "websiteUrl": "https://github.com/cheshirecode/worklog-memory-mcp#readme",
+  "websiteUrl": "https://github.com/cheshirecode/dotfiles/tree/main/packages/worklog-memory-mcp",
   "packages": [
     {
       "registryType": "npm",
@@ -17,7 +18,9 @@
       "identifier": "worklog-memory-mcp",
       "version": "0.1.0",
       "runtimeHint": "npx",
-      "transport": { "type": "stdio" },
+      "transport": {
+        "type": "stdio"
+      },
       "environmentVariables": [
         {
           "name": "WORKLOG_REPO",
