@@ -40,7 +40,7 @@ class SkillBudgetTest(unittest.TestCase):
         lines = SKILL.read_text(encoding="utf-8").splitlines()
         self.assertEqual(lines[0], "---", "SKILL.md must start with frontmatter")
         frontmatter = lines[1 : lines.index("---", 1)]
-        description = [l for l in frontmatter if l.startswith("description:")]
+        description = [line for line in frontmatter if line.startswith("description:")]
         self.assertEqual(len(description), 1, "one description line expected")
         size = len(description[0].encode("utf-8")) + 1  # + newline, as wc -c
         self.assertLessEqual(
