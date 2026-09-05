@@ -1,0 +1,361 @@
+#!/usr/bin/env bash
+# crew-radar — flag files that more than one git worktree is changing.
+#
+# Replicates Fleet Deck's conflict radar with no daemon and no model calls:
+# a merge conflict surfaced before either branch is ready to merge.
+#
+# For every worktree of a repo it collects the paths changed since the merge-base
+# with the base ref, split into two buckets:
+#   committed — in the branch's history but not the base
+#   dirty     — staged, unstaged, or untracked right now
+# Any path claimed by two or more worktrees is an overlap.
+#
+# Severity:
+#   info  every owner has the path COMMITTED and their branches form an ancestry
+#         chain — the expected footprint of deliberately stacking one branch on
+#         another, where the descendant carries the ancestor's change forward
+#   warn  anything else: any owner holding the path dirty (an uncommitted edit
+#         racing a committed one is a real conflict), or unrelated branches
+#
+# Exit: 0 clean (or info only) · 2 collision · 1 usage or repo error
+#
+# Zero tokens by construction: safe to arm from the Monitor tool and to run in a
+# PostToolUse hook. Paths containing newlines are not supported (NUL-delimited
+# git output is parsed, but the report is line-oriented).
+
+set -uo pipefail
+
+PROG=${0##*/}
+
+usage() {
+  cat <<EOF
+$PROG — flag files that more than one git worktree is changing
+
+Usage: $PROG [options] [repo-path]
+
+  repo-path        any path inside the repo (default: current directory)
+
+Options:
+  --base <ref>     base ref to diff against
+                   (default: origin/HEAD, else origin/master, origin/main, master, main)
+  --json           machine-readable output; stable ordering, for Monitor fingerprints
+  --roster <src>   live agent names, so each owner is annotated with who holds it
+                   (feat-a@worker-7f, or @? when unmatched). <src> is a file, a
+                   comma-separated list, or - for stdin; a bare word is refused
+                   as a likely typo'd filename, so for one name append a comma.
+                   Ownership is not inferable from a worktree's path or mtime.
+  --quiet          suppress output, exit code only
+  --strict         treat 'info' (stacked-branch) overlaps as collisions too
+  -h, --help       this text
+
+Exit codes: 0 clean · 2 collision · 1 usage or repo error
+
+Examples:
+  $PROG /workspace/midas
+  $PROG --json /workspace/midas | jq -S -c .          # fingerprint for Monitor
+  $PROG --quiet /workspace/midas || echo "crew collision"
+  $PROG --roster a,b /workspace/midas                 # inline names
+  ListAgents-names | $PROG --roster - /workspace/midas
+EOF
+}
+
+# A --json run must emit JSON on every path. Consumers fingerprint the output
+# (see references/crew.md), so a bare error line on the failure path becomes a
+# parse error inside their pipeline and the fingerprint silently turns to
+# garbage. Pre-scan for --json before parsing, so even a die() raised by arg
+# parsing itself still answers in JSON.
+FMT=text
+for _a in "$@"; do [ "$_a" = "--json" ] && FMT=json && break; done
+
+# Escape backslash and quote, then strip control characters. die() interpolates
+# $REPO, so a path containing a newline or tab is reachable, not theoretical --
+# it produced a literal raw newline inside the JSON string and broke the parse.
+json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\000-\037'; }
+
+die() {
+  printf '%s: %s\n' "$PROG" "$1" >&2
+  [ "$FMT" = json ] && printf '{"error":"%s"}\n' "$(json_escape "$1")"
+  exit 1
+}
+
+BASE=""; QUIET=0; STRICT=0; REPO=""; ROSTER_SRC=""
+while [ $# -gt 0 ]; do
+  case $1 in
+    --base) [ $# -ge 2 ] || die "--base needs a ref"; BASE=$2; shift 2 ;;
+    --base=*) BASE=${1#*=}; shift ;;
+    --json) FMT=json; shift ;;
+    --roster) [ $# -ge 2 ] || die "--roster needs a file or -"; ROSTER_SRC=$2; shift 2 ;;
+    --roster=*) ROSTER_SRC=${1#*=}; shift ;;
+    --quiet|-q) QUIET=1; shift ;;
+    --strict) STRICT=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    -*) die "unknown option: $1 (try --help)" ;;
+    *) [ -z "$REPO" ] || die "only one repo path accepted"; REPO=$1; shift ;;
+  esac
+done
+
+command -v git >/dev/null || die "git not found on PATH"
+REPO=${REPO:-$PWD}
+[ -e "$REPO" ] || die "no such path: $REPO"
+ROOT=$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null) \
+  || die "not inside a git repository: $REPO"
+
+# --- base ref -----------------------------------------------------------------
+if [ -z "$BASE" ]; then
+  for cand in \
+    "$(git -C "$ROOT" symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null)" \
+    origin/master origin/main master main; do
+    [ -n "$cand" ] || continue
+    if git -C "$ROOT" rev-parse --verify -q "${cand}^{commit}" >/dev/null 2>&1; then
+      BASE=$cand; break
+    fi
+  done
+fi
+[ -n "$BASE" ] || die "could not detect a base ref; pass --base <ref>"
+git -C "$ROOT" rev-parse --verify -q "${BASE}^{commit}" >/dev/null 2>&1 \
+  || die "base ref not found: $BASE"
+
+# --- enumerate worktrees ------------------------------------------------------
+declare -a LABELS=() WTPATHS=() HEADS=()
+wt=""; head=""; branch=""; bare=0
+label_exists() {
+  local candidate=$1 existing
+  [ "${#LABELS[@]}" -gt 0 ] || return 1
+  for existing in "${LABELS[@]}"; do
+    [ "$existing" = "$candidate" ] && return 0
+  done
+  return 1
+}
+flush_wt() {
+  [ -n "$wt" ] || return 0
+  if [ "$bare" -eq 0 ]; then
+    local label base
+    # owner lists are word-split downstream; a basename-derived label must
+    # never carry whitespace (branch refs and short SHAs cannot), or one
+    # spaced label reads as two phantom owners and fabricates a collision
+    base=${wt##*/}; base=${base//[[:space:]]/_}
+    if [ -n "$branch" ]; then label=${branch#refs/heads/}
+    elif [ -n "$head" ]; then label="detached@${head:0:8}"
+    else label="$base"; fi
+    # keep labels unique so two detached worktrees never merge into one row
+    if label_exists "$label"; then label="$label($base)"; fi
+    LABELS+=("$label"); WTPATHS+=("$wt"); HEADS+=("$head")
+  fi
+  wt=""; head=""; branch=""; bare=0
+}
+while IFS= read -r line; do
+  case $line in
+    "worktree "*) flush_wt; wt=${line#worktree } ;;
+    "HEAD "*)     head=${line#HEAD } ;;
+    "branch "*)   branch=${line#branch } ;;
+    bare)         bare=1 ;;
+    "")           flush_wt ;;
+  esac
+done < <(git -C "$ROOT" worktree list --porcelain 2>/dev/null)
+flush_wt
+
+[ "${#LABELS[@]}" -gt 0 ] || die "no usable worktrees found under $ROOT"
+
+# --- ownership ----------------------------------------------------------------
+# A worktree in this list may belong to another session, and neither its path
+# nor its mtime says so: a live peer's checkout can sit idle for hours, and a
+# `.claude/worktrees/<name>` path is the harness's own convention. Reading a
+# worktree as abandoned on that evidence deleted nothing only because someone
+# checked first (2026-08-28). Pass `--roster` (a file, or `-` for stdin) with
+# one live agent name per line -- ListAgents rows work as-is -- and each owner
+# is annotated with the agent that holds it, or `?` when nothing matches.
+#
+# Explicit flag rather than implicit stdin: the radar is armed in a 30s Monitor
+# loop, where a blocking read would stall the watch.
+ROSTER=""; ROSTER_SET=0
+if [ -n "$ROSTER_SRC" ]; then
+  # A file, `-` for stdin, or an inline comma-separated list. A bare word is
+  # refused below (fail closed, matching crew-reap): it is indistinguishable
+  # from a typo'd roster filename. An argument containing `/` is always a
+  # path, never an inline list — a comma inside an unreadable path must not
+  # silently load a roster of phantom names.
+  if [ "$ROSTER_SRC" = "-" ]; then ROSTER=$(cat)
+  elif [ -r "$ROSTER_SRC" ]; then ROSTER=$(cat "$ROSTER_SRC")
+  elif [ "${ROSTER_SRC#*,}" != "$ROSTER_SRC" ] && [ "${ROSTER_SRC#*/}" = "$ROSTER_SRC" ]; then ROSTER=$(printf '%s' "$ROSTER_SRC" | tr ',' '\n')
+  else
+    # FAIL CLOSED, matching crew-reap. A bare word is indistinguishable from a
+    # typo'd roster filename, and accepting it as a name loads a roster that
+    # owns nothing -- every owner then annotates `@?`, which reads as "no live
+    # agent holds these" when the truth is "your roster never loaded". A
+    # misleading verdict, and on the reap side the same input flipped a live
+    # worktree from keep to reap (E2E 2026-08-29). The pair must not disagree
+    # about what --roster means. For a single name, append a comma.
+    die "cannot read roster: $ROSTER_SRC (pass a file, '-', or a comma-separated list; for one name append a comma)"
+  fi
+  # A loaded-but-empty roster (all agents dead) is a real verdict: owners
+  # annotate @? rather than silently dropping annotation, so ROSTER_SET, not
+  # roster emptiness, gates the annotation paths below.
+  ROSTER_SET=1
+fi
+
+agent_for() {  # $1 = worktree basename -> prints agent name, or empty
+  [ "$ROSTER_SET" -eq 1 ] || return 0
+  local n
+  while IFS= read -r n; do
+    n=$(printf '%s' "$n" | tr -d '\r' | awk '{print $1}')
+    [ -z "$n" ] && continue
+    [ "$n" = "$1" ] && { printf '%s' "$n"; return 0; }
+    case "$n" in "$1"-*) printf '%s' "$n"; return 0 ;; esac
+  done <<EOF
+$ROSTER
+EOF
+}
+
+declare -a AGENTS=()
+if [ "$ROSTER_SET" -eq 1 ]; then
+  for i in "${!LABELS[@]}"; do
+    b=${WTPATHS[$i]##*/}
+    a=$(agent_for "$b")
+    AGENTS[$i]=${a:-?}
+  done
+fi
+
+# --- collect changed paths per worktree --------------------------------------
+declare -a DIRTY_KEYS=("") OWNER_PATHS=("") OWNER_VALUES=("")
+add_owner() { # $1 path  $2 label
+  local i cur
+  for i in "${!OWNER_PATHS[@]}"; do
+    [ "${OWNER_PATHS[$i]}" = "$1" ] || continue
+    cur=${OWNER_VALUES[$i]}
+    case " $cur " in *" $2 "*) return 0 ;; esac
+    OWNER_VALUES[$i]="${cur:+$cur }$2"
+    return 0
+  done
+  OWNER_PATHS+=("$1"); OWNER_VALUES+=("$2")
+}
+owners_for() { # $1 path
+  local i
+  for i in "${!OWNER_PATHS[@]}"; do
+    [ "${OWNER_PATHS[$i]}" = "$1" ] && { printf '%s' "${OWNER_VALUES[$i]}"; return 0; }
+  done
+}
+mark_dirty() { DIRTY_KEYS+=("$1|$2"); }
+is_dirty() { # $1 label  $2 path
+  local key="$1|$2" candidate
+  for candidate in "${DIRTY_KEYS[@]}"; do
+    [ "$candidate" = "$key" ] && return 0
+  done
+  return 1
+}
+head_for() { # $1 label
+  local i
+  for i in "${!LABELS[@]}"; do
+    [ "${LABELS[$i]}" = "$1" ] && { printf '%s' "${HEADS[$i]}"; return 0; }
+  done
+}
+agent_for_label() { # $1 label
+  local i
+  [ "$ROSTER_SET" -eq 1 ] || return 0
+  for i in "${!LABELS[@]}"; do
+    [ "${LABELS[$i]}" = "$1" ] && { printf '%s' "${AGENTS[$i]:-}"; return 0; }
+  done
+}
+
+for i in "${!LABELS[@]}"; do
+  label=${LABELS[$i]}; path=${WTPATHS[$i]}
+  [ -d "$path" ] || continue
+  mb=$(git -C "$path" merge-base "$BASE" HEAD 2>/dev/null) || mb=""
+  if [ -n "$mb" ]; then
+    while IFS= read -r -d '' f; do
+      [ -n "$f" ] || continue
+      add_owner "$f" "$label"
+    done < <(git -C "$path" diff --name-only -z "$mb" HEAD -- 2>/dev/null)
+  fi
+  while IFS= read -r -d '' f; do
+    [ -n "$f" ] || continue
+    mark_dirty "$label" "$f"; add_owner "$f" "$label"
+  done < <(git -C "$path" diff --name-only -z HEAD -- 2>/dev/null)
+  while IFS= read -r -d '' f; do
+    [ -n "$f" ] || continue
+    mark_dirty "$label" "$f"; add_owner "$f" "$label"
+  done < <(git -C "$path" ls-files --others --exclude-standard -z 2>/dev/null)
+done
+
+# --- classify overlaps --------------------------------------------------------
+# info == nobody holds the path dirty AND the owner HEADs form an ancestry chain
+# warn == anything else. A dirty owner is never "stacked": an uncommitted edit
+#         racing another worktree's committed change is exactly a live conflict.
+is_chain() { # labels... -> 0 when totally ordered by ancestry
+  local -a l=("$@") a b
+  for a in "${l[@]}"; do
+    for b in "${l[@]}"; do
+      [ "$a" = "$b" ] && continue
+      local ha hb
+      ha=$(head_for "$a"); hb=$(head_for "$b")
+      [ -n "$ha" ] && [ -n "$hb" ] || return 1
+      git -C "$ROOT" merge-base --is-ancestor "$ha" "$hb" 2>/dev/null && continue
+      git -C "$ROOT" merge-base --is-ancestor "$hb" "$ha" 2>/dev/null && continue
+      return 1
+    done
+  done
+  return 0
+}
+
+declare -a ROWS=()
+# Row field separator: `|` is legal in file and branch names and truncated
+# rows there corrupt path and owners; \x1f cannot appear in either (json_escape
+# strips control characters anyway).
+SEP=$'\x1f'
+nwarn=0; ninfo=0
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  # shellcheck disable=SC2206  # deliberate word-splitting of the owner list
+  owners=($(owners_for "$f"))
+  [ "${#owners[@]}" -ge 2 ] || continue
+  ndirty=0
+  for o in "${owners[@]}"; do is_dirty "$o" "$f" && ndirty=$((ndirty+1)); done
+  if [ "$ndirty" -eq 0 ] && is_chain "${owners[@]}"; then
+    sev=info; ninfo=$((ninfo+1))
+  else
+    sev=warn; nwarn=$((nwarn+1))
+  fi
+  annotated=()
+  for o in "${owners[@]}"; do
+    tok="$o"
+    agent=$(agent_for_label "$o")
+    [ -n "$agent" ] && tok="$tok@$agent"
+    if is_dirty "$o" "$f"; then annotated+=("$tok[dirty]"); else annotated+=("$tok"); fi
+  done
+  ROWS+=("$sev$SEP$f$SEP$(IFS=,; echo "${annotated[*]}")")
+done < <(printf '%s\n' "${OWNER_PATHS[@]}" | LC_ALL=C sort)
+
+collision=$nwarn
+[ "$STRICT" -eq 1 ] && collision=$((nwarn + ninfo))
+
+# --- report -------------------------------------------------------------------
+if [ "$QUIET" -eq 0 ]; then
+  if [ "$FMT" = json ]; then
+    printf '{"base":"%s","worktrees":%d,"warn":%d,"info":%d,"overlaps":[' \
+      "$(json_escape "$BASE")" "${#LABELS[@]}" "$nwarn" "$ninfo"
+    first=1
+    while IFS= read -r row; do
+      [ -n "$row" ] || continue
+      sev=${row%%"$SEP"*}; rest=${row#*"$SEP"}; f=${rest%%"$SEP"*}; own=${rest#*"$SEP"}
+      [ "$first" -eq 1 ] || printf ','
+      first=0
+      printf '{"severity":"%s","path":"%s","owners":"%s"}' \
+        "$sev" "$(json_escape "$f")" "$(json_escape "$own")"
+    done < <(printf '%s\n' "${ROWS[@]:-}" | LC_ALL=C sort)
+    printf ']}\n'
+  else
+    printf '%s  base=%s  worktrees=%d\n' "$PROG" "$BASE" "${#LABELS[@]}"
+    if [ "${#ROWS[@]}" -eq 0 ]; then
+      printf 'clean — no overlapping paths\n'
+    else
+      while IFS= read -r row; do
+        [ -n "$row" ] || continue
+        sev=${row%%"$SEP"*}; rest=${row#*"$SEP"}; f=${rest%%"$SEP"*}; own=${rest#*"$SEP"}
+        printf '%-5s %-52s %s\n' "$sev" "$f" "$own"
+      done < <(printf '%s\n' "${ROWS[@]}" | LC_ALL=C sort)
+      printf '%d overlapping path(s): %d warn, %d info\n' "${#ROWS[@]}" "$nwarn" "$ninfo"
+    fi
+  fi
+fi
+
+[ "$collision" -gt 0 ] && exit 2
+exit 0

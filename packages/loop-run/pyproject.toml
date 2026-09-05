@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "loop-run"
+version = "0.1.0"
+description = "Bounded, evidence-driven loop state machine for agents: typed evidence per cycle, terminal statuses that refuse false completion, resumable successor states."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "cheshirecode" }]
+keywords = ["agent", "loop", "state-machine", "evidence", "guardrails"]
+
+[project.scripts]
+loop-run = "looprun.loop_run:main"
+
+[project.urls]
+Repository = "https://github.com/cheshirecode/loop-run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/looprun"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/looprun/bin" = "looprun/bin"
