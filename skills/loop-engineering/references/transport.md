@@ -52,11 +52,11 @@ is not both smaller and more legible, send the original bytes.
    | a 3.8k-token Markdown skill | 3847 | 3847 | none |
 
    Structure and repetition are what compress; prose, code and short terminal
-   output do not, and Caveman reports that honestly as `ratio: 0` rather than
-   inventing a saving. Note the shrink lane in item 1 returned **0% on ordinary
-   `git log` output** — "noisy command output" means volume and repetition, not
-   any command. Measure the actual payload; do not assume the lane implies a
-   win.
+   output usually do not. The measured `git log` sample above returned 0%, but
+   that exact ratio is not an invariant: a later run can find a tiny elision.
+   Treat a small nonzero ratio as a measurement, not proof of a useful win;
+   inspect whether the result is both materially smaller and more legible.
+   "Noisy command output" means volume and repetition, not any command.
 
    Both compressed rows carry `lossless_to_model: false`: the model sees the
    compressed form, and the original comes back only through recovery. That is
