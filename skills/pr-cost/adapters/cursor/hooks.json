@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "afterShellExecution": [
+      {
+        "command": "./hooks/pr-cost-from-hook.sh",
+        "matcher": "\\bgh\\s+pr\\s+create\\b",
+        "failClosed": false
+      }
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "command": "gh pr view 123 --json url",
+  "exit_code": 0,
+  "stdout": "https://github.com/cheshirecode/dotfiles/pull/123\n",
+  "stderr": ""
+}
