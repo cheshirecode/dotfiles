@@ -59,6 +59,22 @@ skills:
       path: skills/loop-engineering
     install_to: ~/.claude/skills/loop-engineering
 
+  - name: pr-cost
+    description: Record per-PR AI cost payloads — ledger plus optional idempotent PR comment.
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/pr-cost
+    install_to: ~/.claude/skills/pr-cost
+
+  - name: brainstorm
+    description: Idea generation from observed pains; routes evaluation to council, records via worklog.
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/brainstorm
+    install_to: ~/.claude/skills/brainstorm
+
   - name: loop-helpers
     description: Opt-in transport gates and compact context-pack helpers for loop-engineering.
     optional: true
