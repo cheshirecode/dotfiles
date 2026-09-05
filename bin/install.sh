@@ -3,7 +3,7 @@
 #   1. install-runtime-deps.sh  — python/gh/git/rg/jq/direnv
 #   2. install-skills.sh        — symlink/copy agent skills from manifest
 #   3. install-worklog.sh       — clone _worklog repo + wire hooks
-#   4. install-agents.sh        — link OpenCode & Claude agents and global instructions
+#   4. install-opencode.sh        — link OpenCode & Claude agents and global instructions
 #   5. install-gws.sh           — install Google Workspace CLI + wire its skills
 #   6. doctor.sh                — verify
 #
@@ -35,7 +35,7 @@ install.sh — one-shot installer entry point. Detects OS and orchestrates:
   1. install-runtime-deps.sh
   2. install-skills.sh
   3. install-worklog.sh
-  4. install-agents.sh
+  4. install-opencode.sh
   5. install-gws.sh
   6. doctor.sh
 
@@ -135,9 +135,9 @@ fi
 echo
 echo "=== 4/6 agents & global instructions ==="
 if [[ $DRY_RUN -eq 1 ]]; then
-  echo "  [dry-run] would run: bin/install-agents.sh"
+  echo "  [dry-run] would run: bin/install-opencode.sh"
 else
-  run_step bin/install-agents.sh
+  run_step bin/install-opencode.sh
 fi
 
 if [[ $NO_GWS -eq 0 ]]; then
