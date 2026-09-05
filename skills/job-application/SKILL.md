@@ -1,6 +1,6 @@
 ---
 name: job-application
-description: Generate a tailored job-application package (resume + cover letter + skills keyword block) for one JD. Use when the user names a job URL or job ID and wants an application produced — e.g. "apply to <url>", "generate a resume for <gh_jid>", "tailor for the staff engineer role at X". Triggers any "produce an application", "tailor for this JD", "I need a resume that targets Y" request. Scope boundary — one named JD in, one application package out; not general resume review, not interview prep, not career strategy.
+description: Generate a tailored job-application package (resume, cover letter, and skills keyword block) for one job description. Use when the user provides a job URL or ID and asks to apply, generate a resume, or tailor application materials. Scope is one named job description and one application package; exclude general resume review, interview prep, and career strategy.
 ---
 
 # job-application
