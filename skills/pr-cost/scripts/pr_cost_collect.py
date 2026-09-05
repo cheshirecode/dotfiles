@@ -144,11 +144,10 @@ def default_confidence(harness: str, usd: float | int | None, tokens_known: bool
 def default_notes(harness: str, confidence: str) -> str | None:
     if confidence != "unavailable":
         return None
-    if harness == "cursor":
-        return "Cursor hook payloads do not expose cost or token usage."
-    if harness == "codex":
-        return "Codex has no native PR creation hook or local cost payload."
-    return "Hook payload did not include enough data to estimate session cost."
+    return (
+        "Hook payloads carry no usage fields; run the manual session-usage "
+        "flow (see SKILL.md) for real numbers."
+    )
 
 
 def payload_from_args(
@@ -291,7 +290,9 @@ def extract_command(payload: dict[str, Any]) -> tuple[str | None, str | None, in
     tool_name = payload.get("tool_name")
     tool_input = payload.get("tool_input")
     tool_response = payload.get("tool_response")
-    if tool_name == "Shell" and isinstance(tool_input, dict) and isinstance(tool_response, dict):
+    # Claude Code's shell tool is named "Bash" (a "Shell" match shipped
+    # first and was dead code — council PR-31 item 1).
+    if tool_name == "Bash" and isinstance(tool_input, dict) and isinstance(tool_response, dict):
         return (
             tool_input.get("command"),
             tool_response.get("stdout"),
@@ -300,14 +301,17 @@ def extract_command(payload: dict[str, Any]) -> tuple[str | None, str | None, in
     return None, None, None
 
 
-def detect_harness(args: argparse.Namespace, hook_payload: dict[str, Any]) -> str:
+def detect_harness(args: argparse.Namespace, hook_payload: dict[str, Any]) -> str | None:
     if args.harness:
         return args.harness
-    if "tool_name" in hook_payload:
+    # Raw Claude Code PostToolUse payloads carry tool_name; the claude
+    # adapter normalizes to {command, stdout, exit_code}. Both are claude.
+    # Other harnesses must say so explicitly (--harness) — guessing codex/
+    # cursor from payload shape was removed with those adapters (PR-31
+    # council items 11 and 14).
+    if "tool_name" in hook_payload or "command" in hook_payload:
         return "claude"
-    if "command" in hook_payload:
-        return "cursor"
-    return "codex"
+    return None
 
 
 def is_pr_create_command(command: str) -> bool:
@@ -357,8 +361,18 @@ def command_from_hook(args: argparse.Namespace) -> int:
         if pr_url is None:
             return fail_open("missing-pr-url")
 
-        args.harness = detect_harness(args, hook_payload)
+        detected = detect_harness(args, hook_payload)
+        if detected is None:
+            return fail_open("unknown-harness")
+        args.harness = detected
         args.pr_url = pr_url
+        # A raw PostToolUse payload carries session identity the CLI flags
+        # did not: lift it, or the ledger dedup key degrades to null
+        # (caught by test_raw_claude_payload_autodetects_harness).
+        if args.session_id is None:
+            args.session_id = hook_payload.get("session_id")
+        if args.model is None:
+            args.model = hook_payload.get("model")
         payload = payload_from_args(args, default_pr_url=pr_url)
         target_ledger = ledger_path(args.ledger)
         wrote_ledger = append_ledger(target_ledger, payload)

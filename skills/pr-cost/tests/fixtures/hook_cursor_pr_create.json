@@ -1,6 +1,0 @@
-{
-  "command": "gh pr create --title \"Add collector\" --body \"Implements the contract\"",
-  "exit_code": 0,
-  "stdout": "Creating pull request for fred/pr-cost-hook into main in cheshirecode/dotfiles\nhttps://github.com/cheshirecode/dotfiles/pull/123\n",
-  "stderr": ""
-}
