@@ -549,6 +549,23 @@ PY
     fi
   done
 
+  # Shell fixtures for every other skill. ship-hygiene's test_leak_scan.sh sat
+  # here unwired while the runner reported green (observed 2026-09-05: 141
+  # pass with that fixture red on main). Glob, don't list; loop-engineering
+  # and worklog keep their labeled loops above.
+  for t in skills/*/tests/test_*.sh; do
+    [[ -e "$t" ]] || continue
+    case "$t" in
+      skills/loop-engineering/*|skills/worklog/*) continue ;;
+    esac
+    sname="$(basename "$(dirname "$(dirname "$t")")")"
+    if "${WL_HERMETIC[@]}" bash "$t" >/dev/null 2>&1; then
+      ok "$sname $(basename "$t" .sh)"
+    else
+      fail "$sname $(basename "$t" .sh)"
+    fi
+  done
+
   # Everything else under skills/worklog/tests/. Before this, the runner reached
   # exactly three of ~20 fixture directories: reconcile_pr, verify_refs and
   # lint/. The other 19 ran only if someone invoked them by hand, so a
