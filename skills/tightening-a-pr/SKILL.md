@@ -21,13 +21,9 @@ When an agent finishes a PR, the code is the easy part to see and the hard part 
 
 ## Resolve `$WORKLOG_BIN`
 
-This skill invokes worklog scripts via `$WORKLOG_BIN`. Resolve it the same way the worklog skill does:
-
-```bash
-WORKLOG_BIN="${WORKLOG_BIN:-$HOME/.claude/skills/worklog/bin}"
-```
-
-All `checkpoint.sh` references below use this variable.
+This skill invokes worklog scripts via `$WORKLOG_BIN`. `worklog/SKILL.md` owns
+how to resolve it — follow it, don't restate it here. All `checkpoint.sh`
+references below use this variable.
 
 ## Relationship to ship-hygiene (read this — the overlap is real)
 

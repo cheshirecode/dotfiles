@@ -9,13 +9,9 @@ A periodic sweep skill. Three surfaces share the same staleness pattern: a workl
 
 ## Resolve `$WORKLOG_BIN`
 
-This skill invokes worklog scripts via `$WORKLOG_BIN`. Resolve it the same way the worklog skill does:
-
-```bash
-WORKLOG_BIN="${WORKLOG_BIN:-$HOME/.claude/skills/worklog/bin}"
-```
-
-All `checkpoint.sh` references below use this variable.
+This skill invokes worklog scripts via `$WORKLOG_BIN`. `worklog/SKILL.md` owns
+how to resolve it — follow it, don't restate it here. All `checkpoint.sh`
+references below use this variable.
 
 ## When to use
 
