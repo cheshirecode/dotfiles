@@ -1,6 +1,35 @@
 # Dotfiles
 
-Personal configuration files for shell environments and AI-assisted development tools.
+Personal configuration files for shell environments and AI-assisted development
+tools. **This repo is the main install**: skills, packages, and tests live
+here; satellite repos exist only where a distribution channel demands its own
+repo.
+
+## Ecosystem
+
+In this repo:
+
+- `skills/` — agent skills (loop-engineering, worklog, evidence-gate, council,
+  ship-hygiene, …), each with tests wired into `tests/run.sh all`.
+- `packages/loop-run` — the loop-engineering FSM as a pip package. The skill
+  is canonical; the package is a generated render
+  (`tools/sync-from-skill.py --check` fails CI on drift).
+- `packages/worklog-memory-mcp` — MCP agent-memory server over a worklog
+  vault; wraps the sibling worklog skill's scripts (no cross-repo dependency).
+
+Satellite repos (each exists because its channel requires a standalone repo):
+
+- [evidence-gate-action](https://github.com/cheshirecode/evidence-gate-action)
+  — GitHub Actions Marketplace requires a dedicated repo with root
+  `action.yml`. Shares the evidence-kind contract with `skills/evidence-gate`.
+- [transcript-export](https://github.com/cheshirecode/transcript-export)
+  — pre-commit.com hooks pin rev tags on the hook repo; PyPI package. Its
+  scrubber findings flow back here (worklog `scrub()` gained JWT/PEM from its
+  red-proof).
+- [srt-policy-packs](https://github.com/cheshirecode/srt-policy-packs)
+  — weekly fence-replay cron plus consumer drift wiring; the
+  [sandbox](https://github.com/cheshirecode/sandbox) vendors its
+  `generic-agent` pack.
 
 ## Overview
 
