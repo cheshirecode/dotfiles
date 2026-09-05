@@ -7,7 +7,7 @@
 # Work machine: ~/Documents/projects/_worklog
 gh repo clone ideogram-ai/_worklog ~/Documents/oss/_worklog   # or projects path
 export WORKLOG_REPO="${WORKLOG_REPO:-$HOME/Documents/oss/_worklog}"
-export WORKLOG_BIN="${WORKLOG_BIN:-$HOME/Documents/oss/dotfiles/skills/worklog/bin}"
+export WORKLOG_BIN="${WORKLOG_BIN:-$HOME/.claude/skills/worklog/bin}"
 # Optional but recommended for writes; omit --ldap on search sweeps to see all namespaces:
 # export WORKLOG_LDAP=fredtran
 cd "$WORKLOG_REPO" && cp -n .envrc.example .envrc && direnv allow
@@ -124,7 +124,7 @@ Set up ideogram-ai/_worklog as a sibling of the current repo. If the clone is
 missing, clone it into the parent of the current repo (or ~/Documents/projects /
 ~/projects / ~/code — else ask). Then:
 
-  export WORKLOG_BIN="${WORKLOG_BIN:-$HOME/Documents/oss/dotfiles/skills/worklog/bin}"
+  export WORKLOG_BIN="${WORKLOG_BIN:-$HOME/.claude/skills/worklog/bin}"
   export WORKLOG_REPO="<resolved-_worklog-path>"
   # export WORKLOG_LDAP=<ldap>   # pin for writes; omit --ldap on discovery sweeps
   cd "$WORKLOG_REPO"

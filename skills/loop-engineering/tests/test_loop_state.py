@@ -15,6 +15,23 @@ import unittest
 
 SCRIPT = pathlib.Path(__file__).parents[1] / "scripts" / "loop_state.py"
 SKILL = SCRIPT.parents[1] / "SKILL.md"
+ORCHESTRATOR = SCRIPT.parents[1] / "references/orchestrator.md"
+
+# Heading anchors shared by multiple tests: a rename is one edit here, and a
+# missing heading fails with its name rather than a bare IndexError
+# (commit 44f3f78 repointed the same literal in three tests; cf. 81d4cd7).
+H_DRIVE = "## Drive the loop — one call per cycle"
+H_ORCHESTRATOR = "## Orchestrator mode"
+
+
+def section(text: str, start: str, end: str | None = None) -> str:
+    """Slice the document between two headings, naming any missing anchor."""
+    assert start in text, f"heading {start!r} not found in document"
+    body = text.split(start, 1)[1]
+    if end is None:
+        return body
+    assert end in body, f"heading {end!r} not found after {start!r}"
+    return body.split(end, 1)[0]
 SPEC = importlib.util.spec_from_file_location("loop_state_under_test", SCRIPT)
 assert SPEC and SPEC.loader
 LOOP_STATE = importlib.util.module_from_spec(SPEC)
@@ -81,9 +98,9 @@ class LoopStateTest(unittest.TestCase):
 
     def test_skill_routes_transient_artifacts_to_system_temp(self) -> None:
         skill_text = SKILL.read_text()
-        initialization = skill_text.split(
-            "## Initialize through the script", 1
-        )[1].split("### Optional model routing", 1)[0]
+        initialization = section(
+            skill_text, H_DRIVE, "### Optional model routing"
+        )
         self.assertIn("Keep transient loop state", initialization)
         self.assertIn("`/tmp`", initialization)
         self.assertIn("`$TMPDIR`", initialization)
@@ -91,23 +108,23 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("do\nnot leave ad hoc run artifacts behind", initialization)
 
     def test_orchestrator_terminal_example_supplies_required_verification(self) -> None:
-        skill_text = SKILL.read_text()
+        skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
         terminal_example = skill_text.split(
             "When budget is consumed or the project queue is empty", 1
         )[1].split("If the queue still has tasks", 1)[0]
         self.assertIn("project verify <slug>", terminal_example)
         self.assertIn("project next reported all tasks archived", terminal_example)
         self.assertIn("project queue empty: typed command output", terminal_example)
-        self.assertIn("if ! $WORKLOG_BIN/project.sh verify <program-slug>", terminal_example)
+        self.assertIn('"$WORKLOG_BIN/project.sh" verify "$program_slug"; then', terminal_example)
 
     def test_orchestrator_does_not_treat_any_next_exit_one_as_success(self) -> None:
-        skill_text = SKILL.read_text()
+        skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
         terminal = skill_text.split("When budget is consumed or the project queue is empty", 1)[1]
         self.assertIn("Exit 1 alone is\nnot proof of an empty queue", terminal)
         self.assertIn("blocked or missing", terminal)
 
     def test_orchestrator_preserves_explicit_budget_and_minimum(self) -> None:
-        skill_text = SKILL.read_text()
+        skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
         budgeting = skill_text.split("### 1. Decompose & budget", 1)[1].split(
             "### Mid-run council escalation", 1
         )[0]
@@ -117,9 +134,7 @@ class LoopStateTest(unittest.TestCase):
 
     def test_root_route_matrix_selects_minimum_context(self) -> None:
         skill_text = SKILL.read_text()
-        route = skill_text.split("## Route", 1)[1].split(
-            "## Initialize through the script", 1
-        )[0]
+        route = section(skill_text, "## Route", H_DRIVE)
         for signal in (
             "one action + one check",
             "repeated, resumable, or delegated work",
@@ -131,22 +146,21 @@ class LoopStateTest(unittest.TestCase):
 
     def test_compositional_route_declares_owner_trigger_handoff_and_skip(self) -> None:
         skill_text = SKILL.read_text()
-        routing = skill_text.split("## Compose with installed skills", 1)[1].split(
-            "## Initialize through the script", 1
-        )[0]
+        routing = section(
+            skill_text, "## Compose with installed skills", H_DRIVE
+        )
         for owner in (
-            "serena-rg-search",
-            "worklog",
-            "which-model",
-            "loop-helpers",
-            "council",
-            "karpathy-guidelines",
-            "evidence-gate",
-            "example-led-instructions",
-            "ship-hygiene",
-            "tightening-a-pr",
+            "$serena-rg-search",
+            "$worklog",
+            "$which-model",
+            "$council",
+            "$karpathy-guidelines",
+            "$evidence-gate",
+            "$example-led-instructions",
+            "$ship-hygiene",
+            "$tightening-a-pr",
         ):
-            self.assertIn(f"`{owner}`", routing)
+            self.assertIn(owner, routing)
         for heading in ("Trigger", "Owner", "Handoff and replay", "Skip when"):
             self.assertIn(heading, routing)
         self.assertIn("Do not preload", routing)
@@ -168,6 +182,25 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("capture the producer status", protocol)
         self.assertIn("not evidence that the producer passed", protocol)
 
+    def test_protocol_names_the_adjacent_instrument_family(self) -> None:
+        # Five distinct instances in one day (2026-08-31): $PPID for session id,
+        # newest-file for this-session's-file, a grep of the wrong string, a
+        # pipeline's exit for its producer's, and `git stash` taking the
+        # fixtures with the fix. The section must keep all four detection
+        # rules, not just the memorable anecdote.
+        protocol = (SKILL.parent / "references" / "protocol.md").read_text()
+        section = protocol.split("## Verifying a claim", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("adjacent", section)
+        for rule in (
+            "in the same turn",          # 1: re-run with the real term
+            "visibly fails",             # 2: fixture must be able to fail
+            "share a source",            # 3: agreeing derivations
+            "not only the method",       # 4: right check, wrong object
+            "could have come back",      # 4a: a negative needs a known control
+        ):
+            self.assertIn(rule, section)
+        self.assertIn("reverting the *implementation*", section)
+
     def test_protocol_requires_effect_preflight_before_mutation(self) -> None:
         protocol = (SKILL.parent / "references" / "protocol.md").read_text()
         preflight = protocol.split("Before every mutation", 1)[1]
@@ -186,7 +219,8 @@ class LoopStateTest(unittest.TestCase):
         cycle = skill_text.split("## Run one bounded cycle", 1)[1].split(
             "## Preserve durable context", 1
         )[0]
-        self.assertIn("effect preflight for every mutation", cycle)
+        self.assertIn("effect preflight", cycle)
+        self.assertIn("for every mutation", cycle)
         self.assertIn("stop before writing", cycle)
         self.assertIn("Serialize writes", cycle)
 
@@ -221,28 +255,33 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("current harness exposes it", routing)
         self.assertIn("data-policy gate", routing)
         self.assertIn("model lane, not an unverified exact", routing)
-        self.assertIn("If there is no dispatch", routing)
-        self.assertIn("required supporting tool is unavailable", routing)
+        self.assertIn("If no dispatch tool, target skill, or required", routing)
         self.assertIn("model-routing: skipped", routing)
         self.assertIn("do not spend a cycle", routing)
+        self.assertIn("advisory-only", routing)
+        self.assertIn("never claim a model switch the harness cannot enforce", routing)
 
     def test_payload_transport_is_optional_recoverable_and_byte_preserving(self) -> None:
         skill_text = SKILL.read_text()
-        transport = skill_text.split("### Optional payload transport", 1)[1].split(
+        pointer = skill_text.split("### Optional payload transport", 1)[1].split(
             "### Compaction-friendly output", 1
         )[0]
+        self.assertIn("references/transport.md", pointer)
+        self.assertIn("pixel-transport: skipped", pointer)
+        self.assertIn("bytes unchanged", pointer)
+        transport = (SKILL.parent / "references/transport.md").read_text()
         for requirement in (
             "command -v caveman",
             "pixel-transport: skipped",
             "dense, long-line payloads",
-            "caveman shrink -- <command>",
+            "caveman tools shrink -- <command>",
             "caveman wrap --pixel <agent>",
             "Never pixel sparse code",
-            "original in CCR",
+            "original in an artifact store",
             "recovery handle",
             "bytes unchanged",
             "set -o pipefail",
-            "caveman convert --dry-run",
+            "caveman tools convert --dry-run",
             "byte-identical `--revert`",
             "never rewrite canonical source",
             "output-only response skill",
@@ -275,9 +314,9 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("typed", output)
         self.assertIn("state/worklog artifact", output)
 
-        durable = skill_text.split("## Preserve durable context", 1)[1].split(
-            "## Orchestrator mode", 1
-        )[0]
+        durable = section(
+            skill_text, "## Preserve durable context", H_ORCHESTRATOR
+        )
         for field in (
             "objective",
             "known evidence",
@@ -308,49 +347,61 @@ class LoopStateTest(unittest.TestCase):
 
     def test_skill_makes_worklog_resume_and_local_fallback_executable(self) -> None:
         skill_text = SKILL.read_text()
-        durable = skill_text.split("## Preserve durable context", 1)[1].split(
-            "## Orchestrator mode", 1
-        )[0]
+        durable = section(
+            skill_text, "## Preserve durable context", H_ORCHESTRATOR
+        )
         self.assertIn("context.sh <slug> --for=resume", durable)
-        self.assertIn("target clone's direnv", durable)
         self.assertIn("context <slug> --for=compact", durable)
         self.assertIn("worklog-checkpoint: unavailable", durable)
+        # This used to pin the phrase "target clone's direnv", which asserted
+        # only that the direnv form was mentioned. Measured 2026-09-03:
+        # `direnv exec DIR CMD` does NOT chdir into DIR -- it loads that
+        # directory's direnv environment and nothing else. So when the clone
+        # has no .envrc (the state of a vault that was cloned rather than
+        # created with init-new-data-repo.sh), the wrapper contributes
+        # nothing and the slug resolves against whatever repo the caller
+        # happens to be standing in. Pin the caveat and the explicit-target
+        # fallback, not the mention.
+        self.assertIn("does **not** change directory", durable)
+        self.assertIn('WORKLOG_REPO=<clone-dir>', durable)
 
     def test_orchestrator_gates_optional_decomposition_and_delegate_output(self) -> None:
-        skill_text = SKILL.read_text()
-        orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
+        skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
+        orchestrator = section(skill_text, H_ORCHESTRATOR)
         self.assertIn("regular loop", orchestrator)
         self.assertIn("one or two tasks", orchestrator)
         self.assertIn("only when the task graph is not already explicit", orchestrator)
-        self.assertIn("archived <child-slug> <worklog-commit>", orchestrator)
+        self.assertIn("archived <child-slug> <sha>", orchestrator)
+        self.assertIn('git -C "$WORKLOG_REPO"', orchestrator)
+        self.assertIn("use `HEAD` from the code worktree", orchestrator)
         self.assertIn("discards any", orchestrator)
         self.assertIn("prose", orchestrator)
 
     def test_orchestrator_checks_delegate_capability_before_dispatch(self) -> None:
-        skill_text = SKILL.read_text()
-        orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
+        skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
+        orchestrator = section(skill_text, H_ORCHESTRATOR)
         self.assertIn("current harness exposes the", orchestrator)
         self.assertIn("do not fabricate a delegate result", orchestrator)
         self.assertIn("finish `needs_human`", orchestrator)
         self.assertIn("model-routing: skipped — no delegate surface", orchestrator)
 
     def test_orchestrator_can_escalate_council_mid_run_without_archiving(self) -> None:
-        skill_text = SKILL.read_text()
-        orchestrator = skill_text.split("## Orchestrator mode", 1)[1]
+        skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
+        orchestrator = section(skill_text, H_ORCHESTRATOR)
         self.assertIn("without a new user turn", orchestrator)
         self.assertIn("material uncertainty trigger", orchestrator)
         self.assertIn("replay check", orchestrator)
         self.assertIn("never\narchive or finish `complete`", orchestrator)
 
-    def test_council_escalation_pack_is_minimal_and_replay_bound(self) -> None:
-        skill_text = SKILL.read_text()
+    def test_council_escalation_pack_fields_include_minimal_and_replay_bound(self) -> None:
+        skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
         escalation = skill_text.split("### Mid-run council escalation", 1)[1].split(
             "### 2. Create project", 1
         )[0]
         for field in (
             "`trigger`",
             "`affected mutation`",
-            "`one decision\nquestion`",
+            "`one decision question`",
             "`evidence`",
             "`replay check`",
         ):
@@ -783,6 +834,73 @@ class LoopStateTest(unittest.TestCase):
         self.assertNotIn("loop-state:", misuse.stderr)
         self.assertEqual(self.state.read_text(), before)
 
+    def test_malformed_state_inputs_exit_three_not_traceback(self) -> None:
+        for payload in ("[]", "5", '"loop"'):
+            self.state.write_text(payload)
+            result = self.run_cli(
+                "validate",
+                "--state",
+                str(self.state),
+                expected_returncode=3,
+            )
+            self.assertIn("loop-state:", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+
+        directory_state = pathlib.Path(self.temporary_directory.name) / "as-dir"
+        directory_state.mkdir()
+        result = self.run_cli(
+            "validate",
+            "--state",
+            str(directory_state),
+            expected_returncode=3,
+        )
+        self.assertIn("loop-state:", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_validate_enforces_transition_invariants(self) -> None:
+        base = self.initialize()
+        cases = (
+            (
+                "running action",
+                "running",
+                " ",
+                0,
+                "",
+                "running requires non-empty next_action",
+            ),
+            (
+                "blocked action",
+                "blocked",
+                "",
+                0,
+                "",
+                "blocked requires non-empty next_action",
+            ),
+            (
+                "complete action",
+                "complete",
+                "stale follow-up",
+                0,
+                "test log",
+                "complete requires empty next_action",
+            ),
+        )
+        for name, status, next_action, used, verification, message in cases:
+            with self.subTest(name=name):
+                state = json.loads(json.dumps(base))
+                state["terminal_status"] = status
+                state["next_action"] = next_action
+                state["budget"]["used"] = used
+                state["verification"] = verification
+                self.state.write_text(json.dumps(state))
+                result = self.run_cli(
+                    "validate",
+                    "--state",
+                    str(self.state),
+                    expected_returncode=3,
+                )
+                self.assertIn(message, result.stderr)
+
     def test_annotate_corrects_terminal_evidence_without_reopening(self) -> None:
         self.initialize(limit=1)
         exhausted = json.loads(
@@ -847,6 +965,106 @@ class LoopStateTest(unittest.TestCase):
 
         self.assertIn("state fingerprint changed", result.stderr)
         self.assertEqual(self.state.read_text(), before)
+
+    def test_annotate_rejects_blank_next_action_on_resumable_state(self) -> None:
+        self.initialize(limit=2)
+        self.run_cli(
+            "finish",
+            "--state",
+            str(self.state),
+            "--status",
+            "blocked",
+            "--evidence",
+            "hit wall",
+            "--next-action",
+            "retry after fix",
+        )
+        fingerprint = self.fingerprint()
+        before = self.state.read_text()
+
+        result = self.run_cli(
+            "annotate",
+            "--state",
+            str(self.state),
+            "--expect-sha256",
+            fingerprint,
+            "--evidence",
+            "correction",
+            "--next-action",
+            "  ",
+            expected_returncode=3,
+        )
+
+        self.assertIn("--next-action must be non-empty", result.stderr)
+        self.assertEqual(self.state.read_text(), before)
+
+    def test_resume_of_budget_exhausted_status_requires_extension_even_below_ceiling(
+        self,
+    ) -> None:
+        self.initialize(limit=9)
+        self.run_cli(
+            "finish",
+            "--state",
+            str(self.state),
+            "--status",
+            "budget_exhausted",
+            "--evidence",
+            "declared exhausted early",
+            "--next-action",
+            "resume later",
+            "--consume",
+            "1",
+        )
+
+        result = self.run_cli(
+            "resume",
+            "--state",
+            str(self.state),
+            "--new-state",
+            str(self.successor),
+            "--evidence",
+            "intervention supplied",
+            "--next-action",
+            "replay the blocked check",
+            expected_returncode=3,
+        )
+
+        self.assertIn("requires --extend-budget", result.stderr)
+        self.assertFalse(self.successor.exists())
+
+    def test_quiet_emits_one_running_index_line(self) -> None:
+        self.initialize(limit=2)
+        result = self.run_cli(
+            "advance",
+            "--state",
+            str(self.state),
+            "--evidence",
+            "step one done",
+            "--next-action",
+            "check step two",
+            "--quiet",
+        )
+        lines = result.stdout.strip().splitlines()
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0], "running 1/2 hypotheses — next: check step two")
+
+    def test_quiet_terminal_line_shows_verification_not_next_action(self) -> None:
+        self.initialize(limit=2)
+        result = self.run_cli(
+            "finish",
+            "--state",
+            str(self.state),
+            "--status",
+            "blocked",
+            "--evidence",
+            "hit wall",
+            "--next-action",
+            "retry after fix",
+            "--quiet",
+        )
+        line = result.stdout.strip()
+        self.assertTrue(line.startswith("blocked 0/2 hypotheses"))
+        self.assertNotIn("next:", line)
 
 
 if __name__ == "__main__":

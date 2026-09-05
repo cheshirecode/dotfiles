@@ -1,0 +1,279 @@
+#!/usr/bin/env bash
+# crew-reap — remove worktrees and branches whose work has provably landed.
+#
+# Companion to crew-radar: the radar says who is still working, this says who
+# has finished. No daemon, no model calls, so it is safe to hand to a cheap
+# utility agent instead of spending frontier tokens enumerating worktrees by
+# hand (orchestrator.md: never spend frontier tokens on repetitive mechanical
+# work).
+#
+# DRY RUN BY DEFAULT. --apply is required to remove anything.
+#
+# Two gates, both learned the hard way on 2026-08-28:
+#
+#   OWNERSHIP — merged is not the same as unowned. A live peer's worktree can
+#   sit idle for hours, and a `.claude/worktrees/<name>` path is the harness's
+#   own convention rather than evidence of abandonment. A reap keyed on merge
+#   state alone would have deleted a live session's checkout. So a worktree
+#   whose basename matches a live agent is never touched. Pass the roster on
+#   stdin (one name per line, e.g. from ListAgents); with no roster the tool
+#   refuses to remove worktrees at all rather than guessing.
+#
+#   LANDED — deleting a branch is the irreversible half; removing a worktree is
+#   not. Gate branch deletion on the branch having ZERO commits the target does
+#   not already contain, computed locally with `git rev-list target..branch`.
+#   Do NOT gate on an MR's merged flag: a squash merge sets it true while
+#   leaving the branch's own commits absent from the target.
+#
+# Usage:
+#   crew-reap [--target <ref>] [--roster <file|list|->] [--apply] [--no-fetch] [--json] <repo>
+#   ListAgents-names | crew-reap --apply /workspace/midas
+#
+# Exit: 0 nothing to do or dry run clean, 3 removals performed (or pending in
+# dry run), 4 --apply refused because the ownership gate was inert (a human must
+# decide), 1 usage or repo error. Capture before parsing: 3 and 4 are verdicts.
+
+set -uo pipefail
+PROG=${0##*/}
+
+usage() { sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; }
+
+FMT=text
+for a in "$@"; do [ "$a" = "--json" ] && FMT=json && break; done
+json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\000-\037'; }
+die() {
+  printf '%s: %s\n' "$PROG" "$1" >&2
+  [ "$FMT" = json ] && printf '{"error":"%s"}\n' "$(json_escape "$1")"
+  exit 1
+}
+
+TARGET=""; APPLY=0; REPO=""; FETCH=1; ROSTER_SRC=""
+while [ $# -gt 0 ]; do
+  case $1 in
+    --target) [ $# -ge 2 ] || die "--target needs a ref"; TARGET=$2; shift 2 ;;
+    --target=*) TARGET=${1#*=}; shift ;;
+    --apply) APPLY=1; shift ;;
+    --no-fetch) FETCH=0; shift ;;
+    --roster) [ $# -ge 2 ] || die "--roster needs a file, '-', or a comma-separated list"; ROSTER_SRC=$2; shift 2 ;;
+    --roster=*) ROSTER_SRC=${1#*=}; shift ;;
+    --json)  shift ;;
+    -h|--help) usage; exit 0 ;;
+    -*) die "unknown option: $1 (try --help)" ;;
+    *) [ -z "$REPO" ] || die "only one repo path accepted"; REPO=$1; shift ;;
+  esac
+done
+
+command -v git >/dev/null || die "git not found on PATH"
+REPO=${REPO:-$PWD}
+[ -e "$REPO" ] || die "no such path: $REPO"
+ROOT=$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null) \
+  || die "not inside a git repository: $REPO"
+
+if [ -z "$TARGET" ]; then
+  for c in "$(git -C "$ROOT" symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null)" \
+           origin/master origin/main master main; do
+    [ -n "$c" ] && git -C "$ROOT" rev-parse --verify -q "${c}^{commit}" >/dev/null 2>&1 && { TARGET=$c; break; }
+  done
+fi
+[ -n "$TARGET" ] || die "no target ref found; pass --target"
+git -C "$ROOT" rev-parse --verify -q "${TARGET}^{commit}" >/dev/null 2>&1 || die "target ref not found or not a commit: $TARGET"
+
+# The landed test is only as fresh as the local target ref, and a stale one
+# fails SAFE but SILENTLY: it reports "N commit(s) not in <target>", which reads
+# as unlanded work when the truth is that the ref predates the merge. Observed
+# on live data 2026-08-28 — the same command two minutes apart said keep, then
+# reap, because a fetch had happened in between. A cheap agent handed the first
+# reading would report it with full confidence and be wrong.
+# So: fetch by default, and print the resolved SHA and date either way, so a
+# stale reading is visible rather than merely safe.
+FETCH_NOTE=""
+if [ "$FETCH" = 1 ]; then
+  case "$TARGET" in
+    */*) remote=${TARGET%%/*}; branch=${TARGET#*/}
+         if git -C "$ROOT" fetch --quiet "$remote" "$branch" 2>/dev/null; then
+           FETCH_NOTE="fetched"
+         else
+           FETCH_NOTE="FETCH FAILED — reading may be stale"
+         fi ;;
+    *)   FETCH_NOTE="local ref, not fetched" ;;
+  esac
+else
+  FETCH_NOTE="--no-fetch — reading may be stale"
+fi
+TARGET_SHA=$(git -C "$ROOT" rev-parse --short "$TARGET" 2>/dev/null || echo "?")
+TARGET_WHEN=$(git -C "$ROOT" log -1 --format=%cI "$TARGET" 2>/dev/null | cut -c1-16 | tr T ' ' || echo "?")
+
+# Roster on stdin. Absent means "ownership unknown", which is NOT the same as
+# "unowned" -- worktree removal is skipped entirely rather than guessed at.
+# --roster <file|list|-> is the documented form. A bare stdin
+# pipe still works. The read is bounded: an unbounded one would hang a caller
+# that left stdin open with nothing to say. GNU timeout is not on macOS; use
+# bash `read -t` (Bash 3+) and never fall back to unbounded cat.
+read_bounded_stdin() {
+  # One 5s deadline for the whole stream: read -t resets per line, so a
+  # drip-feeding writer could otherwise hold reap open indefinitely.
+  local line remaining deadline=$((SECONDS + 5))
+  while :; do
+    remaining=$((deadline - SECONDS))
+    [ "$remaining" -gt 0 ] || break
+    line=""
+    if IFS= read -r -t "$remaining" line; then printf '%s\n' "$line"
+    elif [ -n "$line" ]; then printf '%s\n' "$line"; break
+    else break
+    fi
+  done
+}
+ROSTER=""; HAVE_ROSTER=0
+if [ -n "$ROSTER_SRC" ]; then
+  # File, `-` for stdin, or an inline comma-separated list. Same fail-closed
+  # acceptance as crew-radar: a bare word is refused as a likely typo'd file.
+  if [ "$ROSTER_SRC" = "-" ]; then ROSTER=$(cat)
+  elif [ -r "$ROSTER_SRC" ]; then ROSTER=$(cat "$ROSTER_SRC")
+  elif [ "${ROSTER_SRC#*,}" != "$ROSTER_SRC" ]; then ROSTER=$(printf '%s' "$ROSTER_SRC" | tr ',' '\n')
+  else
+    # FAIL CLOSED: a bare word here is indistinguishable from a typo'd roster
+    # filename, and treating it as an agent name arms the removal gate with a
+    # roster that owns nothing (E2E 2026-08-29: a one-char typo flipped a live
+    # worktree from keep to reap). For a single name, append a comma.
+    die "cannot read roster: $ROSTER_SRC (pass a file, '-', or a comma-separated list; for one name append a comma)"
+  fi
+  [ -n "$ROSTER" ] && HAVE_ROSTER=1
+elif [ ! -t 0 ]; then
+  ROSTER=$(read_bounded_stdin 2>/dev/null || true)
+  [ -n "$ROSTER" ] && HAVE_ROSTER=1
+fi
+
+# A roster line may be a bare name or an ListAgents-style "name [ref] · ..." row;
+# take the first field. A worktree is owned when a live agent's name equals its
+# basename or extends it with a suffix (crew spawns append one, e.g.
+# worklog-skill-remote-server-b319ca -> ...-b319ca-9d).
+owned_by_live_agent() {  # $1 = worktree basename
+  [ "$HAVE_ROSTER" = 1 ] || return 1
+  local n
+  while IFS= read -r n; do
+    n=$(printf '%s' "$n" | tr -d '\r' | awk '{print $1}')
+    [ -z "$n" ] && continue
+    [ "$n" = "$1" ] && return 0
+    case "$n" in "$1"-*) return 0 ;; esac
+  done <<EOF
+$ROSTER
+EOF
+  return 1
+}
+
+# Pre-pass: decide whether the ownership gate can vote at all, BEFORE any
+# removal. Counting during the main loop and refusing afterwards is too late —
+# the removals have already happened by then (caught by fixture, 2026-08-31).
+owned=0; seen=0; SEEN_NAMES=""
+while IFS= read -r wt; do
+  [ -n "$wt" ] || continue
+  [ "$wt" = "$(git -C "$ROOT" rev-parse --show-toplevel)" ] && continue
+  seen=$((seen+1)); SEEN_NAMES="$SEEN_NAMES, ${wt##*/}"
+  owned_by_live_agent "${wt##*/}" && owned=$((owned+1))
+done < <(git -C "$ROOT" worktree list --porcelain | sed -n 's/^worktree //p')
+
+# A roster matching NO worktree is operationally identical to no roster: the
+# gate voted on nothing, and every removal would rest on the landed check alone.
+# No-roster already refuses to remove, so this must too. Reported live
+# 2026-08-31: a hand-typed roster of interactive session names matched 0 of 2
+# worktrees, because an entry must equal a worktree basename or extend it with
+# -<suffix>, which session names never do.
+SEEN_NAMES=$(printf '%s' "$SEEN_NAMES" | sed 's/^, //')
+INERT=0; APPLY_REFUSED=0
+if [ "$HAVE_ROSTER" = 1 ] && [ "$seen" -gt 0 ] && [ "$owned" -eq 0 ]; then INERT=1; fi
+# Suppress the removal immediately — that must not depend on anything computed
+# later — but hold the announcement until we know a removal was actually
+# pending. Refusing a run with nothing to reap protects nothing and teaches the
+# operator that OWNERSHIP_INERT_OK is simply the flag you type to make crew-reap
+# proceed; by the time a run matters, the habit is formed. A predictable bypass
+# means the check has already failed. (Reported live 2026-08-31.)
+PENDING_REFUSE=0
+if [ "$INERT" = 1 ] && [ "$APPLY" = 1 ] && [ -z "${OWNERSHIP_INERT_OK:-}" ]; then
+  APPLY=0; PENDING_REFUSE=1
+fi
+
+reaped=0; kept=0; ROWS=$(mktemp); trap 'rm -f "$ROWS"' EXIT
+MAIN=$(git -C "$ROOT" rev-parse --show-toplevel)
+
+while IFS= read -r wt; do
+  [ -n "$wt" ] || continue
+  [ "$wt" = "$MAIN" ] && continue
+  base=$(basename "$wt")
+  br=$(git -C "$wt" symbolic-ref -q --short HEAD 2>/dev/null || echo "")
+
+  if owned_by_live_agent "$base"; then
+    printf 'keep|%s|%s|live agent owns this worktree\n' "$base" "$br" >>"$ROWS"; kept=$((kept+1)); continue
+  fi
+  if [ "$HAVE_ROSTER" != 1 ]; then
+    printf 'keep|%s|%s|no roster supplied; ownership unknown\n' "$base" "$br" >>"$ROWS"; kept=$((kept+1)); continue
+  fi
+  if [ -n "$(git -C "$wt" status --porcelain 2>/dev/null)" ]; then
+    printf 'keep|%s|%s|uncommitted changes\n' "$base" "$br" >>"$ROWS"; kept=$((kept+1)); continue
+  fi
+  if [ -z "$br" ]; then
+    printf 'keep|%s|(detached)|detached HEAD, cannot prove landed\n' "$base" >>"$ROWS"; kept=$((kept+1)); continue
+  fi
+
+  ahead=$(git -C "$ROOT" rev-list --count "$TARGET..$br" 2>/dev/null || echo "?")
+  if [ "$ahead" != "0" ]; then
+    printf 'keep|%s|%s|%s commit(s) not in %s\n' "$base" "$br" "$ahead" "$TARGET" >>"$ROWS"; kept=$((kept+1)); continue
+  fi
+
+  if [ "$APPLY" = 1 ]; then
+    # Remove before recording, so the row reports what actually happened.
+    if git -C "$ROOT" worktree remove --force "$wt" >/dev/null 2>&1; then
+      if git -C "$ROOT" branch -D "$br" >/dev/null 2>&1; then
+        printf 'reap|%s|%s|0 commits ahead of %s\n' "$base" "$br" "$TARGET" >>"$ROWS"
+      else
+        printf 'reap|%s|%s|worktree removed; branch delete failed\n' "$base" "$br" >>"$ROWS"
+      fi
+      reaped=$((reaped+1))
+    else
+      printf 'keep|%s|%s|removal failed\n' "$base" "$br" >>"$ROWS"; kept=$((kept+1))
+    fi
+  else
+    printf 'reap|%s|%s|0 commits ahead of %s\n' "$base" "$br" "$TARGET" >>"$ROWS"
+    reaped=$((reaped+1))
+  fi
+done < <(git -C "$ROOT" worktree list --porcelain | sed -n 's/^worktree //p')
+
+if [ "$PENDING_REFUSE" = 1 ] && [ "$reaped" -gt 0 ]; then
+  printf '%s: refusing --apply: roster matched 0 of %s worktrees (%s), so the ownership gate voted on nothing.\n' \
+    "$PROG" "$seen" "$SEEN_NAMES" >&2
+  printf '  Pipe ListAgents names in (an entry must equal a worktree basename or extend it with -<suffix>),\n' >&2
+  printf '  or set OWNERSHIP_INERT_OK=1 if you know none of these worktrees is agent-owned.\n' >&2
+  APPLY_REFUSED=1
+fi
+
+[ "$APPLY" = 1 ] && git -C "$ROOT" worktree prune >/dev/null 2>&1
+
+if [ "$FMT" = json ]; then
+  printf '{"target":"%s","target_sha":"%s","target_date":"%s","fetch":"%s","roster_matched":%s,"worktrees":%s,"ownership_inert":%s,"apply":%s,"reaped":%s,"kept":%s,"rows":[' \
+    "$(json_escape "$TARGET")" "$(json_escape "$TARGET_SHA")" "$(json_escape "$TARGET_WHEN")" \
+    "$(json_escape "$FETCH_NOTE")" "$owned" "$seen" \
+    "$([ "$INERT" = 1 ] && echo true || echo false)" \
+    "$([ "$APPLY" = 1 ] && echo true || echo false)" "$reaped" "$kept"
+  first=1
+  while IFS="|" read -r act nm brn why; do
+    [ $first = 1 ] || printf ','
+    printf '{"action":"%s","worktree":"%s","branch":"%s","reason":"%s"}' \
+      "$act" "$(json_escape "$nm")" "$(json_escape "$brn")" "$(json_escape "$why")"
+    first=0
+  done <"$ROWS"
+  printf ']}\n'
+else
+  printf '%s  target=%s@%s (%s, %s)  roster matched %s/%s  %s\n' "$PROG" "$TARGET" "$TARGET_SHA" \
+    "$TARGET_WHEN" "$FETCH_NOTE" "$owned" "$seen" \
+    "$([ "${APPLY_REFUSED:-0}" = 1 ] && echo 'APPLY REFUSED (ownership gate inert)' \
+       || { [ "$APPLY" = 1 ] && echo APPLY || echo 'DRY RUN (--apply to remove)'; })"
+  [ "$INERT" = 1 ] && [ "$reaped" -gt 0 ] && \
+    printf 'WARNING: ownership gate inert — every reap below rests on the landed check alone.\n'
+  while IFS="|" read -r act nm brn why; do
+    printf '%-5s %-34s %-40s %s\n' "$act" "$nm" "$brn" "$why"
+  done <"$ROWS"
+  printf '%s reapable, %s kept\n' "$reaped" "$kept"
+fi
+
+[ "$APPLY_REFUSED" = 1 ] && exit 4
+[ "$reaped" -gt 0 ] && exit 3
+exit 0

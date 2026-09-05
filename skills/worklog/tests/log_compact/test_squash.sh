@@ -20,18 +20,50 @@
 #   SOURCE=/path/to/repo tests/log_compact/test_squash.sh
 #
 # Run BEFORE every bin/log-compact.sh --apply on real main.
+#
+# runner: requires-data-repo
+# (tests/run.sh reads the marker above: this gate needs a real worklog data
+# repo, so the suite reports it as an explicit SKIP unless SOURCE is set —
+# it must never inherit the developer's WORKLOG_REPO through ambient env.)
 
 set -euo pipefail
 
 # Resolve sibling bin/ (relocated from data repo to skill).
-WORKLOG_BIN="${WORKLOG_BIN:-$(cd "$(dirname "$0")/../../bin" && pwd)}"
+# Pinned to the tree under test, not `${WORKLOG_BIN:-...}`. A developer
+# profile exports WORKLOG_BIN at the *installed* skill, which is a different
+# checkout; honouring it makes this fixture grade the installed helpers
+# instead of the ones sitting next to it, so a fix in the working tree can
+# read green against unfixed code. tests/run.sh unsets the variable, and
+# deriving it here keeps the fixture honest when run by hand too.
+WORKLOG_BIN="$(cd "$(dirname "$0")/../../bin" && pwd)"
 
 cd "$(dirname "$0")/../.."
 # This is a pre-`--apply` regression gate that rewrites real history on a clone,
 # so SOURCE must be a clonable worklog *data* repo. Post-relocation the skill dir
 # (pwd) is no longer that repo; default to $WORKLOG_REPO (the real vault) — the
 # bare TEST_ORIGIN clone keeps the real origin untouched.
-SOURCE="${SOURCE:-${WORKLOG_REPO:-$(pwd)}}"
+SOURCE="${SOURCE:-${WORKLOG_REPO:-}}"
+
+# Validate before doing any work. The old default was $(pwd) -- the skill
+# directory -- which is never a worklog data repo, so an unset WORKLOG_REPO
+# produced a bare `git clone` fatal naming a path the reader has no reason to
+# connect to the missing variable. Check the argument first and say what to
+# set, rather than discovering it three commands into a rewrite.
+if [ -z "$SOURCE" ]; then
+  echo "$(basename "$0"): no source repo." >&2
+  echo "  This gate rewrites history on a clone of a worklog DATA repo." >&2
+  echo "  Set WORKLOG_REPO (or SOURCE=/path/to/repo) and re-run." >&2
+  exit 1
+fi
+if [ ! -e "$SOURCE/.git" ]; then
+  echo "$(basename "$0"): SOURCE=$SOURCE is not a git repo." >&2
+  exit 1
+fi
+if [ ! -d "$SOURCE/people" ]; then
+  echo "$(basename "$0"): SOURCE=$SOURCE has no people/ -- not a worklog data repo." >&2
+  echo "  The skill directory is not the data repo; they were split." >&2
+  exit 1
+fi
 
 SCRATCH_ROOT="$(mktemp -d -t log-compact-test-XXXXXX)"
 SCRATCH="$SCRATCH_ROOT/repo"
@@ -69,10 +101,11 @@ echo ""
 
 # Dry-run first to capture expected counts.
 echo "=== Dry-run ==="
-WORKLOG_NO_LINT=1 WORKLOG_NO_HOOK=1 "$WORKLOG_BIN/log-compact.sh" > /tmp/dryrun-out 2>&1 || cat /tmp/dryrun-out
-cat /tmp/dryrun-out
-EXPECTED_DROPPED="$(grep -E '^bursts:' /tmp/dryrun-out | awk '{print $NF}')"
-EXPECTED_BURSTS="$(grep -E '^bursts:' /tmp/dryrun-out | awk '{print $2}')"
+DRYRUN_OUT="$SCRATCH_ROOT/dryrun-out"
+WORKLOG_NO_LINT=1 WORKLOG_NO_HOOK=1 "$WORKLOG_BIN/log-compact.sh" > "$DRYRUN_OUT" 2>&1 || cat "$DRYRUN_OUT"
+cat "$DRYRUN_OUT"
+EXPECTED_DROPPED="$(grep -E '^bursts:' "$DRYRUN_OUT" | awk '{print $NF}')"
+EXPECTED_BURSTS="$(grep -E '^bursts:' "$DRYRUN_OUT" | awk '{print $2}')"
 EXPECTED_POST_COUNT=$((PRE_COUNT - EXPECTED_DROPPED + EXPECTED_BURSTS))
 # dropped = total_burst_members - num_bursts ⇒ post = pre - dropped + bursts
 echo "Expected post-rewrite commits = $PRE_COUNT - $EXPECTED_DROPPED + $EXPECTED_BURSTS = $EXPECTED_POST_COUNT"

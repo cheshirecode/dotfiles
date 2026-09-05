@@ -14,9 +14,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Build + run install stages
-        run: docker build -f Dockerfile.test-matrix -t dotfiles-test .
+      - uses: docker/setup-buildx-action@v3
+      - name: Build + run install stages (GHA layer cache)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.test-matrix
+          tags: dotfiles-test
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       # Auth-gated tools (Claude OAuth, Codex OAuth, gh PAT) deliberately
       # not exercised here. They require interactive auth that lives outside
@@ -29,21 +36,14 @@ jobs:
           echo "  - gh-with-PAT push flows"
           echo "These are verified manually after a fresh install — see README.md."
 
-  shellcheck:
-    name: shellcheck bin/*.sh
+  static:
+    name: static — shellcheck bin/*.sh + manifest parses
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update -qq && sudo apt-get install -y shellcheck
       - run: shellcheck --severity=warning bin/*.sh
-
-  manifest-parse:
-    name: manifest/skills.yaml parses
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    steps:
-      - uses: actions/checkout@v4
       - run: |
           python3 -c "
           import yaml, sys
@@ -76,3 +76,23 @@ jobs:
         run: |
           ruff --version
           bash tests/run.sh worklog-skill
+
+  packages:
+    name: packages — loop-run sync+unittest, worklog-memory-mcp e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: packages/worklog-memory-mcp/package-lock.json
+      - name: deps
+        run: cd packages/worklog-memory-mcp && npm install
+      - name: git identity for e2e fixture vault
+        run: |
+          git config --global user.email "ci@cheshirecode.test"
+          git config --global user.name "ci-fixture"
+          git config --global init.defaultBranch main
+      - run: bash tests/run.sh packages

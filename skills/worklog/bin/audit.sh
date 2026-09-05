@@ -48,6 +48,17 @@ run_section() {
   [[ -z "$SECTION" || "$SECTION" == "$1" ]]
 }
 
+# How many active tasks the index actually holds. Every "(none)" below is a
+# statement about this number: none out of 200 is a healthy corpus, none out
+# of 0 is an index that was never built or was built somewhere else, and the
+# two printed the same word. Never empty -- "unknown" when it cannot be
+# computed, so a broken count is visible rather than blank.
+active_total() {
+  local n
+  n="$(jq -r 'select(.state == "active") | .slug' "$INDEX" 2>/dev/null | wc -l | tr -d ' ' || true)"
+  [[ "$n" =~ ^[0-9]+$ ]] && printf '%s' "$n" || printf 'unknown'
+}
+
 age_filter() {
   local min_days="$1"
   local status="$2"
@@ -84,7 +95,7 @@ if run_section blocked; then
   echo "=== Blocked ≥7d (FSM: should be unblocking or escalating) ==="
   out="$(age_filter 7 blocked)"
   if [[ -z "$out" ]]; then
-    echo "  (none)"
+    echo "  (none of $(active_total) active tasks)"
   else
     printf '  age_days\tslug\tldap\tfile\n'
     echo "$out" | sed 's/^/  /'
@@ -96,7 +107,7 @@ if run_section in-review; then
   echo "=== In-review ≥14d (likely stale review — PR landed/abandoned?) ==="
   out="$(age_filter 14 in-review)"
   if [[ -z "$out" ]]; then
-    echo "  (none)"
+    echo "  (none of $(active_total) active tasks)"
   else
     printf '  age_days\tslug\tldap\tfile\n'
     echo "$out" | sed 's/^/  /'
@@ -113,9 +124,19 @@ try:
   data = json.load(sys.stdin)
 except Exception:
   sys.exit(1)
+# "Clean" has to carry the size of what was read. A report over zero task
+# files has no issues either, and printed the same "(clean)" as a healthy
+# corpus -- so running audit.sh against the wrong repo returned a clean bill
+# of health for a corpus it never opened.
+scanned = data.get("total_files")
+if scanned is None:
+  sys.exit(1)
+if scanned == 0:
+  print("  (no task files scanned — is WORKLOG_REPO pointing at the right clone?)")
+  sys.exit(0)
 issues = data.get("issues", [])
 if not issues:
-  print("  (clean)")
+  print(f"  (clean — {scanned} file(s) scanned)")
   sys.exit(0)
 total_errors = data.get("total_errors", 0)
 total_warnings = data.get("total_warnings", 0)

@@ -22,9 +22,27 @@ if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
   exit 0
 fi
 
+# Collect the task directories that actually exist. A bare
+# "$here"/*/active/*.md glob is passed through literally when it matches
+# nothing, and the resulting "no such file" is fatal under `set -e` plus
+# pipefail -- so a namespace with no archive/ yet (every new one) killed the
+# probe. Building the list first makes "nothing to search" a stated condition
+# rather than an accident of glob expansion.
+SCOPE=()
+while IFS= read -r path; do SCOPE+=("$path"); done \
+  < <(find "$here" -type d \( -name active -o -name archive \) 2>/dev/null | sort)
+if [ "${#SCOPE[@]}" -eq 0 ]; then
+  echo "$(basename "$0"): no active/ or archive/ directories under $here" >&2
+  exit 1
+fi
+
 if [ "${1:-}" = "--projects" ]; then
-  awk '/^project:/{print $2}' "$here"/*/active/*.md "$here"/*/archive/*.md \
-    2>/dev/null | sort -u
+  FILES=()
+  while IFS= read -r path; do FILES+=("$path"); done \
+    < <(find "${SCOPE[@]}" -name '*.md' -type f 2>/dev/null | sort)
+  # awk with an empty argument list would read stdin and hang.
+  [ "${#FILES[@]}" -eq 0 ] && exit 0
+  awk '/^project:/{print $2}' "${FILES[@]}" | sort -u
   exit 0
 fi
 
@@ -35,5 +53,15 @@ fi
 
 for kw in "$@"; do
   echo "=== $kw ==="
-  grep -lr -- "$kw" "$here"/*/active/ "$here"/*/archive/ 2>/dev/null | head -10
+  # grep exits 1 for "no matches", which is a verdict here, not an error.
+  # Unguarded under `set -e` it aborted the whole probe on the first
+  # unmatched keyword, so later keywords -- including ones with real prior
+  # art -- were never searched and the run just stopped. Printing the verdict
+  # keeps "searched, found nothing" distinct from "never got here".
+  hits="$(grep -lr -- "$kw" "${SCOPE[@]}" 2>/dev/null | head -10 || true)"
+  if [ -n "$hits" ]; then
+    printf '%s\n' "$hits"
+  else
+    echo "  (no matches)"
+  fi
 done

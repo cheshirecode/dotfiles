@@ -21,23 +21,54 @@ LAST_COMMIT_DAYS=$(git log -1 --format=%ct --author="$LDAP@" -- people/$LDAP/ 2>
 | -------------------------------------------------- | -------------------------------------------------------- |
 | `people/$LDAP/` missing                            | Bootstrap (preamble step 4), then run **full** scan.     |
 | `$ACTIVE_COUNT` = 0                                | Run **light** survey. Offer `--full` if user wants more. |
-| `$ACTIVE_COUNT` ≥ 1 AND `$LAST_COMMIT_DAYS` < 7    | **Light** (read `active/`, verify against `gh pr list`). |
+| `$ACTIVE_COUNT` ≥ 1 AND `$LAST_COMMIT_DAYS` < 7    | **Light** (read `active/`, verify via `forge-prs.sh list`). |
 | `$ACTIVE_COUNT` ≥ 1 AND `$LAST_COMMIT_DAYS` ≥ 7    | Run **light**; point at `--full` if drift is detected.   |
 
 **Explicit overrides:** `/worklog init --full` always runs the full scan; `/worklog init --light` always skips it.
 
 **Drift signals** (trigger the "point at `--full`" suggestion during a light run):
-- Open PR on GitHub (`gh pr list --author @me --state open`) whose number/URL doesn't appear in any active task file.
-- Active task with `status: in-review` whose PR is merged or closed on GitHub.
+- Open PR/MR whose number/URL doesn't appear in any active task file — `bin/forge-prs.sh list`.
+- Active task with `status: in-review` whose PR/MR is merged or closed — `bin/forge-prs.sh state <clone> <n>`.
 - Active task with `status: shipping` whose `last_updated` is >14 days old.
+
+**Forge is per clone, not per machine.** Pick the CLI from each clone's origin
+remote (`github.com` → `gh`, `gitlab.*` → `glab`), never from a default. The
+check used to be a bare `gh pr list --author @me`; on a host with no `gh` and
+GitLab clones it returned nothing, so `drift:` rendered empty and read as clean
+while five active tasks sat at `status: in-review` on already-merged MRs. An
+unrunnable check must say so — see `gap:` below.
 
 ## Light path
 
 Read-only sync, no writes.
 
 1. `ls people/$LDAP/active/` — print slugs.
-2. For each known repo under `$PROJECTS_DIR` (`cheshirecode/<repo>`, `cheshirecode/<repo>`, `cheshirecode/<repo>`, `cheshirecode/<repo>`, `_worklog`), run `gh pr list --author @me --state open --json number,title,url,headRepository --limit 20` in parallel and cross-reference against active task files.
-3. Report drift lines if any. Do not write.
+2. Discover the repos to scan and query each one on its own forge:
+
+   ```bash
+   "$WORKLOG_BIN/forge-prs.sh" list            # scans $PROJECTS_DIR/*/
+   "$WORKLOG_BIN/forge-prs.sh" list <dir> ...  # or an explicit clone list
+   ```
+
+   It reads each clone's `origin` remote, routes GitHub clones to `gh` and
+   GitLab clones to `glab`, and emits TSV rows:
+
+   ```
+   open  <forge>  <owner/repo>  <number>  <url>  <title>
+   gap   <forge>  <owner/repo>  <reason>
+   ```
+
+   A `gap` row means that repo could **not** be checked (`gh-not-installed`,
+   `glab-not-authenticated`, `unrecognized-forge-host`, …). Surface every one of
+   them under `gap:`. Never present an empty `drift:` block as "no drift" when
+   `gap` rows exist — silence there is absence of evidence, not evidence of
+   absence. If `$PROJECTS_DIR` holds no clones the script says so; prompt the
+   user for the repo list rather than guessing.
+
+3. For each active task with `status: in-review`, resolve its PR/MR state with
+   `"$WORKLOG_BIN/forge-prs.sh" state <clone-dir> <number>`. `merged` or
+   `closed` against a live `in-review` task is drift.
+4. Report drift and gap lines. Do not write.
 
 Output:
 
@@ -49,9 +80,14 @@ active tasks (N):
   - <slug-b>.md
 drift:
   - <repo>#<pr>  not tracked in any active task  (run `/worklog init --full` to propose)
-  - <slug>       PR #<n> merged on GitHub but status=in-review
+  - <slug>       !<n> merged on <forge> but status=in-review
+gap:
+  - <repo>       unchecked — glab-not-installed
 ready — which task?
 ```
+
+Print `drift: none` and/or `gap: none` explicitly; omitting a block reads the
+same as an empty one.
 
 ## Tracker hydration (after focus selection)
 
@@ -81,11 +117,11 @@ Expensive: scans GitHub + Linear + Notion + Slack. Warn first:
 
 Wait for acknowledgement.
 
-1. **Verify auth in parallel.** Stop with a clear message if any fails:
-   - `gh auth status`
-   - Linear MCP: `mcp__claude_ai_Linear__get_user` (self)
-   - Notion MCP: `mcp__claude_ai_Notion__notion-get-users`
-   - Slack MCP: `mcp__claude_ai_Slack__slack_search_users` for the user's own LDAP/name (degrade gracefully — if Slack auth is missing, skip step 2's Slack pull and note it in the report; don't hard-fail the whole init).
+1. **Verify auth in parallel.** Only `gh auth status` is required — stop with a clear message if it fails. Linear, Notion, and Slack are OPTIONAL enrichment sources: degrade gracefully — if one's auth is missing, skip its step-2 pull and note the gap in the report; don't hard-fail the whole init.
+   - `gh auth status` — **required**
+   - Linear MCP: `mcp__claude_ai_Linear__get_user` (self) — optional
+   - Notion MCP: `mcp__claude_ai_Notion__notion-get-users` — optional
+   - Slack MCP: `mcp__claude_ai_Slack__slack_search_users` for the user's own LDAP/name — optional
 
 2. **Pull external state in parallel.**
    - **GitHub:** `gh pr list --author @me --state open --json number,title,url,headRepository,isDraft,reviewDecision` across known repos; `gh issue list --assignee @me --state open`.

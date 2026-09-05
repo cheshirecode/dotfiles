@@ -3,6 +3,49 @@
 Read only when state classification, effect ordering, or handoff routing is
 ambiguous.
 
+## 0. Basic single-task loop
+
+INPUT
+
+> Verify that the API endpoint returns 200 for valid requests. Budget: 5 checks.
+
+OUTPUT
+
+Initialize the loop:
+
+```bash
+python3 <skill-dir>/scripts/loop_state.py init \
+  --state /tmp/api-check.json \
+  --goal "API endpoint returns 200 for valid requests" \
+  --evidence "endpoint URL confirmed" \
+  --budget-unit checks \
+  --budget-limit 5 \
+  --next-action "send test request with valid payload"
+```
+
+Run one cycle:
+
+```bash
+# After executing the check and capturing output
+python3 <skill-dir>/scripts/loop_state.py advance \
+  --state /tmp/api-check.json \
+  --evidence "command: curl -s -o /dev/null -w '%{http_code}' — 200" \
+  --next-action "verify response body schema"
+```
+
+On success after verification:
+
+```bash
+python3 <skill-dir>/scripts/loop_state.py finish \
+  --state /tmp/api-check.json \
+  --status complete \
+  --verification "curl exit 0 and HTTP 200 confirmed" \
+  --evidence "command: curl response — 200 OK with valid schema"
+```
+
+This pattern scales to multi-hypothesis diagnosis (fixture 1), delegation
+(fixture 2), and orchestrator programs (fixture 4).
+
 ## 1. Interactive diagnosis
 
 INPUT
@@ -14,7 +57,7 @@ OUTPUT
 ```text
 goal: targeted test passes three consecutive runs
 progress_evidence: failure reproduced once; no source mutation yet
-budget: 3 hypotheses
+budget: 0/3 hypotheses
 next_action: isolate timing-dependent assertions
 terminal_status: running
 ```
@@ -109,8 +152,13 @@ OUTPUT (agent decomposes, creates project, cycles through tasks)
 [         advance evidence: "fix-sh-preamble: archived"]
 [cycle 3: claim fix-py-errors → delegate → archive → advance]
 [         advance evidence: "fix-py-errors: archived"]
-[project next exits 1 → finish complete with verification]
+[project next reports "all tasks ... are archived (nothing left)" + project verify exits 0 → finish complete]
 ```
+
+Same prompt in natural language:
+
+> Use loop-engineering. Goal: audit skills for shellcheck
+> regressions.
 
 Mid-run escalation is resumable, not terminal:
 
@@ -127,15 +175,98 @@ Delegate return contract: `archived <slug> <sha>` is the success case;
 `blocked <slug> <reason>` preserves a non-success outcome without returning a
 full task narrative.
 
-Same prompt in natural language:
+## 5. Discovery keyed on a join dimension
 
-> Use loop-engineering orchestrator mode. Goal: audit skills for shellcheck
-> regressions.
+INPUT
+
+> Watch for MRs in my team's repos that need review.
+
+OUTPUT (agent runs the inverse sweep, not just the forward one)
 
 ```text
-shot_count: few
-format: INPUT/OUTPUT
-examples_or_skip_reason: three distinct fixtures cover diagnosis, delegated durable context, and scheduled handoff
-risk_check: keep fixtures about classification and sequencing so agents do not copy task-specific details
-acceptance_test: an unseen resumable task hydrates context, bounds the run, and ends with evidence plus one valid terminal status
+[sweep A: MRs whose title/branch carries a ticket id -> 6 found]
+[sweep B: tickets on the team field -> resolve to MRs -> 5 found]
+[reconcile: A\B = 1 MR whose ticket is untagged; B\A = 1 MR in a repo not enumerated]
+[evidence: "command: two sweeps reconciled — 2 items visible to exactly one"]
 ```
+
+If a loop discovers work through a join key, items lacking that key are
+invisible **by construction**, not by accident: a title-keyed sweep cannot see an
+untagged MR, and a ticket-keyed sweep cannot see a repo it does not enumerate.
+Run the inverse sweep and reconcile the two sets. Observed 2026-08-28: each
+direction missed something real on the same day.
+
+## 6. Reading a tool whose exit code is a verdict
+
+INPUT
+
+> Fingerprint crew-radar for a Monitor, and check it after the fix.
+
+OUTPUT (capture, then parse — never pipe a verdict into a parser)
+
+```bash
+RADAR=<skill-dir>/bin/crew-radar   # not on PATH; always resolve via <skill-dir>
+
+# WRONG — pipefail binds the pipeline to the radar's exit 2, and a real
+# collision is reported as unparseable output. (Subshell keeps the option
+# from leaking into the RIGHT form below.)
+(
+  set -o pipefail
+  cur=$("$RADAR" --json "$REPO" | jq -S -c '{warn,info}') || cur='{"error":"unparseable"}'
+)
+
+# RIGHT — capture first; only a jq failure reaches the sentinel.
+raw=$("$RADAR" --json "$REPO" 2>/dev/null) || true
+cur=$(printf '%s' "$raw" | jq -S -c '{warn,info,error}' 2>/dev/null) \
+  || cur='{"error":"unparseable"}'
+```
+
+A non-zero exit that *is* the answer — `crew-radar` 2 for a collision,
+`crew-reap` 3 for a removal, a linter's 1 for findings — inverts the usual
+reading. Under `set -o pipefail`, or `... | tail -1; echo $?`, the shell reports
+the pipeline rather than the command, so a correct tool reads as broken and a
+clean run reads as a failure.
+
+Six occurrences in one day across three agents, including one while verifying
+the fix for it and one in a test written by the person who had documented the
+trap that morning. **The knowledge does not fire at the moment you type the
+pipeline**, so a caution does not prevent it — the executable fixtures in
+`tests/test_crew_radar.sh` and `tests/test_crew_reap.sh` do, because they
+assert both that the correct form works and that the wrong form still fails.
+Copy those when adding a tool whose exit code carries meaning.
+
+## 7. Proving a fixture would have caught the bug
+
+INPUT
+
+> Added tests with the fix. Confirm they actually test it.
+
+OUTPUT (revert the FIX; never the fixtures)
+
+```bash
+cp path/to/impl.py "$SCRATCH/impl.fixed"     # keep the fix
+git checkout HEAD -- path/to/impl.py         # revert ONLY the implementation
+bash tests/the_new_suite.sh                  # MUST fail, and name which cases
+cp "$SCRATCH/impl.fixed" path/to/impl.py     # restore
+```
+
+```bash
+# WRONG — `git stash` takes the fixtures with the fix, so the new cases never
+# run. "5 passed, 0 failed" then means the suite you are validating was absent.
+git stash && bash tests/the_new_suite.sh && git stash pop
+```
+
+A fixture written alongside a fix is asserted against a codebase that already
+passes it. Nothing about writing it establishes that it would have failed
+before, and a green run is the same shape whether the case is guarding
+something or merely present. The check is cheap and almost never run.
+
+State the split in the report: on one change here, 3 of 4 new fixtures failed
+with the fix reverted and the 4th passed both ways *by design* — it pinned a
+pre-existing line the fix's correctness argument depended on, which had no
+guard. Both are worth having; conflating them is what hides a fixture that
+guards nothing.
+
+Same family as section 6: the instrument that is easy to reach could not have
+produced the other answer. There the pipeline reported its own exit instead of
+the tool's; here the revert removed the evidence along with the defect.

@@ -17,7 +17,13 @@
 set -euo pipefail
 
 # Resolve sibling bin/ (relocated from data repo to skill).
-WORKLOG_BIN="${WORKLOG_BIN:-$(cd "$(dirname "$0")/../../bin" && pwd)}"
+# Pinned to the tree under test, not `${WORKLOG_BIN:-...}`. A developer
+# profile exports WORKLOG_BIN at the *installed* skill, which is a different
+# checkout; honouring it makes this fixture grade the installed helpers
+# instead of the ones sitting next to it, so a fix in the working tree can
+# read green against unfixed code. tests/run.sh unsets the variable, and
+# deriving it here keeps the fixture honest when run by hand too.
+WORKLOG_BIN="$(cd "$(dirname "$0")/../../bin" && pwd)"
 
 cd "$(dirname "$0")/../.."
 SOURCE="${SOURCE:-$(pwd)}"
@@ -31,12 +37,12 @@ trap 'echo "scratch: $SCRATCH_ROOT (left for inspection)"' ERR
 
 echo "=== Test setup ==="
 # Bare upstream the scratch repo can safely push to.
-git init -q --bare "$UPSTREAM"
+git init -q --bare --initial-branch=main "$UPSTREAM"
 # Fresh scratch data repo seeded with the working-tree bin/. (Post-relocation
 # $SOURCE is a subdir of dotfiles, not a clonable repo root; scripts run from
 # $WORKLOG_BIN, and WORKLOG_REPO below pins resolve_worklog_repo to the scratch
 # so it can't escape to the dev's real vault.)
-git init -q "$SCRATCH"
+git init -q --initial-branch=main "$SCRATCH"
 cp -R "$SOURCE/bin" "$SCRATCH/bin"
 rm -rf "$SCRATCH/bin/__pycache__"
 cd "$SCRATCH"

@@ -105,5 +105,125 @@ class InstallAuditTest(unittest.TestCase):
         self.assertEqual(identical.resolve(), self.canonical.resolve())
 
 
+    def test_pycache_in_canonical_does_not_break_identical_detection(self) -> None:
+        copied = self.make_copy("copied")
+        pycache = self.canonical / "scripts" / "__pycache__"
+        pycache.mkdir()
+        (pycache / "tool.cpython-312.pyc").write_bytes(b"\x00machine-local")
+
+        _, entries = self.run_cli(copied, expected_returncode=1)
+
+        self.assertEqual(entries[0]["status"], "duplicate-identical")
+
+    def git(self, repo: pathlib.Path, *arguments: str) -> None:
+        subprocess.run(
+            ["git", "-C", str(repo), *arguments],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    def make_clone_pair(self) -> tuple[pathlib.Path, pathlib.Path]:
+        """An editing clone one commit ahead of a second, stale clone.
+
+        Mirrors the live shape: `~/.claude/skills/*` symlink into an installed
+        clone nobody pulls, while edits land in a different clone.
+        """
+        origin = self.root / "origin.git"
+        self.git(self.root, "init", "--bare", "--initial-branch=main", str(origin))
+        work = self.root / "work"
+        self.git(self.root, "clone", str(origin), str(work))
+        self.git(work, "config", "user.email", "fixture@example.invalid")
+        self.git(work, "config", "user.name", "fixture")
+        skill = work / "skills/loop-engineering"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("v1\n")
+        self.git(work, "add", "-A")
+        self.git(work, "commit", "-m", "v1")
+        self.git(work, "push", "-u", "origin", "main")
+
+        installed = self.root / "installed"
+        self.git(self.root, "clone", str(origin), str(installed))
+
+        (skill / "SKILL.md").write_text("v2\n")
+        self.git(work, "commit", "-am", "v2")
+        self.git(work, "push")
+        # The stale clone fetched at some point but never merged: that is the
+        # no-network signal, HEAD versus origin/main as of the last fetch.
+        self.git(installed, "fetch", "origin")
+        return work, installed
+
+    def test_installed_clone_behind_its_remote_is_reported(self) -> None:
+        if shutil.which("git") is None:
+            self.skipTest("git unavailable")
+        _, installed = self.make_clone_pair()
+        # Audited from inside the stale clone: the root is a clean symlink into
+        # it, so content comparison alone reports nothing at all.
+        self.canonical = installed / "skills/loop-engineering"
+        link = self.root / "home-claude-skills-loop-engineering"
+        link.symlink_to(self.canonical, target_is_directory=True)
+
+        result, entries = self.run_cli(link, expected_returncode=1)
+
+        self.assertEqual(entries[0]["status"], "linked")
+        self.assertEqual(entries[0]["remote_drift"], "behind:1")
+        self.assertIn("stale install", result.stderr)
+        self.assertIn(str(link), result.stderr)
+
+    def test_installed_clone_behind_editing_clone_is_reported(self) -> None:
+        if shutil.which("git") is None:
+            self.skipTest("git unavailable")
+        work, installed = self.make_clone_pair()
+        self.canonical = work / "skills/loop-engineering"
+        link = self.root / "home-claude-skills-loop-engineering"
+        link.symlink_to(installed / "skills/loop-engineering", target_is_directory=True)
+
+        result, entries = self.run_cli(link, expected_returncode=1)
+
+        self.assertEqual(entries[0]["source_drift"], "behind:1")
+        self.assertIn("stale install", result.stderr)
+
+    def test_non_git_roots_report_no_drift_and_stay_clean(self) -> None:
+        identical = self.make_copy("identical")
+
+        _, entries = self.run_cli(identical, link_identical=True)
+
+        self.assertEqual(entries[0]["status"], "linked")
+        self.assertEqual(entries[0]["source_drift"], "no-git")
+
+    def test_nonexistent_canonical_exits_two_without_traceback(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--canonical",
+                str(self.root / "missing"),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 2, msg=result.stderr)
+        self.assertIn("install-audit:", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_aliased_roots_are_deduplicated_before_repair(self) -> None:
+        identical = self.make_copy("identical")
+        alias_parent = self.root / "alias"
+        alias_parent.symlink_to(self.root, target_is_directory=True)
+
+        _, entries = self.run_cli(
+            identical,
+            alias_parent / "identical",
+            link_identical=True,
+        )
+
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["status"], "linked")
+        self.assertTrue(identical.is_symlink())
+        stray = [p for p in self.root.iterdir() if ".backup-" in p.name]
+        self.assertEqual(stray, [])
+
+
 if __name__ == "__main__":
     unittest.main()

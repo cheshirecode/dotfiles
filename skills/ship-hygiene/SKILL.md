@@ -7,6 +7,16 @@ description: Sweep surfaces that go stale together — worklog task bodies, open
 
 A periodic sweep skill. Three surfaces share the same staleness pattern: a worklog task accumulates iteration drama; open PRs accumulate title typos / outdated bodies / bot-comment noise; the PR stack accumulates CI red and unresolved threads. Doing them all at once amortizes the context cost.
 
+## Resolve `$WORKLOG_BIN`
+
+This skill invokes worklog scripts via `$WORKLOG_BIN`. Resolve it the same way the worklog skill does:
+
+```bash
+WORKLOG_BIN="${WORKLOG_BIN:-$HOME/.claude/skills/worklog/bin}"
+```
+
+All `checkpoint.sh` references below use this variable.
+
 ## When to use
 
 - Pre-handoff (you're about to hand a stack off to a reviewer or a teammate)
@@ -18,23 +28,41 @@ Skip if: only one PR open, body is short, no recent worklog activity. Overhead n
 
 ## Surfaces + verbs
 
-1. **Worklog task body** — `people/$LDAP/active/<slug>.md`. Verb: **compress**. Keep lessons, gotchas, decisions, re-runnable commands. Drop ToT/Reflexion/Assumptions sections once decided. Drop historical iteration tables — git log is the audit trail.
-2. **Open PR titles+bodies + the diff's code comments** — `gh pr list --author @me --state open`. Verb: **audit, don't blind-edit**. Conv-Commit prefixes already correct? Body sized 1-4KB? Leave alone. Slop trigger: body >5KB with stale checklists, OR title missing prefix on a NEW PR (skip the fix on PRs older than a week — reviewers may have linked the original title). **Internal-reference purge (always):** PR title/body AND code comments are reviewer- and product-facing; strip leaked internal artifacts — worklog slugs/paths (`people/<ldap>/active/*`, `[POST-MERGE-CLEANUP]`, `next_action`), agent-process chatter ("Iteration 3", "per the audit", "scope chosen"), preview/worktree internals that don't help a reader understand the change. Strip skill command names (`/ship-hygiene`, `/impeccable`, `/worklog`) unless the PR itself changes dotfiles skill files, `manifest/skills.yaml`, or user-facing skill docs; in that case the skill name is product surface, not a leak. Keep the framing **external-facing and product-first** (what changed for users + why) **unless the change is a pure engineering/infra task** (refactor, codegen, tooling, migration) — then technical framing is fine, but the worklog/agent-chatter purge still applies.
-3. **PR stack health** — CI red, unresolved comments, missing approvals. Verb: **surface, not auto-fix**. Triage red checks by pattern (single shared failure across PRs = workflow config bug; per-PR unique failures = author work). Distinguish reviewer comments from bot noise (preview-deploy, lighthouse-ci, github-actions are bot signatures).
-4. **Post-merge cleanup readiness** — the throwaway resources a PR leaves behind: its sibling worktree, its remote+local branch, and any live preview deploy. Verb: **prepare a note, never execute pre-merge**. For each open PR backed by these, emit the exact teardown commands and persist them as a `[POST-MERGE-CLEANUP]` note in the worklog task so they survive the merge and the next session. Running teardown while the PR is still open would kill the reviewer's preview and orphan the branch — only stage the note.
+1. **Worklog task body** — `people/$LDAP/active/<slug>.md`. Verb: **compress**. Keep lessons, gotchas, decisions, re-runnable commands. Drop scaffolding once decided.
+2. **Open PR titles+bodies + code comments** — `gh pr list --author @me --state open`. Verb: **audit, don't blind-edit**. Slop triggers: body >5KB with stale checklists, title missing Conv-Commit prefix on a new PR. Always: **purge internal-reference leaks** (worklog paths, `[POST-MERGE-CLEANUP]`, `next_action`, agent-process chatter, skill command names unless the PR changes skill files). Keep framing product-first unless it's a pure engineering task.
+3. **PR stack health** — CI red, unresolved comments, missing approvals. Verb: **surface, not auto-fix**. Triage systemic vs per-PR; distinguish reviewer comments from bot noise.
+4. **Post-merge cleanup readiness** — worktree, branch, preview deploy. Verb: **prepare a note, never execute pre-merge**. Persist teardown commands as a `[POST-MERGE-CLEANUP]` note in the worklog task.
 
 ## Recipe
 
 1. **Resolve which worklog task to clean.** Default: most-recently-touched active slug. Verify with `ls -t people/$LDAP/active/*.md | head -3`.
 2. **Read it.** Slop trigger: **>150 lines AND the spike/decision is already made**. If shorter or still-active exploration, skip — leave the iteration drama until it's decided.
 3. **Compress** if triggered. **Drop:** ToT/Reflexion scaffolding, multi-row iteration tables, "Assumptions to verify" once verified, redundant intermediate options. **Preserve:** final decision rationale, lessons/gotchas, re-runnable commands, frontmatter, `next_action`, open follow-up items.
-4. **List open PRs:** `gh pr list --author @me --state open --repo <each-repo> --json number,title,reviewDecision,isDraft,updatedAt`.
+4. **List open PRs:** run `gh pr list --author @me --state open --json number,title,reviewDecision,isDraft,updatedAt` once per repo you contribute to (omit `--repo` for the default remote, or pass `--repo <owner/name>` for each additional repo).
 5. **Per-PR dashboard:** for each non-draft PR, gather `body_length`, `failed_checks`, `pending_checks`, `comment_count`, last-comment-author. Print as a table.
 6. **Title audit:** flag PRs missing Conv-Commit prefix OR with stale prefix (`frontend:` → `feat(spa):` style). **Do not edit titles on PRs older than 7 days** without explicit user confirmation.
-7. **Body + comment audit:** flag PRs with body >5KB; read those bodies for stale checklists, ASCII art, duplicate context. Then scan for **internal-reference leaks** in (a) the title, (b) the body, and (c) code comments added by the diff — run the leak grep against **both** sources, don't rely on eyeballing the body:
-   - (a)+(b) title/body: `gh pr view <n> --json title,body -q '.title + "\n" + .body' | grep -inE 'worklog:|\[POST-MERGE|next_action|/ship-hygiene|/impeccable|/worklog|people/[a-z]+/active|iteration [0-9]|per the (audit|critique)|scope chosen'`
-   - (c) code comments: `gh pr diff <n> | grep -nE '^\+' | grep -iE 'worklog:|\[POST-MERGE|next_action|/ship-hygiene|/impeccable|/worklog|people/[a-z]+/active|iteration [0-9]|per the (audit|critique)|scope chosen'`
-   The two greps aren't redundant: a worklog path in the diff is a leaked *code comment*, the same string in the body is a leaked *PR description* — both need the explicit grep because a body under the 5KB size trigger otherwise gets skipped past without this scan (this is exactly how a `Worklog: people/<ldap>/active/*.md` trailer once nearly shipped in a ~2KB PR body). For PR title/body, **fix in place** (it's your own reviewer-facing text — rewrite product-first, drop the internal refs). For **code comments**, surface them and fix only if they're genuinely leaked process notes; keep durable why-comments. If the PR changes `skills/**`, `manifest/skills.yaml`, or skill docs, allow the relevant skill command names and still purge worklog paths, `next_action`, and agent-process chatter. Respect the pure-engineering exception (technical framing OK; internal-tooling chatter still goes). The token is `worklog:` (the trailer form), not bare `worklog`, on purpose: a PR that legitimately describes worklog *tooling* uses the word "worklog" as product vocabulary, and the leaked forms — the `Worklog:` trailer and worklog *paths* — are still caught (the latter by `people/[a-z]+/active`).
+7. **Body + comment audit** — three sub-steps, run in order:
+
+   **7a. Size flag.** PRs with body >5KB: read for stale checklists, ASCII art, duplicate context.
+
+   **7b. Internal-ref leak scan.** Run both scans below — they are not redundant (a worklog path in the diff is a leaked *code comment*; the same string in the body is a leaked *PR description*; a body under 5KB skips the size flag but still needs this scan):
+   Resolve `<skill-dir>` to the directory holding this SKILL.md (empty when absent, never a bogus path):
+   `SKILL_DIR="$(f=$(find -L ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills -name leak-scan.sh -print -quit 2>/dev/null); [ -n "$f" ] && dirname "$(dirname "$f")")"`
+   - Title + body: `gh pr view <n> --json title,body -q '.title + "\n" + .body' | "$SKILL_DIR"/bin/leak-scan.sh --label body`
+   - Code comments (added lines only): `gh pr diff <n> | grep -E '^\+' | "$SKILL_DIR"/bin/leak-scan.sh --label diff`
+
+   `leak-scan.sh` owns the pattern (`--print-pattern` to see it). Exit **0** clean,
+   **1** leaks found — a verdict, printed — **2** usage, or a refusal to judge.
+   Capture the status before parsing; do not read a pipeline's status as the verdict.
+   It exits 2 rather than reporting clean when stdin is empty, because a failed
+   `gh` call and a leak-free PR otherwise produce identical output.
+
+   **7c. Fix.** For title/body: **fix in place** — rewrite product-first, drop the internal refs. For code comments: surface and fix only if genuinely leaked process notes; keep durable why-comments.
+
+   **Leak-token notes:**
+   - The token is `worklog:` (the trailer form), not bare `worklog` — a PR describing worklog *tooling* uses "worklog" as product vocabulary. The leaked forms are still caught: the `Worklog:` trailer, task paths under `active/` **and `archive/`** (dotted/hyphenated/numeric LDAPs included, e.g. `people/fred.tran/archive/...`), and the `worklog/<ldap>/<slug>` id form. Every sibling skill's command name is a token too — `tests/test_leak_scan.sh` fails if a new skill is added without one, so that gap is caught when the skill lands rather than when its name ships inside a PR body.
+   - If the PR changes `skills/**`, `manifest/skills.yaml`, or skill docs: allow the relevant skill command names; still purge worklog paths, `next_action`, and agent-process chatter.
+   - Pure-engineering exception: technical framing is fine; internal-tooling chatter still goes.
 8. **CI triage:** group failed checks by name. If the same check fails on N>1 PRs → systemic (workflow config bug, not per-PR). Surface the systemic finding as ONE actionable line.
 9. **Comment triage:** check the last comment's author per PR. Bot signatures (`github-actions`, `vercel`, preview-deploy automation under the user's own login) → not unresolved review. Surface only PRs with a real reviewer comment that hasn't been responded to.
 10. **Post-merge cleanup note:** for each open PR backed by a sibling worktree and/or a live preview, assemble the teardown commands and record them as a `[POST-MERGE-CLEANUP]` note in the worklog task (and surface them in the output). Discover the pieces: worktree via `git worktree list | grep <branch-slug>`; preview name from the branch slug / earlier deploy; services from the diff (`frontend`, `ui`, `admin-dashboard`). Template (do NOT run until the PR is merged):
@@ -42,7 +70,11 @@ Skip if: only one PR open, body is short, no recent worklog activity. Overhead n
     - worktree: `git worktree remove <path>`
     - branch: usually auto-deleted on squash-merge; otherwise `git push origin --delete <branch>` + `git branch -D <branch>`
    If a `[POST-MERGE-CLEANUP]` note for this PR already exists, refresh it rather than duplicating.
-11. **Checkpoint** the worklog body change(s): `"$WORKLOG_BIN/checkpoint.sh" <slug>`. Don't bundle unrelated working-tree changes. Use `WORKLOG_CHECKPOINT_FORCE=1` only as an explicit, stated-reason override when intentionally checkpointing extra paths; default ship-hygiene must preserve the staged-scope guard.
+11. **Checkpoint** the worklog body change(s): `"$WORKLOG_BIN/checkpoint.sh" <slug>`. Don't bundle unrelated working-tree changes. If a sibling path genuinely belongs to this slug, add it with `--include=<path>` (repeatable) — that is the sanctioned scoped mechanism and the one checkpoint.sh itself recommends. `WORKLOG_CHECKPOINT_FORCE=1` is the blunt last resort: use it only as an explicit, stated-reason override; default ship-hygiene must preserve the staged-scope guard.
+
+    **Hard failures** (nothing was committed — fix and re-run):
+    - **exit 1** — staged paths outside the slug's scope. Re-run with `--include=<path>` for each path that belongs with this slug, or `git restore --staged <path>` for the ones that belong to a different commit.
+    - **exit 2** — `--status=blocked` without a `Waiting on ...` next_action. Supply `--next="Waiting on <who or what>"`.
 
 ## Output format
 
@@ -103,5 +135,5 @@ Claude: [identifies skillopt-setup as the slop-heavy task]
 
 ```
 User: /ship-hygiene
-Claude: Nothing to do — worklog tasks all under 60 lines, no PRs flagged.
+Claude: Nothing to do — worklog tasks all under 150 lines (no compression triggered), no PRs flagged.
 ```

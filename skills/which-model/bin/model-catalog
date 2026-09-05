@@ -29,7 +29,17 @@ OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 # key: the session itself can list models and inject that JSON via
 # WHICH_MODEL_CATALOG_SOURCE. With no injection we build from the dated docs snapshot
 # below (IDs + pricing/limits), so the claude catalog works offline and key-free.
-ANTHROPIC_PRICING_SNAPSHOT = "2026-01"
+# Provenance, not a snapshot date: every Claude id, price, context window and
+# max-output figure below is transcribed from the claude-api reference bundled with
+# this harness (its shared/models.md and shared/model-migration.md). That reference
+# carries no publication date, so the age of the data is genuinely unknown. We say so
+# instead of stamping a date the data never had, and an undated source is always
+# treated as stale so it can never be presented as current.
+ANTHROPIC_REFERENCE = "bundled claude-api reference (shared/models.md, shared/model-migration.md)"
+UNKNOWN_DATA_AGE = "unknown"
+# Hand-written ENV_SEEDS below carry no live source; this is the date they were
+# last curated. Staleness is computed from the data date, not from build time.
+SEED_DATA_AS_OF = "2026-01-21"
 
 
 TASK_ALIASES = {
@@ -53,189 +63,208 @@ TASK_ALIASES = {
 }
 
 
+CODEX_SEED_CAVEAT = (
+    "Seed-only record: there is no live OpenAI catalog fetch behind the codex "
+    "profile, so the ID, price, and availability here are unverified — confirm "
+    "in the harness and against OpenAI's pricing page before quoting dollars."
+)
+
 ENV_SEEDS = {
     "codex": [
         {
             "id": "gpt-5.6-luna",
             "display_name": "GPT-5.6 Luna",
             "provider": "openai",
-            "availability": "selectable_here",
+            "availability": "requires_harness_check",
             "input_price_per_mtok": 1.0,
             "output_price_per_mtok": 6.0,
             "context_window": 1_050_000,
             "max_output": 128_000,
             "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
             "task_fit": ["mechanical_search", "routine_coding", "cheap_parallel_voter"],
-            "caveats": ["Use a stronger lane for high-risk final synthesis."],
+            "caveats": [CODEX_SEED_CAVEAT, "Use a stronger lane for high-risk final synthesis."],
             "confidence": "seeded",
+            "generation": 5.6,
         },
         {
             "id": "gpt-5.6-terra",
             "display_name": "GPT-5.6 Terra",
             "provider": "openai",
-            "availability": "selectable_here",
+            "availability": "requires_harness_check",
             "input_price_per_mtok": 2.5,
             "output_price_per_mtok": 15.0,
             "context_window": 1_050_000,
             "max_output": 128_000,
             "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
             "task_fit": ["routine_coding", "long_context_review", "planning"],
-            "caveats": ["More expensive than small/search lanes."],
+            "caveats": [CODEX_SEED_CAVEAT, "More expensive than small/search lanes."],
             "confidence": "seeded",
+            "generation": 5.6,
         },
         {
             "id": "gpt-5.6-sol",
             "display_name": "GPT-5.6 Sol",
             "provider": "openai",
-            "availability": "selectable_here",
+            "availability": "requires_harness_check",
             "input_price_per_mtok": 5.0,
             "output_price_per_mtok": 30.0,
             "context_window": 1_050_000,
             "max_output": 128_000,
             "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
             "task_fit": ["final_synthesis", "visual_design", "large_refactor"],
-            "caveats": ["Reserve for work where judgment quality clears the cost."],
+            "caveats": [CODEX_SEED_CAVEAT, "Reserve for work where judgment quality clears the cost."],
             "confidence": "seeded",
+            "generation": 5.6,
         },
         {
             "id": "gpt-5.5",
             "display_name": "GPT-5.5",
             "provider": "openai",
-            "availability": "selectable_here",
+            "availability": "requires_harness_check",
             "input_price_per_mtok": 5.0,
             "output_price_per_mtok": 30.0,
             "context_window": 1_050_000,
             "max_output": 128_000,
             "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
             "task_fit": ["routine_coding", "long_context_review", "planning", "final_synthesis"],
-            "caveats": ["Prefer GPT-5.6 Sol unless a GPT-5.5-specific baseline is required."],
+            "caveats": [CODEX_SEED_CAVEAT, "Prefer GPT-5.6 Sol unless a GPT-5.5-specific baseline is required."],
             "confidence": "seeded",
+            "generation": 5.5,
         },
         {
             "id": "gpt-5.5-pro",
             "display_name": "GPT-5.5 Pro",
             "provider": "openai",
-            "availability": "selectable_here",
+            "availability": "requires_harness_check",
             "input_price_per_mtok": 30.0,
             "output_price_per_mtok": 180.0,
             "context_window": 1_050_000,
             "max_output": 128_000,
             "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
             "task_fit": ["final_synthesis", "large_refactor"],
-            "caveats": ["Premium slow lane; reserve for hard problems where extra compute is justified."],
+            "caveats": [CODEX_SEED_CAVEAT, "Premium slow lane; reserve for hard problems where extra compute is justified."],
             "confidence": "seeded",
+            "generation": 5.5,
         },
         {
             "id": "gpt-5.4",
             "display_name": "GPT-5.4",
             "provider": "openai",
-            "availability": "selectable_here",
+            "availability": "requires_harness_check",
             "input_price_per_mtok": 2.5,
             "output_price_per_mtok": 15.0,
             "context_window": 1_050_000,
             "max_output": 128_000,
             "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
             "task_fit": ["routine_coding", "long_context_review", "planning"],
-            "caveats": ["Older affordable frontier lane; compare against GPT-5.6 Terra first."],
+            "caveats": [CODEX_SEED_CAVEAT, "Older affordable frontier lane; compare against GPT-5.6 Terra first."],
             "confidence": "seeded",
+            "generation": 5.4,
         },
         {
             "id": "gpt-5.4-pro",
             "display_name": "GPT-5.4 Pro",
             "provider": "openai",
-            "availability": "selectable_here",
+            "availability": "requires_harness_check",
             "input_price_per_mtok": 30.0,
             "output_price_per_mtok": 180.0,
             "context_window": 1_050_000,
             "max_output": 128_000,
             "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
             "task_fit": ["final_synthesis", "large_refactor"],
-            "caveats": ["Older premium slow lane; prefer newer premium lanes unless reproducing history."],
+            "caveats": [CODEX_SEED_CAVEAT, "Older premium slow lane; prefer newer premium lanes unless reproducing history."],
             "confidence": "seeded",
+            "generation": 5.4,
         },
         {
             "id": "gpt-5.4-mini",
             "display_name": "GPT-5.4 mini",
             "provider": "openai",
-            "availability": "selectable_here",
+            "availability": "requires_harness_check",
             "input_price_per_mtok": 0.75,
             "output_price_per_mtok": 4.5,
             "context_window": 400_000,
             "max_output": 128_000,
             "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
             "task_fit": ["mechanical_search", "routine_coding", "cheap_parallel_voter"],
-            "caveats": ["Good low-cost coding/subagent lane when GPT-5.6 Luna is unavailable."],
+            "caveats": [CODEX_SEED_CAVEAT, "Good low-cost coding/subagent lane when GPT-5.6 Luna is unavailable."],
             "confidence": "seeded",
+            "generation": 5.4,
         },
         {
             "id": "gpt-5.4-nano",
             "display_name": "GPT-5.4 nano",
             "provider": "openai",
-            "availability": "selectable_here",
+            "availability": "requires_harness_check",
             "input_price_per_mtok": 0.2,
             "output_price_per_mtok": 1.25,
             "context_window": 400_000,
             "max_output": 128_000,
             "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
             "task_fit": ["mechanical_search", "cheap_parallel_voter"],
-            "caveats": ["Best for simple classification, extraction, ranking, and cheap subagents."],
+            "caveats": [CODEX_SEED_CAVEAT, "Best for simple classification, extraction, ranking, and cheap subagents."],
             "confidence": "seeded",
+            "generation": 5.4,
         },
         {
             "id": "gpt-5.3-codex",
             "display_name": "GPT-5.3-Codex",
             "provider": "openai",
-            "availability": "selectable_here",
+            "availability": "requires_harness_check",
             "input_price_per_mtok": 1.75,
             "output_price_per_mtok": 14.0,
             "context_window": 400_000,
             "max_output": 128_000,
             "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
             "task_fit": ["routine_coding", "large_refactor", "agentic_workflow"],
-            "caveats": ["Codex-optimized coding lane; compare against newer GPT-5.6 lanes."],
+            "caveats": [CODEX_SEED_CAVEAT, "Codex-optimized coding lane; compare against newer GPT-5.6 lanes."],
             "confidence": "seeded",
+            "generation": 5.3,
         },
         {
             "id": "gpt-5-codex",
             "display_name": "GPT-5-Codex",
             "provider": "openai",
-            "availability": "selectable_here",
+            "availability": "requires_harness_check",
             "input_price_per_mtok": 1.25,
             "output_price_per_mtok": 10.0,
             "context_window": 400_000,
             "max_output": 128_000,
             "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
             "task_fit": ["routine_coding", "agentic_workflow"],
-            "caveats": ["Older Codex-optimized lane; keep for compatibility and historical comparisons."],
+            "caveats": [CODEX_SEED_CAVEAT, "Older Codex-optimized lane; keep for compatibility and historical comparisons."],
             "confidence": "seeded",
+            "generation": 5.0,
         },
         {
             "id": "gpt-5-mini",
             "display_name": "GPT-5 mini",
             "provider": "openai",
-            "availability": "selectable_here",
+            "availability": "requires_harness_check",
             "input_price_per_mtok": 0.25,
             "output_price_per_mtok": 2.0,
             "context_window": 400_000,
             "max_output": 128_000,
             "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
             "task_fit": ["mechanical_search", "routine_coding", "cheap_parallel_voter"],
-            "caveats": ["Older low-cost GPT-5 lane; prefer newer small lanes when available."],
+            "caveats": [CODEX_SEED_CAVEAT, "Older low-cost GPT-5 lane; prefer newer small lanes when available."],
             "confidence": "seeded",
+            "generation": 5.0,
         },
         {
             "id": "gpt-5-nano",
             "display_name": "GPT-5 nano",
             "provider": "openai",
-            "availability": "selectable_here",
+            "availability": "requires_harness_check",
             "input_price_per_mtok": 0.05,
             "output_price_per_mtok": 0.4,
             "context_window": 400_000,
             "max_output": 128_000,
             "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
             "task_fit": ["mechanical_search", "cheap_parallel_voter"],
-            "caveats": ["Cheapest older GPT-5 lane for simple high-volume tasks."],
+            "caveats": [CODEX_SEED_CAVEAT, "Cheapest older GPT-5 lane for simple high-volume tasks."],
             "confidence": "seeded",
+            "generation": 5.0,
         },
     ],
     "claude": [
@@ -346,7 +375,28 @@ def now_iso() -> str:
 
 
 def parse_iso(value: str) -> float:
-    return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+    text = value.replace("Z", "+00:00")
+    if "T" not in text:
+        # Date-only source stamps (docs snapshot / seed curation date) are UTC midnight.
+        text = f"{text}T00:00:00+00:00"
+    return datetime.fromisoformat(text).timestamp()
+
+
+def parse_iso_or_none(value: object) -> float | None:
+    """parse_iso, but unusable input is None rather than an exception.
+
+    Every caller below treats unknown age as stale. Three unusable cases --
+    absent, null, and the UNKNOWN_DATA_AGE sentinel -- already read that way;
+    a corrupt stamp instead raised ValueError out of is_stale(), so a damaged
+    cache crashed the tool rather than being refreshed, and --refresh-if-stale
+    could not recover without deleting the file by hand.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return parse_iso(value)
+    except ValueError:
+        return None
 
 
 def cache_root() -> pathlib.Path:
@@ -623,49 +673,127 @@ def from_openrouter(payload: object, env: str, *, confidence: str = "fresh") -> 
     return models
 
 
-# Curated Anthropic model metadata (docs snapshot; see ANTHROPIC_PRICING_SNAPSHOT).
+# Curated Anthropic model metadata, transcribed from ANTHROPIC_REFERENCE.
 # Rules are matched most-specific-first against the lowercased model id. The Models
-# API supplies the id/display_name/availability; these fields fill the gaps it omits.
+# API supplies the id and display_name; these fields fill the gaps it omits — including
+# `status`, which is the only place lifecycle is known, since the Models API returns no
+# deprecation field. A figure the reference does not state is left null on purpose:
+# a missing number is recoverable, an invented one is not.
+#
+# status:  "active" | "deprecated" | "retired"   (from the reference's own tables)
+# access:  "program_only" marks lanes the reference restricts to an access program.
+CAPS_FULL = ["text", "image_input", "code", "tools", "reasoning"]
+CAPS_LEGACY = ["text", "image_input", "code", "tools"]
+FRONTIER_FIT = [
+    "agentic_workflow", "final_synthesis", "large_refactor",
+    "long_context_review", "planning", "visual_design",
+]
 ANTHROPIC_MODEL_METADATA: list[tuple[tuple[str, ...], dict]] = [
-    (("haiku-4",), {
-        "input_price_per_mtok": 1.0, "output_price_per_mtok": 5.0,
-        "context_window": 200_000, "max_output": 64_000,
-        "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
+    (("fable-5-1", "fable-5.1"), {
+        "input_price_per_mtok": 10.0, "output_price_per_mtok": 50.0,
+        "context_window": 1_000_000, "max_output": 128_000,
+        "capabilities": CAPS_FULL, "generation": 5.1, "status": "active",
+        "task_fit": FRONTIER_FIT,
     }),
-    (("sonnet-4",), {
+    # Same model as Fable 5.1 per the reference, but offered only to approved
+    # Project Glasswing organizations — so it is listed, priced, and gated.
+    (("mythos-5-1", "mythos-5.1"), {
+        "input_price_per_mtok": 10.0, "output_price_per_mtok": 50.0,
+        "context_window": 1_000_000, "max_output": 128_000,
+        "capabilities": CAPS_FULL, "generation": 5.1, "status": "active",
+        "access": "program_only", "task_fit": FRONTIER_FIT,
+    }),
+    (("fable-5",), {
+        "input_price_per_mtok": 10.0, "output_price_per_mtok": 50.0,
+        "context_window": 1_000_000, "max_output": 128_000,
+        "capabilities": CAPS_FULL, "generation": 5.0, "status": "active",
+        "task_fit": FRONTIER_FIT,
+    }),
+    (("mythos-5",), {
+        "input_price_per_mtok": 10.0, "output_price_per_mtok": 50.0,
+        "context_window": 1_000_000, "max_output": 128_000,
+        "capabilities": CAPS_FULL, "generation": 5.0, "status": "active",
+        "access": "program_only", "task_fit": FRONTIER_FIT,
+    }),
+    (("opus-5",), {
+        "input_price_per_mtok": 5.0, "output_price_per_mtok": 25.0,
+        "context_window": 1_000_000, "max_output": 128_000,
+        "capabilities": CAPS_FULL, "generation": 5.0, "status": "active",
+        "task_fit": FRONTIER_FIT,
+    }),
+    (("sonnet-5",), {
+        "input_price_per_mtok": 2.0, "output_price_per_mtok": 10.0,
+        "context_window": 1_000_000, "max_output": 128_000,
+        "capabilities": CAPS_FULL, "generation": 5.0, "status": "active",
+        "task_fit": [
+            "agentic_workflow", "final_synthesis", "large_refactor",
+            "long_context_review", "planning", "routine_coding", "visual_design",
+        ],
+    }),
+    (("opus-4-8", "opus-4.8"), {
+        "input_price_per_mtok": 5.0, "output_price_per_mtok": 25.0,
+        "context_window": 1_000_000, "max_output": 128_000,
+        "capabilities": CAPS_FULL, "generation": 4.8, "status": "active",
+    }),
+    # Opus 4.7 / 4.6 context and max output are stated; their per-token prices are not.
+    (("opus-4-7", "opus-4.7"), {
+        "context_window": 1_000_000, "max_output": 128_000,
+        "capabilities": CAPS_FULL, "generation": 4.7, "status": "active",
+    }),
+    (("opus-4-6", "opus-4.6"), {
+        "context_window": 1_000_000, "max_output": 128_000,
+        "capabilities": CAPS_FULL, "generation": 4.6, "status": "active",
+    }),
+    # Opus 4.5 and everything below it appear only in the reference's legacy /
+    # deprecated / retired tables, which carry no price, context or max-output
+    # columns at all. Those fields stay null rather than inheriting a neighbour's.
+    (("opus-4-5", "opus-4.5"), {
+        "capabilities": CAPS_FULL, "generation": 4.5, "status": "active",
+    }),
+    (("opus-4-1", "opus-4.1"), {
+        "capabilities": CAPS_FULL, "generation": 4.1, "status": "deprecated",
+        "retires": "2026-08-05",
+    }),
+    (("opus-4-0", "opus-4.0", "opus-4-2025"), {
+        "capabilities": CAPS_FULL, "generation": 4.0, "status": "deprecated",
+    }),
+    (("sonnet-4-6", "sonnet-4.6"), {
         "input_price_per_mtok": 3.0, "output_price_per_mtok": 15.0,
-        "context_window": 200_000, "max_output": 64_000,
-        "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
+        "context_window": 1_000_000, "max_output": 128_000,
+        "capabilities": CAPS_FULL, "generation": 4.6, "status": "active",
     }),
-    (("opus-4",), {
-        "input_price_per_mtok": 15.0, "output_price_per_mtok": 75.0,
-        "context_window": 200_000, "max_output": 32_000,
-        "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
+    (("sonnet-4-5", "sonnet-4.5"), {
+        "capabilities": CAPS_FULL, "generation": 4.5, "status": "active",
+    }),
+    (("sonnet-4-0", "sonnet-4.0", "sonnet-4-2025"), {
+        "capabilities": CAPS_FULL, "generation": 4.0, "status": "deprecated",
+    }),
+    (("haiku-4-5", "haiku-4.5"), {
+        "context_window": 200_000, "max_output": 64_000,
+        "capabilities": CAPS_FULL, "generation": 4.5, "status": "active",
+        "task_fit": [
+            "cheap_parallel_voter", "mechanical_search",
+            "routine_coding", "visual_design",
+        ],
     }),
     (("3-7-sonnet", "3.7-sonnet"), {
-        "input_price_per_mtok": 3.0, "output_price_per_mtok": 15.0,
-        "context_window": 200_000, "max_output": 64_000,
-        "capabilities": ["text", "image_input", "code", "tools", "reasoning"],
+        "capabilities": CAPS_FULL, "generation": 3.7, "status": "retired",
     }),
     (("3-5-sonnet", "3.5-sonnet"), {
-        "input_price_per_mtok": 3.0, "output_price_per_mtok": 15.0,
-        "context_window": 200_000, "max_output": 8_192,
-        "capabilities": ["text", "image_input", "code", "tools"],
+        "capabilities": CAPS_LEGACY, "generation": 3.5, "status": "retired",
     }),
     (("3-5-haiku", "3.5-haiku"), {
-        "input_price_per_mtok": 0.8, "output_price_per_mtok": 4.0,
-        "context_window": 200_000, "max_output": 8_192,
-        "capabilities": ["text", "image_input", "code", "tools"],
+        "capabilities": CAPS_LEGACY, "generation": 3.5, "status": "retired",
     }),
     (("3-opus",), {
-        "input_price_per_mtok": 15.0, "output_price_per_mtok": 75.0,
-        "context_window": 200_000, "max_output": 4_096,
-        "capabilities": ["text", "image_input", "code", "tools"],
+        "capabilities": CAPS_LEGACY, "generation": 3.0, "status": "retired",
+    }),
+    (("3-sonnet",), {
+        "capabilities": CAPS_LEGACY, "generation": 3.0, "status": "retired",
     }),
     (("3-haiku",), {
-        "input_price_per_mtok": 0.25, "output_price_per_mtok": 1.25,
-        "context_window": 200_000, "max_output": 4_096,
-        "capabilities": ["text", "image_input", "code", "tools"],
+        "capabilities": CAPS_LEGACY, "generation": 3.0, "status": "deprecated",
+        "retires": "2026-04-19",
     }),
 ]
 
@@ -678,18 +806,35 @@ def anthropic_metadata(model_id: str) -> dict | None:
     return None
 
 
-# Dated docs snapshot of selectable Claude model IDs (see ANTHROPIC_PRICING_SNAPSHOT).
-# Used when the LLM session does not inject a live Models API result. IDs are chosen to
-# match the metadata rules above; enrichment fills pricing/limits/capabilities.
+# Offline mirror of the Claude model tables in ANTHROPIC_REFERENCE, used when the LLM
+# session does not inject a live Models API result. IDs are chosen to match the metadata
+# rules above; enrichment fills lifecycle/pricing/limits/capabilities, so this list
+# carries ids and display names only — no row here decides its own status.
+# Retired and deprecated lanes stay listed so "is X still available?" resolves, but they
+# are enriched with a non-selectable availability and ranked last, so neither can be
+# presented as a recommendation.
 ANTHROPIC_CATALOG_SNAPSHOT: list[dict] = [
-    {"id": "claude-opus-4-1", "display_name": "Claude Opus 4.1"},
+    {"id": "claude-fable-5-1", "display_name": "Claude Fable 5.1"},
+    {"id": "claude-mythos-5-1", "display_name": "Claude Mythos 5.1"},
+    {"id": "claude-fable-5", "display_name": "Claude Fable 5"},
+    {"id": "claude-mythos-5", "display_name": "Claude Mythos 5"},
+    {"id": "claude-opus-5", "display_name": "Claude Opus 5"},
+    {"id": "claude-opus-4-8", "display_name": "Claude Opus 4.8"},
+    {"id": "claude-opus-4-7", "display_name": "Claude Opus 4.7"},
+    {"id": "claude-opus-4-6", "display_name": "Claude Opus 4.6"},
+    {"id": "claude-opus-4-5", "display_name": "Claude Opus 4.5"},
+    {"id": "claude-sonnet-5", "display_name": "Claude Sonnet 5"},
+    {"id": "claude-sonnet-4-6", "display_name": "Claude Sonnet 4.6"},
     {"id": "claude-sonnet-4-5", "display_name": "Claude Sonnet 4.5"},
     {"id": "claude-haiku-4-5", "display_name": "Claude Haiku 4.5"},
+    {"id": "claude-opus-4-1", "display_name": "Claude Opus 4.1"},
+    {"id": "claude-opus-4-0", "display_name": "Claude Opus 4"},
+    {"id": "claude-sonnet-4-0", "display_name": "Claude Sonnet 4"},
+    {"id": "claude-3-haiku-20240307", "display_name": "Claude Haiku 3"},
     {"id": "claude-3-7-sonnet-latest", "display_name": "Claude Sonnet 3.7"},
     {"id": "claude-3-5-sonnet-latest", "display_name": "Claude Sonnet 3.5"},
     {"id": "claude-3-5-haiku-latest", "display_name": "Claude Haiku 3.5"},
     {"id": "claude-3-opus-latest", "display_name": "Claude Opus 3"},
-    {"id": "claude-3-haiku-20240307", "display_name": "Claude Haiku 3"},
 ]
 
 
@@ -712,30 +857,88 @@ def from_anthropic(payload: object, env: str, *, confidence: str = "fresh") -> l
         model_id = str(model_id)
         metadata = anthropic_metadata(model_id)
         capabilities = list(metadata["capabilities"]) if metadata else ["text", "code"]
+        # Lifecycle is derived from the reference metadata, never from the payload: the
+        # Models API returns no deprecation field, so a payload-only rule would leave
+        # every live-path model "current" and let retired lanes rank as recommendations.
+        # An id the reference does not cover falls back to whatever the payload says.
+        status = (metadata or {}).get("status")
+        if status is None:
+            if item.get("retired"):
+                status = "retired"
+            elif item.get("deprecated"):
+                status = "deprecated"
+            else:
+                status = "unknown"
+        deprecated = status in {"deprecated", "retired"}
+        program_only = (metadata or {}).get("access") == "program_only"
+        if status == "retired":
+            availability = "retired_unavailable"
+        elif program_only:
+            availability = "requires_program_enrollment"
+        else:
+            # The Models API confirms account access; harness may still gate selection.
+            availability = "selectable_if_configured"
         caveats: list[str] = []
+        if status == "retired":
+            caveats.append(
+                "Retired: no longer served, so it cannot be selected at all. Listed only "
+                "so historical lookups resolve; never a recommendation."
+            )
+        elif status == "deprecated":
+            retires = (metadata or {}).get("retires")
+            when = f"retirement stated as {retires}" if retires else "retirement date not stated"
+            passed = (
+                " — that date has already passed, so assume it is gone until the API says otherwise"
+                if retires and (parse_iso_or_none(retires) or float("inf")) < time.time()
+                else ""
+            )
+            caveats.append(
+                f"Deprecated lane ({when}){passed}; ranked below current models and not a "
+                "recommendation — migrate off it."
+            )
+        if program_only:
+            caveats.append(
+                "Offered only to organizations approved for the access program named in "
+                "the reference; not selectable otherwise."
+            )
         if metadata:
             caveats.append(
-                f"Pricing/context/limits from Anthropic docs snapshot {ANTHROPIC_PRICING_SNAPSHOT}; "
-                "verify against current pricing before billing decisions."
+                f"Lifecycle/pricing/context/limits transcribed from the {ANTHROPIC_REFERENCE}, "
+                "which carries no publication date; verify against current pricing before "
+                "billing decisions."
             )
+            if metadata.get("input_price_per_mtok") is None:
+                caveats.append(
+                    "The reference states no per-token price for this model id; prices are "
+                    "null on purpose — look them up before quoting dollars."
+                )
+            if metadata.get("context_window") is None:
+                caveats.append(
+                    "The reference states no context window or max output for this model id; "
+                    "those fields are null on purpose — do not infer them from a sibling lane."
+                )
         else:
             caveats.append(
-                "No pricing/limits metadata match for this model id; refresh the docs snapshot "
-                "before quoting dollars or context limits."
+                "No lifecycle/pricing/limits metadata match for this model id; refresh the "
+                "reference transcription before quoting dollars, limits, or availability."
             )
         models.append(
             {
                 "id": model_id,
                 "display_name": str(item.get("display_name") or model_id),
                 "provider": "anthropic",
-                # The Models API confirms account access; harness may still gate selection.
-                "availability": "selectable_if_configured",
+                "availability": availability,
+                "lifecycle": status,
                 "input_price_per_mtok": metadata.get("input_price_per_mtok") if metadata else None,
                 "output_price_per_mtok": metadata.get("output_price_per_mtok") if metadata else None,
                 "context_window": metadata.get("context_window") if metadata else None,
                 "max_output": metadata.get("max_output") if metadata else None,
                 "capabilities": capabilities,
-                "task_fit": infer_task_fit(model_id, capabilities),
+                "task_fit": list(metadata["task_fit"])
+                if metadata and metadata.get("task_fit")
+                else infer_task_fit(model_id, capabilities),
+                "generation": metadata.get("generation") if metadata else None,
+                "deprecated": deprecated,
                 "caveats": caveats,
                 "confidence": confidence,
             }
@@ -1054,6 +1257,10 @@ def override_confidence(source: str | None) -> str:
 def build_catalog(env: str, provider: str) -> dict:
     sources: list[dict] = []
     models: list[dict] = []
+    # Date of the data itself. None means "fetched live during this build", so the
+    # build time is the data time. Static snapshot/seed data keeps its own date so
+    # re-running --force-refresh cannot launder stale data into a fresh-looking one.
+    data_as_of: str | None = None
     source_payload = local_source_payload()
     if source_payload is not None:
         source_value = os.environ.get("WHICH_MODEL_CATALOG_SOURCE")
@@ -1091,7 +1298,10 @@ def build_catalog(env: str, provider: str) -> dict:
         # injects that result via WHICH_MODEL_CATALOG_SOURCE (handled above). With no
         # injection we build from the dated docs snapshot: no API key, no network.
         models.extend(from_anthropic(ANTHROPIC_CATALOG_SNAPSHOT, env, confidence="snapshot"))
-        sources.append({"kind": "anthropic-docs-snapshot", "snapshot": ANTHROPIC_PRICING_SNAPSHOT})
+        sources.append({"kind": "anthropic-reference-snapshot", "reference": ANTHROPIC_REFERENCE})
+        # The reference is undated, so we report the data age as unknown instead of
+        # inventing a snapshot date. Unknown age is treated as stale, never as fresh.
+        data_as_of = UNKNOWN_DATA_AGE
     elif provider == "cursor":
         if not os.environ.get("WHICH_MODEL_OFFLINE"):
             cursor_payload, cursor_source = load_cursor_catalog_payload()
@@ -1114,17 +1324,27 @@ def build_catalog(env: str, provider: str) -> dict:
         seed_profile = env if provider == "auto" else provider
         models = copy.deepcopy(ENV_SEEDS.get(seed_profile, ENV_SEEDS["unknown"]))
         sources.append({"kind": "seed", "value": seed_profile})
+        data_as_of = SEED_DATA_AS_OF
 
     generated = time.time()
+    if data_as_of == UNKNOWN_DATA_AGE:
+        # Undated data has no expiry to compute; a null stale_after reads as stale.
+        stale_after = None
+    else:
+        data_epoch = parse_iso_or_none(data_as_of) if data_as_of else generated
+        stale_after = None if data_epoch is None else (
+            datetime.fromtimestamp(data_epoch + STALE_AFTER_SECONDS, timezone.utc)
+            .replace(microsecond=0)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
     return {
         "schema_version": SCHEMA_VERSION,
         "environment": env,
         "provider": provider,
         "generated_at": now_iso(),
-        "stale_after": datetime.fromtimestamp(generated + STALE_AFTER_SECONDS, timezone.utc)
-        .replace(microsecond=0)
-        .isoformat()
-        .replace("+00:00", "Z"),
+        "data_as_of": data_as_of or now_iso(),
+        "stale_after": stale_after,
         "sources": sources,
         "models": dedupe_models(models),
     }
@@ -1147,14 +1367,23 @@ def is_stale(catalog: dict) -> bool:
     stale_after = catalog.get("stale_after")
     if not stale_after:
         return True
-    return parse_iso(stale_after) <= time.time()
+    expiry = parse_iso_or_none(stale_after)
+    if expiry is None:
+        return True
+    return expiry <= time.time()
 
 
 def is_very_stale(catalog: dict) -> bool:
-    generated_at = catalog.get("generated_at")
-    if not generated_at:
+    # Age of the data, not of the file: rebuilding a static snapshot does not make
+    # the snapshot newer. Falls back to generated_at for pre-data_as_of caches.
+    stamp = catalog.get("data_as_of") or catalog.get("generated_at")
+    if not stamp or stamp == UNKNOWN_DATA_AGE:
+        # Data of unknown age can never be shown as recent.
         return True
-    return time.time() - parse_iso(generated_at) > VERY_STALE_AFTER_SECONDS
+    epoch = parse_iso_or_none(stamp)
+    if epoch is None:
+        return True
+    return time.time() - epoch > VERY_STALE_AFTER_SECONDS
 
 
 def price_score(model: dict) -> float:
@@ -1165,17 +1394,90 @@ def price_score(model: dict) -> float:
     return float(input_price or 0) + float(output_price or 0)
 
 
+def generation_score(model: dict) -> float:
+    """Higher generation = newer lane. Unknown generation sorts as oldest."""
+    generation = model.get("generation")
+    try:
+        return -float(generation)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+SELECTABLE_AVAILABILITY = {"selectable_here", "selectable_if_configured"}
+VERSION_TOKEN = re.compile(r"v?\d+(?:\.\d+)*|latest|preview")
+
+
+def availability_penalty(model: dict) -> int:
+    return 0 if model.get("availability") in SELECTABLE_AVAILABILITY else 1
+
+
+def family_key(model: dict) -> str:
+    """Group successive releases of one product line: claude-opus-5 ~ claude-opus-4-8.
+
+    Version-ish tokens are dropped wherever they appear, so date-suffixed ids, dotted
+    ids and `-latest` aliases of the same lane all collapse to the same key.
+    """
+    base = str(model.get("id", "")).lower().rsplit("/", 1)[-1].replace(".", "-")
+    words = [part for part in base.split("-") if part and not VERSION_TOKEN.fullmatch(part)]
+    return f"{model.get('provider', '')}:{'-'.join(words) or base}"
+
+
+def superseded_ids(models: list[dict]) -> set[str]:
+    """Ids that have a strictly newer, no-harder-to-reach sibling in the same family.
+
+    "A newer release of this same lane exists" is hard evidence that the older lane is
+    not the answer, whereas a task-fit tag is a soft, partly inferred signal. So this is
+    checked ahead of fit: an older lane carrying the requested tag must never outrank
+    its own successor. Across different families, fit still decides.
+    """
+    newest: dict[tuple[str, int], float] = {}
+    for model in models:
+        generation = number_or_none(model.get("generation"))
+        if generation is None or model.get("deprecated"):
+            continue
+        key = (family_key(model), availability_penalty(model))
+        newest[key] = max(newest.get(key, generation), generation)
+
+    superseded: set[str] = set()
+    for model in models:
+        generation = number_or_none(model.get("generation"))
+        if generation is None:
+            continue
+        family = family_key(model)
+        reach = availability_penalty(model)
+        # A successor only supersedes if it is at least as reachable as this lane.
+        if any(newest.get((family, step), generation) > generation for step in range(reach + 1)):
+            superseded.add(str(model.get("id", "")))
+    return superseded
+
+
 def rank_models(catalog: dict, task: str | None, top: int) -> list[dict]:
     tag = normalize_task(task)
+    models = catalog.get("models", [])
+    superseded = superseded_ids(models)
 
-    def score(model: dict) -> tuple[int, int, float, str]:
+    def score(model: dict) -> tuple[int, int, int, int, float, float, str]:
         fits = set(model.get("task_fit") or [])
-        availability = model.get("availability")
         fit_penalty = 0 if tag and tag in fits else 1
-        availability_penalty = 0 if availability in {"selectable_here", "selectable_if_configured"} else 1
-        return (availability_penalty, fit_penalty, price_score(model), model.get("id", ""))
+        # Recency outranks price and reachability both: a retired lane being cheap, or
+        # being the one you happen to have configured, is not a reason to recommend it.
+        # Sorting this first is what guarantees no deprecated or retired lane can ever
+        # be listed above a current one, whatever tags or prices it carries.
+        deprecated_penalty = 1 if model.get("deprecated") else 0
+        # Same rule one step weaker, for lanes that are merely outdated rather than
+        # deprecated: only the newest member of a family competes on task fit.
+        superseded_penalty = 1 if str(model.get("id", "")) in superseded else 0
+        return (
+            deprecated_penalty,
+            availability_penalty(model),
+            superseded_penalty,
+            fit_penalty,
+            generation_score(model),
+            price_score(model),
+            model.get("id", ""),
+        )
 
-    return sorted(catalog.get("models", []), key=score)[:top]
+    return sorted(models, key=score)[:top]
 
 
 def main() -> int:

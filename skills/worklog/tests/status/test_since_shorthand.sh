@@ -7,6 +7,7 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 cd "$TMP"
+export WORKLOG_REPO="$TMP"
 git init -q
 git config user.email tester@example.com
 git config user.name Tester

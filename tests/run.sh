@@ -11,6 +11,40 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 PASS=0; FAIL=0
+
+# Worklog fixtures pass their own WORKLOG_REPO/WORKLOG_LDAP. A developer shell
+# that pins those vars — BASH_ENV, direnv, or the per-clone .envrc the worklog
+# protocol itself requires — is sourced AFTER the per-command assignment, so it
+# silently overrides them and the fixtures test the real vault instead of the
+# throwaway one. Neutralize that inheritance; CI has nothing to unset.
+#
+# WORKLOG_BIN is unset for a sharper reason: it decides WHICH ARTIFACT the suite
+# grades. A developer profile exports WORKLOG_BIN=~/.claude/skills/worklog/bin,
+# a symlink into the *installed* clone — a different checkout from this tree. A
+# fixture written as `WORKLOG_BIN="${WORKLOG_BIN:-<derived>}"` then ran the
+# installed helpers, so a change in the working tree could read green without
+# ever being executed, and a "proved red" claim was worthless. Fixtures now pin
+# the path from their own location (see archive/_vault.sh); this unset is the
+# belt to those braces, and the static check "fixtures pin WORKLOG_BIN to the
+# tree under test" keeps the pattern from coming back.
+WL_HERMETIC=(env -u BASH_ENV -u WORKLOG_BIN -u WORKLOG_LDAP -u WORKLOG_NS -u WORKLOG_REPO)
+# Dropping BASH_ENV also drops any PYTHONPATH it exported, and fixtures that pin
+# PATH=/usr/bin:/bin to force a fallback then hit a system python without PyYAML.
+# Carry the site path explicitly; a per-line PYTHONPATH still overrides this one.
+WL_SITE=$(python3 -c 'import pathlib, yaml; print(pathlib.Path(yaml.__file__).resolve().parents[1])' 2>/dev/null || true)
+[[ -n "$WL_SITE" ]] && WL_HERMETIC+=("PYTHONPATH=$WL_SITE")
+# macOS has no `timeout` (and often no coreutils `gtimeout`). A bare
+# `timeout 180 cmd` there exits 127 before the fixture starts, so every
+# fixture in the loop reads FAIL for one missing wrapper. Resolve a portable
+# form once; perl ships with macOS and `alarm` kills a hung fixture the same
+# way.
+if command -v timeout >/dev/null 2>&1; then
+  WL_TIMEOUT=(timeout 180)
+elif command -v gtimeout >/dev/null 2>&1; then
+  WL_TIMEOUT=(gtimeout 180)
+else
+  WL_TIMEOUT=(perl -e 'alarm shift; exec @ARGV' 180)
+fi
 say() { printf "  %-5s %s\n" "$1" "$2"; }
 ok()   { say PASS "$1"; PASS=$((PASS+1)); }
 fail() { say FAIL "$1"; FAIL=$((FAIL+1)); }
@@ -45,6 +79,11 @@ for skill_md in sorted(pathlib.Path("skills").glob("*/SKILL.md")):
     expected = skill_md.parent.name
     if fm.get("name") != expected:
         problems.append(f"{skill_md}: name={fm.get('name')!r}, expected {expected!r}")
+    description = fm.get("description")
+    if not isinstance(description, str) or not description.strip():
+        problems.append(f"{skill_md}: description must be a non-empty string")
+    elif "<" in description or ">" in description:
+        problems.append(f"{skill_md}: description cannot contain angle brackets")
 if problems:
     print("\n".join(problems))
     raise SystemExit(1)
@@ -140,17 +179,35 @@ root = (skill / "SKILL.md").read_text()
 examples = (skill / "references/examples.md").read_text()
 hosts = (skill / "references/hosts.md").read_text()
 protocol = (skill / "references/protocol.md").read_text()
+orchestrator = (skill / "references/orchestrator.md").read_text()
+crew = (skill / "references/crew.md").read_text()
+interrogate = (skill / "references/interrogate.md").read_text()
+interrogate_flat = " ".join(interrogate.split())
+radar = (skill / "bin/crew-radar").read_text()
+# Prose references are hard-wrapped, so multi-word contracts match a flattened
+# copy; that keeps them robust to reflowing the paragraph.
+crew_flat = " ".join(crew.split())
+root_flat = " ".join(root.split())
 state_script = (skill / "scripts/loop_state.py").read_text()
 install_script = (skill / "scripts/install_audit.py").read_text()
 references = {path.name for path in (skill / "references").glob("*.md")}
 checks = {
     # Orchestrator mode is intentionally portable in the root; keep a bounded
     # size budget while testing its routing contracts directly.
+    # Duplicate of BUDGET in skills/loop-engineering/tests/test_skill_budget.py.
+    # Two places pin one number: change one and the suite goes red under the
+    # other's name, which reads as an unrelated failure. Keep them in step.
     "portable root budget": len(root.splitlines()) <= 260,
     "standard frontmatter only": root.split("---", 2)[1].count("\n") == 3,
-    "script-first route": "scripts/loop_state.py init" in root,
+    # The root now routes to the single-invocation driver rather than a manual
+    # loop_state.py init recipe. The contract follows the content: pin the
+    # runnable first call, not a bare mention of the filename (the frontmatter
+    # names it too).
+    "script-first route": "scripts/loop_run.py <run-dir> --goal" in root_flat,
     "route matrix": "load only the needed rules" in root,
-    "no hand-edited state": "do not hand-edit its JSON" in root,
+    # Flattened: the sentence is hard-wrapped, and two separate substrings
+    # would pass on any root that merely mentions both halves.
+    "no hand-edited state": "do not hand-edit its state JSON" in root_flat,
     "worklog context route": "<slug> --for=resume" in protocol,
     "tracker hydration route": "hydrate the host tracker from the" in protocol,
     "worklog delegation route": "<slug> --for=compact" in protocol and "spawn <slug>" not in protocol,
@@ -159,7 +216,20 @@ checks = {
     "terminal evidence rule": "model's prose claim is not evidence" in root,
     "typed evidence rule": "one typed line" in root and "index, not a log" in root,
     "optional model route": "$which-model" in root and "model-routing: skipped" in root,
-    "council replay pack": "affected mutation" in root and "one decision" in root and "replay check" in root,
+    # Orchestrator-only rules moved to references/orchestrator.md with the mode;
+    # the contract follows the content rather than pinning it to the root.
+    # d835104 shipped `project.sh add-child`; three docs kept describing the
+    # world before it for a day because nothing checked. Negative half is the
+    # load-bearing one — it catches the stale claim coming back.
+    "add-child route is current": (
+        "project.sh add-child" in orchestrator
+        and "has no add-child" not in orchestrator
+    ),
+    "council replay pack": (
+        "affected mutation" in orchestrator
+        and "one decision" in orchestrator
+        and "replay check" in orchestrator
+    ),
     "checkpoint handoff": "state fingerprint" in protocol and "typed evidence reference" in protocol,
     "continuous active run": (
         "While state is `running`" in root
@@ -206,7 +276,67 @@ checks = {
         and "state fingerprint changed" in state_script
         and "verify state ownership" in protocol
     ),
-    "host differences deferred": references == {"examples.md", "hosts.md", "protocol.md"},
+    # Exact-set, so a legitimately added reference must be declared here.
+    "host differences deferred": references == {"crew.md", "examples.md", "hosts.md", "interrogate.md", "orchestrator.md", "protocol.md", "transport.md"},
+    # Plan interrogation is a gate, not a vibe: the root must route to it, the
+    # reference must keep the one-question protocol, the skip line, the council
+    # escalation, and a verdict that can refuse init.
+    "plan interrogation gate": (
+        "references/interrogate.md" in root
+        and "one question at a time" in interrogate_flat
+        and "interrogation: skipped" in interrogate_flat
+        and "Not Ready" in interrogate
+        and "$council" in interrogate
+        and "needs_human" in interrogate
+    ),
+    # Crew mode must capability-gate host primitives. Codex has shared files,
+    # no isolation flag, and mailbox waits rather than a file Monitor.
+    "crew mode matches Codex collaboration": (
+        "references/crew.md" in root
+        and "shared filesystem" in crew
+        and "spawn_agent" in crew
+        and "wait_agent" in crew
+        and "there is no `Monitor` primitive" in crew
+        and 'isolation: "worktree"' not in crew
+        and "parallel delegates are **read-only**" in crew
+        and "single writer" in crew
+        and "project.sh" in crew
+    ),
+    "loop uses supported evidence-gate flags": (
+        "installed `evidence-gate` skill exposes `--quiet` only on `check` and `show`" in root
+        and "redirect successful `init`/`record` stdout" in root
+    ),
+    "crew radar supports macOS Bash 3": "declare -A" not in radar,
+    "crew radar contract is stated": (
+        "bin/crew-radar" in crew_flat
+        and "`2` collision" in crew_flat
+        and "A clean radar result does not prove isolation" in crew
+        and "before a parallel wave" in crew
+        and "after each serialized write" in crew
+        and "ancestry chain" in crew_flat
+    ),
+    "crew boundaries are explicit": (
+        "answer another session's permission prompt" in crew_flat
+        and "never edit a worker's worktree" in crew_flat.lower()
+    ),
+    # Worktree isolation is built from the DISPATCHING shell's cwd, not from the
+    # declared `--repo`, and the radar cannot see the mismatch. Pin the two
+    # mechanical guards rather than the prose around them: match load-bearing
+    # tokens so the section stays free to be retitled, reworded, or reflowed,
+    # but not to lose a guard.
+    "crew cwd guard is a subshell": (
+        "subshell" in crew_flat
+        # A parenthesised cd on a shell variable. Survives renaming the example
+        # variable; fails if the cd is unwrapped back to a bare one.
+        and '(cd "$' in crew_flat
+        and "current working directory" in crew_flat
+    ),
+    "crew worker identity precheck": (
+        "rev-parse --show-toplevel" in crew_flat
+        and "remote get-url origin" in crew_flat
+        # The precheck is worthless without the stop it authorises.
+        and "wrong-repo worktree" in crew_flat
+    ),
     "cross-host continuation": (
         hosts.count("while state is `running`") >= 3
         and "A prompt cannot manufacture background execution" in hosts
@@ -214,7 +344,7 @@ checks = {
         and "Treat supplied intervention as pending" in hosts
     ),
     "no host-only injection": "!`" not in root and "allowed-tools:" not in root,
-    "three contrastive fixtures": examples.count("\n## ") == 4,
+    "contrastive fixtures present": examples.count("\n## ") >= 4,
     "Codex shared install": "~/.agents/skills/" in hosts,
     "Claude personal install": "~/.claude/skills/" in hosts,
     "Cursor shared install": ".agents/skills/" in hosts,
@@ -251,6 +381,10 @@ import re
 
 text = pathlib.Path("skills/council/SKILL.md").read_text()
 checks = {
+    # Council was the last root with no size ceiling and had grown to 353
+    # lines; the prompt templates and tiering table now live in references/.
+    # Pin the root so dispatch-time payload does not creep back into it.
+    "thin root": len(text.splitlines()) <= 280,
     "support formula": "APPROVE_count + (0.5 * QUALIFY_count)" in text,
     "formula text": "ceil(M_returned / 2 + 1)" in text,
     "threshold name": "majority-plus-one" in text,
@@ -317,6 +451,37 @@ if missing:
     raise SystemExit(1)
 PY
   then ok "Karpathy contradiction invalidation contract"; else fail "Karpathy contradiction invalidation contract"; fi
+  # Which artifact does the suite grade? A fixture that reads its helper path
+  # out of the environment grades whatever the ambient WORKLOG_BIN names —
+  # in a developer shell, the *installed* clone, not this tree. WL_HERMETIC
+  # unsets the variable, but an env-defaulted assignment
+  # (`WORKLOG_BIN="${WORKLOG_BIN:-...}"`) is still wrong: run by hand it
+  # silently grades the wrong checkout, and the fallback hides it. Every
+  # fixture must derive the path from its own location instead. Assignments
+  # only -- the prose in the fixtures explains the ban and must stay legible.
+  if python3 - <<'PY'
+import pathlib
+import re
+
+# Matches an assignment whose value falls back to the ambient variable, with or
+# without `export`, and both the `:-` and `-` default forms. Comments are
+# skipped so the fixtures can keep explaining why the pattern is banned.
+bad = re.compile(r'^\s*(?:export\s+)?WORKLOG_BIN=.*\$\{WORKLOG_BIN:?-')
+offenders = []
+for tests_dir in sorted(pathlib.Path("skills").glob("*/tests")):
+    for path in sorted(tests_dir.rglob("*.sh")):
+        for lineno, line in enumerate(path.read_text().splitlines(), 1):
+            if line.lstrip().startswith("#"):
+                continue
+            if bad.search(line):
+                offenders.append(f"{path}:{lineno}: {line.strip()}")
+if offenders:
+    print("fixtures resolve WORKLOG_BIN from the environment, so they can grade")
+    print("the installed skill instead of the tree under test:")
+    print("\n".join(offenders))
+    raise SystemExit(1)
+PY
+  then ok "fixtures pin WORKLOG_BIN to the tree under test"; else fail "fixtures pin WORKLOG_BIN to the tree under test"; fi
 }
 
 # Council items #1, #6: fixture-driven red-path tests for guardrails.
@@ -331,25 +496,119 @@ print(pathlib.Path(yaml.__file__).resolve().parents[1])
 PY
 )
 
-  if skills/worklog/tests/reconcile_pr/test_reconcile_pr.sh >/dev/null; then
-    ok "worklog PR reconciliation fixtures"
-  else
-    fail "worklog PR reconciliation fixtures"
-  fi
+  # reconcile_pr/ is invoked here rather than from the worklog loop below so
+  # it keeps its own label and runs first. Glob the directory, not the file:
+  # a second reconcile fixture must run by existing, not by being remembered.
+  for t in skills/worklog/tests/reconcile_pr/test_*.sh; do
+    [[ -e "$t" ]] || continue
+    if "${WL_HERMETIC[@]}" bash "$t" >/dev/null 2>&1; then
+      ok "worklog PR reconciliation: $(basename "$t" .sh)"
+    else
+      fail "worklog PR reconciliation: $(basename "$t" .sh)"
+    fi
+  done
 
-  if python3 -m unittest \
-    skills/loop-engineering/tests/test_loop_state.py \
-    skills/loop-engineering/tests/test_install_audit.py >/dev/null; then
-    ok "loop-engineering state transition fixtures"
-  else
-    fail "loop-engineering state transition fixtures"
-  fi
+  # Discovered, not listed: test_loop_run.py existed for a full session while
+  # this line named three files, so its 17 fixtures never ran here. A broken
+  # driver kept the runner green. The skill directory is the unit now, and the
+  # set of skills is globbed too -- a new skills/<name>/tests/test_*.py is wired
+  # up by existing rather than by someone remembering to add a line here.
+  for d in skills/*/tests; do
+    compgen -G "$d/test_*.py" >/dev/null || continue
+    if python3 -m unittest discover -s "$d" -t "$d" -p "test_*.py" >/dev/null 2>&1; then
+      ok "$(basename "$(dirname "$d")") python fixtures"
+    else
+      fail "$(basename "$(dirname "$d")") python fixtures"
+    fi
+  done
 
-  if python3 -m unittest skills/evidence-gate/tests/test_evidence_gate.py >/dev/null; then
-    ok "evidence-gate coverage fixtures"
+  # Shell fixtures for the crew tools. Neither was reachable from this runner
+  # before, so a regression in either only surfaced if someone ran it by hand.
+  #
+  # Every fixture below runs under WL_HERMETIC. A fixture that sandboxes itself
+  # with WORKLOG_REPO=$TMP has that assignment silently overridden, because
+  # BASH_ENV is sourced AFTER the per-command assignment and the developer
+  # profile exports WORKLOG_REPO/WORKLOG_LDAP unconditionally. Without the
+  # wrapper the worklog fixtures run against the real vault: the checkpoint
+  # ones drive git add/commit/push there, and six of them simply fail.
+  for t in skills/loop-engineering/tests/test_*.sh; do
+    [[ -e "$t" ]] || continue
+    if "${WL_HERMETIC[@]}" bash "$t" >/dev/null 2>&1; then
+      ok "loop-engineering $(basename "$t" .sh)"
+    else
+      fail "loop-engineering $(basename "$t" .sh)"
+    fi
+  done
+  # verify_refs/ likewise keeps its own label and is skipped by the loop below.
+  for t in skills/worklog/tests/verify_refs/test_*.sh; do
+    [[ -e "$t" ]] || continue
+    if "${WL_HERMETIC[@]}" bash "$t" >/dev/null 2>&1; then
+      ok "worklog verify-refs: $(basename "$t" .sh)"
+    else
+      fail "worklog verify-refs: $(basename "$t" .sh)"
+    fi
+  done
+
+  # Everything else under skills/worklog/tests/. Before this, the runner reached
+  # exactly three of ~20 fixture directories: reconcile_pr, verify_refs and
+  # lint/. The other 19 ran only if someone invoked them by hand, so a
+  # regression in autosave, project, frontmatter, hooks, okf, scrape-slack,
+  # status, surface, transcript or worklog-manager surfaced nowhere. Glob the
+  # directory rather than listing files, so a new fixture is wired up by
+  # existing rather than by being remembered.
+  #
+  # log_compact/test_squash.sh is deliberately excluded: it clones SOURCE (a
+  # populated worklog vault) and rewrites its history, so it needs real
+  # autosave commits as input and cannot run hermetically. Invoke it directly
+  # with SOURCE=/path/to/vault when changing log-compact.sh.
+  #
+  # .mjs is globbed alongside .sh: worklog_manager/test_units.mjs was named by
+  # hand in test_worklog_skill() only, so `run.sh fixtures` never ran it.
+  for t in skills/worklog/tests/*/test_*.sh skills/worklog/tests/*/test_*.mjs; do
+    [[ -e "$t" ]] || continue
+    case "$t" in
+      */lint/*|*/verify_refs/*|*/reconcile_pr/*) continue ;;
+      */log_compact/test_squash.sh) continue ;;
+    esac
+    case "$t" in
+      *.mjs) runner=(node) ;;
+      *) runner=(bash) ;;
+    esac
+    name="worklog $(basename "$(dirname "$t")")/$(basename "${t%.*}")"
+    if "${WL_TIMEOUT[@]}" "${WL_HERMETIC[@]}" "${runner[@]}" "$t" >/dev/null 2>&1; then
+      ok "$name"
+    else
+      fail "$name"
+    fi
+  done
+
+  # Lint fixtures were never reachable from this runner either, so a regression
+  # in them only surfaced if someone ran them by hand.
+  for t in skills/worklog/tests/lint/*.sh; do
+    if "${WL_HERMETIC[@]}" bash "$t" >/dev/null 2>&1; then
+      ok "worklog lint: $(basename "$t" .sh)"
+    else
+      fail "worklog lint: $(basename "$t" .sh)"
+    fi
+  done
+
+  # Red fixture: a skill directory with no manifest entry must fail
+  # check-manifest. install.sh symlinks every skills/*/ dir regardless, so
+  # without this rule a skill is installed by one path, missing from the
+  # other, and no test notices (job-application sat that way).
+  probe_dir="$REPO_ROOT/skills/zz-manifest-probe"
+  rm -rf "$probe_dir"
+  mkdir -p "$probe_dir"
+  printf -- '---\nname: zz-manifest-probe\ndescription: probe\n---\n' > "$probe_dir/SKILL.md"
+  if ./tools/check-manifest.sh >/dev/null 2>&1; then
+    fail "check-manifest rejects unlisted skill dir"
   else
-    fail "evidence-gate coverage fixtures"
+    ok "check-manifest rejects unlisted skill dir"
   fi
+  rm -rf "$probe_dir"
+
+  # loop-helpers and evidence-gate used to be two more hand-listed .py files
+  # here; both are covered by the skills/*/tests discovery loop above.
 
   if python3 - <<'PY'
 import pathlib
@@ -580,7 +839,7 @@ PY
   fi
   rm -rf "$fake_home"
 
-  local skill_names skill_name skill_md shared_skill_md install_home canonical_skill installed_skill skills_root
+  local skill_names default_skill_names skill_name skill_md shared_skill_md install_home canonical_skill installed_skill skills_root
   skill_names=$(python3 - <<'PY'
 import pathlib
 import yaml
@@ -596,6 +855,23 @@ for entry in manifest.get("skills", []):
     if skill_md.is_file():
         print(entry["name"])
 PY
+)
+  # Subset a bare `install-skills.sh` actually installs: optional entries are
+  # opt-in, so only these may be required to appear in every user root.
+  default_skill_names=$(python3 - <<'PYD'
+import pathlib
+import yaml
+
+manifest = yaml.safe_load(open("manifest/skills.yaml"))
+for entry in manifest.get("skills", []):
+    if entry["name"] == "worklog" or entry.get("optional", False):
+        continue
+    source = entry.get("source", {})
+    if source.get("type") != "subpath":
+        continue
+    if (pathlib.Path(source["path"]) / "SKILL.md").is_file():
+        print(entry["name"])
+PYD
 )
   while IFS= read -r skill_name; do
     [[ -z "$skill_name" ]] && continue
@@ -617,15 +893,18 @@ PY
   install_home=$(mktemp -d)
   if HOME="$install_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" ./bin/install-skills.sh >/dev/null 2>&1; then
     rc=0
-    for canonical_skill in "$REPO_ROOT"/skills/*/SKILL.md; do
-      skill_name=$(basename "$(dirname "$canonical_skill")")
+    # A bare run installs only non-optional manifest skills, so asserting over
+    # skills/*/ would demand exposure for opt-in ones (e.g. loop-helpers).
+    while IFS= read -r skill_name; do
+      [[ -z "$skill_name" ]] && continue
+      canonical_skill="$REPO_ROOT/skills/$skill_name/SKILL.md"
       for skills_root in .agents/skills .claude/skills .cursor/skills; do
         installed_skill="$install_home/$skills_root/$skill_name/SKILL.md"
         if [[ ! -f "$installed_skill" || "$(realpath "$installed_skill")" != "$(realpath "$canonical_skill")" ]]; then
           rc=1
         fi
       done
-    done
+    done <<< "$default_skill_names"
   else
     rc=1
   fi
@@ -662,17 +941,30 @@ PY
   # bin/install-skills.sh resolves /tmp→/private/tmp (Python Path.resolve).
   # install.sh derives REPO_DIR via pwd which may not resolve /tmp.
   # If the comparison fails, install.sh backs up existing symlinks to .bak.
-  local resolve_home
+  #
+  # Both installers run against a copy of the repo with .claude/ omitted. An
+  # agent worktree harness materializes a repo-local .claude/ (worktrees/ plus a
+  # rewritten skills mirror); install.sh's top-level dotfile loop then symlinks
+  # it over $DEST/.claude, which install-skills.sh has just created as a real
+  # directory — one .bak that has nothing to do with path resolution, and skill
+  # symlinks written back into the repo through the new .claude symlink. The
+  # copy keeps every skill root in the comparison; the counted .bak items still
+  # come from the two installers disagreeing on a symlink target.
+  local resolve_home resolve_repo_parent resolve_repo
   resolve_home=$(mktemp -d)
-  HOME="$resolve_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" ./bin/install-skills.sh >/dev/null 2>&1
-  CODER_SYMLINK_DIR="$resolve_home" ./install.sh >/dev/null 2>&1
+  resolve_repo_parent=$(mktemp -d)
+  resolve_repo="$resolve_repo_parent/repo"
+  mkdir -p "$resolve_repo"
+  tar -C "$REPO_ROOT" --exclude=./.git --exclude=./.claude -cf - . | tar -C "$resolve_repo" -xf -
+  HOME="$resolve_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" "$resolve_repo/bin/install-skills.sh" >/dev/null 2>&1
+  CODER_SYMLINK_DIR="$resolve_home" "$resolve_repo/install.sh" >/dev/null 2>&1
   bak_count=$(find "$resolve_home" -name "*.bak" 2>/dev/null | wc -l)
   if [[ $bak_count -eq 0 ]]; then
     ok "install.sh preserves existing skill symlinks (no .bak accumulation)"
   else
     fail "install.sh created $bak_count .bak items (path resolution mismatch)"
   fi
-  rm -rf "$resolve_home"
+  rm -rf "$resolve_home" "$resolve_repo_parent"
 
   if python3 - <<'PY'
 import re
@@ -1168,11 +1460,16 @@ PY
 
   local claude_fixture
   claude_fixture="$catalog_home/claude.json"
+  # Shaped exactly like a live Models API page: ids and display names only, no
+  # lifecycle field. Everything about deprecation must therefore be derived locally.
   cat >"$claude_fixture" <<'EOF'
 {
   "data": [
     {"type": "model", "id": "claude-haiku-4-5-20251001", "display_name": "Claude Haiku 4.5", "created_at": "2025-10-01T00:00:00Z"},
     {"type": "model", "id": "claude-opus-4-1-20250805", "display_name": "Claude Opus 4.1", "created_at": "2025-08-05T00:00:00Z"},
+    {"type": "model", "id": "claude-fable-5", "display_name": "Claude Fable 5", "created_at": "2026-03-01T00:00:00Z"},
+    {"type": "model", "id": "claude-mythos-5-1", "display_name": "Claude Mythos 5.1", "created_at": "2026-05-01T00:00:00Z"},
+    {"type": "model", "id": "claude-3-opus-20240229", "display_name": "Claude Opus 3", "created_at": "2024-02-29T00:00:00Z"},
     {"type": "model", "id": "claude-future-unknown-1", "display_name": "Claude Future Unknown", "created_at": "2026-01-01T00:00:00Z"}
   ],
   "has_more": false
@@ -1181,7 +1478,7 @@ EOF
   catalog_json=$(
     WHICH_MODEL_CACHE_HOME="$catalog_home/cache-claude" \
     WHICH_MODEL_CATALOG_SOURCE="$claude_fixture" \
-    skills/which-model/bin/model-catalog --env claude --refresh-if-stale --task routine_coding --top 3
+    skills/which-model/bin/model-catalog --env claude --refresh-if-stale --task routine_coding --top 6
   )
   if python3 - "$catalog_home/cache-claude/catalog.claude.json" "$catalog_json" <<'PY'
 import json
@@ -1198,41 +1495,80 @@ by_id = {model["id"]: model for model in catalog["models"]}
 assert set(by_id) == {
     "claude-haiku-4-5-20251001",
     "claude-opus-4-1-20250805",
+    "claude-fable-5",
+    "claude-mythos-5-1",
+    "claude-3-opus-20240229",
     "claude-future-unknown-1",
 }
 haiku = by_id["claude-haiku-4-5-20251001"]
-# Models API supplies id/display_name; docs snapshot fills price/limits/capabilities.
+# Models API supplies id/display_name; the reference fills limits/capabilities.
 assert haiku["display_name"] == "Claude Haiku 4.5"
 assert haiku["provider"] == "anthropic"
 assert haiku["availability"] == "selectable_if_configured"
-assert haiku["input_price_per_mtok"] == 1.0, haiku["input_price_per_mtok"]
-assert haiku["output_price_per_mtok"] == 5.0, haiku["output_price_per_mtok"]
+assert haiku["lifecycle"] == "active"
+assert haiku["deprecated"] is False
 assert haiku["context_window"] == 200000
 assert haiku["max_output"] == 64000
+# The reference states Haiku 4.5's limits but never its per-token price, so the price
+# stays null and says so rather than carrying an invented figure.
+assert haiku["input_price_per_mtok"] is None, haiku["input_price_per_mtok"]
+assert haiku["output_price_per_mtok"] is None, haiku["output_price_per_mtok"]
+assert any("no per-token price" in c for c in haiku["caveats"]), haiku["caveats"]
 assert "image_input" in haiku["capabilities"]
 assert "reasoning" in haiku["capabilities"]
 assert haiku["confidence"] == "fixture"
-assert any("docs snapshot" in c for c in haiku["caveats"])
-opus = by_id["claude-opus-4-1-20250805"]
-assert opus["input_price_per_mtok"] == 15.0
-assert opus["output_price_per_mtok"] == 75.0
-assert opus["max_output"] == 32000
+assert any("claude-api reference" in c for c in haiku["caveats"])
+# Lifecycle is derived from the reference, not from the payload: the payload carries no
+# deprecation field at all, yet the deprecated and retired lanes must still be marked.
+opus41 = by_id["claude-opus-4-1-20250805"]
+assert opus41["lifecycle"] == "deprecated", opus41["lifecycle"]
+assert opus41["deprecated"] is True
+assert any("2026-08-05" in c for c in opus41["caveats"]), opus41["caveats"]
+# The reference's legacy tables state no price or limits for it; nothing is inferred.
+assert opus41["input_price_per_mtok"] is None
+assert opus41["output_price_per_mtok"] is None
+assert opus41["context_window"] is None
+assert opus41["max_output"] is None
+retired = by_id["claude-3-opus-20240229"]
+assert retired["lifecycle"] == "retired", retired["lifecycle"]
+assert retired["deprecated"] is True
+assert retired["availability"] == "retired_unavailable", retired["availability"]
+assert any("cannot be selected" in c for c in retired["caveats"]), retired["caveats"]
+# Fable and Mythos match real rules, so they carry a generation and cannot score as
+# unknown lanes; Mythos is access-gated rather than freely selectable.
+fable5 = by_id["claude-fable-5"]
+assert fable5["generation"] == 5.0, fable5["generation"]
+assert fable5["input_price_per_mtok"] == 10.0
+assert fable5["output_price_per_mtok"] == 50.0
+mythos = by_id["claude-mythos-5-1"]
+assert mythos["generation"] == 5.1, mythos["generation"]
+assert mythos["availability"] == "requires_program_enrollment", mythos["availability"]
+assert mythos["deprecated"] is False
 # Unmatched model id keeps prices null and flags the gap rather than inventing numbers.
 unknown = by_id["claude-future-unknown-1"]
 assert unknown["input_price_per_mtok"] is None
 assert unknown["output_price_per_mtok"] is None
-assert any("No pricing/limits metadata match" in c for c in unknown["caveats"])
-# Cheapest fitting lane ranks first for routine_coding.
-assert payload["recommendations"][0]["id"] == "claude-haiku-4-5-20251001"
+assert any("No lifecycle/pricing/limits metadata match" in c for c in unknown["caveats"])
+# Cheapest fitting current lane ranks first for routine_coding, and on this live-shaped
+# payload no deprecated or retired lane may appear above a current one.
+ranked = payload["recommendations"]
+assert ranked[0]["id"] == "claude-haiku-4-5-20251001", ranked[0]["id"]
+assert ranked[-1]["id"] == "claude-3-opus-20240229", ranked[-1]["id"]
+seen_deprecated = False
+for model in ranked:
+    if model["deprecated"]:
+        seen_deprecated = True
+    else:
+        assert not seen_deprecated, f"{model['id']} ranked below a deprecated lane"
 PY
   then ok "which-model claude catalog enriches Models-API metadata"; else fail "which-model claude catalog enriches Models-API metadata"; fi
 
-  # No injected source and no network: the docs snapshot builds a real catalog with
+  # No injected source and no network: the bundled reference builds a real catalog with
   # no Anthropic API key required (WHICH_MODEL_OFFLINE proves no network dependency).
   catalog_json=$(
     WHICH_MODEL_CACHE_HOME="$catalog_home/cache-claude-snapshot" \
     WHICH_MODEL_OFFLINE=1 \
-    skills/which-model/bin/model-catalog --env claude --force-refresh --task routine_coding --top 3
+    skills/which-model/bin/model-catalog --env claude --force-refresh --task routine_coding --top 40
   )
   if ANTHROPIC_API_KEY="" ANTHROPIC_AUTH_TOKEN="" python3 - "$catalog_home/cache-claude-snapshot/catalog.claude.json" "$catalog_json" <<'PY'
 import json
@@ -1244,21 +1580,70 @@ payload = json.loads(sys.argv[2])
 catalog = payload["catalog"]
 assert cache_path.is_file(), "claude snapshot cache not written"
 assert catalog["environment"] == "claude"
-# Snapshot source used; no key-based API fetch, no seed fallback.
-assert any(source.get("kind") == "anthropic-docs-snapshot" for source in catalog["sources"])
+# Reference snapshot used; no key-based API fetch, no seed fallback.
+assert any(source.get("kind") == "anthropic-reference-snapshot" for source in catalog["sources"])
 assert not any(source.get("kind") == "seed" for source in catalog["sources"])
 by_id = {model["id"]: model for model in catalog["models"]}
 assert "claude-haiku-4-5" in by_id and "claude-opus-4-1" in by_id
-haiku = by_id["claude-haiku-4-5"]
-# Real enriched pricing from the docs snapshot, not null seed placeholders.
-assert haiku["input_price_per_mtok"] == 1.0, haiku["input_price_per_mtok"]
-assert haiku["output_price_per_mtok"] == 5.0, haiku["output_price_per_mtok"]
-assert haiku["provider"] == "anthropic"
 for model in catalog["models"]:
     assert model["confidence"] == "snapshot"
-    assert any("docs snapshot" in c for c in model["caveats"])
-# Cheapest fitting lane ranks first (Haiku 3 at 0.25/1.25 undercuts newer Haikus).
-assert payload["recommendations"][0]["id"] == "claude-3-haiku-20240307"
+    assert any("claude-api reference" in c for c in model["caveats"])
+# Real enriched pricing the reference actually states, not null placeholders.
+assert by_id["claude-opus-5"]["input_price_per_mtok"] == 5.0
+assert by_id["claude-opus-5"]["output_price_per_mtok"] == 25.0
+assert by_id["claude-sonnet-5"]["input_price_per_mtok"] == 2.0
+assert by_id["claude-sonnet-5"]["output_price_per_mtok"] == 10.0
+assert by_id["claude-fable-5-1"]["context_window"] == 1000000
+assert by_id["claude-fable-5-1"]["max_output"] == 128000
+# Figures the reference does not state stay null and say why.
+haiku = by_id["claude-haiku-4-5"]
+assert haiku["input_price_per_mtok"] is None and haiku["output_price_per_mtok"] is None
+assert any("no per-token price" in c for c in haiku["caveats"])
+# Every model the reference lists as active is present and marked current.
+for current in (
+    "claude-fable-5-1", "claude-fable-5", "claude-opus-5", "claude-opus-4-8",
+    "claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5", "claude-sonnet-5",
+    "claude-sonnet-4-6", "claude-sonnet-4-5", "claude-haiku-4-5", "claude-mythos-5-1",
+):
+    assert current in by_id, f"snapshot missing current model {current}"
+    assert not by_id[current]["deprecated"], current
+    assert by_id[current]["lifecycle"] == "active", current
+# Retired lanes stay listed but cannot be read as selectable.
+for retired in ("claude-3-7-sonnet-latest", "claude-3-5-sonnet-latest",
+                "claude-3-5-haiku-latest", "claude-3-opus-latest"):
+    assert by_id[retired]["lifecycle"] == "retired", retired
+    assert by_id[retired]["deprecated"] is True, retired
+    assert by_id[retired]["availability"] == "retired_unavailable", retired
+for deprecated in ("claude-opus-4-1", "claude-opus-4-0", "claude-sonnet-4-0",
+                   "claude-3-haiku-20240307"):
+    assert by_id[deprecated]["deprecated"] is True, deprecated
+    assert by_id[deprecated]["lifecycle"] == "deprecated", deprecated
+# Recency outranks price: the cheap retired Haiku 3 must not win routine_coding.
+ranked = payload["recommendations"]
+top = ranked[0]
+assert top["deprecated"] is False, top["id"]
+assert top["id"] == "claude-sonnet-5", top["id"]
+assert all(not model["deprecated"] for model in ranked[:2])
+# No deprecated or retired lane may be listed above any current one, anywhere.
+seen_deprecated = False
+for model in ranked:
+    if model["deprecated"]:
+        seen_deprecated = True
+    else:
+        assert not seen_deprecated, f"{model['id']} ranked below a deprecated lane"
+# An older sibling never outranks its own successor, even carrying the requested tag.
+order = [model["id"] for model in ranked]
+for older, newer in (
+    ("claude-sonnet-4-5", "claude-sonnet-5"),
+    ("claude-opus-4-8", "claude-opus-5"),
+    ("claude-fable-5", "claude-fable-5-1"),
+):
+    assert order.index(newer) < order.index(older), f"{older} outranked {newer}"
+# The reference carries no publication date, so the catalog reports the data age as
+# unknown rather than stamping one, and unknown age always reads as stale.
+assert catalog["data_as_of"] == "unknown", catalog["data_as_of"]
+assert catalog["stale_after"] is None, catalog["stale_after"]
+assert payload["stale"] is True and payload["very_stale"] is True
 PY
   then ok "which-model claude builds key-free docs snapshot"; else fail "which-model claude builds key-free docs snapshot"; fi
 
@@ -1450,7 +1835,7 @@ test_worklog_skill() {
   local vault rc
   vault=$(mktemp -d)/test-vault
   set +e
-  bash "$sb/init-new-data-repo.sh" "$vault" test-ldap >/dev/null 2>&1
+  "${WL_HERMETIC[@]}" bash "$sb/init-new-data-repo.sh" "$vault" test-ldap >/dev/null 2>&1
   rc=$?
   set -e
   if [[ $rc -eq 0 && -f "$vault/AGENTS.md" && -d "$vault/people/test-ldap/active" ]]; then
@@ -1463,7 +1848,7 @@ test_worklog_skill() {
 
   # Idempotent re-run: zero diffs in working tree.
   set +e
-  bash "$sb/init-new-data-repo.sh" "$vault" test-ldap >/dev/null 2>&1
+  "${WL_HERMETIC[@]}" bash "$sb/init-new-data-repo.sh" "$vault" test-ldap >/dev/null 2>&1
   if [[ -z "$(git -C "$vault" status --porcelain)" ]]; then
     ok "init-new-data-repo idempotent (no diff on re-run)"
   else
@@ -1473,21 +1858,21 @@ test_worklog_skill() {
 
   # Run preamble + status + lint against the throwaway vault.
   local out
-  out=$(WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap bash "$sb/preamble.sh" --minimal 2>&1)
+  out=$("${WL_HERMETIC[@]}" WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap bash "$sb/preamble.sh" --minimal 2>&1)
   if echo "$out" | grep -q 'LDAP=test-ldap'; then
     ok "preamble.sh --minimal resolves vault LDAP"
   else
     fail "preamble.sh --minimal (got: $(echo "$out" | head -1))"
   fi
 
-  out=$(WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap bash "$sb/status.sh" --since=today 2>&1)
+  out=$("${WL_HERMETIC[@]}" WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap bash "$sb/status.sh" --since=today 2>&1)
   if echo "$out" | grep -q '_nothing to report_'; then
     ok "status.sh runs against empty vault"
   else
     fail "status.sh against empty vault (got: $(echo "$out" | head -2 | tr '\n' ' '))"
   fi
 
-  out=$(WORKLOG_REPO="$vault" bash "$sb/lint.sh" 2>&1)
+  out=$("${WL_HERMETIC[@]}" WORKLOG_REPO="$vault" bash "$sb/lint.sh" 2>&1)
   if echo "$out" | grep -qE '0 errors'; then
     ok "lint.sh runs clean against empty vault"
   else
@@ -1509,44 +1894,33 @@ test_worklog_skill() {
   fi
 
   # Hard-fail when WORKLOG_REPO unset + cwd outside any clone.
-  out=$( cd /tmp && env -u WORKLOG_REPO -u WORKLOG_LDAP -u WORKLOG_NS bash "$sb/kernels-roster.sh" 2>&1 || true )
+  out=$( cd /tmp && env -u BASH_ENV -u WORKLOG_REPO -u WORKLOG_LDAP -u WORKLOG_NS bash "$sb/kernels-roster.sh" 2>&1 || true )
   if echo "$out" | grep -q 'cannot locate'; then
     ok "scripts hard-fail outside a worklog clone"
   else
     fail "expected hard-fail outside clone, got: $(echo "$out" | head -1)"
   fi
 
-  if bash "$skill/tests/worklog_manager/test_graph.sh" >/dev/null 2>&1; then
-    ok "worklog-manager graph fixture"
-  else
-    fail "worklog-manager graph fixture"
-  fi
+  # These five used to be named file by file. Glob the two directories instead,
+  # so a new worklog_manager or context fixture runs in `run.sh worklog-skill`
+  # by existing. Both directories are also covered by test_fixtures(); this mode
+  # is separately invocable, so it must reach them on its own.
+  for t in "$skill"/tests/worklog_manager/test_* "$skill"/tests/context/test_*; do
+    [[ -f "$t" ]] || continue
+    case "$t" in
+      *.sh) runner=(bash) ;;
+      *.mjs) runner=(node) ;;
+      *) continue ;;
+    esac
+    name="$(basename "$(dirname "$t")")/$(basename "${t%.*}")"
+    if "${WL_HERMETIC[@]}" "${runner[@]}" "$t" >/dev/null 2>&1; then
+      ok "$name fixture"
+    else
+      fail "$name fixture"
+    fi
+  done
 
-  if bash "$skill/tests/worklog_manager/test_dispatch.sh" >/dev/null 2>&1; then
-    ok "worklog-manager dispatch fixture"
-  else
-    fail "worklog-manager dispatch fixture"
-  fi
-
-  if bash "$skill/tests/worklog_manager/test_poll.sh" >/dev/null 2>&1; then
-    ok "worklog-manager poll fixture"
-  else
-    fail "worklog-manager poll fixture"
-  fi
-
-  if node "$skill/tests/worklog_manager/test_units.mjs" >/dev/null 2>&1; then
-    ok "worklog-manager unit fixtures"
-  else
-    fail "worklog-manager unit fixtures"
-  fi
-
-  if bash "$skill/tests/context/test_context.sh" >/dev/null 2>&1; then
-    ok "context current Next + unique slug fixture"
-  else
-    fail "context current Next + unique slug fixture"
-  fi
-
-  if WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap CODEX_SKILL_PATH="$skill/SKILL.md" bash "$sb/codex-surface-check.sh" >/dev/null 2>&1; then
+  if "${WL_HERMETIC[@]}" WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap CODEX_SKILL_PATH="$skill/SKILL.md" bash "$sb/codex-surface-check.sh" >/dev/null 2>&1; then
     ok "codex-surface-check accepts Codex-native skill"
   else
     fail "codex-surface-check rejected Codex-native skill"
@@ -1556,7 +1930,7 @@ test_worklog_skill() {
   bad_codex_skill="$(mktemp)"
   cp "$skill/SKILL.md" "$bad_codex_skill"
   printf '\nNon-Claude agents don'\''t invoke this skill.\n' >> "$bad_codex_skill"
-  if WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap CODEX_SKILL_PATH="$bad_codex_skill" bash "$sb/codex-surface-check.sh" >/dev/null 2>&1; then
+  if "${WL_HERMETIC[@]}" WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap CODEX_SKILL_PATH="$bad_codex_skill" bash "$sb/codex-surface-check.sh" >/dev/null 2>&1; then
     fail "codex-surface-check accepted self-excluding Codex skill"
   else
     ok "codex-surface-check rejects self-excluding Codex skill"
@@ -1565,7 +1939,7 @@ test_worklog_skill() {
 
   bad_init_mode="$(mktemp)"
   printf '# missing Codex hydration contract\n' > "$bad_init_mode"
-  if WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap CODEX_SKILL_PATH="$skill/SKILL.md" MODE_INIT_PATH="$bad_init_mode" bash "$sb/codex-surface-check.sh" >/dev/null 2>&1; then
+  if "${WL_HERMETIC[@]}" WORKLOG_REPO="$vault" WORKLOG_LDAP=test-ldap CODEX_SKILL_PATH="$skill/SKILL.md" MODE_INIT_PATH="$bad_init_mode" bash "$sb/codex-surface-check.sh" >/dev/null 2>&1; then
     fail "codex-surface-check accepted init without update_plan contract"
   else
     ok "codex-surface-check rejects init without update_plan contract"
@@ -1584,8 +1958,32 @@ repos: []
 
 Borrow Schema fallback evidence.
 EOF
-  WORKLOG_REPO="$vault" bash "$sb/index.sh" >/dev/null
-  out=$(PATH=/usr/bin:/bin WORKLOG_REPO="$vault" bash "$sb/search.sh" 'Borrow|Schema' --active 2>&1)
+  "${WL_HERMETIC[@]}" WORKLOG_REPO="$vault" bash "$sb/index.sh" >/dev/null
+  if command -v rg >/dev/null; then
+    out=$("${WL_HERMETIC[@]}" WORKLOG_REPO="$vault" /bin/bash "$sb/search.sh" 'Borrow' --active --json 2>&1)
+    if echo "$out" | grep -q 'search-fixture' && ! echo "$out" | grep -q 'unbound variable'; then
+      ok "search.sh supports an empty rg-extra array under nounset"
+    else
+      fail "search.sh failed with no extra rg arguments (got: $out)"
+    fi
+  fi
+  # Construct rg's absence; do not inherit it. These two cases pinned
+  # PATH=/usr/bin:/bin to force the grep fallback, but rg installs to
+  # /usr/bin/rg — so on any machine that actually has ripgrep (it is what the
+  # repo tells you to use) rg stayed on PATH, the fallback never ran, and the
+  # last assertion went green against code it never reached. Same fix as
+  # 6f32ea3 used for the forge CLIs: mirror /usr/bin + /bin minus rg.
+  NORG="$(mktemp -d)"
+  for d in /usr/bin /bin; do
+    [ -d "$d" ] || continue
+    for f in "$d"/*; do
+      [ -x "$f" ] && [ ! -d "$f" ] || continue
+      base="${f##*/}"
+      [ "$base" = rg ] && continue
+      [ -e "$NORG/$base" ] || ln -sf "$f" "$NORG/$base"
+    done
+  done
+  out=$("${WL_HERMETIC[@]}" PATH="$NORG" WORKLOG_REPO="$vault" bash "$sb/search.sh" 'Borrow|Schema' --active 2>&1)
   if echo "$out" | grep -q 'Borrow Schema fallback evidence'; then
     ok "search.sh grep fallback preserves common regex alternation"
   else
@@ -1593,7 +1991,7 @@ EOF
   fi
 
   set +e
-  out=$(PATH=/usr/bin:/bin WORKLOG_REPO="$vault" bash "$sb/search.sh" 'BORROW SCHEMA' --active -- -i 2>&1)
+  out=$("${WL_HERMETIC[@]}" PATH="$NORG" WORKLOG_REPO="$vault" bash "$sb/search.sh" 'BORROW SCHEMA' --active -- -i 2>&1)
   rc=$?
   set -e
   if [[ $rc -eq 2 && "$out" == *"extra rg arguments require ripgrep"* ]]; then
@@ -1602,14 +2000,70 @@ EOF
     fail "search.sh grep fallback silently ignored rg arguments (rc=$rc, output=$out)"
   fi
 
-  rm -rf "$(dirname "$vault")"
+  rm -rf "$(dirname "$vault")" "$NORG"
+}
+
+
+# --- packages/ (products folded into this repo) ------------------------------
+test_packages() {
+  echo "=== packages ==="
+
+  # loop-run: the skill is canonical; the package must be a clean render.
+  if python3 packages/loop-run/tools/sync-from-skill.py --check; then
+    ok "loop-run package in sync with the skill"
+  else
+    fail "loop-run package drifted from skills/loop-engineering"
+  fi
+  if (cd packages/loop-run && python3 -m unittest discover -s tests -t tests -p 'test_*.py' 2>&1 | tail -1 | grep -q '^OK'); then
+    ok "loop-run package unittest OK"
+  else
+    fail "loop-run package unittest failed"
+  fi
+
+  # worklog-memory-mcp: two-session round trip against a synthetic vault.
+  if command -v node >/dev/null && [ -d packages/worklog-memory-mcp/node_modules ]; then
+    local mini
+    mini="$(mktemp -d)/mini"
+    git init -q "$mini" && mkdir -p "$mini/people/oss/active" "$mini/people/oss/archive"
+    echo "# mini vault" > "$mini/README.md"
+    git -C "$mini" -c user.name=t -c user.email=t@t add -A
+    git -C "$mini" -c user.name=t -c user.email=t@t commit -qm init
+    if (cd packages/worklog-memory-mcp && WORKLOG_SOURCE="$mini" node test/e2e.js | grep -q 'e2e: 5 pass, 0 fail'); then
+      ok "worklog-memory-mcp e2e 5/5"
+    else
+      fail "worklog-memory-mcp e2e failed"
+    fi
+    rm -rf "$(dirname "$mini")"
+  else
+    say SKIP "worklog-memory-mcp e2e (node or node_modules missing — run npm install in packages/worklog-memory-mcp)"
+  fi
+
+  # Release coupling: package.json version, server.json version, and
+  # server.json packages[0].version must move together. Bump one alone and the
+  # registry record advertises an npm version that does not exist.
+  # mcp-publisher validate does NOT catch this - it never reads package.json.
+  local vers
+  if vers="$(python3 - <<'VERCHECK'
+import json, sys
+pkg = json.load(open("packages/worklog-memory-mcp/package.json"))["version"]
+srv = json.load(open("packages/worklog-memory-mcp/server.json"))
+top, inner = srv["version"], srv["packages"][0]["version"]
+sys.stdout.write(f"package.json={pkg} server.json={top} packages[0]={inner}")
+sys.exit(0 if pkg == top == inner else 1)
+VERCHECK
+)"; then
+    ok "worklog-memory-mcp versions agree ($vers)"
+  else
+    fail "worklog-memory-mcp version drift - $vers"
+  fi
 }
 
 case "${1:-all}" in
   static)         test_static ;;
   fixtures)       test_fixtures ;;
   worklog-skill)  test_worklog_skill ;;
-  all)            test_static; test_fixtures; test_worklog_skill ;;
+  packages)       test_packages ;;
+  all)            test_static; test_fixtures; test_worklog_skill; test_packages ;;
   *) echo "usage: $0 {static|fixtures|worklog-skill|all}" >&2; exit 2 ;;
 esac
 

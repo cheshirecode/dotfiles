@@ -3,7 +3,13 @@
 
 set -euo pipefail
 
-WORKLOG_BIN="${WORKLOG_BIN:-$(cd "$(dirname "$0")/../../bin" && pwd)}"
+# Pinned to the tree under test, not `${WORKLOG_BIN:-...}`. A developer
+# profile exports WORKLOG_BIN at the *installed* skill, which is a different
+# checkout; honouring it makes this fixture grade the installed helpers
+# instead of the ones sitting next to it, so a fix in the working tree can
+# read green against unfixed code. tests/run.sh unsets the variable, and
+# deriving it here keeps the fixture honest when run by hand too.
+WORKLOG_BIN="$(cd "$(dirname "$0")/../../bin" && pwd)"
 
 SCRATCH_ROOT="$(mktemp -d -t autosave-test-XXXXXX)"
 SCRATCH="$SCRATCH_ROOT/repo"
@@ -12,8 +18,8 @@ export TMPDIR="$SCRATCH_ROOT/tmp"
 mkdir -p "$TMPDIR"
 trap 'rm -rf "$SCRATCH_ROOT"' EXIT
 
-git init -q --bare "$UPSTREAM"
-git init -q "$SCRATCH"
+git init -q --bare --initial-branch=main "$UPSTREAM"
+git init -q --initial-branch=main "$SCRATCH"
 cp -R "$WORKLOG_BIN" "$SCRATCH/bin"
 rm -rf "$SCRATCH/bin/__pycache__"
 chmod +x "$SCRATCH"/bin/*.sh

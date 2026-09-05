@@ -102,6 +102,28 @@ else
   OLD_STATUS="$(git show "HEAD:$FILE" 2>/dev/null | awk -F': *' '/^status:/ {print $2; exit}' || true)"
 fi
 
+# `blocked` carries an invariant: next_action must name what is being waited on.
+# The linter enforces it as an ERROR, but only on a later run — so a checkpoint
+# could put a task into a state whose contract the same toolchain then reports
+# as broken. Observed 2026-08-31: a generated child stub flipped to blocked kept
+# its "Awaiting claim — child of ..." default and became the corpus's only
+# error. Refuse at the transition, where the person still knows the answer.
+if [[ "$STATUS" == "blocked" ]]; then
+  CANDIDATE="$NEXT"
+  if [[ -z "$CANDIDATE" && -f "$FILE" ]]; then
+    CANDIDATE="$(awk '/^next_action:/ {sub(/^next_action: */, ""); print; exit}' "$FILE" | tr -d '"')"
+  fi
+  if [[ "$CANDIDATE" != "Waiting on"* ]]; then
+    {
+      echo "checkpoint: --status=blocked needs a next_action starting with 'Waiting on'"
+      echo "  current: ${CANDIDATE:-<none>}"
+      echo "  fix:     $0 $SLUG --status=blocked --next=\"Waiting on <who or what>\""
+      echo "  (FSM contract, AGENTS.md § Status lifecycle — the linter reports this as an ERROR)"
+    } >&2
+    exit 2
+  fi
+fi
+
 TODAY="$(date +%Y-%m-%d)"
 
 python3 - "$FILE" "$TODAY" "$STATUS" "$NEXT" "$PR" <<'PY'
@@ -168,20 +190,45 @@ fi
 
 # Soft lint gate — single-file scope. Stderr-only, never blocks the checkpoint.
 # Bypass with WORKLOG_NO_LINT=1 (e.g. in hooks / non-interactive contexts).
+#
+# Soft means "does not block". It does not mean "silent when it fails to run".
+# This used to swallow the status with `|| true`, discard lint.sh's stderr,
+# and exit 0 on unparseable JSON — so a lint that crashed, hit a missing
+# dependency, or printed nothing looked exactly like a lint that found no
+# issues. A lint that printed nothing is not a clean lint, and the checkpoint
+# went on to record the task as verified either way.
+#
+# `total_files` is the scanned-count the real report always carries; its
+# absence is the difference between "ran and found nothing" and "never ran".
 if [[ -z "${WORKLOG_NO_LINT:-}" ]] && [[ -x "$SCRIPT_DIR/lint.sh" ]]; then
-  lint_json="$("$SCRIPT_DIR/lint.sh" --file="$FILE" --format=json 2>/dev/null || true)"
-  printf '%s' "$lint_json" | python3 -c '
-import json, sys
+  lint_err="$(mktemp)"
+  lint_json="$("$SCRIPT_DIR/lint.sh" --file="$FILE" --format=json 2>"$lint_err" || true)"
+  printf '%s' "$lint_json" | LINT_ERR="$lint_err" python3 -c '
+import json, os, sys
+
+raw = sys.stdin.read()
 try:
-  data = json.load(sys.stdin)
-except Exception:
+  data = json.loads(raw)
+  scanned = data["total_files"]
+except Exception as exc:
+  detail = str(exc) if raw.strip() else "lint.sh produced no output"
+  try:
+    with open(os.environ["LINT_ERR"], encoding="utf-8", errors="replace") as fh:
+      stderr_tail = fh.read().strip().splitlines()[-1:]
+  except OSError:
+    stderr_tail = []
+  if stderr_tail:
+    detail = "%s (%s)" % (detail, stderr_tail[0])
+  # Still non-blocking: report the gap and let the checkpoint proceed.
+  print("checkpoint: lint SKIPPED — %s" % detail, file=sys.stderr)
   sys.exit(0)
 for item in data.get("issues", []):
   for e in item.get("errors", []):
-    print(f"checkpoint: lint ERROR  {e}")
+    print(f"checkpoint: lint ERROR  {e}", file=sys.stderr)
   for w in item.get("warnings", []):
-    print(f"checkpoint: lint warn   {w}")
-' >&2 || true
+    print(f"checkpoint: lint warn   {w}", file=sys.stderr)
+' || true
+  rm -f "$lint_err"
 fi
 
 git pull --no-rebase --autostash -q
@@ -203,8 +250,71 @@ if [[ -n "$RENAME_FROM" ]]; then
   fi
 fi
 
+if git diff --cached --quiet && [[ -n "$STATUS" ]]; then
+  # An explicit --status is an ASSERTION, and the Worklog-Status: trailer is the
+  # record of it. When frontmatter already reads that status there is nothing to
+  # rewrite, so this used to fall through to "no changes" and write no trailer —
+  # which made a stale trailer unfixable through the one path meant to fix it.
+  # The lint warning even advised aligning frontmatter DOWN to the stale trailer,
+  # the only move that path allowed. Reported live 2026-08-31 on a task whose
+  # 'in-review' was correct and whose 'draft' trailer was months old.
+  #
+  # Only fires when --status was passed explicitly, so ordinary checkpoints
+  # never produce empty commits.
+  # Only re-assert when the trailer actually diverges: an empty commit per no-op
+  # --status call would be noise. Mirrors _lint.py's _latest_status_trailers —
+  # newest-first, Worklog-Slug: trailer or a `<slug>:` subject prefix.
+  # Mirrors _lint.py's _latest_status_trailers: newest-first, matched by a
+  # Worklog-Slug: trailer or a `<slug>:` subject prefix. Done in python because
+  # trailer values can contain newlines, which a line-oriented awk splits.
+  CUR_TRAILER=$(git log --all --format="%s%x1f%(trailers:key=Worklog-Slug,valueonly=true)%x1f%(trailers:key=Worklog-Status,valueonly=true)%x1e" \
+    | python3 -c '
+import sys
+slug = sys.argv[1]
+for rec in sys.stdin.read().split("\x1e"):
+    rec = rec.strip("\n ")
+    if not rec:
+        continue
+    parts = rec.split("\x1f", 2)
+    if len(parts) < 3:
+        continue
+    subject, sl, st = (x.strip() for x in parts)
+    if not st:
+        continue
+    if sl == slug or subject.startswith(slug + ":"):
+        print(st.split("\n")[0].strip())
+        break
+' "$SLUG")
+  if [[ "$CUR_TRAILER" == "$STATUS" ]]; then
+    echo "checkpoint: no changes for $SLUG (status '$STATUS' already asserted)"
+    exit 0
+  fi
+  echo "checkpoint: frontmatter already reads '$STATUS', trailer says '${CUR_TRAILER:-<none>}' — re-asserting"
+  git commit -q --allow-empty -m "$SLUG: re-assert status $STATUS" \
+    -m "Worklog-Status: $STATUS
+Worklog-Slug: $SLUG"
+  git push -q origin HEAD && echo "checkpoint: pushed $SLUG (trailer re-asserted)"
+  exit 0
+fi
+
 if git diff --cached --quiet; then
   echo "checkpoint: no changes for $SLUG"
+  # ...but "no changes for the task file" is not "no changes". A task's
+  # artifacts/ files are content the body links to, and they are NOT auto-staged
+  # — deliberately, since widening the scope is how a checkpoint sweeps up a
+  # concurrent session's in-flight edits (observed 2026-08-31). So name what is
+  # dirty and point at --include, rather than letting "no changes" read as
+  # "your work is committed" over an uncommitted findings file.
+  DIRTY=$(git status --porcelain -- "people/$LDAP/" 2>/dev/null | head -5)
+  if [[ -n "$DIRTY" ]]; then
+    echo "checkpoint: NOTE — uncommitted files under people/$LDAP/ were not staged:" >&2
+    printf '%s\n' "$DIRTY" | sed 's/^/  /' >&2
+    # The clone can be shared: a dirty path here may be another session's
+    # in-flight edit, so following --include blindly hand-drives the same sweep
+    # this notice exists to avoid automating. Say so at the point of decision.
+    echo "  some may belong to another session — check before staging" >&2
+    echo "  stage the ones that are yours: $0 $SLUG --include <path>" >&2
+  fi
   exit 0
 fi
 

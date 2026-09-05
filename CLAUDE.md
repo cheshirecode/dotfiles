@@ -35,6 +35,41 @@ if work starts there, port or merge the exact changes back into the primary
 there. Do not let "detached HEAD" in a temporary worktree silently turn a
 direct-main request into a side branch.
 
+## Test discipline (lesson from the 2026-09-02 skills audit)
+
+**Prove a new test red before shipping it.** Run it against the unfixed code,
+confirm it fails, and confirm *which* assertions fail. A test that passes both
+ways is worse than no test: it certifies the bug.
+
+This is mechanical, not a principle to keep in mind. During the audit that
+produced this rule, three separate assertions were written that matched a
+summary line (`0 stale, 0 live, ...`) instead of a table row, so they passed
+against the very code they were meant to catch — each one written *after* the
+previous had been caught the same way.
+
+The recurring defect shape in this repo is **a pattern that matches something
+adjacent to what was meant**:
+
+- a greedy `sed 's/.*"state":"\([a-z]*\)".*/\1/p'` taking the *last* `"state"`
+  in a one-line payload (a nested `author.state`) rather than the object's own
+- `people/[a-z]+/active` failing to match any LDAP containing a dot
+- a sort key whose `deprecated` term sat after `fit`, so retired models still
+  outranked current ones — the test asserted only the top two and passed
+- an unanchored `![0-9]{4}` matching the first four digits of five-digit refs
+
+All of them fail silent rather than loud, and a suite that only asserts "runs
+clean" stays green while the tool is wrong. Measured cost of one instance: a
+stale-ref checker reported 19 stale refs where the truth was 45, missing 58%
+with no error surfaced.
+
+Two corollaries:
+
+- **Prefer the silent failure when building a fixture.** If a wrong input can
+  either 404 loudly or return a confident wrong value, build the fixture around
+  the confident wrong value; the loud path proves much less.
+- **A check nothing runs is not coverage.** Glob test directories in the runner
+  rather than listing files, so a new fixture is wired up by existing.
+
 ## Reading posture (apply before treating any section as a recipe)
 
 This is a guidance document, not a runnable checklist. When an agent reads
@@ -55,6 +90,84 @@ Commands shown below are illustrative. Destructive ones (`git reset --hard`,
 `rm -rf`, force-push) are documented as DANGEROUS with explicit guardrails
 in their respective sections; agents must honor those guardrails as
 preconditions, not skip past them.
+
+## Search tooling (zvec-grep first)
+
+`zg` (zvec-grep) replaces bare `rg` for shell-level search in this repo. One
+CLI, three lanes; results keep file:line locations:
+
+- `zg query --rg <rg-args>` — managed ripgrep, with one difference that bites:
+  **it exits 0 when it finds nothing, where `rg` exits 1.** So
+  `rg X || echo absent` fires and the `zg` form never does; it prints
+  `No matches.` instead. Read the output, not `$?`, and do not drop it into an
+  existing script that branches on rg's exit status.
+- `zg query --fts "terms"` — BM25 keyword ranking when literal hits are noisy.
+  Needs the workspace index, same as the semantic lane.
+- `zg query "natural language"` — semantic + FTS hybrid when you don't know
+  the exact terms. Requires the workspace index (`zg index`; stored in
+  `.zvec-grep/`; rebuild after large refactors). **`.zvec-grep/` is
+  gitignored in THIS repo only.** Verified 2026-09-03: it is not ignored
+  in /workspace/midas or /workspace/worklog, so indexing there drops a
+  ~15M untracked directory into `git status`, one `git add -A` from being
+  committed. Before `zg index` in any other repo, check
+  `git check-ignore .zvec-grep` and add it (or set a global
+  `core.excludesfile`) first. Without one, both
+  this and `--fts` fail `WORKSPACE_INDEX_NOT_FOUND`; only `--rg` works
+  unindexed.
+
+**The ranked lanes cannot say "not here."** `--fts` and the semantic form
+return the top N by ranking, so a query for something absent still comes back
+full — `zg query --fts "xyzzy plugh frotz nitfol"` returns 10 hits. Use them to
+find candidates; confirm an absence with `--rg` or `rg`, which can express one.
+(Measured against zvec-grep 0.2.1.)
+
+Gate on availability and fail open: if `command -v zg` is empty, use `rg` and
+continue — never block on setup mid-task. Install: `npm install -g
+@zvec/zvec-grep` (Node 22+). This governs Bash searches only; the harness
+Grep/Glob tools are unchanged. Full facet routing (symbols, JSON, history,
+logs) lives in `skills/serena-rg-search`.
+
+## Fable 5.1 prompt alignment
+
+Adopted 2026-09-03 from the official guide ("Prompting Claude Fable 5.1",
+platform.claude.com). The Claude Code harness already ships the guide's
+autonomy/finish-the-whole-task, delivering-work, progress-update,
+tool-batching, and compaction blocks — do NOT duplicate those here; a stale
+copy would fight the harness's newer one. This file adopts the three
+prompt-text items the harness does not carry:
+
+**Scoped changes and tests** (guide text, verbatim):
+
+> If, while working or testing, you find a pre-existing bug, a performance
+> concern, or behavior the task doesn't mention, don't fix, optimize or
+> extend it in this change unless the requested behavior cannot work without
+> it; report it as a follow-up in your summary. Where the task is ambiguous,
+> implement the reading its wording and the surrounding code most directly
+> support, state that assumption in your summary, and don't build for the
+> other readings as well. Verify your work however you like; scratch scripts
+> and quick checks need not be kept. Commit tests only where the task asks
+> for them or this repository already keeps tests for this kind of change,
+> sized like the neighboring test files — roughly one focused test per stated
+> behavior — and don't turn scratch checks into additional permanent test
+> files. This is about extras only: implement every behavior the task asks
+> for, completely.
+
+**Targeted edits over whole-file rewrites** (verbatim):
+
+> The number of tokens used to edit files is best minimized, all else being
+> equal. Therefore, when it will not affect the end result, try to surgically
+> edit a file rather than rewrite the entire thing.
+
+**Search before answering from familiarity** (verbatim):
+
+> When a query centers on a name you do not confidently recognize, or
+> recognize from a fast-moving area like AI models and developer tools where
+> the landscape shifts within months, the name itself is the thing to verify:
+> search before answering, and include the name as the user wrote it in at
+> least one query alongside any reformulations. This holds even when you have
+> some background on it — partial background is exactly what makes an
+> out-of-date answer sound authoritative, so familiarity is not a reason to
+> skip the search.
 
 ---
 

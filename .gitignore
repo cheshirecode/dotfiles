@@ -38,3 +38,9 @@ coverage/
 # Per-host secrets and identity overlays
 .envrc.github
 .gitconfig.local
+.shell_common.local
+# Agent worktrees + any install residue; harness-created, never source.
+.claude/
+
+# zvec-grep local workspace index
+.zvec-grep/

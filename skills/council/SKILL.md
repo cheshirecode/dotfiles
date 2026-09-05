@@ -5,6 +5,8 @@ description: "Run multi-angle, audited research with independent voting. Use whe
 
 # council
 
+Resolve `<skill-dir>` as this `SKILL.md` file's directory.
+
 ## When to use
 
 - "Run a council on X" / "get multiple opinions on Y" / `/council <topic>`
@@ -84,7 +86,8 @@ The full ballot per item is one of:
 
 Before tallying, validate every ballot:
 
-- Save each returned ballot verbatim and run `python3 <skill-dir>/bin/validate-ballot.py --items <N> --unresolved <comma-separated item numbers> <ballot-file>` from this skill directory. Treat a non-zero exit as malformed and retry once; do not tally an unvalidated ballot.
+- Save each returned ballot verbatim and run `python3 <skill-dir>/bin/validate-ballot.py --items <N> --unresolved <item numbers> <ballot-file>` from this skill directory. Treat a non-zero exit as malformed and retry once; do not tally an unvalidated ballot.
+- Both numeric arguments are **Stage 4 list positions**, not `A1-i2`/`D-i1` upstream IDs. `--items <N>` is the length of the Stage 4 candidate list. `--unresolved` is the comma-separated positions of every item Stage 3 marked `UNRESOLVED MATERIAL`; it is required, and when there are none you must pass `--unresolved none` rather than omitting the flag. Omitting it is a validator error, not a silent pass — that is what keeps the APPROVE-over-UNRESOLVED-MATERIAL Iron Law enforced.
 - Invalid criterion name, missing item, or malformed vote -> retry that voter once.
 - `APPROVE` on an `UNRESOLVED MATERIAL` candidate is malformed -> retry that voter once.
 - Still invalid after retry -> mark that item ballot `INVALID`, exclude it from support/reject counts, keep the full odd `M_returned` denominator, and mark the item `UNVERIFIED` if fewer than 3 valid item ballots remain.
@@ -100,126 +103,35 @@ Before tallying, validate every ballot:
 
 ## Model tiering per stage
 
-Use `$which-model` for provider/model selection. Council owns the stage requirements; `which-model`
-owns model comparison, pricing freshness, first-class Chinese-model treatment, data-policy gates,
-and sequential-thinking decomposition. If `which-model` is unavailable, use the same principle:
-pick the cheapest model lane that clears the stage's capability and data-policy bar.
+Read `references/tiering.md` before choosing a model for a stage: it holds the per-stage tier
+mapping, the cheap-token expansion rule, and the escalate-only-after-failure rule.
 
-The council-specific mapping is:
+## Candidate item contract
 
-- **Stage 1 research** — mid tier for judgment-bearing angles (design critique, trade-off analysis); cheap tier for purely mechanical inventory/grep angles.
-- **Stage 3 discussion** / **Stage 5 voting** — mid tier: adversarial application of the criteria is judgment work, not lookup.
-- **Stage 4 collation** — cheap tier: dedupe + tag only, no invention authority (Iron Law), so it needs no reasoning headroom.
-- **Stage 6 tally + conclusion** — the frontier orchestrator itself: cross-context judgment, QUALIFY/veto resolution, and the final report stay with the model holding the whole thread.
+Every candidate carries the same four fields at every stage — Stage 1 `A<i>-iN`, Stage 3 `D-iN`,
+and every Stage 4 entry. Stage 4 drops any item missing one, so a Stage 3 discussion item without
+a survival status never reaches the ballot.
 
-Cheap-token expansion rule:
-
-- If Stage 1 inventory/search uses a cheap tier, prefer 4-5 narrow angles over 3 broad ones when the extra angle can test a real blind spot.
-- If Stage 5 voting uses a cheap-enough mid tier, prefer 5 voters over 3 for high-impact or close-call decisions.
-- Keep cheap expansion evidence-shaped: file/line refs, commands, source citations, explicit no-finding results. More cheap tokens are for coverage, not longer prose.
-
-Escalate a stage one tier only after an observed failure (timed-out or malformed return, a voter that can't apply a criterion) — never preemptively. Don't spend frontier/premium budget on a lane a mid model clears, and don't starve cheap tiers when token price makes extra verification affordable.
+- **Falsifier or strongest counterexample** — the observation that would defeat or materially qualify the item.
+- **Verification recipe** — the cheapest safe check and its expected discriminating result.
+- **Verification evidence** — `PLANNED|EXECUTED-PASS|EXECUTED-FAIL|UNAVAILABLE`, plus an artifact pointer or a reason. Never present a planned check as an executed result; preserve the state and pointer verbatim across stages.
+- **Counterexample survival status** — `SURVIVES|REFUTED|UNRESOLVED MATERIAL|UNRESOLVED MINOR`, assigned by Stage 3 to every candidate including its own.
 
 ## Prompt templates
 
-### Stage 1 research
-
-```
-You are research angle <angle_i> of <angle_count>. Do not Read, Grep, or Monitor outputs of other angles. Do not coordinate.
-
-Original request: <verbatim user request>
-Angle scope: <one narrow, non-overlapping angle>
-
-Read only what is needed for this angle. Return:
-1. Top findings with file/line references or source citations when possible.
-2. Candidate items proposed by this angle:
-   - A<angle_i>-i1: <concrete, testable item>
-     - Falsifier or strongest counterexample: <observation that would defeat or materially qualify it>
-     - Verification recipe: <cheapest safe check and expected discriminating result>
-     - Verification evidence: <PLANNED|EXECUTED-PASS|EXECUTED-FAIL|UNAVAILABLE> — <artifact pointer or reason>
-   - A<angle_i>-i2: <concrete, testable item>
-     - Falsifier or strongest counterexample: <observation that would defeat or materially qualify it>
-     - Verification recipe: <cheapest safe check and expected discriminating result>
-     - Verification evidence: <PLANNED|EXECUTED-PASS|EXECUTED-FAIL|UNAVAILABLE> — <artifact pointer or reason>
-No file edits.
-```
-
-### Stage 3 discussion
-
-```
-You are the Stage 3 discussion agent. Read all Stage 2 findings below.
-Flag agreements, disagreements, gaps, and contradictions.
-You may propose additional candidate items only when they are surfaced by cross-angle gaps.
-For every candidate, assess its strongest counterexample from the supplied evidence. Run a cheap, safe, in-scope verification recipe only when needed; otherwise leave it unresolved rather than guessing. Never present a planned check as an executed result; preserve its evidence state and artifact pointer.
-
-Output:
-## Stage 3 discussion
-Agreements:
-Disagreements:
-Gaps:
-Counterexample survival status:
-- A1-i1: <SURVIVES|REFUTED|UNRESOLVED MATERIAL|UNRESOLVED MINOR> — <evidence or missing check>
-Additional candidate items surfaced by cross-angle gaps:
-- D-i1: <concrete, testable item>
-  - Falsifier or strongest counterexample: <observation>
-  - Verification recipe: <check and expected result>
-  - Verification evidence: <state and artifact pointer or reason>
-```
-
-### Stage 4 candidate collation
-
-```
-You are the Stage 4 collator. Gather the union of candidate items from Stage 1 angles and Stage 3 discussion.
-Deduplicate near-identical items while keeping the strongest phrasing.
-You may not add new items.
-
-Output:
-## Stage 4 candidate list
-1. <item> [proposed-by: A1-i2, D-i1]
-   - Falsifier or strongest counterexample: <preserved from upstream>
-   - Verification recipe: <preserved from upstream>
-   - Verification evidence: <preserved state and artifact pointer>
-   - Counterexample survival status: <Stage 3 status>
-2. <item> [proposed-by: A2-i3]
-   - Falsifier or strongest counterexample: <preserved from upstream>
-   - Verification recipe: <preserved from upstream>
-   - Verification evidence: <preserved state and artifact pointer>
-   - Counterexample survival status: <Stage 3 status>
-
-Collator: 0 items invented; X items deduped.
-Items without exact upstream proposer IDs, a falsifier/counterexample, a verification recipe, verification evidence state, or a Stage 3 survival status will be dropped before voting.
-```
-
-### Stage 5 voting
-
-```
-You are an independent Stage 5 voter. You may not see other voters' ballots.
-Use only the Stage 4 candidate list, Stage 2 findings, Stage 3 discussion, the council voting criteria, and the original request.
-You must not cast `APPROVE` for a candidate marked `UNRESOLVED MATERIAL`; cast `QUALIFY` with the resolving check or `REJECT` with a named criterion. `UNRESOLVED MINOR` remains eligible for normal voting.
-
-For each item, cast exactly one ballot:
-- APPROVE
-- REJECT: <TRACES|SOLVES-EXTANT-PAIN|N-THRESHOLD-MET|COST-PROPORTIONATE|NON-INFRA-PADDING>[, ...], <one-sentence justification>
-- QUALIFY: <condition>
-
-Output:
-## Stage 5 ballots
-Voter <n>:
-  item 1: APPROVE
-  item 2: REJECT: SOLVES-EXTANT-PAIN, <reason>
-  item 3: QUALIFY: <condition>
-```
+Read `references/templates.md` before spawning any Stage 1, 3, 4, or 5 sub-agent, and use its
+template verbatim. It also fixes the Stage 5 ballot's exact accepted line shapes.
 
 ## Recipe
 
 1. **Decompose the topic.** State the question. Pick 3-5 research angles that do not overlap.
-2. **Spawn research sub-agents** (Stage 1). Each prompt must use the Stage 1 template and include the exact no-cross-angle sentence. Each agent output must include `Candidate items proposed by this angle:` plus the required falsifier/counterexample, verification recipe, and evidence state for every item.
+2. **Spawn research sub-agents** (Stage 1). Read `references/templates.md` before spawning a stage agent. Each prompt must use the Stage 1 template and include the exact no-cross-angle sentence. Each agent output must include `Candidate items proposed by this angle:` plus the required falsifier/counterexample, verification recipe, and evidence state for every item.
 3. **Collect findings** (Stage 2). Read each return; quote-tag key claims; extract candidate IDs and their evidence fields per angle.
-4. **Run discussion** (Stage 3). Use the Stage 3 template, assign every candidate a counterexample survival status, and record additional `D-iN` candidates only when tied to a cross-angle gap.
-5. **Run candidate collation** (Stage 4). Use the Stage 4 template. Drop collator-invented, untagged, or evidence-incomplete items before voting.
-6. **Run voting** (Stage 5). Use at least 3 odd-count independent voters. Use the Stage 5 template. Retry malformed voters, including forbidden approvals over unresolved material counterexamples, once.
+4. **Run discussion** (Stage 3). Use the Stage 3 template from `references/templates.md`, assign every candidate a counterexample survival status — including each `D-iN` item the discussion agent proposes itself, or Stage 4 will drop it before voting — and record additional `D-iN` candidates only when tied to a cross-angle gap.
+5. **Run candidate collation** (Stage 4). Use the Stage 4 template from `references/templates.md`. Drop collator-invented, untagged, or evidence-incomplete items before voting.
+6. **Run voting** (Stage 5). Use at least 3 odd-count independent voters. Use the Stage 5 template from `references/templates.md`, including its exact-line-shape rule. Retry malformed voters, including forbidden approvals over unresolved material counterexamples, once.
 6a. **Save ballots to files.** For each returned voter, write its ballot output to a temp file (e.g. `/tmp/council-ballot-<voter_n>.txt`).
-7. **Tally + conclude** (Stage 6). Validate each ballot file with `python3 <skill-dir>/bin/validate-ballot.py`, resolve QUALIFY conditions, enforce majority-plus-one support, apply hard-reject vetoes, and produce the final report.
+7. **Tally + conclude** (Stage 6). Validate each ballot file with `python3 <skill-dir>/bin/validate-ballot.py --items <N> --unresolved <item numbers|none> <ballot-file>` (both arguments are required Stage 4 list positions), resolve QUALIFY conditions, enforce majority-plus-one support, apply hard-reject vetoes, and produce the final report.
 
 ## Run-until-completion behavior
 
@@ -255,13 +167,13 @@ Do not present the live progress log as the final answer.
 
 ### Final report
 
-The final report is outcome-first. The first 25 rendered lines should show the decision summary, not ballots.
+The final report is outcome-first. The first 25 rendered lines should show the decision summary, not ballots. Use the following section headings and table formats verbatim in the output:
 
 ## Outcome
 
 | Field | Value |
 |---|---|
-| Status | `verified` or `UNVERIFIED: <reason>` |
+| Status | `VERIFIED` or `UNVERIFIED: <reason>` |
 | Mode | `<foreground|background>` |
 | Angles | `<returned>/<planned>` |
 | Voters | `<returned>/<planned>` |
@@ -317,10 +229,10 @@ Put full Stage 5 ballots here, after the outcome and vote tables.
 
 ## Pairings
 
-- `Agent` tool: every sub-agent in every stage is an `Agent` call when that primitive is available.
-- `karpathy-guidelines`: the council criteria above operationalize Think-Before, Simplicity-First, Surgical-Changes, and Goal-Driven.
+- `task` tool: every sub-agent in every stage is a `task` call with `subagent_type: general-purpose` — Claude Code's built-in type. Council ships no custom agent types; stage behavior comes from the stage prompt in `references/templates.md`, not from a specialized agent.
+- `$karpathy-guidelines`: the council criteria above operationalize Think-Before, Simplicity-First, Surgical-Changes, and Goal-Driven.
 - For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
-- `worklog plan`: only when the user has not opted out of worklog tracking. Feed the council's kept list into `/worklog plan <task>` for planning artifacts.
+- `$worklog`: `worklog plan` only when the user has not opted out of worklog tracking. Feed the council's kept list into `/worklog plan <task>` for planning artifacts.
 
 ## Examples
 
@@ -349,5 +261,3 @@ Claude: SKIP single-agent answer: 4
 ## Why voting
 
 A single synthesis agent inventing items and verifiers cleaning them up is structurally backwards. Items should clear an explicit bar to enter, not enter by default and need removal. Voting flips it: the collator only gathers, voters apply explicit criteria, and items need positive majority-plus-one support to be kept.
-
-- Quick reference: support threshold is `ceil(M_returned / 2 + 1)` for odd returned voter counts only: M=3 threshold 3, M=5 threshold 4, M=7 threshold 5. M=2 or M=4 is `UNVERIFIED` until a replacement voter restores an odd count.

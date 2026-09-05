@@ -71,5 +71,6 @@ Parent + N Claude Code sub-agents share one session ID — same-session re-claim
 
 ## Out of scope (deferred)
 
+- Extra work mid-run (a rereview after HEAD moved, a later wave) goes through `project.sh add-child <project> <child> [--kind=] [--depends-on=]`, which writes the child stub and the parent's `tasks:` entry in one commit and is idempotent, so a re-running scheduled job is safe on pass 2. A pre-declared `*-r2` child at `project new`, or a new wave project, remain fine. Do not hand-write a standalone task with `project:` set but missing from the parent's `tasks:` block: `verify` does **not** catch that — it walks only the parent's block, so it stays exit 0 while `next` can never hand the task out. The loud half is the mirror image (declared in `tasks:`, no file): exit 2.
 - Mechanical `/stacking-strategy` markdown parser is shipped (`"$WORKLOG_BIN/_stacking_strategy_parser.py"`) but `project new` doesn't invoke it automatically — agent paraphrases into JSON. Wire it in when the manual paraphrase step bites.
 - Phase 2 mutex acceptance tests pass; real cross-host (Claude ↔ Codex concurrent on Fred's box) hasn't fired yet. Watch for the first contention.

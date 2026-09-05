@@ -90,7 +90,7 @@ parse_git_branch() {
     fi
 }
 # nicer prompt
-PS1="\n\[\e[30;1m\](\[\e[34;1m\]\u@\h:\w\[\e[30;1m\]) (\[\e[32;1m\]$(/bin/ls -1 | /usr/bin/wc -l | /bin/sed 's: ::g') files, $(/bin/ls -lah | /bin/grep -m 1 total | /bin/sed 's/total //')b\[\e[30;1m\]) (\e[36m$(parse_git_branch))\] \n--> \[\e[0m\]"
+PS1='\n\[\e[30;1m\](\[\e[34;1m\]\u@\h:\w\[\e[30;1m\]) (\[\e[32;1m\]$(/bin/ls -1 | /usr/bin/wc -l | /bin/sed "s: ::g") files, $(/bin/ls -lah | /bin/grep -m 1 total | /bin/sed "s/total //")b\[\e[30;1m\]) (\[\e[36m\]$(parse_git_branch)\[\e[30;1m\])\n--> \[\e[0m\]'
 
 # enable color support of ls and also add handy aliases
 if [ -x /usr/bin/dircolors ]; then
@@ -150,8 +150,6 @@ alias reload='source ~/.bashrc'
 # Show most popular commands (bash-specific syntax)
 top-commands() { history | awk "{print \$2}" | awk "{print \$1}" | sort | uniq -c | sort -rn | head -10; }
 . ~/.super-autocomplete.bash
-unset KUBERNETES_SERVICE_PORT
-unset KUBERNETES_SERVICE_HOST
 # --- datadog-vscode-autoinstall (super) ---
 DATADOG_ID="datadog.datadog-vscode"
 
@@ -196,3 +194,24 @@ if [ -n "$EDITOR_CLI" ] && ! "$EDITOR_CLI" --list-extensions 2>/dev/null | grep 
   fi
 fi
 # --- end claude-code-autoinstall (super) ---
+
+# --- ghostty terminfo guard -------------------------------------------------
+# Ghostty sends TERM=xterm-ghostty. If this workspace was rebuilt and no longer
+# has that terminfo entry, TERM would be unusable, so fall back to
+# xterm-256color for THIS session only.
+#
+# Note: xterm-256color is a perfectly serviceable fallback -- it defines the
+# same XM/xm mouse capabilities as xterm-ghostty on this host. Neither entry
+# defines XF, so focus reporting (1004) is never terminfo-mediated; apps that
+# use it write \033[?1004h directly and must disable it themselves on exit.
+# Prefer the real entry anyway so ghostty-specific capabilities resolve.
+#
+# If stray ^[[I / ^[[O / ^[[<35;..M appear at the prompt on mouse clicks, a TUI
+# exited without disabling its reporting modes. Clear them with:
+#   printf '\033[?1004l\033[?1003l\033[?1002l\033[?1000l\033[?1006l'
+# The per-prompt reset in .shell_common does this automatically.
+if [ "$TERM" = "xterm-ghostty" ] && ! infocmp xterm-ghostty >/dev/null 2>&1; then
+    export TERM=xterm-256color
+fi
+
+# --- end ghostty terminfo guard --------------------------------------------

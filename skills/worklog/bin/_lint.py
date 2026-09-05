@@ -47,6 +47,9 @@ from typing import Any
 
 import yaml
 
+# Directories under people/<ldap>/ that hold content rather than tasks.
+NON_TASK_DIRS = {"transcripts", "artifacts"}
+
 KINDS = {
   "design", "review", "spike", "impl", "ops", "debug",
   "program", "postmortem", "runbook", "proposal",
@@ -59,6 +62,17 @@ KINDS = {
   "bug", "perf", "tooling",
 }
 STATUSES = {"draft", "in-progress", "in-review", "blocked", "shipping", "archived"}
+# Common wrong statuses → the intended FSM state. active/ is a directory,
+# not a status, so a fresh task shouldn't have to guess its way past the hook.
+STATUS_HINTS = {
+  "active": "the active/ directory is a location, not a status; "
+            "use 'in-progress' (ongoing) or 'draft' (not started)",
+  "complete": "use 'archived' and move the file to archive/",
+  "done": "use 'archived' and move the file to archive/",
+  "todo": "use 'draft'",
+  "proposal": "that's a kind, not a status; use 'draft'",
+  "wip": "use 'in-progress'",
+}
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 ISO_TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:?\d{2})?$")
 PROJECT_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
@@ -105,9 +119,17 @@ def _layout_issues(root: pathlib.Path) -> list[dict[str, Any]]:
       if state_dir.name in {"active", "archive"}:
         task_paths.extend(sorted(state_dir.glob("*.md")))
         continue
-      if state_dir.name == "transcripts":
+      # Content directories, not task states. `artifacts/` holds monitor
+      # templates, scripts and findings logs that task bodies link to.
+      if state_dir.name in NON_TASK_DIRS:
         continue
       markdown = sorted(state_dir.rglob("*.md"))
+      # An UNKNOWN directory still has its files validated: `archived/` is a
+      # typo for `archive/`, and those files really are tasks worth checking.
+      # Only the named content dirs above skip parsing, because their files are
+      # not tasks at all. Suppressing the message and skipping the parse are
+      # separate decisions, and which one applies depends on whether the files
+      # are misplaced tasks or not tasks.
       task_paths.extend(markdown)
       if markdown:
         rel = state_dir.relative_to(root)
@@ -227,7 +249,8 @@ def _latest_status_trailers() -> dict[str, str]:
   return out_map
 
 
-def _missing_related_slugs(fm: dict[str, Any], body: str, slug: str, known_slugs: set[str]) -> list[str]:
+def _missing_related_slugs(fm: dict[str, Any], body: str, slug: str, known_slugs: set[str],
+                           declared_repos: set[str] | None = None) -> list[str]:
   """Return body-mention slugs (sorted) not declared in any relation field."""
   declared: set[str] = set()
   for k in ("parent_slug", "supersedes", "superseded_by", "reopens"):
@@ -238,7 +261,11 @@ def _missing_related_slugs(fm: dict[str, Any], body: str, slug: str, known_slugs
     if isinstance(item, dict) and item.get("slug"):
       declared.add(str(item["slug"]))
   declared.add(slug)
-  missing = {t for t in BODY_SLUG_RE.findall(body) if t in known_slugs and t not in declared}
+  # Same repo-vs-task resolution as the check in _cross_task_checks. This path
+  # WRITES to the file, so a miss here is worse than a spurious warning: it
+  # would commit `related: [decision-engine]` describing a repo as a task.
+  declared |= declared_repos or set()
+  missing = {t for t in BODY_SLUG_RE.findall(_prose_only(body)) if t in known_slugs and t not in declared}
   return sorted(missing)
 
 
@@ -257,6 +284,40 @@ def _stub_related_block(missing: list[str], indent: str = "  ") -> str:
     f"{indent}- slug: {s}\n{note_indent}note: \"(auto-added; refine note)\"\n"
     for s in missing
   )
+
+
+def _prose_only(body: str) -> str:
+  """Body with fenced blocks and table rows blanked out.
+
+  The slug scan means "this prose refers to that task". A slug inside a fenced
+  block or a table cell is structured content -- a version table, a clone
+  command, a pasted log -- and naming a task there is not a relation. Verified
+  2026-08-31: `decision-engine` is both a repo and a task slug here, and a venv
+  version table plus a fenced clone line each produced a false relation that
+  --fix-related then wrote into frontmatter.
+
+  URLs and frontmatter need no handling: BODY_SLUG_RE's lookbehind already
+  rejects a preceding `/`, so `textemma/decision-engine` never matches, and
+  frontmatter is not part of `body`. Both were reported as failing and neither
+  reproduced -- do not add exclusions for them.
+
+  Prose that merely names the service ("decision-engine merged 23 MRs") stays
+  in. It is indistinguishable from a task reference without reading intent, and
+  a warning a human resolves beats a silent miss.
+  """
+  out = []
+  fenced = False
+  for line in body.split("\n"):
+    stripped = line.lstrip()
+    if stripped.startswith("```") or stripped.startswith("~~~"):
+      fenced = not fenced
+      out.append("")
+      continue
+    if fenced or stripped.startswith("|"):
+      out.append("")
+      continue
+    out.append(line)
+  return "\n".join(out)
 
 
 def _apply_fix_related(path: pathlib.Path, missing: list[str]) -> bool:
@@ -349,9 +410,11 @@ def _cross_task_checks(
   state: str,
   slug: str,
   known_slugs: set[str],
+  declared_repos: set[str],
   slugs_with_pr: set[str],
   today: datetime.date,
   latest_status_trailers: dict[str, str] | None = None,
+  repo_named: list[str] | None = None,
 ) -> tuple[list[str], list[str]]:
   errors: list[str] = []
   warnings: list[str] = []
@@ -359,21 +422,16 @@ def _cross_task_checks(
     return errors, warnings
 
   status = fm.get("status")
-  next_action = fm.get("next_action") or ""
   last_updated_raw = fm.get("last_updated")
 
-  # 1. blocked → next_action must start "Waiting on"
-  if status == "blocked" and isinstance(next_action, str):
-    if not next_action.lstrip().lower().startswith("waiting on"):
-      errors.append("status 'blocked' but next_action does not start with 'Waiting on' (FSM contract, AGENTS.md § Status lifecycle)")
-
-  # 2a. trailer-vs-frontmatter divergence: latest Worklog-Status: trailer
-  # for this slug must match frontmatter status. Drift here means a commit
-  # author hand-wrote a trailer (e.g. via `git commit -m`) without flipping
-  # the frontmatter — bypassing bin/checkpoint.sh --status=, which is the
-  # only path that updates both atomically. Warning, not error: there are
-  # legitimate cases (force-push fixups, multi-task commits) where a brief
-  # divergence is fine.
+  # 2a. trailer-vs-frontmatter divergence. EITHER side can be the stale one and
+  # the lint cannot tell which: a hand-written trailer that skipped the
+  # frontmatter, or accurate frontmatter over a trailer nobody re-asserted.
+  # This warning used to name only the first case and advise aligning
+  # frontmatter DOWN to the trailer — which, in the case reported live
+  # 2026-08-31, would have degraded a correct 'in-review' to a stale 'draft'.
+  # Name both and both remedies; the reader knows which is true and the linter
+  # does not. Warning, not error: brief divergence is legitimate.
   if latest_status_trailers and isinstance(status, str):
     trailer_status = latest_status_trailers.get(slug)
     if trailer_status and trailer_status not in STATUSES:
@@ -384,7 +442,9 @@ def _cross_task_checks(
       warnings.append(
         f"frontmatter status '{status}' diverges from latest "
         f"Worklog-Status: trailer '{trailer_status}' for this slug — "
-        f"use `bin/checkpoint.sh {slug} --status={trailer_status}` to align"
+        f"if the trailer is right, `bin/checkpoint.sh {slug} "
+        f"--status={trailer_status}`; if the FRONTMATTER is right, re-assert it "
+        f"with `bin/checkpoint.sh {slug} --status={status}`"
       )
 
   # 2. stale in-review: in-review >14d with no Worklog-PR: trailer for slug
@@ -412,8 +472,25 @@ def _cross_task_checks(
         declared.add(str(item["slug"]))
     declared.add(slug)  # self-mentions are fine
 
-    for token in set(BODY_SLUG_RE.findall(body)):
+    # A slug that also names a repo THIS task works in is the repo, not the
+    # task. Measured 2026-08-31: `decision-engine` is both; the test resolved
+    # 6 of 8 live prose mentions, and the 2 files that do not list the repo
+    # still warn.
+    #
+    # The feared false negative — a task that both works in the repo and
+    # genuinely references the same-named task — cannot arise for that task
+    # itself, since self-mentions are excluded above. It stays possible for a
+    # third task, so the signal is not dropped: it is counted and surfaced in
+    # the summary rather than left in the warning list, where no edit could
+    # ever clear it. A permanently unresolvable warning teaches readers to skim
+    # the whole class, the resolvable ones included.
+    repo_names = declared_repos
+    for token in set(BODY_SLUG_RE.findall(_prose_only(body))):
       if token in known_slugs and token not in declared:
+        if token in repo_names:
+          if repo_named is not None:
+            repo_named.append(f"{slug} -> {token}")
+          continue
         warnings.append(f"body mentions slug '{token}' not in parent_slug/related/supersedes/reopens — declare the relation or remove the reference")
 
   return errors, warnings
@@ -423,11 +500,13 @@ def _lint_file(
   path: pathlib.Path,
   state: str,
   known_slugs: set[str],
+  declared_repos: set[str] | None = None,
   cross_task: bool = False,
   okf: bool = False,
   slugs_with_pr: set[str] | None = None,
   today: datetime.date | None = None,
   latest_status_trailers: dict[str, str] | None = None,
+  repo_named: list[str] | None = None,
 ) -> tuple[list[str], list[str]]:
   errors: list[str] = []
   warnings: list[str] = []
@@ -465,7 +544,11 @@ def _lint_file(
   if not status:
     errors.append("missing frontmatter key: status")
   elif status not in STATUSES:
-    errors.append(f"status '{status}' not in FSM: {sorted(STATUSES)}")
+    hint = STATUS_HINTS.get(status)
+    errors.append(
+      f"status '{status}' not in FSM: {sorted(STATUSES)}"
+      + (f" — {hint}" if hint else "")
+    )
 
   if state == "archive" and status and status != "archived":
     warnings.append(f"file under archive/ has status '{status}' (expected 'archived')")
@@ -571,9 +654,46 @@ def _lint_file(
       if any("notion.so" in str(r) for r in ext_refs):
         warnings.append("external_refs: contains a notion.so URL but notion: field is absent — add 'notion: <page-id>' so init --full can match this task")
 
+  # blocked -> next_action must start "Waiting on" (FSM contract, AGENTS.md
+  # § Status lifecycle). This is a SINGLE-FILE invariant — it reads only this
+  # file's own frontmatter — but it lived in _cross_task_checks, so it fired
+  # only under --cross-task. checkpoint.sh runs `lint.sh --file=...` WITHOUT
+  # that flag, so the tool that accepted a bad blocked transition also linted
+  # the file and reported nothing. Reported live 2026-08-31 by a session whose
+  # broken file passed a bare lint.sh cleanly.
+  if state == "active" and fm.get("status") == "blocked":
+    na = fm.get("next_action") or ""
+    if isinstance(na, str) and not na.lstrip().lower().startswith("waiting on"):
+      errors.append("status 'blocked' but next_action does not start with 'Waiting on' (FSM contract, AGENTS.md § Status lifecycle)")
+
   body = text[m.end():]
   if state == "active":
-    if "\n## Context" not in f"\n{body}":
+    # A `kind: project` file is a program, not a task. It carries ## Goal,
+    # ## Objective and ## Tasks — strictly more orientation than ## Context —
+    # so demanding ## Context of it applied a task rule to a non-task, and
+    # `project.sh new` produced a file that warned the moment it was written.
+    # Reported live 2026-08-31: 3 of one clone's 8 remaining warnings were
+    # generator output. A generator that fails its own linter teaches people to
+    # ignore the linter, so this is not exempted quietly — the project sections
+    # are checked instead, and a hand-written program missing ## Tasks is still
+    # caught.
+    if fm.get("kind") == "project":
+      # Orientation may live in EITHER place. `project.sh new` writes it twice —
+      # frontmatter `goal:`/`objective:`/`tasks:` and matching body sections —
+      # but a hand-maintained program legitimately keeps only the frontmatter
+      # (machine-readable) and organises its body as Context / Findings / Scope
+      # / Work items / Verification. Demanding the body sections flagged three
+      # of those on a well-formed file: the first version of this check swapped
+      # one false-positive class for another, caught by running it on the live
+      # corpus rather than by re-reading it.
+      for key, section in (("goal", "## Goal"), ("objective", "## Objective"),
+                           ("tasks", "## Tasks")):
+        if not fm.get(key) and f"\n{section}" not in f"\n{body}":
+          warnings.append(
+            f"program (kind: project) has neither a '{key}:' field nor a "
+            f"{section} section — a program needs its goal, objective and tasks "
+            f"recorded in one place or the other")
+    elif "\n## Context" not in f"\n{body}":
       warnings.append("missing ## Context section")
     if "\n## Next" not in f"\n{body}":
       warnings.append("missing ## Next section")
@@ -584,9 +704,11 @@ def _lint_file(
   if cross_task and slug and isinstance(slug, str):
     ct_errors, ct_warnings = _cross_task_checks(
       fm, body, state, slug, known_slugs,
+      declared_repos or set(),
       slugs_with_pr or set(),
       today or datetime.date.today(),
       latest_status_trailers=latest_status_trailers,
+      repo_named=repo_named,
     )
     errors.extend(ct_errors)
     warnings.extend(ct_warnings)
@@ -645,6 +767,14 @@ def main() -> None:
     files = all_files
   layout_report = [] if single_file else _layout_issues(root)
   known_slugs: set[str] = set()
+  # Every repo name declared anywhere in the corpus. Keyed corpus-wide, not
+  # per-file, because a task that names a repo it ruled OUT will never declare
+  # that repo — "decision-engine carries no CA underwriting deny rules" is a
+  # recorded negative result, and its repos: is [midas, monorepo] permanently.
+  # Per-file, those mentions stayed unresolvable warnings. Measured 2026-08-31:
+  # across 297 tasks and 17 declared repos, exactly ONE name is both a slug and
+  # a repo, so the union changes behaviour for that name and no other.
+  declared_repos: set[str] = set()
   for path, _ in all_files:
     text = path.read_text()
     m = FRONTMATTER_RE.match(text)
@@ -655,6 +785,9 @@ def main() -> None:
       fm = yaml.safe_load(m.group(1)) or {}
     except yaml.YAMLError:
       fm = {}
+    if isinstance(fm, dict):
+      for r in fm.get("repos") or []:
+        declared_repos.add(str(r))
     if isinstance(fm, dict) and fm.get("slug"):
       known_slugs.add(str(fm["slug"]))
     else:
@@ -662,6 +795,10 @@ def main() -> None:
 
   slugs_with_pr = _slugs_with_pr_trailers() if cross_task else set()
   latest_status_trailers = _latest_status_trailers() if cross_task else {}
+  # Body mentions resolved as repo names rather than task references. Counted,
+  # not warned — see _cross_task_checks. Reported so the resolution is never
+  # silent: a wrong resolution is visible as a number that will not go down.
+  repo_named: list[str] = []
   today = datetime.date.today()
 
   fixed_files: list[tuple[str, list[str]]] = []
@@ -678,7 +815,7 @@ def main() -> None:
         continue
       slug = fm.get("slug") or path.stem
       body = text[m.end():]
-      missing = _missing_related_slugs(fm, body, str(slug), known_slugs)
+      missing = _missing_related_slugs(fm, body, str(slug), known_slugs, declared_repos)
       if missing and _apply_fix_related(path, missing):
         fixed_files.append((str(path.relative_to(root)), missing))
 
@@ -688,11 +825,13 @@ def main() -> None:
   for path, state in files:
     errors, warnings = _lint_file(
       path, state, known_slugs,
+      declared_repos=declared_repos,
       cross_task=cross_task,
       okf=okf,
       slugs_with_pr=slugs_with_pr,
       today=today,
       latest_status_trailers=latest_status_trailers,
+      repo_named=repo_named,
     )
     total_errors += len(errors)
     total_warnings += len(warnings)
@@ -714,13 +853,29 @@ def main() -> None:
     }, indent=2))
   else:
     if fixed_files:
-      print(f"--fix-related applied: {len(fixed_files)} file(s) modified")
+      # Report the placeholders created, not only the files touched. Each one
+      # trades a "body mentions slug" warning for a "note is the placeholder"
+      # warning 1:1, so the total does not fall — and a caller reading
+      # "N file(s) modified" plus exit 0 reasonably concludes the work is done.
+      # It is not: the relation is now asserted with "refine note" as its stated
+      # purpose, and related: is load-bearing for context.sh and the graph.
+      # (Live 2026-08-31: 65 warnings before, 65 after.)
+      stubs = sum(len(slugs) for _f, slugs in fixed_files)
+      print(f"--fix-related applied: {len(fixed_files)} file(s) modified, "
+            f"{stubs} note(s) still need a real why "
+            f"(the warning count will not drop until they do)")
       for f, slugs in fixed_files:
         print(f"  {f}")
         for s in slugs:
           print(f"    + related: {s}  (auto-added; refine note)")
       print()
     print(f"Scanned {len(files)} task files — {total_errors} errors, {total_warnings} warnings")
+    if repo_named:
+      # Not a warning: nothing to fix, and no edit could ever clear it.
+      # Printed so a wrong resolution stays discoverable rather than silent.
+      print(f"  ({len(repo_named)} body mention(s) read as a repo name "
+            f"declared in this corpus, not a task reference: "
+            f"{', '.join(sorted(repo_named))})")
     print()
     for item in report:
       print(f"{item['file']}  [{item['state']}]")

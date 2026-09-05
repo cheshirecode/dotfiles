@@ -10,45 +10,52 @@ checks that every declared criterion has at least one typed evidence record; the
 agent remains responsible for verifying that each record is truthful and
 relevant.
 
+## When to use
+
+- Before marking a multi-clause task, agent loop, deployment, PR, or verification workflow complete
+- When tests passing does not prove delivery, merge, or user-visible success
+- When you need to map every observable goal or acceptance criterion to typed evidence
+
+Skip if: the task has a single observable outcome with one sufficient check (tests alone prove completion).
+
+## Resolve the skill directory
+
+Resolve `<skill-dir>` to the directory containing this `SKILL.md`. In most
+agent contexts, this is the path from which the skill was loaded. If uncertain,
+search for `evidence_gate.py` under the skill root:
+
+```bash
+# Roots checked in order; empty when absent — never a bogus "./..":
+SKILL_DIR="$(for r in ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills; do f=$(find -L "$r" -name evidence_gate.py -print -quit 2>/dev/null); [ -n "$f" ] && { dirname "$(dirname "$f")"; break; }; done)"
+```
+
+All script invocations below use `python3 <skill-dir>/scripts/evidence_gate.py`.
+
 ## Declare every goal clause
 
-Resolve `<skill-dir>` as this `SKILL.md` file's directory. Use stable lowercase
-criterion IDs and an explicit gate path.
-
-```bash
-python3 <skill-dir>/scripts/evidence_gate.py init \
-  --gate <gate-file> \
-  --goal "<full observable goal>" \
-  --criterion "tests=full suite passes" \
-  --criterion "merge=PR is merged into main"
-```
-
-Do not collapse distinct outcomes into one criterion. Tests, commit, deployment,
-PR state, and user-visible behavior are separate when the goal names them.
-
+Initialize with `python3 <skill-dir>/scripts/evidence_gate.py init`; see
+[references/recording.md](references/recording.md) for clause wording rules.
 ## Record verified evidence
 
-After checking the source, attach evidence to exactly one criterion:
+**Evidence kinds:** `command`, `artifact`, `git`, `github`, `url`. Never
+record model prose as evidence. Evidence of a change is not evidence of its
+health — see [references/health-evidence.md](references/health-evidence.md).
 
-```bash
-python3 <skill-dir>/scripts/evidence_gate.py record \
-  --gate <gate-file> \
-  --criterion tests \
-  --kind command \
-  --ref "tests/run.sh all" \
-  --result "62 pass, 0 fail"
-```
-
-Kinds are `command`, `artifact`, `git`, `github`, and `url`. Never record model
-prose as evidence. For GitHub completion, inspect the exact PR head, base,
-state, non-empty diff, and merged target before recording it.
-
+See [references/recording.md](references/recording.md) for the record
+subcommand, evidence kinds, and worked examples.
 ## Gate completion
 
-Run `python3 <skill-dir>/scripts/evidence_gate.py check --gate <gate-file>`. Exit `1` means criteria remain uncovered; do not
-claim completion. Exit `0` returns a `verification` value containing the
-gate-file path and SHA-256 digest. Pass that value to the parent workflow's
-completion record.
+See [references/recording.md](references/recording.md) for the check
+subcommand, its exit codes, and the pass/fail contract.
+## Inspect the gate
 
-The digest proves which coverage artifact was checked, not that an evidence
-source was interpreted correctly. Preserve the gate file with the task evidence.
+Run `python3 <skill-dir>/scripts/evidence_gate.py show --gate <gate-file>` to
+print the full gate JSON (all criteria and their evidence records). Useful for
+debugging or reviewing what has been recorded.
+
+## Digest semantics
+
+The SHA-256 digest proves which coverage artifact was checked, not that an
+evidence source was interpreted correctly. Preserve the gate file with the task
+evidence. If the gate file is modified after `check`, the digest no longer
+matches; re-run `check` to regenerate it.

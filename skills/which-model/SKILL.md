@@ -7,29 +7,34 @@ description: Choose the best-value model lane for a task by comparing capability
 
 Choose by capability and cost for the job, not provider reputation. Treat OpenAI, Anthropic, Chinese models, and local/open-weight routes as first-class candidates.
 
+## When to use
+
+- User invokes `/which-model`, asks which model to use, or wants value-for-token model suggestions
+- Session-level model-selection guidelines are needed
+- `/which-model` with no arguments prints the guideline; `/which-model task prose or capability` returns 1-3 model suggestions
+
+Skip if: no delegate surface, or in-band work is sufficient for the task.
+
+## Resolve the skill directory
+
+The skill root is the directory this `SKILL.md` was loaded from; its location varies by install (repo checkout, `~/.claude/skills/`, agent-managed). Never hardcode a path.
+
+Run helpers from that root as `bin/model-catalog ...`, and read references as `references/routing.md` and `references/catalog.md` — both relative to it. Use `cd` into the root once rather than prefixing each command with an absolute path.
+
 ## Route first
 
 - No arguments: print `## Guideline` and `## Data policy gate`, then stop. Do not read references or fetch live pricing.
 - Task prose/capability: apply the data gate, read `references/routing.md`, and return 1-3 suggestions.
 - Exact model, availability, current/latest/live, pricing, billing, environment, provider, or harness request: also read `references/catalog.md` and run `bin/model-catalog` as directed there.
+- Comparison request ("X vs Y", "which is cheaper"): read `references/catalog.md`, run `bin/model-catalog` for the relevant env, and return a side-by-side with prices, context, and capability differences.
+- Unknown or unrecognized argument: print usage (`/which-model` or `/which-model <task description>`) and stop.
 
 Do not preload references that the selected route does not require.
 
 ## Task requests
 
-For a non-trivial task, use an available sequential-thinking MCP first to decompose capability requirements, constraints, and risk gates. In Claude-style namespaces this is typically `mcp__sequential-thinking__sequentialthinking`; other agents use their equivalent. Use the result to choose models without exposing chain-of-thought. Skip it for obvious one-lane asks.
-
-Return up to three recommendations: best value, fallback, then premium/escalation only when useful.
-
-```markdown
-1. <model or lane> — <why it is best value for this task>
-   Use for: <specific subtask shape>
-   Avoid if: <capability/privacy/cost caveat>
-   Availability: <selectable here | requires wrapper | not available in this harness>
-```
-
-Include exact prices only after reading `references/catalog.md` and obtaining a fresh enough snapshot. Otherwise compare qualitatively and label dated calibration as approximate.
-
+See [references/routing.md](references/routing.md) for the decomposition
+procedure and the per-agent sequential-thinking namespaces.
 ## Guideline
 
 1. Identify the job: mechanical search, code edit, long-context review, visual judgment, adversarial verification, planning, synthesis, or final decision.
