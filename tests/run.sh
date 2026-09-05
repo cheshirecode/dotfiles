@@ -2037,6 +2037,25 @@ test_packages() {
   else
     say SKIP "worklog-memory-mcp e2e (node or node_modules missing — run npm install in packages/worklog-memory-mcp)"
   fi
+
+  # Release coupling: package.json version, server.json version, and
+  # server.json packages[0].version must move together. Bump one alone and the
+  # registry record advertises an npm version that does not exist.
+  # mcp-publisher validate does NOT catch this - it never reads package.json.
+  local vers
+  if vers="$(python3 - <<'VERCHECK'
+import json, sys
+pkg = json.load(open("packages/worklog-memory-mcp/package.json"))["version"]
+srv = json.load(open("packages/worklog-memory-mcp/server.json"))
+top, inner = srv["version"], srv["packages"][0]["version"]
+sys.stdout.write(f"package.json={pkg} server.json={top} packages[0]={inner}")
+sys.exit(0 if pkg == top == inner else 1)
+VERCHECK
+)"; then
+    ok "worklog-memory-mcp versions agree ($vers)"
+  else
+    fail "worklog-memory-mcp version drift - $vers"
+  fi
 }
 
 case "${1:-all}" in
