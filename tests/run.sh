@@ -2075,6 +2075,30 @@ test_packages() {
     fail "loop-run package unittest failed"
   fi
 
+  # Static checks for the packaged python, matching what skills/worklog/bin gets.
+  # compileall's OUTPUT is captured rather than piped into a test: under
+  # `set -o pipefail` an `if compileall ... | grep -q .` reads the pipeline
+  # status, which compileall sets non-zero on a syntax error, so that form takes
+  # the else branch and passes the very file it should have caught.
+  local pyc_out
+  pyc_out="$(python3 -m compileall -q packages/loop-run/src packages/loop-run/tools packages/loop-run/tests 2>&1)"
+  if [ -n "$pyc_out" ]; then
+    echo "$pyc_out" | head -10 >&2
+    fail "python compile packages/loop-run/"
+  else
+    ok "python compile packages/loop-run/"
+  fi
+  if command -v ruff >/dev/null; then
+    if ruff check packages/loop-run >/dev/null 2>&1; then
+      ok "ruff packages/loop-run/"
+    else
+      ruff check packages/loop-run 2>&1 | head -10 >&2
+      fail "ruff packages/loop-run/"
+    fi
+  else
+    say SKIP "ruff not installed"
+  fi
+
   # worklog-memory-mcp: two-session round trip against a synthetic vault.
   if command -v node >/dev/null && [ -d packages/worklog-memory-mcp/node_modules ]; then
     local mini
