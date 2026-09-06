@@ -22,7 +22,8 @@ Skip if: the task has a single observable outcome with one sufficient check (tes
 
 Resolve `<skill-dir>` to the directory containing this `SKILL.md`. In most
 agent contexts, this is the path from which the skill was loaded. If uncertain,
-search for `evidence_gate.py` under the skill root:
+search for `evidence_gate.py` under the skill root.
+`loop-engineering/SKILL.md` owns this resolver pattern, including the per-host variants and the fixture that executes them; the line below is the same pattern with this skill's own sentinel file.
 
 ```bash
 # Roots checked in order; empty when absent — never a bogus "./..":
