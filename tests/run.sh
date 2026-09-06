@@ -60,6 +60,39 @@ test_static() {
   else
     say SKIP "shellcheck not installed"
   fi
+
+  # The glob above is extension-gated, so a script with no .sh suffix was linted
+  # nowhere — that is every bin/ entry meant to be run as a command (crew-radar,
+  # crew-reap, worklog-manager, the git hooks). Discover them by shebang instead
+  # of listing them, so a new one is covered by existing.
+  #
+  # Findings are captured into a variable rather than tested through a pipeline.
+  # Under `set -o pipefail` an `if shellcheck ... | grep` reads the PIPELINE
+  # status, and shellcheck exits non-zero exactly when it HAS findings, so that
+  # form takes the else branch and reports a pass precisely when it should fail.
+  if command -v shellcheck >/dev/null; then
+    local binscripts=() sc_out
+    while IFS= read -r script; do binscripts+=("$script"); done < <(
+      git ls-files -z 'bin/*' '*/bin/*' \
+        | while IFS= read -r -d '' candidate; do
+            case "$candidate" in *.sh) continue ;; esac
+            head -1 "$candidate" 2>/dev/null \
+              | grep -qE '^#!.*(bash|/sh|[[:space:]]sh)([[:space:]]|$)' \
+              && printf '%s\n' "$candidate"
+          done
+    )
+    if [ "${#binscripts[@]}" -eq 0 ]; then
+      fail "extensionless bin/ script discovery found nothing — the lane is inert"
+    else
+      sc_out="$(shellcheck --severity=warning "${binscripts[@]}" 2>&1 | grep -E '^In ')"
+      if [ -n "$sc_out" ]; then
+        echo "$sc_out" >&2
+        fail "shellcheck ${#binscripts[@]} extensionless bin/ script(s)"
+      else
+        ok "shellcheck ${#binscripts[@]} extensionless bin/ script(s)"
+      fi
+    fi
+  fi
   if ./tools/check-manifest.sh >/dev/null 2>&1; then ok "check-manifest.sh"; else fail "check-manifest.sh"; fi
   if python3 ./tools/check-skill-opt-ins.py >/dev/null 2>&1; then ok "check-skill-opt-ins.py"; else fail "check-skill-opt-ins.py"; fi
   if python3 - <<'PY'
