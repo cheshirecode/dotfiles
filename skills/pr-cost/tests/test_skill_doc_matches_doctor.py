@@ -51,6 +51,14 @@ TABLE_ROW = re.compile(r"^\|\s*`([a-z-]+)`\s*\|(.*)\|\s*(\S+)\s*\|\s*$")
 # mention anywhere in the docstring -- see the test for why that matters.
 DOCSTRING_STATUS_ROW = re.compile(r"^  ([a-z][a-z-]*)\s+\S", re.MULTILINE)
 
+# A lane declaration in the doctor's lanes() list. Matches only a quoted
+# literal, so `{"harness": lane["harness"]}` in the report builder is not a
+# lane and cannot inflate the set.
+DOCTOR_LANE = re.compile(r'"harness":\s*"([a-z-]+)"')
+
+# A bullet in SKILL.md's Harness guidance section: `- \`name\`:`.
+GUIDANCE_BULLET = re.compile(r"^- `([a-z-]+)`:", re.MULTILINE)
+
 
 def doctor_source() -> str:
     return DOCTOR.read_text(encoding="utf-8")
@@ -69,6 +77,23 @@ def statuses_the_doctor_fails_on() -> set[str]:
     if match is None:
         return set()
     return set(re.findall(r'"([a-z-]+)"', match.group(1)))
+
+
+def doctor_lanes() -> set[str]:
+    return set(DOCTOR_LANE.findall(doctor_source()))
+
+
+def harness_guidance_section() -> str:
+    text = SKILL_MD.read_text(encoding="utf-8")
+    start = text.find("## Harness guidance")
+    if start == -1:
+        return ""
+    end = text.find("\n## ", start + 1)
+    return text[start:] if end == -1 else text[start:end]
+
+
+def documented_harnesses() -> set[str]:
+    return set(GUIDANCE_BULLET.findall(harness_guidance_section()))
 
 
 def self_diagnosis_section() -> str:
@@ -126,6 +151,18 @@ class SkillDocMatchesDoctorTest(unittest.TestCase):
             "no rows matched in the doctor docstring's status block; the "
             "extraction is broken, so agreement proves nothing",
         )
+        self.assertNotEqual(
+            doctor_lanes(),
+            set(),
+            "no lane declarations matched in the doctor; the extraction is "
+            "broken, so agreement proves nothing",
+        )
+        self.assertNotEqual(
+            documented_harnesses(),
+            set(),
+            "no bullets matched in SKILL.md's Harness guidance section; the "
+            "extraction is broken, so agreement proves nothing",
+        )
 
     def test_the_table_lists_exactly_the_statuses_the_doctor_emits(self) -> None:
         emitted = statuses_the_doctor_emits()
@@ -169,6 +206,22 @@ class SkillDocMatchesDoctorTest(unittest.TestCase):
             "the doctor's docstring status block and SKILL.md's table "
             "disagree. If the block was only reformatted, this pattern reads "
             "two-space indent then the status then its description column.",
+        )
+
+
+    def test_every_doctor_lane_has_harness_guidance(self) -> None:
+        # SKILL.md described three harnesses for a while after the doctor
+        # declared four. A lane that the doctor diagnoses but the docs never
+        # mention is the shape this catches: the reader learns the skill
+        # supports less than it does, and nothing goes red.
+        lanes = doctor_lanes()
+        documented = documented_harnesses()
+        self.assertEqual(
+            documented,
+            lanes,
+            "SKILL.md's Harness guidance and the doctor's lanes disagree.\n"
+            f"  documented but not a lane: {sorted(documented - lanes)}\n"
+            f"  a lane but undocumented:   {sorted(lanes - documented)}",
         )
 
 
