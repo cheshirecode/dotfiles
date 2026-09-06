@@ -66,7 +66,7 @@ Skip if: only one PR open, body is short, no recent worklog activity. Overhead n
     - worktree: `git worktree remove <path>`
     - branch: usually auto-deleted on squash-merge; otherwise `git push origin --delete <branch>` + `git branch -D <branch>`
    If a `[POST-MERGE-CLEANUP]` note for this PR already exists, refresh it rather than duplicating.
-11. **Checkpoint** the worklog body change(s): `"$WORKLOG_BIN/checkpoint.sh" <slug>`. Don't bundle unrelated working-tree changes. If a sibling path genuinely belongs to this slug, add it with `--include=<path>` (repeatable) — that is the sanctioned scoped mechanism and the one checkpoint.sh itself recommends. `WORKLOG_CHECKPOINT_FORCE=1` is the blunt last resort: use it only as an explicit, stated-reason override; default ship-hygiene must preserve the staged-scope guard.
+11. **Checkpoint** the worklog body change(s): `"$WORKLOG_BIN/checkpoint.sh" <slug>`. Don't bundle unrelated working-tree changes. Use the plain command — its staged-scope guard is what enforces that. `worklog/modes/sync.md` owns the guard's exit codes, `--include=<path>`, and the force bypass; follow it rather than re-deriving them here.
 
     **Hard failures** (nothing was committed — fix and re-run):
     - **exit 1** — staged paths outside the slug's scope. Re-run with `--include=<path>` for each path that belongs with this slug, or `git restore --staged <path>` for the ones that belong to a different commit.

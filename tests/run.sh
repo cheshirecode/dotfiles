@@ -1010,10 +1010,15 @@ PY
 import pathlib
 
 text = pathlib.Path("skills/ship-hygiene/SKILL.md").read_text()
+owner = pathlib.Path("skills/worklog/modes/sync.md").read_text()
+# The force semantics moved to their owner (worklog). ship-hygiene keeps only
+# the plain invocation, so the "marked exceptional" pin follows the prose to
+# sync.md -- left on ship-hygiene it would pass vacuously once the text is gone.
 checks = {
     "plain checkpoint default": '`"$WORKLOG_BIN/checkpoint.sh" <slug>`' in text,
-    "force marked exceptional": "explicit, stated-reason override" in text,
+    "force marked exceptional (owner)": "explicit, stated-reason override" in owner,
     "no forced checkpoint default": "`WORKLOG_CHECKPOINT_FORCE=1 bin/checkpoint.sh <slug>`" not in text,
+    "caller routes instead of restating": "modes/sync.md` owns" in text,
 }
 missing = [name for name, ok in checks.items() if not ok]
 if missing:
