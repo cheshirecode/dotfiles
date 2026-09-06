@@ -1,16 +1,20 @@
-#!/opt/homebrew/bin/python3
+#!/usr/bin/env python3
 """Normalize Claude PostToolUse payloads for the shared PR cost collector."""
 
 from __future__ import annotations
 
 import json
+import pathlib
 import subprocess
 import sys
 from typing import Any
 
 
-PYTHON = "/opt/homebrew/bin/python3"
-COLLECTOR = "/Users/fredtran/Documents/oss/dotfiles/skills/pr-cost/scripts/pr_cost_collect.py"
+# Resolved from this file's own location, never from an absolute prefix:
+# adapters/claude/v1/ -> parents[3] is the skill root. The adapter runs from
+# here (a ~/.claude/hooks wrapper invokes it by path), so __file__ is the
+# real location in whatever checkout this is.
+COLLECTOR = pathlib.Path(__file__).resolve().parents[3] / "scripts" / "pr_cost_collect.py"
 
 
 def _clean_string(value: Any) -> str | None:
@@ -65,7 +69,7 @@ def normalize_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def collector_command(payload: dict[str, Any]) -> list[str]:
-    command = [PYTHON, COLLECTOR, "from-hook", "--harness", "claude"]
+    command = [sys.executable, str(COLLECTOR), "from-hook", "--harness", "claude"]
 
     session_id = _clean_string(payload.get("session_id"))
     if session_id is not None:
