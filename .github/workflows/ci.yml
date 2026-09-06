@@ -37,24 +37,22 @@ jobs:
           echo "These are verified manually after a fresh install — see README.md."
 
   static:
-    name: static — shellcheck bin/*.sh + manifest parses
+    # Calls the runner rather than re-implementing its checks. The two steps
+    # this replaced were a hand-copied subset — shellcheck on bin/*.sh plus a
+    # manifest parse — and they had already drifted: `static` mode carries 13
+    # checks, so 11 of them ran nowhere in CI. A copy of a lane is a lane that
+    # silently stops matching.
+    name: static — tests/run.sh static (13 checks)
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update -qq && sudo apt-get install -y shellcheck
-      - run: shellcheck --severity=warning bin/*.sh
-      - run: |
-          python3 -c "
-          import yaml, sys
-          m = yaml.safe_load(open('manifest/skills.yaml'))
-          assert m['version'] == 1, 'version pin lost'
-          for s in m['skills']:
-              for key in ('name', 'description', 'source', 'install_to'):
-                  assert key in s, f'{s.get(\"name\", \"?\")} missing {key}'
-              assert s['source']['type'] in ('subpath', 'git'), s['name']
-          print(f'manifest OK: {len(m[\"skills\"])} skills')
-          "
+      - name: install shellcheck + yaml
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y shellcheck
+          pip install --quiet pyyaml
+      - run: bash tests/run.sh static
 
   worklog-skill:
     name: worklog skill — shellcheck + ruff + fixture-vault smoke
@@ -76,6 +74,32 @@ jobs:
         run: |
           ruff --version
           bash tests/run.sh worklog-skill
+
+  fixtures:
+    # The red-path guardrail suite — 105 checks that ran in no job at all, so
+    # a regression in them surfaced only when someone invoked the mode by
+    # hand. Measured green at 9e9a4d0 both normally and with rg, shellcheck
+    # and ruff absent from PATH, which is what a bare runner looks like: the
+    # lanes needing a missing tool skip rather than fail.
+    name: fixtures — tests/run.sh fixtures (105 checks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: install shellcheck + ruff + yaml
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y shellcheck jq
+          pip install --quiet 'ruff==0.15.12' pyyaml
+      - name: git identity for fixture vault commits
+        run: |
+          git config --global user.email "ci@cheshirecode.test"
+          git config --global user.name "ci-fixture"
+          git config --global init.defaultBranch main
+      - run: bash tests/run.sh fixtures
 
   packages:
     name: packages — loop-run sync+unittest, worklog-memory-mcp e2e
