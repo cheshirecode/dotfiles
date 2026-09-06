@@ -17,8 +17,12 @@ from __future__ import annotations
 import importlib.util
 import json
 import pathlib
+import subprocess
+import sys
 import tempfile
 import unittest
+
+SKILL_SCRIPTS = pathlib.Path(__file__).resolve().parents[1] / "scripts"
 
 SPEC = importlib.util.spec_from_file_location(
     "pr_cost_doctor",
@@ -221,6 +225,26 @@ class RealLaneTest(unittest.TestCase):
         }
         self.assertEqual(set(doctor.SYNTHETIC), readers)
 
+    def test_the_docstring_names_every_basis_the_doctor_can_emit(self) -> None:
+        """Catch the prose going stale when a lane prices differently.
+
+        This drifted once already: adding the opencode lane introduced a
+        second basis while the docstring still said "Both readers carry fixed
+        default rates ... reports usd_basis as default-rates". The status-block
+        pin passed throughout, because it pins names and exit codes, not the
+        paragraph above them. Pinning the basis *values* closes the specific
+        gap without pretending to check English.
+        """
+        report = doctor.diagnose(self_check=True, live=False)
+        docstring = doctor.__doc__ or ""
+        for basis in sorted(set(report["usd_basis"].values())):
+            self.assertIn(
+                basis,
+                docstring,
+                f"the doctor can report usd_basis {basis!r}, but its own "
+                f"docstring never mentions it",
+            )
+
     def test_no_lane_claims_its_usd_is_measured(self) -> None:
         """Each lane declares its own basis; none may claim a measured figure.
 
@@ -236,6 +260,31 @@ class RealLaneTest(unittest.TestCase):
         self.assertEqual(basis["claude"], "default-rates")
         self.assertEqual(basis["codex"], "default-rates")
         self.assertEqual(basis["opencode"], "provider-reported")
+
+    def test_every_reader_lane_is_a_harness_the_collector_accepts(self) -> None:
+        """A lane you can diagnose but cannot record is only half a lane.
+
+        This gap shipped: the opencode reader produced a full eight-key
+        payload with the best basis of any lane, the doctor reported it `ok`,
+        and `pr_cost_collect.py` then rejected `--harness opencode` with exit
+        2. Nothing connected the two sides, so both were individually green.
+        """
+        collector = SKILL_SCRIPTS / "pr_cost_collect.py"
+        for lane in doctor.lanes():
+            if lane["reader"] is None:
+                continue
+            proc = subprocess.run(
+                [
+                    sys.executable, str(collector), "emit",
+                    "--harness", lane["harness"], "--confidence", "unavailable",
+                ],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(
+                proc.returncode, 0,
+                f"doctor declares a {lane['harness']} lane, but the collector "
+                f"rejects --harness {lane['harness']}: {proc.stderr.strip()}",
+            )
 
     def test_every_reader_lane_reports_a_basis(self) -> None:
         """A lane with no declared basis would silently read as a rate guess."""
