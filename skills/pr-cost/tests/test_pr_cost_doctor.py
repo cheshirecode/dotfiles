@@ -221,10 +221,29 @@ class RealLaneTest(unittest.TestCase):
         }
         self.assertEqual(set(doctor.SYNTHETIC), readers)
 
-    def test_usd_is_never_claimed_as_measured(self) -> None:
+    def test_no_lane_claims_its_usd_is_measured(self) -> None:
+        """Each lane declares its own basis; none may claim a measured figure.
+
+        `provider-reported` is not the same claim as `measured`: it is the
+        number the provider billed, which is still not a rate this repo
+        verified. The two rate-table lanes must say so explicitly rather
+        than inheriting a basis from a lane that prices differently.
+        """
         report = doctor.diagnose(self_check=True, live=False)
-        self.assertEqual(report["usd_basis"], "default-rates")
+        basis = report["usd_basis"]
         self.assertIn("estimated, not", report["usd_basis_note"])
+        self.assertNotIn("measured", basis.values())
+        self.assertEqual(basis["claude"], "default-rates")
+        self.assertEqual(basis["codex"], "default-rates")
+        self.assertEqual(basis["opencode"], "provider-reported")
+
+    def test_every_reader_lane_reports_a_basis(self) -> None:
+        """A lane with no declared basis would silently read as a rate guess."""
+        report = doctor.diagnose(self_check=True, live=False)
+        readers = {
+            lane["harness"] for lane in doctor.lanes() if lane["reader"] is not None
+        }
+        self.assertEqual(set(report["usd_basis"]), readers)
 
 
 if __name__ == "__main__":

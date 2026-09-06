@@ -61,7 +61,10 @@ SHARED_KEYS = (
 
 # A synthetic transcript per lane, with distinct non-round token counts so a
 # wrong field pairing cannot coincidentally balance.
-SYNTHETIC = {
+# One fixture per reader lane: how to build it, and what to call it.
+# Values are distinct and non-round so a wrong field pairing cannot
+# coincidentally reproduce the right total.
+_JSONL_EVENTS = {
     "claude": [
         {
             "type": "user",
@@ -112,7 +115,6 @@ SYNTHETIC = {
     ],
 }
 
-
 def display_path(path: pathlib.Path) -> str:
     """Path relative to the skill when it lives there, absolute otherwise.
 
@@ -123,6 +125,71 @@ def display_path(path: pathlib.Path) -> str:
         return str(path.relative_to(SKILL))
     except ValueError:
         return str(path)
+
+
+def write_jsonl(events: list[dict], target: pathlib.Path) -> None:
+    target.write_text(
+        "".join(json.dumps(e) + "\n" for e in events), encoding="utf-8"
+    )
+
+
+def write_opencode_db(target: pathlib.Path) -> None:
+    """Build a minimal opencode database with one billed assistant message.
+
+    opencode stores sessions in SQLite, not JSONL, so its synthetic fixture
+    has to be a real database. Distinct non-round counts, same as the other
+    lanes, so no wrong field pairing reproduces the right total.
+    """
+    import sqlite3
+
+    conn = sqlite3.connect(target)
+    try:
+        conn.execute(
+            "CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT)"
+        )
+        conn.execute(
+            "CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, "
+            "time_created INTEGER, data TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO session VALUES ('doctor-opencode', '/doctor')"
+        )
+        conn.execute(
+            "INSERT INTO message VALUES ('m1', 'doctor-opencode', ?, ?)",
+            (
+                1767225600000,
+                json.dumps(
+                    {
+                        "role": "assistant",
+                        "modelID": "doctor-model",
+                        "providerID": "doctor-provider",
+                        "cost": 0.0123,
+                        "tokens": {
+                            "input": 13,
+                            "output": 27,
+                            "reasoning": 7,
+                            "cache": {"read": 101, "write": 59},
+                        },
+                    }
+                ),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+SYNTHETIC = {
+    "claude": {
+        "suffix": ".jsonl",
+        "build": lambda p: write_jsonl(_JSONL_EVENTS["claude"], p),
+    },
+    "codex": {
+        "suffix": ".jsonl",
+        "build": lambda p: write_jsonl(_JSONL_EVENTS["codex"], p),
+    },
+    "opencode": {"suffix": ".db", "build": write_opencode_db},
+}
 
 
 def lanes() -> list[dict[str, Any]]:
@@ -149,8 +216,10 @@ def lanes() -> list[dict[str, Any]]:
         },
         {
             "harness": "opencode",
-            "reader": None,
-            "adapter": None,
+            "reader": SCRIPTS / "opencode_session_usage.py",
+            "flag": "--db",
+            "live_root": pathlib.Path.home() / ".local" / "share" / "opencode",
+            "live_glob": "opencode.db",
         },
     ]
 
@@ -211,11 +280,9 @@ def run_reader(reader: pathlib.Path, flag: str, target: pathlib.Path) -> dict[st
 
 
 def synthetic_lane(lane: dict[str, Any], tmp: pathlib.Path) -> dict[str, Any]:
-    events = SYNTHETIC[lane["harness"]]
-    target = tmp / f"{lane['harness']}.jsonl"
-    target.write_text(
-        "".join(json.dumps(e) + "\n" for e in events), encoding="utf-8"
-    )
+    spec = SYNTHETIC[lane["harness"]]
+    target = tmp / f"{lane['harness']}{spec['suffix']}"
+    spec["build"](target)
     return run_reader(lane["reader"], lane["flag"], target)
 
 
@@ -238,11 +305,13 @@ def live_lane(lane: dict[str, Any]) -> dict[str, Any]:
 def diagnose(*, self_check: bool, live: bool) -> dict[str, Any]:
     report: dict[str, Any] = {
         "schema_version": "pr-cost-doctor/v1",
-        "usd_basis": "default-rates",
+        "usd_basis": {},
         "usd_basis_note": (
-            "Readers price every session at fixed default rates and never use "
-            "the model name they report. Any USD figure is estimated, not "
-            "measured, whatever model ran."
+            "The claude and codex readers price every session at fixed default "
+            "rates and never use the model name they report, so their USD is "
+            "estimated, not measured, whatever model ran. The opencode reader "
+            "reports the provider's own billed cost. Never assume every lane's "
+            "figure is the same kind of number."
         ),
         "shared_keys": list(SHARED_KEYS),
         "lanes": [],
@@ -273,6 +342,17 @@ def diagnose(*, self_check: bool, live: bool) -> dict[str, Any]:
                 entry["self_check"] = synthetic_lane(lane, tmp)
             if live:
                 entry["live"] = live_lane(lane)
+            # Read the basis from the lane itself rather than assuming one.
+            # opencode reports the provider's billed cost; the other two
+            # price from a fixed rate table. Claiming a single basis for all
+            # of them would misdescribe whichever lane it did not match.
+            for key in ("self_check", "live"):
+                payload = entry.get(key, {}).get("payload")
+                if isinstance(payload, dict):
+                    report["usd_basis"][lane["harness"]] = payload.get(
+                        "usd_basis", "default-rates"
+                    )
+                    break
             statuses = [
                 entry[k]["status"] for k in ("self_check", "live") if k in entry
             ]
@@ -322,8 +402,11 @@ def render(report: dict[str, Any]) -> str:
         if report["failed"]
         else "OK: no lane is broken"
     )
+    basis = ", ".join(
+        f"{harness}={value}" for harness, value in sorted(report["usd_basis"].items())
+    )
     return "\n".join(
-        ["pr-cost doctor", *rows, "", f"usd_basis: {report['usd_basis']}", verdict]
+        ["pr-cost doctor", *rows, "", f"usd_basis: {basis or 'none measured'}", verdict]
     )
 
 
