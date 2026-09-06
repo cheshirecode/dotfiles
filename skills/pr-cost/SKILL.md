@@ -18,10 +18,12 @@ the lanes still work, run the doctor: see [Self-diagnosis](#self-diagnosis).
 ## Files
 
 - Collector: `scripts/pr_cost_collect.py`
-- Usage readers: `scripts/claude_session_usage.py`, `scripts/codex_session_usage.py`
+- Usage readers: `scripts/claude_session_usage.py`,
+  `scripts/codex_session_usage.py`, `scripts/opencode_session_usage.py`
 - Doctor: `scripts/pr_cost_doctor.py`
 - Tests: `tests/test_pr_cost_collect.py`, `tests/test_pr_cost_doctor.py`,
-  `tests/test_usage_key_contract.py`
+  `tests/test_usage_key_contract.py`, `tests/test_opencode_reader.py`,
+  `tests/test_no_hardcoded_paths.py`, `tests/test_skill_doc_matches_doctor.py`
 - Fixtures: `tests/fixtures/`
 
 ## Contract
@@ -69,6 +71,14 @@ present so downstream adapters receive a stable typed contract.
 - `codex`: there is no native PR creation hook. Use a wrapper that feeds a
   matching hook JSON shape to `from-hook`, or call `emit` / `annotate`
   directly with explicit payload fields.
+- `opencode`: sessions live in SQLite at
+  `~/.local/share/opencode/opencode.db`, not in a JSONL transcript, so its
+  reader takes `--db` / `--session-id` / `--cwd` rather than a file path.
+  Each assistant message carries the provider's own `cost`, so this lane
+  reports what the provider billed instead of inferring a price.
+  **The collector cannot record this lane yet**: `--harness` accepts only
+  claude, cursor and codex, so `annotate --harness opencode` exits 2. The
+  lane can be measured and diagnosed but not yet written to a PR.
 
 ## Self-diagnosis
 
@@ -106,10 +116,20 @@ none of these harnesses installed, and in CI. `--live` reads the newest
 non-empty transcript under `~/.claude/projects/` or `~/.codex/sessions/` and is
 therefore machine-dependent.
 
-The report always states `usd_basis: default-rates`. Both readers price every
-session at fixed default rates and never use the model name they report, so a
-cheap-model session is billed at the default lane rate. No figure the doctor
-prints is measured.
+`usd_basis` is reported per lane, because the lanes no longer share one basis:
+
+```
+usd_basis: claude=default-rates, codex=default-rates, opencode=provider-reported
+```
+
+`default-rates` means the reader priced the session at fixed rates and never
+used the model name it reports, so a cheap-model session is billed at the
+default lane rate. `provider-reported` means the harness recorded what the
+provider actually billed.
+
+Neither value means `measured`. `provider-reported` is a number this repo
+copied rather than computed, and nothing here verifies it against an invoice.
+Read it as better sourced than an estimate, not as an audited figure.
 
 ## Environment
 
@@ -209,9 +229,16 @@ PR_COST_HOOK_LIVE=1 python3 scripts/pr_cost_collect.py annotate \
   --notes "Session usage summed by $READER. Cache read/write included in tokens_in where the harness reports it. USD uses that reader's default rates, not the rate of the model named above."
 ```
 
-Both readers emit the same eight shared keys, so only `READER`, `READER_FLAG`
-and `HARNESS` change between lanes. `--confidence estimated` is the honest
-level: the figure comes from default rates, never from metered billing.
+All three readers emit the same eight shared keys, so `READER`, `READER_FLAG`
+and `HARNESS` are what change between the claude and codex lanes.
+
+The opencode lane does not fit this recipe yet, for two independent reasons:
+its reader selects a session with `--db` / `--session-id` / `--cwd` instead of
+a transcript path, and `annotate --harness opencode` is rejected by the
+collector. Measure it with the reader; do not expect to record it.
+
+`--confidence estimated` is the honest level for the two lanes above: the
+figure comes from default rates, never from metered billing.
 
 `PR_COST_HOOK_LIVE=1` is scoped to that one command on purpose. Exporting it
 leaves every later `annotate` in the shell live.
