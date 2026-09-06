@@ -26,10 +26,13 @@ that has none of these harnesses installed, and in CI. `--live` adds the
 lanes that need a real transcript. Default runs both, and skips live lanes
 that have nothing to read.
 
-USD is never model-derived. Both readers carry fixed default rates and read
-the model name without using it to price anything, so a cheap-model session
-is billed at the default lane rate. The doctor reports `usd_basis` as
-`default-rates` for that reason and refuses to call any figure measured.
+USD is reported per lane, because the lanes do not price alike. The claude
+and codex readers carry fixed default rates and read the model name without
+using it to price anything, so a cheap-model session is billed at the default
+lane rate: `default-rates`. The opencode reader passes through the provider's
+own billed cost: `provider-reported`. Neither is `measured` — nothing here
+checks either figure against an invoice — and a single basis asserted for all
+three would misdescribe whichever lane it did not match.
 """
 
 from __future__ import annotations

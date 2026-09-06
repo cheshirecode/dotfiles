@@ -17,7 +17,7 @@ from typing import Any
 
 
 SCHEMA_VERSION = "pr-cost/v1"
-HARNESSES = {"claude", "cursor", "codex"}
+HARNESSES = {"claude", "cursor", "codex", "opencode"}
 CONFIDENCE_LEVELS = {"metered", "estimated", "unavailable"}
 DEFAULT_LEDGER = "~/.local/share/pr-cost/ledger.jsonl"
 PR_URL_PATTERN = re.compile(r"https://github\.com/[^/\s]+/[^/\s]+/pull/\d+")
@@ -148,6 +148,12 @@ def default_notes(harness: str, confidence: str) -> str | None:
         return "Cursor hook payloads do not expose cost or token usage."
     if harness == "codex":
         return "Codex has no native PR creation hook or local cost payload."
+    if harness == "opencode":
+        # The only lane that does not need this branch to apologise for a
+        # missing number: opencode records the provider's billed cost, so
+        # `unavailable` here means the payload never reached the collector,
+        # not that the harness cannot produce one.
+        return "opencode records provider-billed cost; none reached this payload."
     return "Hook payload did not include enough data to estimate session cost."
 
 
