@@ -40,7 +40,7 @@ if [[ -z "${WORKLOG_REPO:-}" ]]; then
   # Steps below also invoke tests/*.sh by relative path.
   [[ -d "$SCRIPT_DIR/../tests" ]] && cp -R "$SCRIPT_DIR/../tests" "$WORKLOG_REPO/tests"
   (
-    cd "$WORKLOG_REPO"
+    cd "$WORKLOG_REPO" || exit 1
     git init -q .
     # The email decides the namespace: _lib.sh::resolve_ldap derives LDAP from
     # it, while the steps below use $USER. A mismatch put the seed tasks in
@@ -80,7 +80,7 @@ if [[ ! -d "$WORKLOG_REPO/people" ]]; then
   echo "  create and commit seed tasks into a source checkout." >&2
   exit 1
 fi
-cd "$WORKLOG_REPO"
+cd "$WORKLOG_REPO" || exit 1
 
 if [[ -d skills/worklog && "${WORKLOG_E2E_ALLOW_SOURCE:-0}" != "1" ]]; then
   echo "e2e: refusing to run from the dotfiles/source tree; run in a disposable _worklog data repo or set WORKLOG_E2E_ALLOW_SOURCE=1" >&2
