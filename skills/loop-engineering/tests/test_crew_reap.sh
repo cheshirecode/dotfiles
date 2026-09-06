@@ -89,19 +89,32 @@ ck "unreadable roster rejected"       ''           'cannot read roster'         
 ck "bare-word roster fails closed"    ''           'cannot read roster'         --no-fetch --roster wt-peer-9d
 
 # Bare stdin is bounded across the whole stream, not five seconds per line.
-# A drip-feeding writer hits the closed pipe once the ~5s deadline lapses
-# (measured elapsed ~7s); the old per-line reset would ride all fifteen
-# writes (~15s). The threshold sits between with ~4s margin each way.
-started=$SECONDS
+# Asserted by WHAT reap consumed, not by how long the pipeline took. The
+# wall-clock form failed on CI while the deadline itself was working: it timed
+# the whole pipeline, and the pipeline ends when the drip-writer stops. macOS
+# kills the writer with SIGPIPE at ~7s, but bash's builtin printf on the CI
+# runner reports "write error: Broken pipe" and keeps looping all fifteen
+# writes, so elapsed read 15s on a correct implementation. A timing threshold
+# there measures the writer's SIGPIPE disposition, not reap's deadline.
+#
+# `wt-landed` is fed on line 12, well past the 5s deadline. One total deadline
+# never sees it, so wt-landed stays reapable. A per-line reset rides every
+# write, reads it, and keeps wt-landed as a live agent. Slower machines only
+# push line 12 later, never earlier, so this cannot flake the wrong way.
 slow_out=$(
-  seq 15 | while read -r i; do sleep 1; printf 'agent-%s\n' "$i"; done |
+  { for i in $(seq 15); do
+      sleep 1
+      if [ "$i" = 12 ]; then printf 'wt-landed\n' || break
+      else printf 'nope-%s\n' "$i" || break
+      fi
+    done; } 2>/dev/null |
     "$REAP" --target main --no-fetch "$TMP/r" 2>&1
 ) || true
-elapsed=$((SECONDS - started))
-if [ "$elapsed" -le 11 ]; then
+if printf '%s' "$slow_out" | grep -Eq 'reap +wt-landed'; then
   PASS=$((PASS+1)); printf '  PASS  bare stdin has one total timeout\n'
 else
-  FAIL=$((FAIL+1)); printf '  FAIL  bare stdin timeout reset per line (%ss)\n' "$elapsed"
+  FAIL=$((FAIL+1))
+  printf '  FAIL  bare stdin timeout reset per line (read a roster entry sent at ~12s)\n%s\n' "$slow_out"
 fi
 
 build
