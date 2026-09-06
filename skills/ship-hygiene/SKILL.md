@@ -42,7 +42,7 @@ Skip if: only one PR open, body is short, no recent worklog activity. Overhead n
    **7a. Size flag.** PRs with body >5KB: read for stale checklists, ASCII art, duplicate context.
 
    **7b. Internal-ref leak scan.** Run both scans below — they are not redundant (a worklog path in the diff is a leaked *code comment*; the same string in the body is a leaked *PR description*; a body under 5KB skips the size flag but still needs this scan):
-   Resolve `<skill-dir>` to the directory holding this SKILL.md (empty when absent, never a bogus path):
+   Resolve `<skill-dir>` to the directory holding this SKILL.md — `loop-engineering/SKILL.md` owns the pattern; this is it with `leak-scan.sh` as the sentinel:
    `SKILL_DIR="$(f=$(find -L ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills -name leak-scan.sh -print -quit 2>/dev/null); [ -n "$f" ] && dirname "$(dirname "$f")")"`
    - Title + body: `gh pr view <n> --json title,body -q '.title + "\n" + .body' | "$SKILL_DIR"/bin/leak-scan.sh --label body`
    - Code comments (added lines only): `gh pr diff <n> | grep -E '^\+' | "$SKILL_DIR"/bin/leak-scan.sh --label diff`
