@@ -304,7 +304,7 @@ SEP=$'\x1f'
 nwarn=0; ninfo=0
 while IFS= read -r f; do
   [ -n "$f" ] || continue
-  # shellcheck disable=SC2206  # deliberate word-splitting of the owner list
+  # shellcheck disable=SC2207  # deliberate word-splitting of the owner list
   owners=($(owners_for "$f"))
   [ "${#owners[@]}" -ge 2 ] || continue
   ndirty=0
@@ -319,7 +319,7 @@ while IFS= read -r f; do
     tok="$o"
     agent=$(agent_for_label "$o")
     [ -n "$agent" ] && tok="$tok@$agent"
-    if is_dirty "$o" "$f"; then annotated+=("$tok[dirty]"); else annotated+=("$tok"); fi
+    if is_dirty "$o" "$f"; then annotated+=("${tok}[dirty]"); else annotated+=("$tok"); fi
   done
   ROWS+=("$sev$SEP$f$SEP$(IFS=,; echo "${annotated[*]}")")
 done < <(printf '%s\n' "${OWNER_PATHS[@]}" | LC_ALL=C sort)
