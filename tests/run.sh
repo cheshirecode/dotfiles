@@ -54,7 +54,15 @@ fail() { say FAIL "$1"; FAIL=$((FAIL+1)); }
 test_static() {
   echo "=== static ==="
   if command -v shellcheck >/dev/null; then
-    if shellcheck --severity=warning bin/*.sh tools/*.sh tests/*.sh 2>&1 | grep -E '^In '; then
+    # Capture, then test -n. `if shellcheck ... | grep` reads the PIPELINE
+    # status under `set -o pipefail`, and shellcheck exits non-zero exactly
+    # when it HAS findings, so that form reports a pass precisely when it
+    # should fail. Do not "fix" this with `|| true`: that trades away the
+    # exit code and reintroduces the same class of bug.
+    local sc_root
+    sc_root="$(shellcheck --severity=warning bin/*.sh tools/*.sh tests/*.sh 2>&1 | grep -E '^In ')"
+    if [ -n "$sc_root" ]; then
+      echo "$sc_root" >&2
       fail "shellcheck"
     else
       ok "shellcheck"
@@ -1871,7 +1879,13 @@ test_worklog_skill() {
   fi
 
   # 2. python syntax + ruff (skip ruff if absent).
-  if python3 -m compileall -q "$sb" 2>&1 | grep -q .; then
+  # Same capture-then-test-n rule as the static shellcheck lane: compileall
+  # exits non-zero on a syntax error, so piping it into `grep -q .` inverts
+  # the check and passes the file it should catch.
+  local pyc_sb
+  pyc_sb="$(python3 -m compileall -q "$sb" 2>&1)"
+  if [ -n "$pyc_sb" ]; then
+    echo "$pyc_sb" | head -10 >&2
     fail "python compile skills/worklog/bin/"
   else
     ok "python compile skills/worklog/bin/"
