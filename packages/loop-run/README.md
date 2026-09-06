@@ -23,8 +23,12 @@ available. Caps bound the loop; they don't make it honest.
 
 ## Use
 
+Not published yet. `loop-run` is not on PyPI, so the install line below
+does not resolve today — `curl https://pypi.org/pypi/loop-run/json` returns
+404.
+
 ```bash
-pip install loop-run
+pip install loop-run   # once published
 
 # one call per cycle — the driver owns state, you own the decision
 loop-run ./run --goal "tests pass and PR merged" --budget 20
@@ -51,5 +55,9 @@ states never reopen.
 Extracted from the `loop-engineering` skill in
 [cheshirecode/dotfiles](https://github.com/cheshirecode/dotfiles), where this
 state machine has driven real multi-day agent workloads. The vendored
-modules are unmodified except for package-relative paths; the 46-test code
-suite ships with the package.
+modules are unmodified except for package-relative paths.
+
+The 46-test suite lives in `tests/` in this repo, not in the wheel:
+pyproject.toml sets `[tool.hatch.build.targets.wheel] packages =
+["src/looprun"]`, and `tests/` sits outside `src/looprun`. Run it from a
+checkout — `python3 -m unittest discover -s tests -t tests -p 'test_*.py'`.
