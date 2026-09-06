@@ -16,8 +16,16 @@ const SOURCE = process.env.WORKLOG_SOURCE;
 const DEFAULT_BIN = path.join(import.meta.dirname, "..", "..", "..", "skills", "worklog", "bin");
 const BIN = process.env.WORKLOG_BIN || (fs.existsSync(DEFAULT_BIN) ? DEFAULT_BIN : "");
 if (!SOURCE || !BIN) {
-  console.log("SKIP e2e: set WORKLOG_SOURCE (vault to clone); WORKLOG_BIN defaults to the sibling worklog skill");
-  process.exit(0);
+  // A suite that asserted nothing must not report success. This used to print
+  // SKIP and exit 0, so `npm test` was a green no-op: rc=0 reads as proof to
+  // anyone checking the exit code. Exit 2 ("not run") stays distinct from the
+  // exit 1 below ("assertions failed").
+  const missing = [
+    !SOURCE && "WORKLOG_SOURCE (a vault to clone; it is never written)",
+    !BIN && `WORKLOG_BIN (the worklog skill's bin/; defaults to the sibling ${DEFAULT_BIN}, absent here)`,
+  ].filter(Boolean);
+  console.error(`e2e NOT RUN — nothing was asserted. Set ${missing.join(" and ")}.`);
+  process.exit(2);
 }
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "wmm-e2e-"));
