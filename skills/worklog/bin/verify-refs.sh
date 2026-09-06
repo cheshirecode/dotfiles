@@ -140,8 +140,8 @@ for f in "${files[@]}"; do
   while IFS= read -r ref; do
     [ -n "$ref" ] || continue
     case "$ref" in
-      !*) kind=mr;    st=$(lookup mr "$ref" "$proj") ;;
-      *)  kind=issue; st=$(lookup issue "$ref" "-") ;;
+      !*) st=$(lookup mr "$ref" "$proj") ;;
+      *)  st=$(lookup issue "$ref" "-") ;;
     esac
     case "$st" in
       merged|closed|done) printf 'stale|%s|%s|%s|%s\n' "$slug" "$ref" "$proj" "$st" >>"$ROWS"; stale=$((stale+1)) ;;
