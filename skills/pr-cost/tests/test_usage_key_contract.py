@@ -35,6 +35,7 @@ import unittest
 SKILL_DIR = pathlib.Path(__file__).resolve().parents[1]
 CLAUDE_SCRIPT = SKILL_DIR / "scripts" / "claude_session_usage.py"
 CODEX_SCRIPT = SKILL_DIR / "scripts" / "codex_session_usage.py"
+COLLECT_SCRIPT = SKILL_DIR / "scripts" / "pr_cost_collect.py"
 
 # The eight keys a consumer may rely on regardless of harness.
 SHARED_KEYS = frozenset(
@@ -296,6 +297,55 @@ class UsageKeyContractTest(unittest.TestCase):
                 "lane's output rate is 30.0 where claude's is 25.0."
             ),
         )
+
+
+class DocumentedCollectorValuesTest(unittest.TestCase):
+    """The two enum values SKILL.md's live-annotate recipe hardcodes.
+
+    The recipe in SKILL.md passes `--harness claude` and
+    `--confidence estimated` literally. Drop either value from the parser and
+    argparse exits 2 with a choices error, so anyone following the documented
+    recipe hits a wall the test suite never warned about. Nothing else pinned
+    these two literals.
+
+    Asserted by running the collector, not by reading its source. A source
+    grep for `"claude"` matches HARNESSES, the harness guidance strings and
+    the default-notes text, so it stays green after the choice is gone.
+    """
+
+    def emit(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(COLLECT_SCRIPT), "emit", *arguments],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    # Each test passes ONLY the flag it is about, so one removed choice fails
+    # one test. A first version passed both flags in both tests, and then
+    # either mutation failed both -- neither assertion isolated its own claim.
+    # `--confidence` is optional, so the harness test can omit it; the
+    # confidence test needs some harness and deliberately picks a different
+    # one, so it survives `claude` being removed.
+
+    def test_harness_claude_is_still_an_accepted_value(self) -> None:
+        result = self.emit("--harness", "claude")
+        self.assertEqual(
+            result.returncode,
+            0,
+            "SKILL.md's recipe passes --harness claude: " f"{result.stderr.strip()}",
+        )
+        self.assertEqual(json.loads(result.stdout)["harness"], "claude")
+
+    def test_confidence_estimated_is_still_an_accepted_value(self) -> None:
+        result = self.emit("--harness", "codex", "--confidence", "estimated")
+        self.assertEqual(
+            result.returncode,
+            0,
+            "SKILL.md's recipe passes --confidence estimated: "
+            f"{result.stderr.strip()}",
+        )
+        self.assertEqual(json.loads(result.stdout)["confidence"], "estimated")
 
 
 if __name__ == "__main__":
