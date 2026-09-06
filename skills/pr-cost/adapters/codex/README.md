@@ -5,7 +5,7 @@ least-bad fallback from the survey: an opt-in `gh` wrapper that watches for
 successful `gh pr create` commands and forwards a hook-shaped JSON payload to:
 
 ```bash
-/opt/homebrew/bin/python3 /Users/fredtran/Documents/oss/dotfiles/skills/pr-cost/scripts/pr_cost_collect.py from-hook --harness codex
+python3 <skill>/scripts/pr_cost_collect.py from-hook --harness codex
 ```
 
 The wrapper is versioned under this skill instead of inventing new
@@ -16,10 +16,11 @@ The wrapper is versioned under this skill instead of inventing new
 Prepend this adapter directory to `PATH` for the shell where Codex runs `gh`:
 
 ```bash
-export PATH="/Users/fredtran/Documents/oss/dotfiles/skills/pr-cost/adapters/codex/bin:$PATH"
+export PATH="$(git rev-parse --show-toplevel)/skills/pr-cost/adapters/codex/bin:$PATH"
 ```
 
-If the real GitHub CLI is not `/opt/homebrew/bin/gh`, point the wrapper at it
+The wrapper looks for the real GitHub CLI on `PATH` and at the usual
+install prefixes. If it cannot find yours, point it at the binary
 explicitly:
 
 ```bash
