@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Test harness for cheshirecode/dotfiles. Same script for local + CI.
 #
-#   tests/run.sh static       lint scripts + manifest
-#   tests/run.sh fixtures     run guardrail fixtures (red-path tests)
-#   tests/run.sh all          static + fixtures
+#   tests/run.sh static         lint scripts + manifest
+#   tests/run.sh fixtures       run guardrail fixtures (red-path tests)
+#   tests/run.sh worklog-skill  shellcheck + ruff + fixture-vault smoke
+#   tests/run.sh packages       packages/ sync, tests, lint, version coupling
+#   tests/run.sh all            every mode above
 
 set -uo pipefail
 
@@ -2143,7 +2145,7 @@ case "${1:-all}" in
   worklog-skill)  test_worklog_skill ;;
   packages)       test_packages ;;
   all)            test_static; test_fixtures; test_worklog_skill; test_packages ;;
-  *) echo "usage: $0 {static|fixtures|worklog-skill|all}" >&2; exit 2 ;;
+  *) echo "usage: $0 {static|fixtures|worklog-skill|packages|all}" >&2; exit 2 ;;
 esac
 
 echo
