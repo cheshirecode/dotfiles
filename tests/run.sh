@@ -1869,10 +1869,27 @@ test_worklog_skill() {
 
   # 1. shellcheck on all .sh under skill bin/ (excluding git-hooks/ — same severity gate).
   if command -v shellcheck >/dev/null; then
-    if shellcheck --severity=warning "$sb"/*.sh "$sb"/git-hooks/* 2>&1 | grep -E '^In ' >/dev/null; then
-      fail "shellcheck skills/worklog/bin/"
+    # Capture, then test -n — same rule as the static lanes. Piping shellcheck
+    # into grep reads the PIPELINE status under `set -o pipefail`, and the
+    # linter exits non-zero exactly when it HAS findings, so that form
+    # reported a pass precisely when it should fail. It hid three real findings
+    # here. Not `|| true`: that trades away the exit code and brings it back.
+    # (Do not open a comment line with "# shellcheck <word>" — the tool reads
+    # that as a directive and errors SC1072/SC1073. This lane caught it here.)
+    local sb_scripts=() candidate sc_sb
+    for candidate in "$sb"/*.sh "$sb"/git-hooks/*; do
+      [ -f "$candidate" ] && sb_scripts+=("$candidate")
+    done
+    if [ "${#sb_scripts[@]}" -eq 0 ]; then
+      fail "no scripts found under $sb — the lane is inert"
     else
-      ok "shellcheck skills/worklog/bin/ (incl. git-hooks)"
+      sc_sb="$(shellcheck --severity=warning "${sb_scripts[@]}" 2>&1 | grep -E '^In ')"
+      if [ -n "$sc_sb" ]; then
+        echo "$sc_sb" >&2
+        fail "shellcheck skills/worklog/bin/"
+      else
+        ok "shellcheck ${#sb_scripts[@]} script(s) under skills/worklog/bin/ (incl. git-hooks)"
+      fi
     fi
   else
     say SKIP "shellcheck not installed"
