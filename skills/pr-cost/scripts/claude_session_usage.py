@@ -12,6 +12,7 @@ from typing import Any
 
 def session_usage(path: pathlib.Path) -> dict[str, Any]:
     messages: dict[str, dict[str, Any]] = {}
+    assistant_seen = 0
     session_id = None
     model = None
     window_start = None
@@ -35,6 +36,7 @@ def session_usage(path: pathlib.Path) -> dict[str, Any]:
             message = event.get("message")
             if not isinstance(message, dict) or message.get("role") != "assistant":
                 continue
+            assistant_seen += 1
             message_id = message.get("id")
             usage = message.get("usage")
             if not isinstance(message_id, str) or not isinstance(usage, dict):
@@ -42,6 +44,20 @@ def session_usage(path: pathlib.Path) -> dict[str, Any]:
             messages[message_id] = usage
             if isinstance(message.get("model"), str):
                 model = message["model"]
+
+    # Assistant turns with no readable usage anywhere is a format change,
+    # not a cheap session. Before this, both produced byte-identical output:
+    # all zeros, model null, usd 0.0, exit 0. One is "nothing was said", the
+    # other is "this reader no longer understands what it is reading", and
+    # only the second is silent breakage. The empty case stays quiet and
+    # zeroed on purpose; the caller's doctor classifies that as no-signal.
+    if assistant_seen and not messages:
+        raise SystemExit(
+            f"{path}: {assistant_seen} assistant message(s), none carrying a "
+            "readable usage block. The transcript format changed or this "
+            "reader is out of date; a zero-cost estimate would be wrong "
+            "rather than cheap."
+        )
 
     tokens_in = 0
     tokens_out = 0
@@ -61,6 +77,7 @@ def session_usage(path: pathlib.Path) -> dict[str, Any]:
         "uncached_input_tokens": tokens_in,
         "cache_read_input_tokens": cache_read,
         "cache_creation_input_tokens": cache_write,
+        "assistant_messages_seen": assistant_seen,
         "unique_assistant_messages": len(messages),
         "window_start": window_start,
         "window_end": window_end,
