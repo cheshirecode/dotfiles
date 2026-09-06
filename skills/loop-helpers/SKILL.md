@@ -12,7 +12,8 @@ parent transcript, or rewrite a canonical skill.
 ## Resolve the skill directory
 
 Resolve `<skill-dir>` to the directory containing this `SKILL.md`. If uncertain,
-search for `context_pack.py` under the skill roots:
+search for `context_pack.py` under the skill roots.
+`loop-engineering/SKILL.md` owns this resolver pattern, including the per-host variants and the fixture that executes them; the line below is the same pattern with this skill's own sentinel file.
 
 ```bash
 # Roots checked in order; empty when absent — never a bogus "./..":
