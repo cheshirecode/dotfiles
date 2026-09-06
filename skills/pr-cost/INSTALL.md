@@ -7,7 +7,7 @@ off unless `PR_COST_HOOK_LIVE=1`.
 Collector:
 
 ```bash
-/opt/homebrew/bin/python3 skills/pr-cost/scripts/pr_cost_collect.py from-hook --harness <cursor|claude|codex>
+python3 skills/pr-cost/scripts/pr_cost_collect.py from-hook --harness <cursor|claude|codex>
 ```
 
 ## Cursor (installed on this machine)
@@ -35,10 +35,10 @@ Existing worklog `PreCompact` / `SessionEnd` hooks must stay. Do not set
 Codex has no native PR-create hook. Prepend only in shells where Codex runs `gh`:
 
 ```bash
-export PATH="$HOME/Documents/oss/dotfiles/skills/pr-cost/adapters/codex/bin:$PATH"
+export PATH="$(git rev-parse --show-toplevel)/skills/pr-cost/adapters/codex/bin:$PATH"
 ```
 
-See `adapters/codex/README.md`. Do not shadow `/opt/homebrew/bin/gh` globally.
+See `adapters/codex/README.md`. Do not shadow the real `gh` globally.
 
 ## Enable live PR comments (off by default)
 
@@ -60,7 +60,7 @@ Codex sessions expose running totals as `event_msg.type = token_count` in
 ## Verify without a live PR
 
 ```bash
-/opt/homebrew/bin/python3 -m unittest discover -s skills/pr-cost/tests -q
+python3 -m unittest discover -s skills/pr-cost/tests -q
 ```
 
 That suite includes a `from-hook` fixture that writes a temp ledger and fails

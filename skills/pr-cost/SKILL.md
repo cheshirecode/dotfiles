@@ -123,7 +123,7 @@ prints is measured.
 Validate and print a payload:
 
 ```bash
-/opt/homebrew/bin/python3 scripts/pr_cost_collect.py emit \
+python3 scripts/pr_cost_collect.py emit \
   --harness claude \
   --confidence estimated \
   --usd 1.23 \
@@ -139,7 +139,7 @@ Validate and print a payload:
 Append to the ledger and optionally comment on the PR:
 
 ```bash
-/opt/homebrew/bin/python3 scripts/pr_cost_collect.py annotate \
+python3 scripts/pr_cost_collect.py annotate \
   --fixture tests/fixtures/emit_valid.json
 ```
 
@@ -147,7 +147,7 @@ Run from a hook adapter by piping the native hook JSON to stdin:
 
 ```bash
 printf '%s\n' '{"command":"gh pr create ...","exit_code":0,"stdout":"https://github.com/owner/repo/pull/123"}' \
-  | /opt/homebrew/bin/python3 scripts/pr_cost_collect.py from-hook \
+  | python3 scripts/pr_cost_collect.py from-hook \
       --harness cursor
 ```
 
