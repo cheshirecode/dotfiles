@@ -50,6 +50,22 @@ fi
 say() { printf "  %-5s %s\n" "$1" "$2"; }
 ok()   { say PASS "$1"; PASS=$((PASS+1)); }
 fail() { say FAIL "$1"; FAIL=$((FAIL+1)); }
+# Fixture output is discarded on success to keep the suite readable. On failure
+# it is the only thing that says WHY, and without it a failure is diagnosable
+# only on a machine that reproduces it. Measured 2026-09-06: a CI-only
+# crew-reap failure cost four container experiments and a throwaway CI commit
+# to see one line. Capped, because a runaway fixture must not bury the summary.
+FIXTURE_LOG_LINES=${FIXTURE_LOG_LINES:-120}
+fail_with_output() {
+  fail "$1"
+  local body total
+  total=$(printf '%s\n' "$2" | wc -l | tr -d ' ')
+  body=$(printf '%s\n' "$2" | tail -n "$FIXTURE_LOG_LINES")
+  if [ "$total" -gt "$FIXTURE_LOG_LINES" ]; then
+    printf '        (last %s of %s lines)\n' "$FIXTURE_LOG_LINES" "$total" >&2
+  fi
+  printf '%s\n' "$body" | sed 's/^/        /' >&2
+}
 
 test_static() {
   echo "=== static ==="
@@ -544,10 +560,10 @@ PY
   # a second reconcile fixture must run by existing, not by being remembered.
   for t in skills/worklog/tests/reconcile_pr/test_*.sh; do
     [[ -e "$t" ]] || continue
-    if "${WL_HERMETIC[@]}" bash "$t" >/dev/null 2>&1; then
+    if out=$("${WL_HERMETIC[@]}" bash "$t" 2>&1); then
       ok "worklog PR reconciliation: $(basename "$t" .sh)"
     else
-      fail "worklog PR reconciliation: $(basename "$t" .sh)"
+      fail_with_output "worklog PR reconciliation: $(basename "$t" .sh)" "$out"
     fi
   done
 
@@ -558,10 +574,10 @@ PY
   # up by existing rather than by someone remembering to add a line here.
   for d in skills/*/tests; do
     compgen -G "$d/test_*.py" >/dev/null || continue
-    if python3 -m unittest discover -s "$d" -t "$d" -p "test_*.py" >/dev/null 2>&1; then
+    if out=$(python3 -m unittest discover -s "$d" -t "$d" -p "test_*.py" 2>&1); then
       ok "$(basename "$(dirname "$d")") python fixtures"
     else
-      fail "$(basename "$(dirname "$d")") python fixtures"
+      fail_with_output "$(basename "$(dirname "$d")") python fixtures" "$out"
     fi
   done
 
@@ -576,19 +592,19 @@ PY
   # ones drive git add/commit/push there, and six of them simply fail.
   for t in skills/loop-engineering/tests/test_*.sh; do
     [[ -e "$t" ]] || continue
-    if "${WL_HERMETIC[@]}" bash "$t" >/dev/null 2>&1; then
+    if out=$("${WL_HERMETIC[@]}" bash "$t" 2>&1); then
       ok "loop-engineering $(basename "$t" .sh)"
     else
-      fail "loop-engineering $(basename "$t" .sh)"
+      fail_with_output "loop-engineering $(basename "$t" .sh)" "$out"
     fi
   done
   # verify_refs/ likewise keeps its own label and is skipped by the loop below.
   for t in skills/worklog/tests/verify_refs/test_*.sh; do
     [[ -e "$t" ]] || continue
-    if "${WL_HERMETIC[@]}" bash "$t" >/dev/null 2>&1; then
+    if out=$("${WL_HERMETIC[@]}" bash "$t" 2>&1); then
       ok "worklog verify-refs: $(basename "$t" .sh)"
     else
-      fail "worklog verify-refs: $(basename "$t" .sh)"
+      fail_with_output "worklog verify-refs: $(basename "$t" .sh)" "$out"
     fi
   done
 
@@ -602,10 +618,10 @@ PY
       skills/loop-engineering/*|skills/worklog/*) continue ;;
     esac
     sname="$(basename "$(dirname "$(dirname "$t")")")"
-    if "${WL_HERMETIC[@]}" bash "$t" >/dev/null 2>&1; then
+    if out=$("${WL_HERMETIC[@]}" bash "$t" 2>&1); then
       ok "$sname $(basename "$t" .sh)"
     else
-      fail "$sname $(basename "$t" .sh)"
+      fail_with_output "$sname $(basename "$t" .sh)" "$out"
     fi
   done
 
@@ -635,20 +651,20 @@ PY
       *) runner=(bash) ;;
     esac
     name="worklog $(basename "$(dirname "$t")")/$(basename "${t%.*}")"
-    if "${WL_TIMEOUT[@]}" "${WL_HERMETIC[@]}" "${runner[@]}" "$t" >/dev/null 2>&1; then
+    if out=$("${WL_TIMEOUT[@]}" "${WL_HERMETIC[@]}" "${runner[@]}" "$t" 2>&1); then
       ok "$name"
     else
-      fail "$name"
+      fail_with_output "$name" "$out"
     fi
   done
 
   # Lint fixtures were never reachable from this runner either, so a regression
   # in them only surfaced if someone ran them by hand.
   for t in skills/worklog/tests/lint/*.sh; do
-    if "${WL_HERMETIC[@]}" bash "$t" >/dev/null 2>&1; then
+    if out=$("${WL_HERMETIC[@]}" bash "$t" 2>&1); then
       ok "worklog lint: $(basename "$t" .sh)"
     else
-      fail "worklog lint: $(basename "$t" .sh)"
+      fail_with_output "worklog lint: $(basename "$t" .sh)" "$out"
     fi
   done
 
@@ -2001,10 +2017,10 @@ test_worklog_skill() {
       *) continue ;;
     esac
     name="$(basename "$(dirname "$t")")/$(basename "${t%.*}")"
-    if "${WL_HERMETIC[@]}" "${runner[@]}" "$t" >/dev/null 2>&1; then
+    if out=$("${WL_HERMETIC[@]}" "${runner[@]}" "$t" 2>&1); then
       ok "$name fixture"
     else
-      fail "$name fixture"
+      fail_with_output "$name fixture" "$out"
     fi
   done
 
