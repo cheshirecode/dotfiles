@@ -34,7 +34,8 @@ unset WORKLOG_NS
 # WL_HERMETIC does not strip it — so a defaulted assignment silently tests the
 # installed copy instead of the tree this fixture ships in, and a green run
 # proves nothing about the change under review.
-export WORKLOG_BIN="$(cd "$(dirname "$0")/../../bin" && pwd)"
+WORKLOG_BIN="$(cd "$(dirname "$0")/../../bin" && pwd)"
+export WORKLOG_BIN
 
 cd "$(dirname "$0")/../.."
 SOURCE="${SOURCE:-$(pwd)}"

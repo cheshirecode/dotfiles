@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared scratch-vault setup for the archive/ fixtures. Sourced, not run —
 # the runner globs test_*.sh, so this leading-underscore file is not a fixture.
 #
@@ -13,6 +14,7 @@
 # it makes these fixtures assert against whatever is installed rather than the
 # archive.sh sitting next to them, which is how a fix in the working tree can
 # read green against unfixed code.
+# shellcheck disable=SC2034  # read by the fixtures that source this file.
 WORKLOG_BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../bin" && pwd)"
 
 make_vault() {
@@ -24,7 +26,7 @@ make_vault() {
 
   git init -q --bare --initial-branch=main "$UPSTREAM"
   git init -q --initial-branch=main "$SCRATCH"
-  cd "$SCRATCH"
+  cd "$SCRATCH" || exit 1
   export WORKLOG_REPO="$SCRATCH"
   export WORKLOG_LDAP=tester
   export WORKLOG_NO_HOOK=1

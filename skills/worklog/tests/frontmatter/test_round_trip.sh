@@ -22,6 +22,8 @@ set -euo pipefail
 # instead of the ones sitting next to it, so a fix in the working tree can
 # read green against unfixed code. tests/run.sh unsets the variable, and
 # deriving it here keeps the fixture honest when run by hand too.
+# shellcheck disable=SC2034  # the pin itself is the point: tests/run.sh
+# statically requires fixtures to pin WORKLOG_BIN to the tree under test.
 WORKLOG_BIN="$(cd "$(dirname "$0")/../../bin" && pwd)"
 
 cd "$(dirname "$0")/../.."
