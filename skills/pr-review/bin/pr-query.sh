@@ -43,6 +43,14 @@ NUMBER=""
 AUTHOR=""
 LIMIT="20"
 
+require_value() {
+  local option="$1"
+  if [[ $# -lt 2 || -z "${2:-}" || "${2:-}" == --* ]]; then
+    echo "$PROG: $option requires a value" >&2
+    exit 2
+  fi
+}
+
 usage() {
   echo "$PROG: usage: $PROG <view|diff|list-open|ci-status|merge-base> [<number>] [--repo <dir>] [--token <val>]" >&2
   exit 2
@@ -68,10 +76,10 @@ esac
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --repo)   REPO_DIR="${2:-}"; shift 2 ;;
-    --token)  TOKEN_VAL="${2:-}"; shift 2 ;;
-    --author) AUTHOR="${2:-}"; shift 2 ;;
-    --limit)  LIMIT="${2:-}"; shift 2 ;;
+    --repo)   require_value "$@"; REPO_DIR="$2"; shift 2 ;;
+    --token)  require_value "$@"; TOKEN_VAL="$2"; shift 2 ;;
+    --author) require_value "$@"; AUTHOR="$2"; shift 2 ;;
+    --limit)  require_value "$@"; LIMIT="$2"; shift 2 ;;
     *) echo "$PROG: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -96,6 +104,12 @@ if [[ "$OPERATION" != "merge-base" ]]; then
     echo "$PROG: fix with '$CLI auth login', or pass --token <value>" >&2
     exit 2
   fi
+  if [[ -n "$TOKEN_VAL" ]]; then
+    case "$FORGE" in
+      github) export GH_TOKEN="$TOKEN_VAL" ;;
+      gitlab) export GLAB_TOKEN="$TOKEN_VAL" ;;
+    esac
+  fi
   GITLAB_URL="${GITLAB_URL:-https://gitlab.com}"
 fi
 
@@ -112,9 +126,13 @@ repo_root() {
 }
 
 default_branch() {
-  local dir="$1"
-  git -C "$dir" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null \
-    | sed 's|^origin/||' && return
+  local dir="$1" remote_head
+  remote_head="$(git -C "$dir" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)" \
+    && { printf '%s' "$remote_head"; return; }
+  git -C "$dir" show-ref --verify --quiet refs/remotes/origin/main \
+    && { printf 'origin/main'; return; }
+  git -C "$dir" show-ref --verify --quiet refs/remotes/origin/master \
+    && { printf 'origin/master'; return; }
   git -C "$dir" show-ref --verify --quiet refs/heads/main && { printf 'main'; return; }
   git -C "$dir" show-ref --verify --quiet refs/heads/master && { printf 'master'; return; }
   printf 'main'
