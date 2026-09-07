@@ -59,8 +59,8 @@ classify_remote() {
   host="${host%%:*}"
   forge=other; cli=""
   case "$host" in
-    github.com|github.*) forge=github; cli=gh ;;
-    gitlab.com|gitlab.*) forge=gitlab; cli=glab ;;
+    github.com|*.github.com) forge=github; cli=gh ;;
+    gitlab.com|*.gitlab.com) forge=gitlab; cli=glab ;;
   esac
   printf '%s\t%s\t%s\n' "$forge" "$path" "$cli"
 }
