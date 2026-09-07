@@ -34,7 +34,7 @@
 #   # --repo omitted: uses the current directory's git root.
 #
 # Example output (a tab between each field):
-#   github	acme/widget	gh	
+#   github<TAB>acme/widget<TAB>gh<TAB>
 #   gitlab	acme/gadget	glab	glab-not-installed
 
 set -uo pipefail
@@ -43,6 +43,14 @@ PROG=${0##*/}
 
 REPO_DIR=""
 TOKEN_OVERRIDE=""
+
+require_value() {
+  local option="$1"
+  if [[ $# -lt 2 || -z "${2:-}" || "${2:-}" == --* ]]; then
+    echo "$PROG: $option requires a value" >&2
+    exit 2
+  fi
+}
 
 # Prints "forge<TAB>slug<TAB>cli". This runs in a command substitution, so it
 # must RETURN the CLI rather than assign it: an earlier version set a global
@@ -102,8 +110,8 @@ auth_reason() {
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --repo)  REPO_DIR="${2:-}"; shift 2 ;;
-    --token) TOKEN_OVERRIDE="${2:-}"; shift 2 ;;
+    --repo)  require_value "$@"; REPO_DIR="$2"; shift 2 ;;
+    --token) require_value "$@"; TOKEN_OVERRIDE="$2"; shift 2 ;;
     -h|--help) sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "$PROG: unknown argument: $1" >&2; exit 2 ;;
   esac
