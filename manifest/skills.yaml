@@ -92,8 +92,16 @@ skills:
       path: skills/evidence-gate
     install_to: ~/.claude/skills/evidence-gate
 
+  - name: pr-review
+    description: Single-PR review and closeout — ownership-based review modes, then distill, codify, deslop, checkpoint.
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/pr-review
+    install_to: ~/.claude/skills/pr-review
+
   - name: ship-hygiene
-    description: Pre-handoff sweep across worklog + PRs + CI.
+    description: Periodic multi-PR sweep across worklog + PRs + CI; delegates per-PR work to pr-review.
     source:
       type: subpath
       ref: HEAD
@@ -127,7 +135,7 @@ skills:
     install_to: ~/.claude/skills/example-led-instructions
 
   - name: tightening-a-pr
-    description: Single-PR post-completion close-out — distill learnings (council) → codify → deslop (ship-hygiene) → checkpoint.
+    description: DEPRECATED shim — delegates to pr-review's closeout entry point. Kept so existing routing keeps working.
     source:
       type: subpath
       ref: HEAD
