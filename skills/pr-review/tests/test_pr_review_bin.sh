@@ -135,8 +135,8 @@ for script in owner-check.sh detect-forge.sh pr-query.sh; do
 done
 
 echo "=== 10. the scripts pass shellcheck ==="
-# tests/run.sh shellchecks bin/ tools/ tests/ at the repo root only; skills/*/bin
-# is outside that sweep, so these three were never linted.
+# The repo-wide lane now covers these scripts. Keep this focused check so a
+# failure reports against pr-review directly too.
 if command -v shellcheck >/dev/null 2>&1; then
   sc="$(shellcheck --severity=warning "$BIN"/*.sh 2>&1 | grep -E '^In ')"
   if [[ -n "$sc" ]]; then
@@ -148,6 +148,100 @@ if command -v shellcheck >/dev/null 2>&1; then
 else
   pass "skipped: shellcheck not installed"
 fi
+
+echo "=== 11. explicit tokens reach forge API calls ==="
+FAKE_BIN="$TMP/fake-bin"
+mkdir -p "$FAKE_BIN"
+cat > "$FAKE_BIN/gh" <<'GH'
+#!/usr/bin/env bash
+case "${1:-} ${2:-}" in
+  "auth status") exit 0 ;;
+  "api user")
+    [[ -z "${REQUIRE_GH_TOKEN:-}" || "${GH_TOKEN:-}" == "$REQUIRE_GH_TOKEN" ]] || exit 42
+    printf '%s\n' "${CURRENT_GH_USER:-alice}"
+    ;;
+  "pr view")
+    [[ -z "${REQUIRE_GH_TOKEN:-}" || "${GH_TOKEN:-}" == "$REQUIRE_GH_TOKEN" ]] || exit 42
+    printf '{"number":7,"title":"fixture","isDraft":false,"state":"OPEN","author":{"login":"%s"},"commits":[{"authors":[{"login":"%s"}]}]}\n' \
+      "${PR_AUTHOR:-alice}" "${COMMIT_AUTHOR:-alice}"
+    ;;
+  *) exit 42 ;;
+esac
+GH
+chmod +x "$FAKE_BIN/gh"
+
+out="$(env -u GH_TOKEN -u GITHUB_TOKEN PATH="$FAKE_BIN:$PATH" REQUIRE_GH_TOKEN=sentinel \
+  "$BIN/pr-query.sh" view 7 --repo "$TMP/gh" --token sentinel 2>/dev/null)"
+st=$?
+[[ "$st" -eq 0 && "$out" == *'"number":7'* ]] \
+  && pass "pr-query forwards --token to gh" \
+  || fail "pr-query did not forward --token to gh (rc=$st)"
+
+out="$(env -u GH_TOKEN -u GITHUB_TOKEN PATH="$FAKE_BIN:$PATH" REQUIRE_GH_TOKEN=sentinel \
+  "$BIN/owner-check.sh" 7 --repo "$TMP/gh" --token sentinel 2>/dev/null)"
+st=$?
+[[ "$st" -eq 0 && "$out" == "self" ]] \
+  && pass "owner-check forwards --token to gh" \
+  || fail "owner-check did not forward --token to gh (rc=$st, out=$out)"
+
+echo "=== 12. only the PR author owns the PR ==="
+out="$(env -u GH_TOKEN -u GITHUB_TOKEN PATH="$FAKE_BIN:$PATH" \
+  CURRENT_GH_USER=alice PR_AUTHOR=bob COMMIT_AUTHOR=alice \
+  "$BIN/owner-check.sh" 7 --repo "$TMP/gh" 2>/dev/null)"
+st=$?
+[[ "$st" -eq 1 && "$out" == "other" ]] \
+  && pass "a matching commit author does not claim another user's PR" \
+  || fail "commit author incorrectly claimed another user's PR (rc=$st, out=$out)"
+
+echo "=== 13. merge-base uses the remote default branch ==="
+git init -q --bare --initial-branch=main "$TMP/base-remote.git"
+git clone -q "$TMP/base-remote.git" "$TMP/base-seed" 2>/dev/null
+git -C "$TMP/base-seed" -c user.name=fixture -c user.email=fixture@example.com \
+  commit -q --allow-empty -m A
+git -C "$TMP/base-seed" push -q origin main
+git clone -q "$TMP/base-remote.git" "$TMP/base-review"
+git -C "$TMP/base-seed" -c user.name=fixture -c user.email=fixture@example.com \
+  commit -q --allow-empty -m B
+git -C "$TMP/base-seed" push -q origin main
+git -C "$TMP/base-review" fetch -q origin main
+git -C "$TMP/base-review" switch -q -c feature origin/main
+git -C "$TMP/base-review" -c user.name=fixture -c user.email=fixture@example.com \
+  commit -q --allow-empty -m C
+out="$("$BIN/pr-query.sh" merge-base --repo "$TMP/base-review" 2>/dev/null)"
+expected="$(git -C "$TMP/base-review" merge-base origin/main HEAD)"
+[[ "$out" == "$expected" ]] \
+  && pass "merge-base follows origin/main instead of stale local main" \
+  || fail "merge-base used stale local main (got=$out, want=$expected)"
+
+echo "=== 14. missing option values exit instead of hanging ==="
+expect_usage_exit() { # <label> <command...>
+  local label="$1" pid st i
+  shift
+  "$@" >/dev/null 2>&1 & pid=$!
+  i=0
+  while kill -0 "$pid" 2>/dev/null && [[ "$i" -lt 10 ]]; do
+    sleep 0.05
+    i=$((i + 1))
+  done
+  if kill -0 "$pid" 2>/dev/null; then
+    kill "$pid" 2>/dev/null
+    wait "$pid" 2>/dev/null
+    fail "$label hung on a missing option value"
+    return
+  fi
+  wait "$pid"; st=$?
+  [[ "$st" -eq 2 ]] && pass "$label exits 2 on a missing option value" \
+                       || fail "$label exits $st on a missing option value"
+}
+for option in --repo --token; do
+  expect_usage_exit "detect-forge $option" "$BIN/detect-forge.sh" "$option"
+done
+for option in --repo --token --author --limit; do
+  expect_usage_exit "pr-query $option" "$BIN/pr-query.sh" view 7 "$option"
+done
+for option in --repo --token; do
+  expect_usage_exit "owner-check $option" "$BIN/owner-check.sh" 7 "$option"
+done
 
 if [[ "$FAIL" -ne 0 ]]; then
   echo "pr-review bin: FAILURES above" >&2
