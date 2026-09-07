@@ -10,7 +10,9 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$REPO_ROOT"
+# `|| exit 1`: every path below is relative to the repo root, so a failed cd
+# would run the whole suite somewhere else and report on the wrong tree.
+cd "$REPO_ROOT" || exit 1
 
 PASS=0; FAIL=0
 
