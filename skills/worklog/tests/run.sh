@@ -9,7 +9,7 @@
 # MCP (the scrape-slack "unavailable provider" branch then found a real
 # token — and a live-token test run must never reach the real Slack API).
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 
 pass=0
 fail=0

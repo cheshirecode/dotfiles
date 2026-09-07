@@ -22,7 +22,7 @@ task() {  # task <status>
 }
 
 run() { OUT=$(WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP=tester \
-              bash "$ROOT/bin/lint.sh" 2>&1); RC=$?; }
+              bash "$ROOT/bin/lint.sh" 2>&1); }
 
 task active
 run
@@ -33,7 +33,7 @@ printf '%s' "$OUT" | grep -q 'directory is a location, not a status' \
   && ck "'active' error carries the directory-name hint" pass pass \
   || ck "'active' error carries the directory-name hint" fail pass
 
-task done
+task 'done'
 run
 printf '%s' "$OUT" | grep -q "status 'done' not in FSM.*use 'archived'" \
   && ck "'done' error points at archived" pass pass \

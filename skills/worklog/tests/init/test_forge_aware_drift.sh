@@ -105,14 +105,15 @@ export PATH="$STUB:$MIRROR"
 
 # Self-check: if PATH pinning did not take, every assertion below would be
 # measuring the live forge instead of the stubs and could pass for wrong reasons.
-[[ "$(command -v glab)" == "$STUB/glab" ]]
-check "PATH pinning took: glab resolves to the stub" $?
-[[ -z "$(command -v gh)" ]]
-check "PATH pinning took: gh is absent" $?
+if [[ "$(command -v glab)" == "$STUB/glab" ]]; then rc=0; else rc=1; fi
+check "PATH pinning took: glab resolves to the stub" "$rc"
+if [[ -z "$(command -v gh)" ]]; then rc=0; else rc=1; fi
+check "PATH pinning took: gh is absent" "$rc"
 
 out="$("$FORGE" list --author fred.tran "$TMP/clones/midas" "$TMP/clones/dotfiles" 2>/dev/null)"
 
-[[ -n "$out" ]]; check "drift output is never silently empty" $?
+if [[ -n "$out" ]]; then rc=0; else rc=1; fi
+check "drift output is never silently empty" "$rc"
 
 # The load-bearing assertion: the GitLab clone must actually report its MR.
 printf '%s' "$out" | grep -Eq $'^open\tgitlab\ttextemma/midas\t1770\t'
@@ -124,15 +125,16 @@ check "unchecked GitHub repo is named in an explicit gap row" $?
 
 # ------------------------------------------------- merged-MR drift (in-review)
 st="$("$FORGE" state "$TMP/clones/midas" 1770 2>/dev/null)"
-[[ "$st" == merged ]]
-check "in-review drift: MR state parsed as 'merged' (got '$st'; nested author.state=active must not win)" $?
+if [[ "$st" == merged ]]; then rc=0; else rc=1; fi
+check "in-review drift: MR state parsed as 'merged' (got '$st'; nested author.state=active must not win)" "$rc"
 
 # --------------------------------------------- no forge CLI at all → all gaps
 # MIRROR excludes gh AND glab, so this really is "no forge CLI" rather than
 # "whichever of the two this host lacks today".
 export PATH="$MIRROR"
 out2="$("$FORGE" list --author fred.tran "$TMP/clones/midas" "$TMP/clones/dotfiles" 2>/dev/null)"
-[[ -n "$out2" ]]; check "no-CLI case still produces output instead of an empty drift block" $?
+if [[ -n "$out2" ]]; then rc=0; else rc=1; fi
+check "no-CLI case still produces output instead of an empty drift block" "$rc"
 printf '%s' "$out2" | grep -q $'^gap\tgitlab\ttextemma/midas\tglab-not-installed$'
 check "no-CLI case names the GitLab repo it could not check" $?
 printf '%s' "$out2" | grep -q $'^gap\tgithub\tcheshirecode/dotfiles\tgh-not-installed$'

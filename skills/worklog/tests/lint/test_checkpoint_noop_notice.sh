@@ -19,7 +19,7 @@ G() { git -c user.email=t@t.t -c user.name=t "$@"; }
 # checkpoint.sh pulls and pushes, so the fixture needs a real upstream.
 G init -q --bare "$TMP/origin.git"
 G init -q --initial-branch=main "$TMP/wl"
-cd "$TMP/wl"
+cd "$TMP/wl" || exit 1
 G remote add origin "$TMP/origin.git"
 mkdir -p people/tester/active people/tester/artifacts
 cat > people/tester/active/thing.md <<'EOF'
