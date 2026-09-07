@@ -14,7 +14,7 @@
 
 stdin_json=$(cat)
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 collector="$script_dir/../../scripts/pr_cost_collect.py"
 if [ ! -f "$collector" ]; then
   collector="${PR_COST_COLLECTOR:-}"

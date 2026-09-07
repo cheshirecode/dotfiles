@@ -18,7 +18,7 @@ ck() { if [ "$2" = "$3" ]; then PASS=$((PASS+1)); printf '  PASS  %s\n' "$1"
 
 G() { git -c user.email=t@t.t -c user.name=t "$@"; }
 G init -q --bare "$TMP/origin.git"
-G init -q --initial-branch=main "$TMP/wl"; cd "$TMP/wl"
+G init -q --initial-branch=main "$TMP/wl"; cd "$TMP/wl" || exit 1
 G remote add origin "$TMP/origin.git"
 mkdir -p people/tester/active
 

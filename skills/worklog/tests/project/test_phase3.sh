@@ -10,7 +10,8 @@ set -euo pipefail
 # instead of the ones sitting next to it, so a fix in the working tree can
 # read green against unfixed code. tests/run.sh unsets the variable, and
 # deriving it here keeps the fixture honest when run by hand too.
-export WORKLOG_BIN="$(cd "$(dirname "$0")/../../bin" && pwd)"
+WORKLOG_BIN="$(cd "$(dirname "$0")/../../bin" && pwd)"
+export WORKLOG_BIN
 
 cd "$(dirname "$0")/../.."
 SOURCE="${SOURCE:-$(pwd)}"
@@ -78,8 +79,10 @@ assert len(tasks) == 3, f"expected 3 tasks, got {len(tasks)}"
 slugs = [t["slug"] for t in tasks]
 assert slugs[0].startswith("add-new-schema"), f"slug 0 = {slugs[0]}"
 assert "depends_on" not in tasks[0] or tasks[0]["depends_on"] == [], "PR 1 should have no deps"
-assert tasks[1]["depends_on"] == [slugs[0]], f"PR 2 deps = {tasks[1]['depends_on']}"
-assert tasks[2]["depends_on"] == [slugs[0], slugs[1]], f"PR 3 deps = {tasks[2]['depends_on']}"
+deps1 = tasks[1]["depends_on"]
+deps2 = tasks[2]["depends_on"]
+assert deps1 == [slugs[0]], f"PR 2 deps = {deps1}"
+assert deps2 == [slugs[0], slugs[1]], f"PR 3 deps = {deps2}"
 print("  parser OK")
 '
 
