@@ -1,155 +1,22 @@
 ---
 name: tightening-a-pr
-description: Use when an agent has just finished the code on a single PR/branch and it's about to be handed to a reviewer — the diff is done but the learnings are still trapped in the worklog and the PR text still reads like an agent transcript. Triggers "tighten up this PR", "wrap up this PR", "distill the learnings from this PR", "codify what we learned", "deslop this PR before handoff", post-PR retrospective. Scoped to ONE just-finished PR, not a periodic multi-PR sweep.
+description: DEPRECATED — use $pr-review instead. Thin shim kept so existing routing keeps working. Loads $pr-review, runs its closeout entry point (steps 1-4), and relabels the output to tightening-a-pr's original schema for consumers that still expect it. Triggers "tighten up PR #N", "wrap up this PR", "distill the learnings from this PR", "deslop this PR before handoff".
 ---
+# DEPRECATED: tightening-a-pr delegates to pr-review
 
-# tightening-a-pr
+This skill is a thin backward-compatibility shim. It has no independent logic.
 
-## Overview
+## Behavior
 
-When an agent finishes a PR, the code is the easy part to see and the hard part to lose is everything around it: the lessons that only exist in the worklog, the guardrail gaps the work exposed, and a PR title/body that still reads like an agent's iteration log. This skill is the ordered close-out that captures those before handoff.
+When invoked:
+1. Load `$pr-review` and invoke its **closeout** entry point with the same PR number and worklog slug.
+2. Map pr-review's closeout output (distilled → codified → deslop → checkpoint) back to tightening-a-pr's original output schema (`=== distilled learnings ===` → `=== codified ===` → `=== PR deslop (ship-hygiene) ===` → `=== checkpoint ===`).
 
-**Core principle: a learning that isn't codified evaporates on merge.** The point is not to *note* what you learned — it's to turn each learning into something durable (a script check, a CLAUDE.md rule, a follow-up task) or explicitly drop it, so the next agent doesn't re-discover it.
+## Why this exists
 
-## When to use
-
-- An agent (you, or one you dispatched) just finished the implementation on a single PR/branch and it's pre-handoff.
-- The worklog task for it accumulated real exploration — iterations, dead ends, gotchas — and the decision is now made.
-- User: "tighten up this PR", "wrap up / close out this PR", "distill and codify the learnings", "deslop before I hand this off".
-
-**Skip / downgrade if:** trivial one-commit PR with no lessons worth codifying (do the deslop step alone). Multiple open PRs to sweep periodically → that's `ship-hygiene`, not this. Implementation not actually finished → finish it first. **No worklog task tracks this PR** → either create one first, or distill from the diff + PR body alone and skip step 4 (`checkpoint.sh` needs a slug).
-
-## Resolve `$WORKLOG_BIN`
-
-This skill invokes worklog scripts via `$WORKLOG_BIN`. `worklog/SKILL.md` owns
-how to resolve it — follow it, don't restate it here. All `checkpoint.sh`
-references below use this variable.
-
-## Relationship to ship-hygiene (read this — the overlap is real)
-
-`ship-hygiene` is a **periodic, multi-PR** sweep (CI triage across the stack, "clean my open PRs"). This skill is a **single-PR, post-completion retrospective**. They share exactly one surface — the PR title/body deslop + internal-reference purge — and this skill **delegates that step to ship-hygiene's rules rather than re-deriving the pattern.** Do not duplicate ship-hygiene's leak pattern here; run its `bin/leak-scan.sh` for step 3. What this skill adds on top: the council-driven learning distillation (step 1) and the codify triage (step 2), which ship-hygiene has no concept of.
-
-## The pipeline (ordered — do not reorder)
-
-The order is load-bearing: you distill learnings (step 1) **before** you compress the worklog (step 4) — the compression drops the very iteration rows the learnings live in, so a checkpoint before distilling would erase them — and you codify (step 2) **before** you checkpoint, so the codified changes and the compressed worklog land as their own separate commits.
-
-### 1. Distill learnings — via `council`
-
-Dispatch `council` on the question: *"What are the durable, reusable learnings from PR #N — bugs whose class recurs elsewhere, missing reusable utilities, config that should be parameterized, guardrail gaps the work exposed?"* Feed it the worklog task body and the diff as context.
-
-Why council and not a single read: a single agent transcribes the lessons that are already labeled and misses the ones that aren't (this is the observed baseline failure). Council's independent angles surface blind spots, and its voting criteria are the exact filter you need next — `N-THRESHOLD-MET` answers "is this a recurring class worth a guardrail or an n=1 one-off", `SOLVES-EXTANT-PAIN` and `COST-PROPORTIONATE` gate speculative "might need it" learnings out.
-
-Downgrade to a single-pass distillation only for a genuinely small PR — mirror council's own skip rule. Single-pass: read the worklog task body + diff once, ask yourself "what bug class, missing utility, or guardrail gap would the next agent re-discover?" and list them. Apply the same codify triage (step 2) to the list. Skip the voting machinery.
-
-The output you carry forward is council's **kept list**: learnings that cleared the bar.
-
-### 2. Codify each kept learning — triage, don't just note
-
-For **every** kept learning, pick exactly one destination. "Note it in the PR description" is not a destination — that dies on merge.
-
-| Learning shape | Codify as |
-|---|---|
-| Recurring class (council `N-THRESHOLD-MET` passed) — a bug pattern, a missing lint | **Durable guard**: extend an existing `bin/*.sh`/hook if one fits; add a new one only if none does. Behavioral. |
-| A posture/discipline lesson ("split these commits", "verify before X") | **CLAUDE.md rule** or a skill edit. Guidance. |
-| A concrete one-off fix/improvement, not yet recurring | **Worklog follow-up task** — a real `next_action` item, not a blocker for this PR. |
-| Speculative / n=1 / no current consumer (council would REJECT) | **Drop it.** Don't manufacture infra for a hypothetical. |
-
-Council gates whether a *learning* is kept — not its *destination*. Before writing a **new** script for a kept learning, confirm the destination decision itself clears `COST-PROPORTIONATE` / `NON-INFRA-PADDING`; an n≥3 bug class can still be a follow-up audit rather than a new guard if no cheap static check exists.
-
-**Commit-hygiene split (per this repo's CLAUDE.md):** a guidance change (CLAUDE.md/README posture) and a behavioral guard (`bin/*.sh`, manifest, hooks) are separate concerns → separate commits, even in one session. Don't bundle a CLAUDE.md rule with a lint script.
-
-### 3. Deslop the PR title/body + tracking tasks — via `ship-hygiene`
-
-Load the `ship-hygiene` skill and apply **both** its step 6 (title audit) and its step 7 (body + comment audit) to this one PR.
-
-**Step 6 is not optional and is the one most often skipped.** A PR that accreted work after it was opened almost always carries the title of its *first* commit. A valid Conv-Commit prefix is not a passing title: `fix(preview):` on a branch whose ten commits are mostly `perf(ci)` is a *stale* prefix, which is exactly what step 6 covers. Re-derive the title from the final commit set (`git log --format='%s' origin/main..HEAD | grep -oE '^[a-z]+\([a-z-]+\)' | sort | uniq -c | sort -rn`) and make the title describe the whole PR, leading with its largest change.
-
-Then run ship-hygiene's two leak scans (title/body + diff added-lines) through its `bin/leak-scan.sh`, fix any leaks in place, then apply the same purge to the tracking worklog task's public-facing fields (title, Context section — not the frontmatter). `ship-hygiene` **owns** the authoritative leak-token list, in `bin/leak-scan.sh` — do not re-derive the pattern here. That script exits 2 rather than reporting clean on empty input, so a failed `gh` call cannot pass for a clean PR.
-
-**A clean leak scan does not mean the deslop is done.** `leak-scan.sh` answers one narrow question — are there internal references — and has no opinion on whether the title describes the PR or the body reads coherently. Those are judgment sub-steps (6, 7a, 7c) that no script reports on. Do not write the step's summary line off a green scan; a mechanical check passing is not the same as the step completing. Rewrite product-first (what changed for users + why) unless it's pure engineering/infra; skill command names are a leak *unless* the PR changes skill files, where they're product surface.
-
-After any fix round that amends the branch, re-read the PR body for claims the amendment falsified — quantified facts (test counts, timeout values, TTLs) and absolutes ("never", "always", "no X anywhere") rot first, but the **scope** claim rots hardest and is the easiest to miss because it is not a number — re-ask "does the title, and the opening paragraph, still describe everything this PR now contains?", and a body that contradicts its own evidence comments burns reviewer trust. Correct them in the body, not in a trailing comment.
-
-**Synthesise multiple work streams into one narrative.** A PR that grew a second stream tends to
-keep the first one's structure and bolt the rest on as `## Also: …` sections. That ordering encodes
-the order *you* did the work, not what the reviewer needs. It is the PR-body form of the iteration
-log this skill exists to remove. Rewrite it as one piece of work: open with what the PR delivers as
-a whole, order the sections by weight to the reviewer (largest or riskiest change first, regardless
-of which came first chronologically), and drop `Also:`/`Additionally:` framing. If the streams
-genuinely share no rationale, say so in one line near the top and still order by weight — do not
-leave the reviewer to infer it from section order. If they cannot be told as one story *and* the
-user has not asked for them together, that is the signal to propose splitting the PR, not to paper
-over it with headings.
-
-Before calling the PR ready, record the current head SHA, the focused validation commands with pass/fail results, and the green CI run or check set in the PR body or a final PR comment. Keep "evidence complete" distinct from "ready for review": a draft PR is not ready until it is explicitly marked ready after those facts are current.
-
-### 4. Compress + checkpoint the worklog
-
-Compress the decided iteration drama out of the task body (drop ToT/Reflexion scaffolding, verified "Assumptions", multi-row iteration tables — git log is the audit trail; keep the decision rationale, lessons, re-runnable commands, `next_action`), then checkpoint it **on its own**: `"$WORKLOG_BIN/checkpoint.sh" <slug>`. Use the plain command — its staged-scope guard is exactly what enforces the single-concern commit. `worklog/modes/sync.md` owns the guard's exit codes, `--include=<path>`, and the force bypass; follow it rather than re-deriving them here. Keep this separate from the step-2 codify commits — up to three concerns, up to three commits, never one bundle.
-
-**No worklog task:** if step 1 was single-pass distillation from the diff + PR body alone (no worklog task tracks this PR), skip this step — there's nothing to checkpoint. The codify commits from step 2 and the deslop from step 3 are sufficient.
-
-## Red flags — STOP, you're skipping a step
-
-| Thought | Reality |
-|---|---|
-| "The lessons are obvious, I'll just list them in the worklog" | That's the baseline failure. Obvious-to-you lessons still evaporate uncodified. Run the distill + codify triage. |
-| "Codifying is overkill for this" | Then council would have REJECTED the learning — drop it explicitly, don't skip the triage. |
-| "I'll deslop the PR and call it done" | Deslop alone is ship-hygiene. You skipped distill + codify — the durable half. |
-| "leak-scan came back clean, the body is fine" | It only checks internal references. It cannot see a stale title or a body that reads as two bolted-together streams. Steps 6, 7a and 7c are judgment work no script reports on. |
-| "The title has a Conv-Commit prefix, so it passes" | A prefix can be valid and stale. `fix(preview):` on a branch that is mostly `perf(ci)` describes one commit of ten. Re-derive it from the final commit set. |
-| "I'll put the post-merge/cleanup note in the PR body" | Reviewer-facing text dies on merge. It belongs in the worklog. |
-| "One commit for all of it is cleaner" | Guard + guidance + worklog are different diff lenses. Split them (CLAUDE.md commit-hygiene rule). |
-| "I'll compress the worklog first, then find the lessons" | Compression drops the rows the lessons live in. Distill FIRST. |
-
-## Anti-patterns
-
-- Re-deriving ship-hygiene's leak pattern inline instead of running its `bin/leak-scan.sh` for step 3.
-- Running a full multi-PR CI/comment sweep — that's ship-hygiene's job, not this single-PR close-out.
-- Turning every learning into a follow-up task by default (the safe-looking option that codifies nothing durable).
-- Running a heavyweight council on a trivial one-commit PR — downgrade to single-pass distillation.
-- Bundling the codified guard, the CLAUDE.md rule, and the worklog compress into one commit.
-
-## Pairings
-
-- `council` — step 1 distillation. Its kept list + voting criteria drive step 2's codify triage.
-- `ship-hygiene` — step 3 deslop + internal-ref purge (delegated, not duplicated).
-- `worklog` — step 4 checkpoint (`checkpoint.sh`); follow-up learnings become `next_action` items.
-- `karpathy-guidelines` — "don't refactor what isn't broken": most kept learnings are one-off tasks or drops, not new infra.
-- For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
-
-## Output format
-
-```
-=== distilled learnings (council) ===
-  <N kept> / <M proposed>. Mode: <fg|bg>.
-  - <learning> → <codify destination>
-
-=== codified ===
-  guard:    <bin/xxx.sh change> (commit <sha>)
-  guidance: <CLAUDE.md rule>    (commit <sha>)
-  task:     <next_action added to <slug>>
-  dropped:  <n1 learnings, reason>
-
-=== PR deslop (ship-hygiene) ===
-  #N title: <kept | rewritten: "<new title>"> (derived from <N> commits: <type counts>)
-  #N body:  <single-narrative | restructured: dropped N "Also:" sections>
-  Leak grep: <clean | fixed at ...>.  Scope re-check: <title+intro cover all streams | corrected>
-
-=== checkpoint ===
-  <slug>: N → M lines. Commit <sha>. (separate from codify commits)
-  [OR: skipped — no worklog task tracked this PR]
-```
-
-## Example
-
-```
-User: tighten up PR #482 before I hand it off
-Claude: [council on "durable learnings from #482" → 3 kept / 5 proposed]
-        - abort-signal not propagated (class of bug, N-THRESHOLD-MET) → guard: bin/lint-pr.sh
-        - fake-timer test helper missing (n=1 so far)              → follow-up task
-        - backoff cap hardcoded                                     → follow-up task
-        [codify: lint guard committed; 2 next_actions added; 0 dropped]
-        [ship-hygiene deslop: title → feat(upload): ...; stripped worklog path + "iteration 3"]
-        [checkpoint worklog 180 → 60 lines, separate commit]
-```
+This shim exists only for callers that still name `$tightening-a-pr`.
+loop-engineering's routing table no longer does — it routes one owner,
+`$pr-review`, which chooses review or closeout from the request. Point any
+remaining caller at `$pr-review` and ask it for closeout; there is no
+`--tighten` flag in the routing table, because the Owner column holds a
+skill name and a flag there breaks the compose-table contract.
