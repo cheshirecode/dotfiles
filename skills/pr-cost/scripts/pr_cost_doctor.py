@@ -279,6 +279,21 @@ def run_reader(reader: pathlib.Path, flag: str, target: pathlib.Path) -> dict[st
             "a zero-cost estimate is not an estimate",
             "payload": payload,
         }
+    # The same reasoning, applied to the number this skill exists to produce.
+    # Counting tokens correctly while pricing them at zero is a lost rate
+    # table, and the token guard above cannot see it: it matches tokens,
+    # which is adjacent to what was meant. Per lane, because the bases differ
+    # — a fixed rate table cannot reach zero on a non-empty transcript, but a
+    # provider-reported cost legitimately can for a free request.
+    basis = payload.get("usd_basis", "default-rates")
+    usd = payload["usd_estimated"]
+    if basis != "provider-reported" and isinstance(usd, (int, float)) and usd == 0:
+        return {
+            "status": "no-signal",
+            "detail": f"reader counted {payload['tokens_in']} input tokens but "
+            f"priced them at $0 on a {basis} lane; the rate table is missing",
+            "payload": payload,
+        }
     return {"status": "ok", "payload": payload}
 
 
