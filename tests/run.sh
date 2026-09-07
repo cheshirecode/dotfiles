@@ -77,13 +77,26 @@ test_static() {
     # when it HAS findings, so that form reports a pass precisely when it
     # should fail. Do not "fix" this with `|| true`: that trades away the
     # exit code and reintroduces the same class of bug.
-    local sc_root
-    sc_root="$(shellcheck --severity=warning bin/*.sh tools/*.sh tests/*.sh 2>&1 | grep -E '^In ')"
-    if [ -n "$sc_root" ]; then
-      echo "$sc_root" >&2
-      fail "shellcheck"
+    #
+    # Discovered, not listed. `bin/*.sh tools/*.sh tests/*.sh` reached 10 of the
+    # repo's 115 tracked .sh files; every skill's bin/ and tests/ sat outside it.
+    # That is how pr-review's three scripts shipped with a broken arg parser, a
+    # 644 mode bit, and a token default that read as the literal string
+    # "GITLAB_TOKEN:-" -- no lane ever ran a linter over them. Globbing the
+    # tracked set means a new script is covered by existing, not by someone
+    # remembering to extend a list.
+    local shscripts=() sc_root
+    while IFS= read -r script; do shscripts+=("$script"); done < <(git ls-files '*.sh')
+    if [ "${#shscripts[@]}" -eq 0 ]; then
+      fail "tracked .sh discovery found nothing — the lane is inert"
     else
-      ok "shellcheck"
+      sc_root="$(shellcheck --severity=warning "${shscripts[@]}" 2>&1 | grep -E '^In ')"
+      if [ -n "$sc_root" ]; then
+        echo "$sc_root" >&2
+        fail "shellcheck ${#shscripts[@]} tracked .sh file(s)"
+      else
+        ok "shellcheck ${#shscripts[@]} tracked .sh file(s)"
+      fi
     fi
   else
     say SKIP "shellcheck not installed"
