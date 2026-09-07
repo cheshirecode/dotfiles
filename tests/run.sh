@@ -2160,6 +2160,31 @@ test_packages() {
     say SKIP "ruff not installed"
   fi
 
+  # Nothing in this repo ever built the package, which is how a fatal
+  # pyproject.toml error survived: a force-include table duplicated a path the
+  # `packages` list already carried, and hatchling refused every wheel. The
+  # unittest suite runs the modules from the source tree, so it never noticed.
+  # Read the builder's exit status directly, never through a pipe.
+  if python3 -m pip --version >/dev/null 2>&1; then
+    local wheeldir build_out
+    wheeldir="$(mktemp -d)"
+    if build_out="$(python3 -m pip wheel --no-deps -q -w "$wheeldir" packages/loop-run 2>&1)"; then
+      # A frontend that exits 0 having produced nothing would pass a build lane
+      # that only checked the exit status.
+      if [ -n "$(find "$wheeldir" -name 'loop_run-*.whl' -print -quit)" ]; then
+        ok "loop-run wheel builds"
+      else
+        fail "loop-run wheel build exited 0 but produced no wheel"
+      fi
+    else
+      echo "$build_out" | tail -20 >&2
+      fail "loop-run wheel build failed"
+    fi
+    rm -rf "$wheeldir"
+  else
+    say SKIP "loop-run wheel build (python3 -m pip unavailable)"
+  fi
+
   # worklog-memory-mcp: two-session round trip against a synthetic vault.
   if command -v node >/dev/null && [ -d packages/worklog-memory-mcp/node_modules ]; then
     local mini
