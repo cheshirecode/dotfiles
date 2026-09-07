@@ -9,6 +9,13 @@ fixtures` globs `skills/*/tests/test_*.sh`, so each runs in the suite:
 - `test_forge_no_origin.sh` — case 1c, a repo with no `origin`.
 - `test_forge_hosts.sh` — cases 4a–4c, which host counts as which forge.
 
+Three ways `owner-check.sh` can fail to establish an owner are pinned
+alongside 1d, because each is caught by a different guard and each would
+otherwise produce a verdict on a PR that was never read: a 404, a payload that
+is empty, and a payload that is well formed with a null author. An
+unresolvable current user is pinned too — that guard is what makes the
+`-n "$AUTHOR"` term in the comparison unreachable.
+
 The rest of this file is the manual plan for cases that need a live PR.
 
 Case 1j is automated against a throwaway clone with a GitLab origin, not by
@@ -24,8 +31,8 @@ editing this repo's own remote and restoring it. A checkout is shared: a
 | 1a | detect: non-git directory | Exit 2, "not a git repository" message | `detect-forge.sh --repo /tmp/not-a-repo-test`; assert exit code |
 | 1b | detect: dotfiles repo (GitHub) | Exit 0, stdout contains `github`, CLI = `gh` | Run on `/Users/fredtran/Documents/oss/dotfiles` |
 | 1c | detect: missing origin remote | Exit 2, clear error | Create bare clone with no origin configured |
-| 1d | owner-check.sh: non-existent PR | Exit 2, error message on stderr | `owner-check.sh 999999`; assert exit code |
-| 1e | owner-check.sh: current user's own PR | Exit 0, stdout = "self" | Create a test branch/PR as cheshirecode |
+| 1d | owner-check.sh: non-existent PR | Exit 2, error naming the PR number on stderr, empty stdout | Automated fake `gh` 404s any number but the known one |
+| 1e | owner-check.sh: current user's own PR | Exit 0, stdout = "self" | Automated fake `gh` returns a PR whose author is the current user |
 | 1f | owner-check.sh: another user's PR | Exit 1, stdout = "other" | Find any PR not opened by cheshirecode |
 | 1g | owner-check.sh: no args | Exit 2, usage message | `owner-check.sh` with zero args |
 | 1h | owner-check.sh: with --token override | Exports the override to the selected forge CLI | Automated fake `gh` rejects the API call unless `GH_TOKEN` matches |

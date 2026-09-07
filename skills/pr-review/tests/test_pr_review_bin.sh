@@ -158,10 +158,26 @@ case "${1:-} ${2:-}" in
   "auth status") exit 0 ;;
   "api user")
     [[ -z "${REQUIRE_GH_TOKEN:-}" || "${GH_TOKEN:-}" == "$REQUIRE_GH_TOKEN" ]] || exit 42
+    # NO_CURRENT_USER prints nothing. A CURRENT_GH_USER="" cannot express this:
+    # the ${:-alice} default treats empty and unset alike.
+    [[ -z "${NO_CURRENT_USER:-}" ]] || exit 0
     printf '%s\n' "${CURRENT_GH_USER:-alice}"
     ;;
   "pr view")
     [[ -z "${REQUIRE_GH_TOKEN:-}" || "${GH_TOKEN:-}" == "$REQUIRE_GH_TOKEN" ]] || exit 42
+    # KNOWN_PR: any other number 404s the way real gh does (exit 1, stderr).
+    [[ -z "${KNOWN_PR:-}" || "${3:-}" == "$KNOWN_PR" ]] || {
+      echo "could not resolve to a PullRequest with the number of ${3:-}" >&2
+      exit 1
+    }
+    # EMPTY_PR: exit 0 having printed nothing -- the silent-success shape.
+    [[ -z "${EMPTY_PR:-}" ]] || exit 0
+    # NULL_AUTHOR: valid JSON, author null. This is the shape that reaches the
+    # author guard; an empty payload is caught earlier, so it cannot.
+    [[ -z "${NULL_AUTHOR:-}" ]] || {
+      printf '{"number":7,"title":"fixture","isDraft":false,"state":"OPEN","author":null}\n'
+      exit 0
+    }
     printf '{"number":7,"title":"fixture","isDraft":false,"state":"OPEN","author":{"login":"%s"},"commits":[{"authors":[{"login":"%s"}]}]}\n' \
       "${PR_AUTHOR:-alice}" "${COMMIT_AUTHOR:-alice}"
     ;;
@@ -242,6 +258,66 @@ done
 for option in --repo --token; do
   expect_usage_exit "owner-check $option" "$BIN/owner-check.sh" 7 "$option"
 done
+
+echo "=== 15. a PR that does not exist is an error, not an owner ==="
+# 1d. Two ways the forge can fail to hand back a PR, and both must exit 2 with
+# an empty stdout. A consumer branches on "self"/"other", so any stdout here
+# would be read as an ownership verdict.
+out="$(env -u GH_TOKEN -u GITHUB_TOKEN PATH="$FAKE_BIN:$PATH" KNOWN_PR=7 \
+  "$BIN/owner-check.sh" 999999 --repo "$TMP/gh" 2>/dev/null)"
+st=$?
+[[ "$st" -eq 2 ]] && pass "a missing PR exits 2" || fail "missing PR must exit 2, got $st"
+[[ -z "$out" ]] && pass "a missing PR prints nothing to stdout" \
+                || fail "missing PR must print nothing, got '$out'"
+
+err="$(env -u GH_TOKEN -u GITHUB_TOKEN PATH="$FAKE_BIN:$PATH" KNOWN_PR=7 \
+  "$BIN/owner-check.sh" 999999 --repo "$TMP/gh" 2>&1 >/dev/null)"
+[[ "$err" == *999999* ]] && pass "the error names the PR number" \
+                         || fail "the error must name the PR number, got '$err'"
+
+# The silent half: gh exits 0 and prints nothing. Without the empty-data guard
+# the author would parse to "" and compare equal to an empty current user,
+# reporting "self" on a PR that was never read.
+out="$(env -u GH_TOKEN -u GITHUB_TOKEN PATH="$FAKE_BIN:$PATH" EMPTY_PR=1 \
+  "$BIN/owner-check.sh" 7 --repo "$TMP/gh" 2>/dev/null)"
+st=$?
+[[ "$st" -eq 2 && -z "$out" ]] \
+  && pass "an empty PR payload exits 2 instead of claiming ownership" \
+  || fail "empty payload must exit 2 with no stdout, got rc=$st out='$out'"
+
+# A well-formed payload with a null author is the case an empty-payload check
+# cannot reach: the JSON is valid, so only the author guard is left. Left
+# unguarded, the blank author compares equal to nothing and the script would
+# have to pick a verdict -- and "self" is the unsafe pick, granting the lighter
+# self-check mode on a PR whose owner was never established.
+out="$(env -u GH_TOKEN -u GITHUB_TOKEN PATH="$FAKE_BIN:$PATH" NULL_AUTHOR=1 \
+  "$BIN/owner-check.sh" 7 --repo "$TMP/gh" 2>/dev/null)"
+st=$?
+[[ "$st" -eq 2 && -z "$out" ]] \
+  && pass "a null author exits 2 rather than guessing an owner" \
+  || fail "null author must exit 2 with no stdout, got rc=$st out='$out'"
+
+# An unresolvable current user must stop, not compare. This is the guard that
+# makes the `-n "$AUTHOR"` term in the comparison unreachable: without it, a
+# blank author and a blank current user would compare equal and report "self".
+out="$(env -u GH_TOKEN -u GITHUB_TOKEN PATH="$FAKE_BIN:$PATH" NO_CURRENT_USER=1 \
+  "$BIN/owner-check.sh" 7 --repo "$TMP/gh" 2>/dev/null)"
+st=$?
+[[ "$st" -eq 2 && -z "$out" ]] \
+  && pass "an unresolvable current user exits 2" \
+  || fail "unresolvable current user must exit 2 with no stdout, got rc=$st out='$out'"
+
+echo "=== 16. the current user's own PR reports self ==="
+# 1e. Section 11 already exercises this path, but only as the tail of a token
+# assertion. Pinned here on its own so a self-detection regression cannot hide
+# behind a token failure.
+out="$(env -u GH_TOKEN -u GITHUB_TOKEN PATH="$FAKE_BIN:$PATH" \
+  CURRENT_GH_USER=alice PR_AUTHOR=alice COMMIT_AUTHOR=bob \
+  "$BIN/owner-check.sh" 7 --repo "$TMP/gh" 2>/dev/null)"
+st=$?
+[[ "$st" -eq 0 && "$out" == "self" ]] \
+  && pass "the PR author is reported as self" \
+  || fail "own PR must be self with exit 0, got rc=$st out='$out'"
 
 if [[ "$FAIL" -ne 0 ]]; then
   echo "pr-review bin: FAILURES above" >&2
