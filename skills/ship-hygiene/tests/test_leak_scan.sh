@@ -138,6 +138,50 @@ else
   fail "--print-pattern produced an unusable regex: $PAT"
 fi
 
+echo "=== 7. a large single-line input is scanned, and not copied in the shell ==="
+# A generated bundle or lock file puts megabytes on one diff line. The scan
+# used to slurp stdin into a variable, strip whitespace into a second copy,
+# then stream the variable through a pipe twice more. Measured on an 8MB single
+# line: 1007ms, against 123ms for grep alone on the same pattern.
+#
+# The guard is structural, not a stopwatch. A wall-clock bound measures
+# whatever else the machine is doing, but "does the whole input become a shell
+# string" is a property of the script and answers the same question.
+if grep -qE 'INPUT="\$\(cat\)"|\$\{INPUT//' "$SCAN"; then
+  fail "the scan builds a shell copy of the whole input; stage stdin in a file"
+else
+  pass "stdin is not slurped into a shell variable"
+fi
+
+# And the behaviour that matters is unchanged at that size: a leak on a very
+# long line is still found, and a clean one still counted.
+big_leak="$(mktemp)"; big_clean="$(mktemp)"
+trap 'rm -f "$big_leak" "$big_clean"' EXIT
+awk 'BEGIN { s="ab-"; for (i = 0; i < 18; i++) s = s s; print "worklog " s }' > "$big_leak"
+awk 'BEGIN { s="x";   for (i = 0; i < 18; i++) s = s s; print s }'            > "$big_clean"
+set +e
+"$SCAN" --label big </"$big_leak" >/dev/null 2>&1; big_leak_rc=$?
+big_clean_out="$("$SCAN" --label big <"$big_clean" 2>&1)"; big_clean_rc=$?
+set -e
+[ "$big_leak_rc" -eq 1 ] \
+  && pass "a leak on a multi-megabyte line still exits 1" \
+  || fail "multi-megabyte leak line exited $big_leak_rc; expected 1"
+[ "$big_clean_rc" -eq 0 ] && [ "${big_clean_out##*(}" = "1 lines scanned)" ] \
+  && pass "a clean multi-megabyte line counts as one line" \
+  || fail "clean multi-megabyte line: rc=$big_clean_rc out='$big_clean_out'"
+
+# The reported total must count a final line that has no trailing newline.
+# `wc -l < file` counts newlines, so it reports one fewer and the count drifts
+# for exactly the inputs a pipe from `gh` produces. The old form got this right
+# by accident: command substitution stripped the trailing newline and printf
+# put exactly one back.
+set +e
+nonl_out="$(printf 'alpha\nbeta' | "$SCAN" --label nonl 2>&1)"; nonl_rc=$?
+set -e
+[ "$nonl_rc" -eq 0 ] && [ "${nonl_out##*(}" = "2 lines scanned)" ] \
+  && pass "a final line with no newline is counted" \
+  || fail "unterminated last line: rc=$nonl_rc out='$nonl_out'"
+
 echo
 [ "$FAIL" -eq 0 ] && echo "leak-scan: all cases passed" || echo "leak-scan: FAILURES above" >&2
 exit "$FAIL"

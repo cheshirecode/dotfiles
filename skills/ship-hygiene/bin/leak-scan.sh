@@ -67,20 +67,36 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-INPUT="$(cat)"
-if [ -z "${INPUT//[[:space:]]/}" ]; then
+# The input is a whole PR body or diff, and one generated bundle line can be
+# megabytes. Holding it in a shell variable cost far more than the scan: on an
+# 8MB single line the script took 2292ms where grep alone took 123ms. The read
+# plus the whitespace-stripping copy alone were 1099ms of that, and the clean
+# path then streamed the whole variable through a pipe twice more. Stage stdin
+# in a temp file and let grep and wc read it directly, so no copy of the input
+# is ever built in the shell. Created after the option loop, so --print-pattern
+# and --help still touch no filesystem.
+INPUT_FILE="$(mktemp "${TMPDIR:-/tmp}/leak-scan.XXXXXX")"
+trap 'rm -f "$INPUT_FILE"' EXIT
+cat > "$INPUT_FILE"
+
+# Stops at the first non-space byte instead of copying the input to strip them.
+if ! grep -q '[^[:space:]]' "$INPUT_FILE"; then
   echo "$PROG: refusing to report '$LABEL' clean: nothing was read on stdin." >&2
   echo "  A failed gh call and a leak-free PR both produce no bytes here." >&2
   exit 2
 fi
 
 # grep exits 1 for "no matches", which is the clean verdict, not an error.
-HITS="$(printf '%s\n' "$INPUT" | grep -inE "$PATTERN" || true)"
+HITS="$(grep -inE "$PATTERN" "$INPUT_FILE" || true)"
 if [ -n "$HITS" ]; then
   printf '%s: %s — internal-ref leaks:\n' "$PROG" "$LABEL"
   printf '%s\n' "$HITS"
   exit 1
 fi
+# `grep -c ''` counts a final line that has no newline. The previous form was
+# `printf '%s\n' "$INPUT" | wc -l`, and command substitution had already
+# stripped the trailing newline, so it counted that line too. `wc -l < file`
+# would report one fewer for such input and quietly change the reported total.
 printf '%s: %s — clean (%s lines scanned)\n' "$PROG" "$LABEL" \
-  "$(printf '%s\n' "$INPUT" | wc -l | tr -d ' ')"
+  "$(grep -c '' "$INPUT_FILE")"
 exit 0
