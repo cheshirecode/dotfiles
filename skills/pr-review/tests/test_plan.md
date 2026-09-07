@@ -1,9 +1,10 @@
 # pr-review skill — test plan
 
 `test_pr_review_bin.sh` in this directory automates the script-level cases
-(1a, 1b, 1g, 1j, 2a, 2c, 2e) plus the execute bits, the cross-skill-path ban,
-and shellcheck. `tests/run.sh fixtures` globs it, so it runs in the suite. The
-rest of this file is the manual plan for cases that need a live PR.
+(1a, 1b, 1g–1j, 2a, 2c, 2e) plus token forwarding, missing option values,
+the execute bits, the cross-skill-path ban, and shellcheck. `tests/run.sh
+fixtures` globs it, so it runs in the suite. The rest of this file is the
+manual plan for cases that need a live PR.
 
 Case 1j is automated against a throwaway clone with a GitLab origin, not by
 editing this repo's own remote and restoring it. A checkout is shared: a
@@ -22,13 +23,13 @@ editing this repo's own remote and restoring it. A checkout is shared: a
 | 1e | owner-check.sh: current user's own PR | Exit 0, stdout = "self" | Create a test branch/PR as cheshirecode |
 | 1f | owner-check.sh: another user's PR | Exit 1, stdout = "other" | Find any PR not opened by cheshirecode |
 | 1g | owner-check.sh: no args | Exit 2, usage message | `owner-check.sh` with zero args |
-| 1h | owner-check.sh: with --token override | Respects override token, proceeds past auth check | Pass `--token ghp_fake` — should fail at next step but NOT at auth |
-| 1i | Owner detection ambiguous (null author, email-only) | Falls through commit-author check, then defaults to "other" | Simulate PR opened via web UI without linked GitHub account |
+| 1h | owner-check.sh: with --token override | Exports the override to the selected forge CLI | Automated fake `gh` rejects the API call unless `GH_TOKEN` matches |
+| 1i | PR author differs but a commit author matches | Exit 1, stdout = "other" | Automated fake `gh` returns different PR/current users and a matching commit author |
 | 1j | Forge: GitLab URL (simulated) | classify_remote returns `gitlab\towner/group-slug` | Automated: throwaway repo with a GitLab origin, `detect-forge.sh --repo` against it. Never edit this checkout's origin |
 
-**Note for 1c:** not automated — it needs a repo with no origin configured.
-1b and 1j build throwaway repos instead, so neither reads the real remote.  
-**Note for 1i:** hard to reproduce on existing repos; requires synthetic PR data. Schedule for real-world testing.
+**Note for 1c:** automated in `test_forge_no_origin.sh`, against throwaway
+repos: one with no remote at all, one with an `upstream` but no `origin`.
+1b and 1j build throwaway repos too, so none of the three reads the real remote.
 
 ### 2. Script-level tests (bin/pr-query.sh)
 
@@ -36,7 +37,7 @@ editing this repo's own remote and restoring it. A checkout is shared: a
 |---|------|----------|---------------|
 | 2a | pr-query.sh view (GitHub PR) | Valid JSON with number, title, author fields | `pr-query.sh view <n>` on an open dotfiles PR; jq-parse output |
 | 2b | pr-query.sh diff (GitHub PR) | Unified diff text, non-empty for changed files | `pr-query.sh diff <n>`; check exit code, pipe to wc -l |
-| 2c | pr-query.sh merge-base | Returns valid SHA, not empty | `pr-query.sh merge-base`; grep -E '^[0-9a-f]{40}$' |
+| 2c | pr-query.sh merge-base | Returns the merge base against the remote default branch | Automated repo keeps local `main` stale while the feature starts from `origin/main` |
 | 2d | pr-query.sh: missing auth | Exit 2, clear error message about unauthenticated CLI | Temporarily unset GH_TOKEN, run any query |
 | 2e | pr-query.sh: invalid PR number | Exit 1 or 2, error on stderr (not silent failure) | `pr-query.sh view 999999`; assert non-zero exit |
 | 2f | pr-query.sh: --repo override | Uses specified repo's remote, not cwd | Set up a mock GitLab-origin checkout, run with --repo pointing to it |
@@ -59,7 +60,7 @@ editing this repo's own remote and restoring it. A checkout is shared: a
 | 4a | detect-forge: GitHub SSH remote (git@github.com:o/r.git) | forge=github, CLI=gh | Temporarily set origin to SSH form, run detect-forge.sh |
 | 4b | detect-forge: GitLab HTTPS remote (https://gitlab.com/o/r.git) | forge=gitlab, CLI=glab | Temporarily set origin to GitLab form, run detect-forge.sh |
 | 4c | detect-forge: Self-hosted GitHub (github.mycompany.com) | forge=other | Temporarily set origin to self-hosted hostname, run detect-forge.sh |
-| 4d | owner-check.sh with --token bypasses auth | Respects token override even if gh/glab is unauthenticated | Pass `--token ghp_fake_token`; should fail past auth at next step |
+| 4d | owner-check.sh with --token bypasses auth | The selected CLI receives the override token | Automated fake `gh` requires the exact token on both API calls |
 | 4e | owner-check.sh: GitLab MR (simulated auth) | Uses glab API path, not gh | Requires GitLab setup; validate code path via tracing |
 
 ### 5. SKILL.md integration tests (loop-engineering routing)
@@ -79,7 +80,7 @@ editing this repo's own remote and restoring it. A checkout is shared: a
 | 6b | Review draft PR (others') | other-review | Structural audit only; skip adversarial assumption attacks |
 | 6c | Review merged PR (retrospective) | other-review | Full adversarial pass possible; no live-edit risk |
 | 6d | Review closed/deleted PR | other-review (conservative) | pr-query.sh view may fail; handle gracefully, flag incomplete data |
-| 6e | Owner detection ambiguous (null author, email-only) | other-review (default) | Falls through commit-author check, defaults to "other" |
+| 6e | Owner detection ambiguous (null author, email-only) | other-review (default) | Cannot confirm PR authorship, so defaults to "other" |
 | 6f | Self-check depth budget exceeded (diff > 500 lines) | self-check | Log warning, either proceed with reduced scope or request confirmation |
 | 6g | Other-review with green CI + clean leak-scan + coherent body/diff | other-review | Verdict: "correct, here is what I checked." Zero findings. Short output. |
 | 6h | Body claims "no production impact" but diff touches production files | other-review | High-value finding: body ≠ diff contradiction |
@@ -93,4 +94,4 @@ Run tests 1a–1f first (fast, no real PRs needed). Then 2a–2e (script mechani
 - **Inherited CI procedure**: Cannot fully test without access to multiple PRs on the same base. Requires a failing CI job and a second PR on the same base to verify control matching.
 - **Council performance**: Distillation via council is async/background. Test requires an actual worklog task with substantial iteration history (>100 lines).
 - **Token cost measurement**: Adversarial review on a large PR (~2000 line diff) needs profiling in production to calibrate depth budgets.
-- **GitLab full path**: pr-query.sh's GitLab code paths are untested. Requires a GitLab instance with authenticated glab CLI, at least one open MR, and a team repo scenario where current user is commit-author but not MR author.
+- **GitLab full path**: pr-query.sh's GitLab code paths are untested. Requires a GitLab instance with authenticated glab CLI and at least one open MR.
