@@ -63,7 +63,7 @@ if no trigger is true, record `optional-skill: skipped — <reason>` and continu
 | a reusable instruction has a brittle format or recurring classification error | `$example-led-instructions` | apply the 0/1/few-shot gate and test the smallest example set | prose is obvious and examples add context cost |
 | open-ended idea generation with a kept-ideas threshold | `$brainstorm` | pass seed sources, exclusions, and target K; replay the council tally and vault refs | one predetermined idea needs evaluation — use `$council` |
 | multiple PRs or stale worklog/PR/CI surfaces need a pre-handoff sweep | `$ship-hygiene` | audit only triggered surfaces and replay the hygiene checks | one short PR with no recent worklog activity |
-| one just-finished PR needs learning distillation before handoff | `$tightening-a-pr` | pass the finished diff and task context; replay the handoff checks | implementation is unfinished or the change is trivial |
+| one PR needs code review or a post-completion retrospective | `$pr-review` | pass the PR number and, for closeout, the worklog slug; the skill picks review or closeout and replays its own checks | no PR number, or the implementation is unfinished |
 
 Routing example: `multi-repo search with uncertain ownership` → `serena-rg-search` → compact candidate paths plus one replay command; `one known-file lookup` → `optional-skill: skipped — single literal lookup`.
 

@@ -158,7 +158,7 @@ class LoopStateTest(unittest.TestCase):
             "$evidence-gate",
             "$example-led-instructions",
             "$ship-hygiene",
-            "$tightening-a-pr",
+            "$pr-review",
         ):
             self.assertIn(owner, routing)
         for heading in ("Trigger", "Owner", "Handoff and replay", "Skip when"):
