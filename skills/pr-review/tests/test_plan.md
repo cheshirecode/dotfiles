@@ -24,9 +24,10 @@ editing this repo's own remote and restoring it. A checkout is shared: a
 | 1g | owner-check.sh: no args | Exit 2, usage message | `owner-check.sh` with zero args |
 | 1h | owner-check.sh: with --token override | Respects override token, proceeds past auth check | Pass `--token ghp_fake` — should fail at next step but NOT at auth |
 | 1i | Owner detection ambiguous (null author, email-only) | Falls through commit-author check, then defaults to "other" | Simulate PR opened via web UI without linked GitHub account |
-| 1j | Forge: GitLab URL (simulated) | classify_remote returns `gitlab\towner/group-slug` | Temporarily set origin to `https://gitlab.com/foo/bar.git`, run detect-forge.sh, restore |
+| 1j | Forge: GitLab URL (simulated) | classify_remote returns `gitlab\towner/group-slug` | Automated: throwaway repo with a GitLab origin, `detect-forge.sh --repo` against it. Never edit this checkout's origin |
 
-**Note for 1b–1c:** do these in the dotfiles checkout; they use the real remote.  
+**Note for 1c:** not automated — it needs a repo with no origin configured.
+1b and 1j build throwaway repos instead, so neither reads the real remote.  
 **Note for 1i:** hard to reproduce on existing repos; requires synthetic PR data. Schedule for real-world testing.
 
 ### 2. Script-level tests (bin/pr-query.sh)
