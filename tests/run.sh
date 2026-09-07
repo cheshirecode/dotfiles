@@ -121,6 +121,23 @@ test_static() {
       fi
     fi
   fi
+  # The pr-cost doctor grades its own cost lanes against synthetic transcripts:
+  # exit 0 when every declared lane meets the shared contract, 1 when a lane is
+  # broken or returns a confident zero. It needs no harness installed, so it is
+  # safe here and in CI. Read its exit status directly, never through a pipe.
+  # A missing script fails rather than skips: the file is tracked, so its
+  # absence is a regression, not an environment gap.
+  if [ -f skills/pr-cost/scripts/pr_cost_doctor.py ]; then
+    local doctor_out
+    if doctor_out="$(python3 skills/pr-cost/scripts/pr_cost_doctor.py --self-check 2>&1)"; then
+      ok "pr-cost doctor self-check"
+    else
+      echo "$doctor_out" | tail -20 >&2
+      fail "pr-cost doctor self-check"
+    fi
+  else
+    fail "skills/pr-cost/scripts/pr_cost_doctor.py missing — the lane is inert"
+  fi
   if ./tools/check-manifest.sh >/dev/null 2>&1; then ok "check-manifest.sh"; else fail "check-manifest.sh"; fi
   if python3 ./tools/check-skill-opt-ins.py >/dev/null 2>&1; then ok "check-skill-opt-ins.py"; else fail "check-skill-opt-ins.py"; fi
   if python3 - <<'PY'
