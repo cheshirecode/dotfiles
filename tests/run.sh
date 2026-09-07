@@ -116,7 +116,7 @@ test_static() {
     while IFS= read -r script; do binscripts+=("$script"); done < <(
       git ls-files -z 'bin/*' '*/bin/*' \
         | while IFS= read -r -d '' candidate; do
-            case "$candidate" in *.sh) continue ;; esac
+            [[ "$candidate" == *.sh ]] && continue
             head -1 "$candidate" 2>/dev/null \
               | grep -qE '^#!.*(bash|/sh|[[:space:]]sh)([[:space:]]|$)' \
               && printf '%s\n' "$candidate"
@@ -2195,10 +2195,20 @@ test_packages() {
   # `packages` list already carried, and hatchling refused every wheel. The
   # unittest suite runs the modules from the source tree, so it never noticed.
   # Read the builder's exit status directly, never through a pipe.
-  if python3 -m pip --version >/dev/null 2>&1; then
+  local wheel_python="" candidate
+  for candidate in python3 python3.10 python3.11 python3.12 python3.13 python3.14; do
+    command -v "$candidate" >/dev/null 2>&1 || continue
+    if "$candidate" -c 'import sys; raise SystemExit(sys.version_info < (3, 10))' 2>/dev/null; then
+      wheel_python="$candidate"
+      break
+    fi
+  done
+  if [[ -z "$wheel_python" ]]; then
+    fail "loop-run wheel build requires Python >=3.10"
+  elif "$wheel_python" -m pip --version >/dev/null 2>&1; then
     local wheeldir build_out
     wheeldir="$(mktemp -d)"
-    if build_out="$(python3 -m pip wheel --no-deps -q -w "$wheeldir" packages/loop-run 2>&1)"; then
+    if build_out="$("$wheel_python" -m pip wheel --no-deps -q -w "$wheeldir" packages/loop-run 2>&1)"; then
       # A frontend that exits 0 having produced nothing would pass a build lane
       # that only checked the exit status.
       if [ -n "$(find "$wheeldir" -name 'loop_run-*.whl' -print -quit)" ]; then
@@ -2212,7 +2222,7 @@ test_packages() {
     fi
     rm -rf "$wheeldir"
   else
-    say SKIP "loop-run wheel build (python3 -m pip unavailable)"
+    say SKIP "loop-run wheel build ($wheel_python -m pip unavailable)"
   fi
 
   # worklog-memory-mcp: two-session round trip against a synthetic vault.
