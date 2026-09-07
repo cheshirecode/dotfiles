@@ -84,6 +84,28 @@ class RunReaderTest(unittest.TestCase):
         self.assertEqual(result["status"], "no-signal")
         self.assertIn("zero", result["detail"])
 
+    def test_zero_usd_on_a_rate_table_lane_is_no_signal(self) -> None:
+        """Counting tokens while pricing them at zero is a lost rate table.
+
+        The token guard cannot see this: tokens are correct, so it passes,
+        and the number the skill exists to produce is silently zero. Found by
+        planting `return 0.0` in claude_session_usage.estimate_usd — the
+        lane graded `ok` with rc=0.
+        """
+        result = self.check(emit({**GOOD, "usd_estimated": 0.0}))
+        self.assertEqual(result["status"], "no-signal")
+        self.assertIn("rate table", result["detail"])
+
+    def test_zero_usd_is_allowed_on_a_provider_reported_lane(self) -> None:
+        """A billed cost of zero is a fact, not a missing rate table.
+
+        opencode passes through what the provider charged, and a free
+        request legitimately costs nothing. Applying the rate-table guard
+        there would fail a correct reading.
+        """
+        payload = {**GOOD, "usd_estimated": 0.0, "usd_basis": "provider-reported"}
+        self.assertEqual(self.check(emit(payload))["status"], "ok")
+
     def test_output_only_still_counts_as_signal(self) -> None:
         """Only both sides at zero is no-signal; one side may legitimately be 0."""
         self.assertEqual(
@@ -190,12 +212,15 @@ class LaneClassificationTest(unittest.TestCase):
         report = self.diagnose_with(
             [
                 {"harness": "cursor", "reader": None, "adapter": adapter},
-                {"harness": "opencode", "reader": None, "adapter": None},
+                # Deliberately not a real harness name: `unsupported` is
+                # unreachable from the declared lane set today, so naming a
+                # live lane here would read as a claim about that lane.
+                {"harness": "hypothetical", "reader": None, "adapter": None},
             ]
         )
         statuses = {lane["harness"]: lane["status"] for lane in report["lanes"]}
         self.assertEqual(statuses["cursor"], "adapter-only")
-        self.assertEqual(statuses["opencode"], "unsupported")
+        self.assertEqual(statuses["hypothetical"], "unsupported")
         self.assertEqual(report["failed"], [])
 
 
