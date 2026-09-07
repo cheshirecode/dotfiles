@@ -1,10 +1,15 @@
 # pr-review skill — test plan
 
-`test_pr_review_bin.sh` in this directory automates the script-level cases
-(1a, 1b, 1g–1j, 2a, 2c, 2e) plus token forwarding, missing option values,
-the execute bits, the cross-skill-path ban, and shellcheck. `tests/run.sh
-fixtures` globs it, so it runs in the suite. The rest of this file is the
-manual plan for cases that need a live PR.
+Three fixtures in this directory carry the automated cases, and `tests/run.sh
+fixtures` globs `skills/*/tests/test_*.sh`, so each runs in the suite:
+
+- `test_pr_review_bin.sh` — script-level cases 1a, 1b, 1g–1j, 2a, 2c, 2e, plus
+  token forwarding, missing option values, the execute bits, the
+  cross-skill-path ban, and shellcheck.
+- `test_forge_no_origin.sh` — case 1c, a repo with no `origin`.
+- `test_forge_hosts.sh` — cases 4a–4c, which host counts as which forge.
+
+The rest of this file is the manual plan for cases that need a live PR.
 
 Case 1j is automated against a throwaway clone with a GitLab origin, not by
 editing this repo's own remote and restoring it. A checkout is shared: a
@@ -57,9 +62,9 @@ repos: one with no remote at all, one with an `upstream` but no `origin`.
 
 | # | Test | Expected | How to verify |
 |---|------|----------|---------------|
-| 4a | detect-forge: GitHub SSH remote (git@github.com:o/r.git) | forge=github, CLI=gh | Temporarily set origin to SSH form, run detect-forge.sh |
-| 4b | detect-forge: GitLab HTTPS remote (https://gitlab.com/o/r.git) | forge=gitlab, CLI=glab | Temporarily set origin to GitLab form, run detect-forge.sh |
-| 4c | detect-forge: Self-hosted GitHub (github.mycompany.com) | forge=other | Temporarily set origin to self-hosted hostname, run detect-forge.sh |
+| 4a | detect-forge: GitHub SSH remote (git@github.com:o/r.git) | forge=github, CLI=gh | Automated in `test_forge_hosts.sh`, both URL forms, against throwaway repos |
+| 4b | detect-forge: GitLab HTTPS remote (https://gitlab.com/o/r.git) | forge=gitlab, CLI=glab | Automated in `test_forge_hosts.sh`; also pins the vendors' alternate SSH hosts (ssh.github.com, altssh.gitlab.com) |
+| 4c | detect-forge: Self-hosted GitHub (github.mycompany.com) | forge=other, CLI empty, reason `unsupported-forge-host` | Automated in `test_forge_hosts.sh`. Was a live defect: the old `github.*` glob matched this host and returned CLI=gh |
 | 4d | owner-check.sh with --token bypasses auth | The selected CLI receives the override token | Automated fake `gh` requires the exact token on both API calls |
 | 4e | owner-check.sh: GitLab MR (simulated auth) | Uses glab API path, not gh | Requires GitLab setup; validate code path via tracing |
 
@@ -87,7 +92,7 @@ repos: one with no remote at all, one with an `upstream` but no `origin`.
 
 ## Test execution order
 
-Run tests 1a–1f first (fast, no real PRs needed). Then 2a–2e (script mechanics). Then 3a–3f (shell traps + stash cycle). Then 4a–4e (forge detection — requires changing git origin temporarily or using --repo flags). Then 5a–5d (routing integration). Then 6a–6h and the tighten overlay tests require real GitHub/GitLab data — schedule for a dedicated test session with controlled test repos.
+Run tests 1a–1f first (fast, no real PRs needed). Then 2a–2e (script mechanics). Then 3a–3f (shell traps + stash cycle). Then 4a–4e (forge detection — 4a–4c are automated against throwaway repos via `--repo`; 4e still needs a live GitLab setup). Then 5a–5d (routing integration). Then 6a–6h and the tighten overlay tests require real GitHub/GitLab data — schedule for a dedicated test session with controlled test repos.
 
 ## Known gaps (require real-world testing)
 
