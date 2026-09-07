@@ -763,7 +763,15 @@ PY
   set +e
   HOME="$fake_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" ./bin/install-skills.sh council >/dev/null 2>&1
   rc=$?
-  set -e
+  # `set +e`, not `set -e`: this script declares `set -uo pipefail` at the
+  # top and never enables errexit. Restoring to `-e` turned it ON for the
+  # first time and left it on for every later section. The next section's
+  # `sc_sb="$(shellcheck ... | grep -E '^In ')"` returns 1 when the lint is
+  # CLEAN -- grep matches nothing -- so errexit killed the run silently
+  # there. `all` skipped its last 27 checks and printed no summary, while
+  # each mode passed when run alone. The suite aborted because a lane
+  # passed. Measured 2026-09-07.
+  set +e
   if [[ $rc -eq 3 ]]; then
     ok "install-skills refuses unowned dst (exit=3)"
   else
@@ -783,7 +791,7 @@ PY
   set +e
   HOME="$fake_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" ./bin/install-skills.sh council >/dev/null 2>&1
   rc=$?
-  set -e
+  set +e
   if [[ $rc -eq 3 ]] && [[ "$(readlink "$unowned_dst")" == "$symlink_target" ]]; then
     ok "install-skills refuses unowned divergent symlink (exit=3)"
   else
@@ -800,7 +808,7 @@ PY
   set +e
   HOME="$fake_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" ./bin/install-skills.sh council >/dev/null 2>&1
   rc=$?
-  set -e
+  set +e
   if [[ $rc -eq 0 ]]; then
     ok "install-skills accepts sentineled dst (exit=0)"
   else
@@ -818,7 +826,7 @@ PY
   set +e
   HOME="$fake_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" ./bin/install-skills.sh council >/dev/null 2>&1
   rc=$?
-  set -e
+  set +e
   if [[ $rc -eq 3 ]] && grep -q "user-edited content" "$unowned_dst/SKILL.md"; then
     ok "install-skills refuses edited sentineled copy (exit=3)"
   else
@@ -835,7 +843,7 @@ PY
   set +e
   HOME="$fake_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" ./bin/install-skills.sh council >/dev/null 2>&1
   rc=$?
-  set -e
+  set +e
   if [[ $rc -eq 0 ]]; then
     ok "install-skills accepts duplicate-identical unowned copy (exit=0)"
   else
@@ -858,7 +866,7 @@ PY
     PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" \
     ./bin/install-skills.sh council --dry-run >/dev/null 2>&1
   rc=$?
-  set -e
+  set +e
   if [[ $rc -eq 0 ]] && [[ ! -e "$fake_home/claude-skills" ]] &&
      [[ ! -e "$dry_shared" ]] && [[ ! -e "$dry_cursor" ]] &&
      [[ ! -e "$dry_cache" ]]; then
@@ -882,7 +890,7 @@ PY
     PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" \
     ./bin/uninstall.sh >/dev/null 2>&1
   rc=$?
-  set -e
+  set +e
   if [[ $rc -eq 0 ]] && [[ -f "$uninstall_target/SKILL.md" ]] &&
      grep -q "user-owned content" "$uninstall_target/SKILL.md"; then
     ok "uninstall preserves unowned skill directory"
@@ -907,7 +915,7 @@ PY
     PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" \
     ./bin/uninstall.sh >/dev/null 2>&1
   rc=$?
-  set -e
+  set +e
   if [[ $rc -eq 0 ]] && [[ ! -e "$cursor_target" ]] && [[ ! -L "$cursor_target" ]]; then
     ok "uninstall removes owned Cursor skill installation"
   else
@@ -955,7 +963,7 @@ PYD
     set +e
     HOME="$fake_home" PYTHONPATH="${python_site_path}${PYTHONPATH:+:$PYTHONPATH}" ./bin/install-skills.sh "$skill_name" >/dev/null 2>&1
     rc=$?
-    set -e
+    set +e
     skill_md="$fake_home/.claude/skills/$skill_name/SKILL.md"
     shared_skill_md="$fake_home/.agents/skills/$skill_name/SKILL.md"
     if [[ $rc -eq 0 && -f "$skill_md" && -f "$shared_skill_md" && -f "$fake_home/.cursor/skills/$skill_name/SKILL.md" ]]; then
@@ -1172,7 +1180,7 @@ EOF
   set +e
   optin_output=$(python3 tools/check-skill-opt-ins.py --root "$optin_tmp" 2>&1)
   rc=$?
-  set -e
+  set +e
   if [[ $rc -eq 1 \
     && "$optin_output" == *"must use the exact compact opt-in preamble"* \
     && "$optin_output" == *"duplicate \$example-led-instructions opt-in"* \
@@ -1451,7 +1459,7 @@ PY
   set +e
   unknown_provider_output=$(skills/which-model/bin/model-catalog --env opencode --provider bogus 2>&1)
   rc=$?
-  set -e
+  set +e
   if [[ $rc -eq 2 && "$unknown_provider_output" == *"unknown provider 'bogus'"* ]]; then
     ok "which-model rejects unknown explicit provider (exit=2)"
   else
@@ -1941,7 +1949,9 @@ test_worklog_skill() {
   set +e
   "${WL_HERMETIC[@]}" bash "$sb/init-new-data-repo.sh" "$vault" test-ldap >/dev/null 2>&1
   rc=$?
-  set -e
+  # Same leak as test_fixtures: restoring to `-e` enables errexit for the
+  # first time, and here it would carry into test_packages.
+  set +e
   if [[ $rc -eq 0 && -f "$vault/AGENTS.md" && -d "$vault/people/test-ldap/active" ]]; then
     ok "init-new-data-repo bootstraps clean (vault @ $vault)"
   else
@@ -1958,7 +1968,7 @@ test_worklog_skill() {
   else
     fail "init-new-data-repo NOT idempotent — re-run dirtied the tree"
   fi
-  set -e
+  set +e
 
   # Run preamble + status + lint against the throwaway vault.
   local out
@@ -1990,7 +2000,7 @@ test_worklog_skill() {
       && git -c core.hooksPath="$sb/git-hooks" add -f bin/forbidden.sh \
       && git -c core.hooksPath="$sb/git-hooks" commit -m "smoke" >/dev/null 2>&1 )
   rc=$?
-  set -e
+  set +e
   if [[ $rc -ne 0 ]]; then
     ok "pre-commit empty-bin guard rejects bin/foo.sh"
   else
@@ -2097,7 +2107,7 @@ EOF
   set +e
   out=$("${WL_HERMETIC[@]}" PATH="$NORG" WORKLOG_REPO="$vault" bash "$sb/search.sh" 'BORROW SCHEMA' --active -- -i 2>&1)
   rc=$?
-  set -e
+  set +e
   if [[ $rc -eq 2 && "$out" == *"extra rg arguments require ripgrep"* ]]; then
     ok "search.sh grep fallback rejects unsupported rg arguments"
   else
