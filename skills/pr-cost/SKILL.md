@@ -33,7 +33,7 @@ The collector emits one JSON object with this required shape:
 ```json
 {
   "schema_version": "pr-cost/v1",
-  "harness": "claude | cursor | codex",
+  "harness": "claude | cursor | codex | opencode",
   "confidence": "metered | estimated | unavailable",
   "usd": 1.23,
   "tokens_in": 1200,
@@ -75,10 +75,8 @@ present so downstream adapters receive a stable typed contract.
   `~/.local/share/opencode/opencode.db`, not in a JSONL transcript, so its
   reader takes `--db` / `--session-id` / `--cwd` rather than a file path.
   Each assistant message carries the provider's own `cost`, so this lane
-  reports what the provider billed instead of inferring a price.
-  **The collector cannot record this lane yet**: `--harness` accepts only
-  claude, cursor and codex, so `annotate --harness opencode` exits 2. The
-  lane can be measured and diagnosed but not yet written to a PR.
+  reports what the provider billed instead of inferring a price, and its
+  payload says `usd_basis: provider-reported`.
 
 ## Self-diagnosis
 
@@ -232,10 +230,10 @@ PR_COST_HOOK_LIVE=1 python3 scripts/pr_cost_collect.py annotate \
 All three readers emit the same eight shared keys, so `READER`, `READER_FLAG`
 and `HARNESS` are what change between the claude and codex lanes.
 
-The opencode lane does not fit this recipe yet, for two independent reasons:
-its reader selects a session with `--db` / `--session-id` / `--cwd` instead of
-a transcript path, and `annotate --harness opencode` is rejected by the
-collector. Measure it with the reader; do not expect to record it.
+The opencode lane needs the two reader lines changed rather than swapped: it
+selects a session with `--db` / `--session-id` / `--cwd` instead of a
+transcript path, so the `TRANSCRIPT` step above does not apply. The collector
+accepts `--harness opencode`, so the annotate command itself is unchanged.
 
 `--confidence estimated` is the honest level for the two lanes above: the
 figure comes from default rates, never from metered billing.
