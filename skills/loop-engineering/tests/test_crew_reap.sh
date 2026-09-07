@@ -4,7 +4,7 @@
 # whose commits never landed.
 set -uo pipefail
 REAP="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/bin/crew-reap"
-PASS=0; FAIL=0
+PASS=0; FAIL=0; SKIP=0
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 G() { git -c user.email=t@t.t -c user.name=t \
         -c commit.gpgsign=false -c core.hooksPath=/dev/null "$@"; }
@@ -68,6 +68,13 @@ ck "worktree path with a space is enumerated" 'wt-peer-9d' 'reap +wt spaced'
 # jq would report that as failure even though the JSON is well formed.
 ckjson() {  # ckjson <name> <filter> [args...]
   local name=$1 filter=$2; shift 2
+  # Without this gate a missing jq is indistinguishable from malformed JSON:
+  # `jq -e` returns non-zero either way, so the failure line printed perfectly
+  # valid JSON next to the word FAIL. A check that cannot say "I could not
+  # run" reports the wrong defect, and this one accused the payload.
+  if ! command -v jq >/dev/null 2>&1; then
+    SKIP=$((SKIP+1)); printf '  SKIP  %s (jq not installed)\n' "$name"; return
+  fi
   local out; out=$(printf 'x\n' | "$REAP" "$@" 2>/dev/null)
   if printf '%s' "$out" | jq -e "$filter" >/dev/null 2>&1; then
     PASS=$((PASS+1)); printf '  PASS  %s\n' "$name"
@@ -175,6 +182,15 @@ else PASS=$((PASS+1)); printf '  PASS  no inert warning when the gate voted\n'; 
 # must read it correctly, and the piped form must still fail — otherwise this
 # fixture stops guarding the documented trap. See references/examples.md §6.
 build
+# Both halves need jq, and the second one FAILS OPEN without it: `old` becomes
+# {"error":"unparseable"} because jq is missing rather than because pipefail
+# swallowed exit 3, so the assertion passes while never testing the trap it
+# names. A false pass is worse than the false failure its sibling produced.
+if ! command -v jq >/dev/null 2>&1; then
+  SKIP=$((SKIP+2))
+  printf '  SKIP  capture-then-parse survives exit 3 (jq not installed)\n'
+  printf '  SKIP  piped form still false-positives on exit 3 (jq not installed)\n'
+else
 {
   set -uo pipefail
   raw=$(printf 'x\n' | "$REAP" --target main --json --no-fetch "$TMP/r" 2>/dev/null) || true
@@ -193,6 +209,7 @@ build
     FAIL=$((FAIL+1)); printf '  FAIL  piped form no longer locks the trap (got %s)\n' "$old"
   fi
 }
+fi
 
 # Exit codes are the caller contract (crew.md: capture before parsing).
 # Assert them directly — the grep-only checks above would pass even if die()
@@ -225,5 +242,9 @@ if [ "$rc" = 3 ] && printf '%s' "$out" | grep -q 'branch delete failed'; then
   PASS=$((PASS+1)); printf '  PASS  branch delete failure degrades the row, still exits 3\n'
 else FAIL=$((FAIL+1)); printf '  FAIL  branch delete failure: rc=%s\n%s\n' "$rc" "$out"; fi
 
-printf '\n  %d passed, %d failed\n' "$PASS" "$FAIL"
+if [ "$SKIP" -gt 0 ]; then
+  printf '\n  %d passed, %d failed, %d skipped\n' "$PASS" "$FAIL" "$SKIP"
+else
+  printf '\n  %d passed, %d failed\n' "$PASS" "$FAIL"
+fi
 [ "$FAIL" -eq 0 ]
