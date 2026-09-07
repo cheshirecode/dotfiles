@@ -59,6 +59,12 @@ DOCTOR_LANE = re.compile(r'"harness":\s*"([a-z-]+)"')
 # A bullet in SKILL.md's Harness guidance section: `- \`name\`:`.
 GUIDANCE_BULLET = re.compile(r"^- `([a-z-]+)`:", re.MULTILINE)
 
+# The Contract block's harness line: "harness": "a | b | c".
+CONTRACT_HARNESS = re.compile(r'"harness":\s*"([a-z |]+)"')
+
+# The collector's accepted-harness set.
+COLLECTOR_HARNESSES = re.compile(r"^HARNESSES\s*=\s*\{([^}]*)\}", re.MULTILINE)
+
 
 def doctor_source() -> str:
     return DOCTOR.read_text(encoding="utf-8")
@@ -81,6 +87,21 @@ def statuses_the_doctor_fails_on() -> set[str]:
 
 def doctor_lanes() -> set[str]:
     return set(DOCTOR_LANE.findall(doctor_source()))
+
+
+def collector_harnesses() -> set[str]:
+    source = (SKILL_DIR / "scripts" / "pr_cost_collect.py").read_text(encoding="utf-8")
+    match = COLLECTOR_HARNESSES.search(source)
+    if match is None:
+        return set()
+    return set(re.findall(r'"([a-z-]+)"', match.group(1)))
+
+
+def contract_harnesses() -> set[str]:
+    match = CONTRACT_HARNESS.search(SKILL_MD.read_text(encoding="utf-8"))
+    if match is None:
+        return set()
+    return {part.strip() for part in match.group(1).split("|") if part.strip()}
 
 
 def harness_guidance_section() -> str:
@@ -163,6 +184,18 @@ class SkillDocMatchesDoctorTest(unittest.TestCase):
             "no bullets matched in SKILL.md's Harness guidance section; the "
             "extraction is broken, so agreement proves nothing",
         )
+        self.assertNotEqual(
+            collector_harnesses(),
+            set(),
+            "could not read HARNESSES out of the collector; the extraction "
+            "is broken, so agreement proves nothing",
+        )
+        self.assertNotEqual(
+            contract_harnesses(),
+            set(),
+            "could not read the harness line out of SKILL.md's Contract "
+            "block; the extraction is broken, so agreement proves nothing",
+        )
 
     def test_the_table_lists_exactly_the_statuses_the_doctor_emits(self) -> None:
         emitted = statuses_the_doctor_emits()
@@ -222,6 +255,22 @@ class SkillDocMatchesDoctorTest(unittest.TestCase):
             "SKILL.md's Harness guidance and the doctor's lanes disagree.\n"
             f"  documented but not a lane: {sorted(documented - lanes)}\n"
             f"  a lane but undocumented:   {sorted(lanes - documented)}",
+        )
+
+
+    def test_the_contract_block_lists_the_harnesses_the_collector_accepts(self) -> None:
+        # Third instance of this drift in two days: the collector grew
+        # opencode while SKILL.md's Contract block still advertised three
+        # harnesses. A reader building a payload against that block would
+        # omit a harness the collector accepts.
+        contract = contract_harnesses()
+        accepted = collector_harnesses()
+        self.assertEqual(
+            contract,
+            accepted,
+            "SKILL.md's Contract harness line and the collector disagree.\n"
+            f"  in the contract, not accepted: {sorted(contract - accepted)}\n"
+            f"  accepted, not in the contract: {sorted(accepted - contract)}",
         )
 
 
