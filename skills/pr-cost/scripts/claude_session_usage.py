@@ -9,6 +9,27 @@ import pathlib
 import sys
 from typing import Any
 
+# USD per million tokens: (input, output, cache_read, cache_write), matched by
+# the longest prefix of the lowercased model name. Public Anthropic list
+# prices; the claude lane reports input_tokens WITHOUT cache tokens, unlike
+# the codex lane.
+MODEL_RATES: dict[str, tuple[float, float, float, float]] = {
+    "claude-opus-4": (15.0, 75.0, 1.5, 18.75),
+    "claude-sonnet-4": (3.0, 15.0, 0.3, 3.75),
+    "claude-haiku-4": (1.0, 5.0, 0.1, 1.25),
+    "claude-3-7-sonnet": (3.0, 15.0, 0.3, 3.75),
+    "claude-3-5-sonnet": (3.0, 15.0, 0.3, 3.75),
+    "claude-3-5-haiku": (0.8, 4.0, 0.08, 1.0),
+}
+
+
+def lookup_model_rates(model: str | None) -> tuple[float, float, float, float] | None:
+    if not model:
+        return None
+    lowered = model.lower()
+    hits = [prefix for prefix in MODEL_RATES if lowered.startswith(prefix)]
+    return MODEL_RATES[max(hits, key=len)] if hits else None
+
 
 def session_usage(path: pathlib.Path) -> dict[str, Any]:
     messages: dict[str, dict[str, Any]] = {}
@@ -111,22 +132,49 @@ def estimate_usd(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--jsonl", type=pathlib.Path, required=True)
-    parser.add_argument("--input-usd-per-mtok", type=float, default=5.0)
-    parser.add_argument("--output-usd-per-mtok", type=float, default=25.0)
-    parser.add_argument("--cache-read-usd-per-mtok", type=float, default=0.5)
-    parser.add_argument("--cache-write-usd-per-mtok", type=float, default=6.25)
+    parser.add_argument("--input-usd-per-mtok", type=float, default=None)
+    parser.add_argument("--output-usd-per-mtok", type=float, default=None)
+    parser.add_argument("--cache-read-usd-per-mtok", type=float, default=None)
+    parser.add_argument("--cache-write-usd-per-mtok", type=float, default=None)
     args = parser.parse_args()
     usage = session_usage(args.jsonl)
+
+    table_rates = lookup_model_rates(usage.get("model"))
+    explicit = (
+        args.input_usd_per_mtok,
+        args.output_usd_per_mtok,
+        args.cache_read_usd_per_mtok,
+        args.cache_write_usd_per_mtok,
+    )
+    if any(rate is not None for rate in explicit):
+        input_rate = args.input_usd_per_mtok if args.input_usd_per_mtok is not None else 5.0
+        output_rate = args.output_usd_per_mtok if args.output_usd_per_mtok is not None else 25.0
+        cache_read_rate = (
+            args.cache_read_usd_per_mtok if args.cache_read_usd_per_mtok is not None else 0.5
+        )
+        cache_write_rate = (
+            args.cache_write_usd_per_mtok if args.cache_write_usd_per_mtok is not None else 6.25
+        )
+        rate_source, usd_basis = "cli", "default-rates"
+    elif table_rates is not None:
+        input_rate, output_rate, cache_read_rate, cache_write_rate = table_rates
+        rate_source, usd_basis = "model-table", "model-rates"
+    else:
+        input_rate, output_rate, cache_read_rate, cache_write_rate = 5.0, 25.0, 0.5, 6.25
+        rate_source, usd_basis = "cli-default", "default-rates"
+
     usage["usd_estimated"] = estimate_usd(
         uncached=int(usage["uncached_input_tokens"]),
         cache_read=int(usage["cache_read_input_tokens"]),
         cache_write=int(usage["cache_creation_input_tokens"]),
         tokens_out=int(usage["tokens_out"]),
-        input_rate=args.input_usd_per_mtok,
-        output_rate=args.output_usd_per_mtok,
-        cache_read_rate=args.cache_read_usd_per_mtok,
-        cache_write_rate=args.cache_write_usd_per_mtok,
+        input_rate=input_rate,
+        output_rate=output_rate,
+        cache_read_rate=cache_read_rate,
+        cache_write_rate=cache_write_rate,
     )
+    usage["rate_source"] = rate_source
+    usage["usd_basis"] = usd_basis
     json.dump(usage, sys.stdout, indent=2, sort_keys=True)
     sys.stdout.write("\n")
     return 0

@@ -122,8 +122,16 @@ usd_basis: claude=default-rates, codex=default-rates, opencode=provider-reported
 
 `default-rates` means the reader priced the session at fixed rates and never
 used the model name it reports, so a cheap-model session is billed at the
-default lane rate. `provider-reported` means the harness recorded what the
-provider actually billed.
+default lane rate. `model-rates` means the model name matched a prefix in the
+reader's rate table (claude: sonnet/haiku/opus-4 families; codex: gpt-5,
+gpt-4.1, o3/o4-mini, codex-mini), so the estimate uses that model's public
+list prices — still list prices, not the account's actual billing. Explicit
+CLI rate flags override the table and report `default-rates`. The codex
+reader prices `cached_input_tokens` (a subset of `input_tokens`) at the
+cache-read rate; the claude reader keeps cache tokens out of `tokens_in` and
+prices the read/write split directly.
+`provider-reported` means the harness recorded what the provider actually
+billed.
 
 Neither value means `measured`. `provider-reported` is a number this repo
 copied rather than computed, and nothing here verifies it against an invoice.
