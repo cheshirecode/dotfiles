@@ -83,9 +83,17 @@ fi
 if [[ -n "$TOKEN_VAL" ]]; then
   case "$FORGE" in
     github) export GH_TOKEN="$TOKEN_VAL" ;;
-    gitlab) export GLAB_TOKEN="$TOKEN_VAL" ;;
+    # glab reads GITLAB_TOKEN. GLAB_TOKEN alone is ignored, and the api call
+    # below then fails into an empty CURRENT_USER, reported as "run glab auth login".
+    gitlab) export GITLAB_TOKEN="$TOKEN_VAL"; export GLAB_TOKEN="$TOKEN_VAL" ;;
   esac
 fi
+
+# `glab api` takes --hostname (a host), not --url. Derive it once, unconditionally:
+# the project-id and MR lookups below need it even when WORKLOG_GITLAB_USER short-
+# circuits the username lookup.
+_gl_host="${GITLAB_URL:-https://gitlab.com}"
+_gl_host="${_gl_host#*://}"; _gl_host="${_gl_host%%/*}"
 
 # --- Who am I? ---------------------------------------------------------------
 CURRENT_USER=""
@@ -98,7 +106,7 @@ case "$FORGE" in
   gitlab)
     CURRENT_USER="${WORKLOG_GITLAB_USER:-}"
     if [[ -z "$CURRENT_USER" ]]; then
-      CURRENT_USER="$(glab api user --url "${GITLAB_URL:-https://gitlab.com}" 2>/dev/null \
+      CURRENT_USER="$(glab api user --hostname "$_gl_host" 2>/dev/null \
                       | jq -r '.username // empty')"
     fi
     ;;
@@ -127,11 +135,11 @@ case "$FORGE" in
     ;;
   gitlab)
     PROJECT_ID="$(glab api "projects/$(printf '%s' "$SLUG" | sed 's|/|%2F|g')" \
-                    --url "${GITLAB_URL:-https://gitlab.com}" 2>/dev/null | jq -r '.id // empty')"
+                    --hostname "$_gl_host" 2>/dev/null | jq -r '.id // empty')"
     [[ -n "$PROJECT_ID" ]] || {
       printf '%s: could not resolve project id for %s\n' "$PROG" "$SLUG" >&2; exit 2; }
     MR_DATA="$(glab api "projects/$PROJECT_ID/merge_requests/$PR_NUMBER" \
-                 --url "${GITLAB_URL:-https://gitlab.com}" 2>/dev/null)"
+                 --hostname "$_gl_host" 2>/dev/null)"
     [[ -n "$MR_DATA" ]] || {
       printf '%s: MR #%s not found or inaccessible on %s\n' "$PROG" "$PR_NUMBER" "$SLUG" >&2
       exit 2
