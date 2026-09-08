@@ -107,17 +107,20 @@ if [[ "$OPERATION" != "merge-base" ]]; then
   if [[ -n "$TOKEN_VAL" ]]; then
     case "$FORGE" in
       github) export GH_TOKEN="$TOKEN_VAL" ;;
-      gitlab) export GLAB_TOKEN="$TOKEN_VAL" ;;
+      # glab reads GITLAB_TOKEN; GLAB_TOKEN alone is ignored.
+      gitlab) export GITLAB_TOKEN="$TOKEN_VAL"; export GLAB_TOKEN="$TOKEN_VAL" ;;
     esac
   fi
   GITLAB_URL="${GITLAB_URL:-https://gitlab.com}"
+  # `glab api` wants a hostname, not a URL. Derive it once.
+  GITLAB_HOST="${GITLAB_URL#*://}"; GITLAB_HOST="${GITLAB_HOST%%/*}"
 fi
 
 # --- Helpers ----------------------------------------------------------------
 
 glab_project_id() {
   glab api "projects/$(printf '%s' "$SLUG" | sed 's|/|%2F|g')" \
-    --url "$GITLAB_URL" 2>/dev/null | jq -r '.id // empty'
+    --hostname "$GITLAB_HOST" 2>/dev/null | jq -r '.id // empty'
 }
 
 repo_root() {
@@ -160,7 +163,7 @@ do_view() {
       local pid raw
       pid="$(glab_project_id)"
       [[ -n "$pid" ]] || { echo "$PROG: could not resolve project id for $SLUG" >&2; return 1; }
-      raw="$(glab api "projects/$pid/merge_requests/$NUMBER" --url "$GITLAB_URL" 2>/dev/null)" || {
+      raw="$(glab api "projects/$pid/merge_requests/$NUMBER" --hostname "$GITLAB_HOST" 2>/dev/null)" || {
         echo "$PROG: MR #$NUMBER not found or inaccessible on $SLUG" >&2; return 1; }
       # Build the object with jq, not printf: a title containing a quote or a
       # backslash would otherwise emit JSON that no consumer can parse.
@@ -186,7 +189,7 @@ do_diff() {
       local pid
       pid="$(glab_project_id)"
       [[ -n "$pid" ]] || { echo "$PROG: could not resolve project id for $SLUG" >&2; return 1; }
-      glab api "projects/$pid/merge_requests/$NUMBER/changes" --url "$GITLAB_URL" 2>/dev/null \
+      glab api "projects/$pid/merge_requests/$NUMBER/changes" --hostname "$GITLAB_HOST" 2>/dev/null \
         | jq -r '.changes[]?.diff // empty' \
         || { echo "$PROG: could not fetch diff for MR #$NUMBER" >&2; return 1; }
       ;;
@@ -207,14 +210,14 @@ do_list_open() {
     gitlab)
       local who="$AUTHOR"
       if [[ -z "$who" ]]; then
-        who="$(glab api user --url "$GITLAB_URL" 2>/dev/null | jq -r '.username // empty')"
+        who="$(glab api user --hostname "$GITLAB_HOST" 2>/dev/null | jq -r '.username // empty')"
       fi
       [[ -n "$who" ]] || { echo "$PROG: list-open: no --author given and username unresolved" >&2; return 1; }
       local pid
       pid="$(glab_project_id)"
       [[ -n "$pid" ]] || { echo "$PROG: could not resolve project id for $SLUG" >&2; return 1; }
       glab api "projects/$pid/merge_requests?state=opened&author_username=$who&per_page=$LIMIT" \
-        --url "$GITLAB_URL" 2>/dev/null \
+        --hostname "$GITLAB_HOST" 2>/dev/null \
         | jq -r '.[] | [(.iid|tostring), (.title // ""), (.web_url // ""),
                         (if ((.draft // .work_in_progress // false) == true) then "true" else "false" end),
                         (.author.username // .author.name // "")] | @tsv' \
@@ -245,10 +248,10 @@ do_ci_status() {
       local pid sha rows
       pid="$(glab_project_id)"
       [[ -n "$pid" ]] || { echo "$PROG: could not resolve project id for $SLUG" >&2; return 1; }
-      sha="$(glab api "projects/$pid/merge_requests/$NUMBER" --url "$GITLAB_URL" 2>/dev/null \
+      sha="$(glab api "projects/$pid/merge_requests/$NUMBER" --hostname "$GITLAB_HOST" 2>/dev/null \
              | jq -r '.sha // empty')"
       [[ -n "$sha" ]] || { echo "$PROG: could not resolve head sha for MR #$NUMBER" >&2; return 1; }
-      rows="$(glab api "projects/$pid/repository/commits/$sha/statuses" --url "$GITLAB_URL" 2>/dev/null \
+      rows="$(glab api "projects/$pid/repository/commits/$sha/statuses" --hostname "$GITLAB_HOST" 2>/dev/null \
               | jq -r '.[] | [(.name // ""), (.status // ""), (.status // ""), (.target_url // "")] | @tsv')"
       [[ -n "$rows" ]] || { echo "$PROG: no CI data for MR #$NUMBER" >&2; return 1; }
       printf '%s\n' "$rows"
