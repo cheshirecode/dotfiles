@@ -62,6 +62,7 @@ CLAUDE_CACHE_READ_RATE = 0.5
 CLAUDE_CACHE_WRITE_RATE = 6.25
 CODEX_INPUT_RATE = 5.0
 CODEX_OUTPUT_RATE = 30.0
+CODEX_CACHE_READ_RATE = 0.5
 
 # Deliberately non-round and mutually distinct, so no wrong pairing of the parts
 # can coincidentally reproduce the right total.
@@ -280,11 +281,20 @@ class UsageKeyContractTest(unittest.TestCase):
     def test_codex_usd_estimated_uses_its_documented_default_rates(self) -> None:
         tokens_in = 4_444_444
         tokens_out = 555_555
+        cached = 222_222
         data = self.codex_usage(
-            [{"input_tokens": tokens_in, "output_tokens": tokens_out, "cached_input_tokens": 222_222}]
+            [{"input_tokens": tokens_in, "output_tokens": tokens_out, "cached_input_tokens": cached}]
         )
+        # Cache-aware since the pr-cost-cache-tokens change: cached input is a
+        # subset of input_tokens and is priced at the cache-read rate (0.5
+        # default), not the 5.0 input rate.
         expected = round(
-            (tokens_in * CODEX_INPUT_RATE + tokens_out * CODEX_OUTPUT_RATE) / 1_000_000,
+            (
+                (tokens_in - cached) * CODEX_INPUT_RATE
+                + cached * CODEX_CACHE_READ_RATE
+                + tokens_out * CODEX_OUTPUT_RATE
+            )
+            / 1_000_000,
             4,
         )
         self.assertAlmostEqual(
@@ -293,8 +303,8 @@ class UsageKeyContractTest(unittest.TestCase):
             places=4,
             msg=(
                 "codex usd_estimated drifted from its documented defaults "
-                f"({CODEX_INPUT_RATE}/{CODEX_OUTPUT_RATE} per Mtok). Note this "
-                "lane's output rate is 30.0 where claude's is 25.0."
+                f"({CODEX_INPUT_RATE}/{CODEX_OUTPUT_RATE}/{CODEX_CACHE_READ_RATE} per "
+                "Mtok). Note this lane's output rate is 30.0 where claude's is 25.0."
             ),
         )
 
