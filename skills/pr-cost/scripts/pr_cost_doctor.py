@@ -27,12 +27,15 @@ lanes that need a real transcript. Default runs both, and skips live lanes
 that have nothing to read.
 
 USD is reported per lane, because the lanes do not price alike. The claude
-and codex readers carry fixed default rates and read the model name without
-using it to price anything, so a cheap-model session is billed at the default
-lane rate: `default-rates`. The opencode reader passes through the provider's
-own billed cost: `provider-reported`. Neither is `measured` — nothing here
-checks either figure against an invoice — and a single basis asserted for all
-three would misdescribe whichever lane it did not match.
+and codex readers fall back to fixed default rates for unknown models:
+`default-rates`. A model name matching the reader's rate table prices the
+session at that model's public list prices: `model-rates`. The codex reader
+prices its cached input at the cache-read rate; the claude reader prices the
+cache read/write split directly. The opencode reader passes through the
+provider's own billed cost: `provider-reported`. None of the three is
+`measured` — nothing here checks any figure against an invoice — and a single
+basis asserted for all three would misdescribe whichever lane it did not
+match.
 """
 
 from __future__ import annotations
