@@ -388,14 +388,15 @@ while IFS= read -r f; do
   else
     sev=warn; nwarn=$((nwarn+1))
   fi
-  annotated=()
+  annotated=(); nmine=0
   for o in "${owners[@]}"; do
     tok="$o"
     agent=$(agent_for_label "$o")
-    [ -n "$agent" ] && tok="$tok@$agent"
+    # `?` is the unmatched marker, not an agent name.
+    [ -n "$agent" ] && { tok="$tok@$agent"; [ "$agent" != "?" ] && nmine=$((nmine+1)); }
     if is_dirty "$o" "$f"; then annotated+=("${tok}[dirty]"); else annotated+=("$tok"); fi
   done
-  ROWS+=("$sev$SEP$f$SEP$(IFS=,; echo "${annotated[*]}")")
+  ROWS+=("$sev$SEP$f$SEP$(IFS=,; echo "${annotated[*]}")$SEP$nmine")
 done < <(printf '%s\n' "${OWNER_PATHS[@]}" | LC_ALL=C sort)
 
 collision=$nwarn
@@ -417,11 +418,16 @@ if [ "$QUIET" -eq 0 ]; then
     first=1
     while IFS= read -r row; do
       [ -n "$row" ] || continue
-      sev=${row%%"$SEP"*}; rest=${row#*"$SEP"}; f=${rest%%"$SEP"*}; own=${rest#*"$SEP"}
+      sev=${row%%"$SEP"*}; rest=${row#*"$SEP"}; f=${rest%%"$SEP"*}
+      rest=${rest#*"$SEP"}; own=${rest%%"$SEP"*}; nmine=${rest#*"$SEP"}
       [ "$first" -eq 1 ] || printf ','
       first=0
-      printf '{"severity":"%s","path":"%s","owners":"%s"}' \
+      printf '{"severity":"%s","path":"%s","owners":"%s"' \
         "$sev" "$(json_escape "$f")" "$(json_escape "$own")"
+      # Only with a roster is `mine` a verdict; without one it is unknown, and
+      # printing 0 would be indistinguishable from "none of these are yours".
+      [ "$ROSTER_SET" -eq 1 ] && printf ',"mine":%d' "$nmine"
+      printf '}'
     done < <(printf '%s\n' "${ROWS[@]:-}" | LC_ALL=C sort)
     printf ']}\n'
   else
@@ -437,7 +443,8 @@ if [ "$QUIET" -eq 0 ]; then
     else
       while IFS= read -r row; do
         [ -n "$row" ] || continue
-        sev=${row%%"$SEP"*}; rest=${row#*"$SEP"}; f=${rest%%"$SEP"*}; own=${rest#*"$SEP"}
+        sev=${row%%"$SEP"*}; rest=${row#*"$SEP"}; f=${rest%%"$SEP"*}
+        rest=${rest#*"$SEP"}; own=${rest%%"$SEP"*}
         printf '%-5s %-52s %s\n' "$sev" "$f" "$own"
       done < <(printf '%s\n' "${ROWS[@]}" | LC_ALL=C sort)
       printf '%d overlapping path(s): %d warn, %d info\n' "${#ROWS[@]}" "$nwarn" "$ninfo"
