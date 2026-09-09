@@ -64,6 +64,11 @@ command rejected by the state contract exits `3` with a `loop-state:` error.
   continuation and background recurrence are distinct.
 - A user may authorize a successor after `budget_exhausted`; do not silently
   grant more budget. Never resume `complete` or `cancelled`.
+- **Prefer resuming a delegate to restarting one.** A restart discards context
+  already paid for and begins the task at zero. The one exception is a delegate
+  that produced nothing: resuming into an empty transcript costs the same as a
+  fresh start and carries the confusion of a history that shows no work. Judge
+  it on what the delegate produced, not on how it stopped.
 
 ## Cycle decision record
 
