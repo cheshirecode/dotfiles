@@ -177,6 +177,11 @@ if [ ! -e "$DEST/.shell_common.local" ]; then
 # Sourced from .bashrc above the interactive guard, so this applies to
 # non-interactive shells (bash -c from tools/hooks) as well.
 
+# Vault helpers live in the tracked .shell_common.vault (symlinked into $HOME
+# by this installer). Sourced here, not from ~/.shell_common, because that file
+# is read below .bashrc's interactive guard and so is invisible to `bash -c`.
+[ -r "$HOME/.shell_common.vault" ] && . "$HOME/.shell_common.vault"
+
 # --- drop Kubernetes service-discovery injection ---------------------------
 # Only meaningful when running as a k8s pod; a harmless no-op elsewhere.
 unset KUBERNETES_SERVICE_HOST

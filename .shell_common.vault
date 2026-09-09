@@ -1,0 +1,67 @@
+# ~/.shell_common.vault -- Vault helpers. TRACKED in the dotfiles repo, unlike
+# ~/.shell_common.local which is deliberately machine-local. These belong here
+# because nothing in them is machine-specific: the two Vault addresses are the
+# same for everyone at Super.
+#
+# Sourced from ~/.shell_common.local, which .bashrc reads at line 16 -- ABOVE
+# the interactive guard. That placement is load-bearing: ~/.shell_common is
+# sourced at line 138, below the guard, so anything defined there is missing
+# from `bash -c`, hooks and tool calls, and it prints a login banner. Do not
+# move these into .shell_common for tidiness.
+
+# --- drop the Vault address injection --------------------------------------
+# Coder injects VAULT_ADDR=<production> at pid 1, so it is present in every
+# process on this box. super_cli.util.vault.set_vault_addr_for_env() returns
+# early when VAULT_ADDR is already set ("honors any user-provided override"),
+# so `super vault <cmd> <service> staging` silently targets the PRODUCTION
+# Vault -- whose staging/ tree is a stale copy (newest write 2026-03; the live
+# staging tree is on vault-staging and was written 2026-08). The prod
+# confirmation gate keys off the env argument, not the Vault reached, so it
+# does not fire either.
+#
+# Deliberately NOT fixed by `unset VAULT_ADDR` here. Two reasons, both measured:
+#   1. This file is loaded through BASH_ENV, so the unset runs on EVERY
+#      non-interactive bash startup and strips VAULT_ADDR back out of any
+#      child shell -- including one a helper below just set it for (observed:
+#      curl exit code 000, empty URL).
+#   2. Routing alone would not help. Tokens are not env-aware, so a bare
+#      `super vault ... staging` would route to the staging Vault and then
+#      present ~/.vault-token's PRODUCTION token, which 403s there.
+# The address and the token have to move together, so pair them explicitly per
+# command with the helpers below. The injected value stays as the default,
+# where it is correctly paired with ~/.vault-token.
+
+# Tokens are NOT env-aware: authenticate() takes one token from $VAULT_TOKEN
+# then ~/.vault-token, and pairs it with whatever VAULT_ADDR says. Each token
+# 403s against the other Vault, so addr and token must move together. Use these
+# as a prefix for one command; do not export VAULT_TOKEN.
+#   vault-prod    super vault get midas production
+#   vault-staging super vault get midas staging
+# Each reads .env.secrets fresh in a subshell rather than trusting the ambient
+# environment. The _WORKSPACE_AUTH_LOADED guard above loads .env.rc once per
+# process tree, so a secret ADDED or ROTATED after a long-running process
+# started never reaches its children -- measured: a shell inheriting the flag
+# had no VAULT_TOKEN_PROD minutes after it was added to the file.
+_vault_with() {  # _vault_with <addr-var-value> <token-var-name> <cmd...>
+  local addr="$1" tokvar="$2"; shift 2
+  ( set -a; . /workspace/.env.secrets 2>/dev/null; set +a
+    local tok="${!tokvar:-}"
+    [ -n "$tok" ] || { echo "$tokvar not in /workspace/.env.secrets" >&2; return 1; }
+    # VAULT_STRICT_HTTP makes hvac use GET ...?list=true instead of the
+    # non-standard LIST HTTP verb. The staging Vault (or its proxy) rejects
+    # LIST with 400 Bad Request while production accepts it, so without this
+    # every `super vault get ... staging` dies as
+    # "Vault exception InvalidRequest with args ('Bad Request',)" -- which
+    # names neither the verb nor the host and reads like a bad token.
+    # Measured: LIST -> 400 staging / 200 prod; GET?list=true -> 200 both.
+    # Set for both envs so the two behave identically.
+    VAULT_ADDR="$addr" VAULT_TOKEN="$tok" VAULT_STRICT_HTTP=true "$@" )
+}
+vault-prod() {
+  _vault_with "https://vault-production.production-eks-private.internaldns-snaptravel.com" \
+              VAULT_TOKEN_PROD "$@"
+}
+vault-staging() {
+  _vault_with "https://vault-staging.private.staging.superinc.net" \
+              VAULT_TOKEN_STAGING "$@"
+}
