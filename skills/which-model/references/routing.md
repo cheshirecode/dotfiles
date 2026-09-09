@@ -48,6 +48,38 @@ Deprecated ids (`claude-opus-4-0`, `claude-opus-4-1`, `claude-sonnet-4-0`,
 `claude-3-haiku-20240307`) stay `selectable_if_configured` and must still not be
 recommended; retired ids cannot be served at all.
 
+#### Cursor
+
+Cursor's catalog is **machine-local**: the helper reads the editor's own
+`state.vscdb` (`availableDefaultModels2` in globalStorage) rather than any
+public API, so what it can tell you depends on whether Cursor is installed
+where the skill is running.
+
+Check which of the two you got before naming anything:
+
+```bash
+bin/model-catalog --env cursor --refresh-if-stale \
+  | jq '{sources: .catalog.sources, ids: [.catalog.models[].id]}'
+```
+
+- A **real** read lists ids from the editor's own model list.
+- The **fallback** is a single `cursor-default-fast` record with
+  `confidence: "seeded"` and `availability: "unverified_in_harness"`, and
+  `sources[]` carries `{"kind": "cursor-state-db", "error": "Cursor state.vscdb
+  not found in default locations"}`. Measured on this machine 2026-09-09: the
+  fallback, because no Cursor install is present.
+
+**On the fallback, recommend lanes and never exact Cursor model ids.** The seed
+carries one placeholder id, no prices, and no context window; presenting it as
+a model is inventing availability. Cursor also gates models by plan and
+workspace, so even a real local read proves what *this* install offers, not
+what the user's teammate or CI sees — say which of those you checked.
+
+Model choice in Cursor is a **picker** decision. Unless the session exposes a
+delegation surface of its own, treat any routing advice here as advisory and
+say so; do not describe it in the enforceable terms that apply to Claude Code
+dispatch above.
+
 ### Delegation model selection
 
 Distinct from the picker: the picker sets what *this* session runs, delegation
