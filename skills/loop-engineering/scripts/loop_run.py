@@ -52,14 +52,16 @@ def loop_state(args):
     return proc.returncode, proc.stdout.strip()
 
 
-def radar_line(repo):
+def radar_line(repo, remote=False):
     """One radar verdict cell; never fails the cycle."""
     if not repo:
         return "radar: off"
+    cmd = [str(CREW_RADAR), "--json"]
+    if remote:
+        cmd.append("--remote")
+    cmd.append(repo)
     try:
-        proc = subprocess.run(
-            [str(CREW_RADAR), "--json", repo], capture_output=True, text=True
-        )
+        proc = subprocess.run(cmd, capture_output=True, text=True)
         data = json.loads(proc.stdout)
     except (OSError, ValueError):
         return "radar: error=unrunnable"
@@ -186,6 +188,11 @@ def main():
     parser.add_argument("--verification")
     parser.add_argument("--repo", help="repo for the crew radar (default: "
                         "cwd git toplevel at init)")
+    parser.add_argument("--radar-remote", dest="radar_remote",
+                        action="store_true",
+                        help="include pushed remote branches as radar owners; "
+                             "needed only for peers with no local worktree "
+                             "(remote-isolated subagents, other machines)")
     parser.add_argument("--project", help="worklog project slug for the "
                         "orchestrator queue")
     parser.add_argument("--allowed-effect", dest="allowed_effect",
@@ -210,7 +217,8 @@ def main():
                 text=True,
             )
             repo = probe.stdout.strip() if probe.returncode == 0 else ""
-        config = {"repo": repo or "", "project": ns.project or ""}
+        config = {"repo": repo or "", "project": ns.project or "",
+                  "remote": bool(ns.radar_remote)}
         config_path.write_text(json.dumps(config))
         rc, line = loop_state([
             "init", "--state", str(state),
@@ -269,7 +277,8 @@ def main():
     status = line.split(" ", 1)[0]
     decide = "stopped" if status in TERMINAL else "continue or stop"
     print("%s | %s | %s | decide: %s" % (
-        line, radar_line(config.get("repo")), q_line, decide,
+        line, radar_line(config.get("repo"), config.get("remote", False)),
+        q_line, decide,
     ))
     return 0
 
