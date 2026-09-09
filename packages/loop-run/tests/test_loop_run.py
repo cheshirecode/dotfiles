@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
@@ -213,6 +214,18 @@ class LoopRunTest(unittest.TestCase):
         self.addCleanup(setattr, loop_run, "CREW_RADAR", real)
         return loop_run.radar_line(str(Path(self._tmp.name)))
 
+    def test_radar_usage_or_repo_error_is_not_a_conflict_verdict(self):
+        # crew.md: exit 1 is a usage or repo error, exit 2 the collision
+        # verdict. A radar that could not inspect the repo must never render
+        # as a `warn=` cell -- that reads as "the radar ran and found N".
+        cell = self._radar_cell(
+            1,
+            '{"base":"HEAD","worktrees":0,"warn":0,"info":0,"overlaps":[]}',
+            "crew-radar: repo unreadable",
+        )
+        self.assertTrue(cell.startswith("radar: error="), cell)
+        self.assertNotIn("warn=", cell)
+
     def test_radar_never_renders_an_unknown_verdict_label(self):
         # A payload with no warn count cannot be reported as a verdict at all;
         # `warn=?` is indistinguishable from a real verdict whose label is
@@ -244,6 +257,55 @@ class LoopRunTest(unittest.TestCase):
             '{"sev":"warn","path":"b.py","owners":"f-b"}]}',
         )
         self.assertEqual(cell, "radar: warn=1 paths=a.py,b.py")
+
+    def test_radar_single_owner_is_not_rendered_as_clean(self):
+        # A repo with one owner cannot express an overlap, so exit 0 there is
+        # the absence of a comparison. Rendering it `clean` is the reading that
+        # makes an orchestrator skip serializing writes: subagents sharing one
+        # worktree collide under a single label and the radar cannot see it.
+        cell = self._radar_cell(
+            0,
+            '{"base":"HEAD","worktrees":1,"comparable":false,'
+            '"remote_branches":0,"remote_fetch":"off",'
+            '"warn":0,"info":0,"overlaps":[]}',
+        )
+        self.assertEqual(cell, "radar: single-owner")
+
+    def test_radar_clean_requires_an_actual_comparison(self):
+        cell = self._radar_cell(
+            0,
+            '{"base":"HEAD","worktrees":2,"comparable":true,'
+            '"remote_branches":0,"remote_fetch":"off",'
+            '"warn":0,"info":0,"overlaps":[]}',
+        )
+        self.assertEqual(cell, "radar: clean")
+
+    def test_radar_without_comparable_field_still_reads_clean(self):
+        # An older crew-radar omits the field; absence is not proof of a
+        # single owner, so the cell must not invent one.
+        cell = self._radar_cell(
+            0, '{"base":"HEAD","worktrees":2,"warn":0,"info":0,"overlaps":[]}'
+        )
+        self.assertEqual(cell, "radar: clean")
+
+    def test_radar_remote_flag_reaches_crew_radar(self):
+        argv = Path(self._tmp.name) / "radar-argv"
+        stub = Path(self._tmp.name) / "crew-radar-argv"
+        stub.write_text(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > " + shlex.quote(str(argv))
+            + "\nprintf '%s' '{\"base\":\"H\",\"worktrees\":2,"
+              "\"comparable\":true,\"warn\":0,\"info\":0,\"overlaps\":[]}'\n"
+        )
+        stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+        real = loop_run.CREW_RADAR
+        loop_run.CREW_RADAR = stub
+        self.addCleanup(setattr, loop_run, "CREW_RADAR", real)
+
+        loop_run.radar_line(str(Path(self._tmp.name)))
+        self.assertNotIn("--remote", argv.read_text().split("\n"))
+
+        loop_run.radar_line(str(Path(self._tmp.name)), remote=True)
+        self.assertIn("--remote", argv.read_text().split("\n"))
 
     def test_queue_off_without_project(self):
         r = self.init_run()
@@ -332,6 +394,36 @@ class LoopRunTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(self._queue_cell(r.stdout), "queue: blocked")
 
+    def test_queue_configuration_failure_is_an_error_not_a_lull(self):
+        # orchestrator.md: exit 1 alone is not proof of an empty or blocked
+        # queue -- it also covers a missing or misconfigured project. Reporting
+        # those as `blocked` lets a loop spin forever claiming nothing.
+        for stderr_line in (
+            "project next: no task file for 'prog-x'",
+            "project next: 'prog-x' has no tasks: block",
+            "_lib.sh::resolve_worklog_repo: cannot locate a worklog data repo.",
+        ):
+            with self.subTest(stderr_line):
+                self._tmp.cleanup()
+                self._tmp = tempfile.TemporaryDirectory()
+                self.run_dir = str(Path(self._tmp.name) / "run")
+                self.cwd = self._tmp.name
+                r = self.init_with_stub(
+                    "#!/bin/sh\necho \"%s\" >&2\nexit 1\n" % stderr_line
+                )
+                self.assertEqual(r.returncode, 0, r.stderr)
+                cell = self._queue_cell(r.stdout)
+                self.assertTrue(cell.startswith("queue: error="), cell)
+                self.assertNotIn("blocked", cell)
+
+    # --- WORKLOG_BIN resolution -------------------------------------------
+    # A queue the caller asked for and did not get used to print
+    # "queue: off (no WORKLOG_BIN)" -- the same word the driver uses when no
+    # --project was passed at all. Two worklog checkouts can exist on one
+    # machine, so a profile exporting WORKLOG_BIN at the wrong one is the
+    # expected failure, not an exotic one. Each test below is RED against the
+    # pre-fix driver.
+
     def test_requested_queue_with_wrong_worklog_bin_is_an_error(self):
         # RED before the fix: this printed "queue: off (no WORKLOG_BIN)".
         # WORKLOG_BIN set but pointing at a directory with no project.sh --
@@ -359,3 +451,45 @@ class LoopRunTest(unittest.TestCase):
         self.assertNotIn("off", cell)
         body = [ln for ln in r.stdout.splitlines() if ln.strip()]
         self.assertEqual(len(body), 1)
+
+    def test_requested_queue_with_no_worklog_anywhere_is_an_error(self):
+        # RED before the fix: also printed "queue: off (no WORKLOG_BIN)".
+        # In-process so both fallback roots can be emptied: $HOME and the
+        # skill's own sibling directory are real on a dev box, and a
+        # subprocess would resolve the developer's installed worklog and
+        # pass for the wrong reason.
+        home = Path(self._tmp.name) / "home"
+        (home / ".claude/skills").mkdir(parents=True)
+        siblings = Path(self._tmp.name) / "skills"
+        siblings.mkdir()
+        with mock.patch.dict(os.environ, {"HOME": str(home)}, clear=False), \
+                mock.patch.object(loop_run, "SKILL_DIR", siblings / "loop-engineering"):
+            os.environ.pop("WORKLOG_BIN", None)
+            found, why = loop_run.resolve_project_sh()
+            self.assertIsNone(found)
+            self.assertIn("no WORKLOG_BIN", why)
+            cell, slug = loop_run.queue_line("prog-x")
+        self.assertIsNone(slug)
+        self.assertTrue(cell.startswith("queue: error="), cell)
+        self.assertNotIn("off", cell)
+
+    def test_installed_worklog_resolves_without_worklog_bin(self):
+        # GREEN half of the pair: the fallback must actually find an installed
+        # skill, or the two RED cases above would pass on a resolver that can
+        # only ever fail.
+        home = Path(self._tmp.name) / "home"
+        bin_dir = home / ".claude/skills/worklog/bin"
+        bin_dir.mkdir(parents=True)
+        (bin_dir / "project.sh").write_text("#!/bin/sh\necho task-alpha\n")
+        siblings = Path(self._tmp.name) / "skills"
+        siblings.mkdir()
+        with mock.patch.dict(os.environ, {"HOME": str(home)}, clear=False), \
+                mock.patch.object(loop_run, "SKILL_DIR", siblings / "loop-engineering"):
+            os.environ.pop("WORKLOG_BIN", None)
+            found, why = loop_run.resolve_project_sh()
+        self.assertIsNone(why)
+        self.assertEqual(found, bin_dir / "project.sh")
+
+
+if __name__ == "__main__":
+    unittest.main()
