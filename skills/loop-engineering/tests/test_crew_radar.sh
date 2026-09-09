@@ -249,5 +249,32 @@ off=$("$RADAR" --json --base origin/main "$RL" | jq -r '.remote_fetch')
 if [ "$off" = off ]; then ok "lane off renders as off, not stale"
 else bad "lane off renders as off, not stale (got '$off')"; fi
 
+# --- whose workers own the overlap -------------------------------------------
+# An overlap is three different problems depending on how many of its owners
+# are yours: both (your split is wrong, you can fix it), one (a cross-run
+# conflict neither side can fix alone), or none (not yours, do not act).
+RM=$TMP/rmine
+G init -q -b main "$RM"; ( cd "$RM" && echo base > s.txt && G add -A && G commit -qm init )
+G -C "$RM" worktree add -q "$TMP/agent-m1" -b mfeat-a
+G -C "$RM" worktree add -q "$TMP/agent-m2" -b mfeat-b
+echo one > "$TMP/agent-m1/s.txt"; echo two > "$TMP/agent-m2/s.txt"
+rmine() { "$RADAR" --json --base main "$@" "$RM" | jq -r '.overlaps[0].mine'; }
+
+got=$(rmine --roster 'm1,m2'); [ "$got" = 2 ] \
+  && ok "both owners mine -> mine=2" || bad "both owners mine -> mine=2 (got '$got')"
+got=$(rmine --roster 'm1,');   [ "$got" = 1 ] \
+  && ok "one owner mine -> mine=1"  || bad "one owner mine -> mine=1 (got '$got')"
+: > "$TMP/none.roster"
+got=$(rmine --roster "$TMP/none.roster"); [ "$got" = 0 ] \
+  && ok "loaded-but-empty roster -> mine=0" || bad "loaded-but-empty roster -> mine=0 (got '$got')"
+
+# Pin (passes before and after): no roster carries NO ownership information.
+# Reporting 0 there would
+# read as "none of these are yours" -- the same words as the real verdict
+# above, and the reading that makes an orchestrator ignore its own collision.
+got=$(rmine); [ "$got" = null ] \
+  && ok "no roster omits mine rather than reporting 0" \
+  || bad "no roster omits mine rather than reporting 0 (got '$got')"
+
 printf "\n  %d passed, %d failed\n" "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
