@@ -86,6 +86,14 @@ Two mechanical guards, because "remember the cwd" is not one:
   returning `blocked <slug> wrong-repo worktree` on a mismatch. A worker that
   checks first costs one tool call; a worker that improvises costs a wave.
 
+### Fan-out stays one level deep
+
+Delegates have their own dispatch tool and will use it. Say in the prompt that
+subtask delegation is theirs to do in-process, and that the fan-out you are
+managing is yours alone: a delegate that spawns its own crew produces workers
+with no entry in your roster, which the radar cannot annotate, `crew-reap`
+cannot gate on, and no one is tracking. One level, and the roster stays true.
+
 ### Keep the lead working while delegates run
 
 Per the Fable 5.1 prompting guide, don't idle the orchestrator while
