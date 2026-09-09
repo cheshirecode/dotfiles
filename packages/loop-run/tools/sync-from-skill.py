@@ -3,8 +3,16 @@
 
 The skill (../../skills/loop-engineering) is canonical. loop_state.py and
 bin/crew-radar are copied verbatim; loop_run.py gets exactly two mechanical
-package adaptations (path constants, dual-mode sibling import). --check
-diffs instead of writing, so CI fails on drift the moment the skill moves.
+package adaptations (path constants, dual-mode sibling import), and
+tests/test_loop_run.py gets the matching path rewrite. --check diffs instead
+of writing, so CI fails on drift the moment the skill moves.
+
+tests/test_loop_state.py is deliberately NOT rendered: the skill's copy pins
+SKILL.md and references/ prose that the package does not ship, so it is
+hand-maintained as a subset. Rendering source but not tests is what let a
+package fixture keep asserting `radar: clean` after the skill corrected that
+verdict -- the drift check passed, and the stale expectation only surfaced
+once the source was re-synced.
 """
 
 from __future__ import annotations
@@ -40,13 +48,35 @@ except ImportError:  # package import
 ]
 
 
+# The package test resolves the modules under src/looprun instead of the
+# skill's scripts/ directory. Everything else in the file is portable: the
+# fixtures that look layout-dependent patch loop_run.SKILL_DIR and HOME
+# explicitly, so they do not read the real tree.
+TEST_PATCHES = [
+    (
+        'LOOP_RUN = SKILL_DIR / "scripts" / "loop_run.py"',
+        'LOOP_RUN = SKILL_DIR / "src" / "looprun" / "loop_run.py"',
+    ),
+    (
+        'sys.path.insert(0, str(SKILL_DIR / "scripts"))',
+        'sys.path.insert(0, str(SKILL_DIR / "src" / "looprun"))',
+    ),
+]
+
+
 def render() -> dict[pathlib.Path, str | bytes]:
     src = (SKILL / "scripts" / "loop_run.py").read_text()
     for old, new in PATCHES:
         if old not in src:
             sys.exit(f"sync: patch anchor missing in skill loop_run.py: {old.splitlines()[0]!r}")
         src = src.replace(old, new)
+    test_src = (SKILL / "tests" / "test_loop_run.py").read_text()
+    for old, new in TEST_PATCHES:
+        if old not in test_src:
+            sys.exit(f"sync: patch anchor missing in skill test_loop_run.py: {old!r}")
+        test_src = test_src.replace(old, new)
     return {
+        PKG / "tests/test_loop_run.py": test_src,
         PKG / "src/looprun/loop_run.py": src,
         PKG / "src/looprun/loop_state.py": (SKILL / "scripts" / "loop_state.py").read_text(),
         PKG / "src/looprun/bin/crew-radar": (SKILL / "bin" / "crew-radar").read_bytes(),
