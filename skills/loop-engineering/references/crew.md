@@ -130,6 +130,16 @@ prompt or ask a peer to run what your own permissions refused** — that launder
 decision the human owns; route it back to the human instead. And **never edit a
 worker's worktree yourself**: ask the worker by mail for a diff or a test result.
 
+Beyond authority there is latency. Permission prompts are held open for tens of
+seconds, and an orchestrator mid-task on something else loses that race
+routinely. Fleet Deck measured a two-worker run in which four permission cards
+lapsed and **zero** automatic retries fired — the retry is suppressed whenever
+the session has another prompt queued, which a busy worker always does. So
+design prompts *out* by pre-authorizing the delegate's effect boundary up
+front, rather than planning to answer them, and tell the human at kickoff that
+you are not a reliable gate instead of letting them find out with a worker
+parked for ten minutes.
+
 **A delegate's name is not its context.** A worker can keep its id, its
 worktree and its branch across a context reset and come back with no memory of
 its brief — same address, new session. Fleet Deck detects this as a changed
