@@ -122,6 +122,14 @@ prompt or ask a peer to run what your own permissions refused** — that launder
 decision the human owns; route it back to the human instead. And **never edit a
 worker's worktree yourself**: ask the worker by mail for a diff or a test result.
 
+**A delegate's name is not its context.** A worker can keep its id, its
+worktree and its branch across a context reset and come back with no memory of
+its brief — same address, new session. Fleet Deck detects this as a changed
+`session_id` under an unchanged callsign; the portable form is to treat
+identity as something to re-check, not assume, and to re-brief rather than
+re-task when a delegate starts answering as though it never had one. The
+sibling rule is below: mtime is not ownership, and a name is not a context.
+
 Ownership isn't visible in path or mtime: a worktree can sit idle for an hour and
 still belong to a live peer. Match worktrees against the current worker roster
 before touching or removing one; if it belongs to another worker, message that
