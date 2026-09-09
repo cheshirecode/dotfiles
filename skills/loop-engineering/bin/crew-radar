@@ -195,12 +195,19 @@ fi
 
 agent_for() {  # $1 = worktree basename -> prints agent name, or empty
   [ "$ROSTER_SET" -eq 1 ] || return 0
-  local n
+  # Claude Code names an isolated subagent's worktree `agent-<id>` while the
+  # roster row from ListAgents carries the bare `<id>`. Comparing only against
+  # the raw basename annotated every such worktree `@?` -- indistinguishable
+  # from "no live agent holds this" -- on the one harness that actually
+  # provides isolation. Compare the de-prefixed basename too.
+  # crew-reap's owned_by_live_agent() must match this rule exactly.
+  local n b=$1 bstrip=${1#agent-}
   while IFS= read -r n; do
     n=$(printf '%s' "$n" | tr -d '\r' | awk '{print $1}')
     [ -z "$n" ] && continue
-    [ "$n" = "$1" ] && { printf '%s' "$n"; return 0; }
-    case "$n" in "$1"-*) printf '%s' "$n"; return 0 ;; esac
+    [ "$n" = "$b" ] && { printf '%s' "$n"; return 0; }
+    [ "$n" = "$bstrip" ] && { printf '%s' "$n"; return 0; }
+    case "$n" in "$b"-*|"$bstrip"-*) printf '%s' "$n"; return 0 ;; esac
   done <<EOF
 $ROSTER
 EOF

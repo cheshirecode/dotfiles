@@ -242,6 +242,20 @@ if [ "$rc" = 3 ] && printf '%s' "$out" | grep -q 'branch delete failed'; then
   PASS=$((PASS+1)); printf '  PASS  branch delete failure degrades the row, still exits 3\n'
 else FAIL=$((FAIL+1)); printf '  FAIL  branch delete failure: rc=%s\n%s\n' "$rc" "$out"; fi
 
+# A Claude Code isolated subagent gets a worktree named `agent-<id>` while the
+# roster row from ListAgents carries the bare `<id>`. Under basename/basename-*
+# matching that pair never matched: the ownership gate went inert on the one
+# harness that provides isolation, and a live agent's landed worktree was
+# reapable. crew-radar must match this rule exactly.
+build
+G -C "$TMP/r" worktree add -q -b br-agent "$TMP/agent-deadbeef01"
+out=$(printf 'deadbeef01\n' | "$REAP" --target main --no-fetch "$TMP/r" 2>&1)
+if printf '%s' "$out" | grep -Eq 'keep +agent-deadbeef01 .*live agent'; then
+  PASS=$((PASS+1)); printf '  PASS  agent-<id> worktree is owned by bare-id roster\n'
+else
+  FAIL=$((FAIL+1)); printf '  FAIL  agent-<id> worktree is owned by bare-id roster\n%s\n' "$out"
+fi
+
 if [ "$SKIP" -gt 0 ]; then
   printf '\n  %d passed, %d failed, %d skipped\n' "$PASS" "$FAIL" "$SKIP"
 else

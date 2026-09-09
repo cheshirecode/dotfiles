@@ -177,5 +177,14 @@ ck "unreadable roster path with comma fails closed" 1 'cannot read roster' \
 ck "empty roster annotates owners @?" 2 'pfeat-a@[?]' \
   --roster "$TMP/empty.roster" --base main "$RP"
 
+# Claude Code names an isolated subagent worktree `agent-<id>` while the roster
+# from ListAgents carries the bare `<id>`. Matching only basename/basename-*
+# annotated every one of them `@?` -- "no live agent holds this" -- and left
+# crew-reap's ownership gate inert on exactly the harness that has isolation.
+G -C "$RP" worktree add -q "$TMP/agent-deadbeef01" -b pfeat-c
+echo z > "$TMP/agent-deadbeef01/a|b.txt"
+ck "roster matches an agent-<id> worktree" 2 'pfeat-c@deadbeef01' \
+  --base main --roster 'deadbeef01,' "$RP"
+
 printf "\n  %d passed, %d failed\n" "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
