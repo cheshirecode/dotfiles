@@ -219,6 +219,31 @@ Act on severity:
   branch on another. Leave it; mail the descendant once to keep the shared file
   read-only. Repeat `info` rows on those paths are noise.
 
+### Whose overlap is it
+
+`--roster` makes this mechanical: each JSON overlap carries `mine`, the number
+of its owners matched to a live agent of yours. The field is absent without a
+roster — that is "unknown", not "none". Three different problems:
+
+- **`mine == 2` (or more) — your split is wrong, and you can fix it.** Decide
+  who owns the file and mail both workers to divide it: one takes the file, the
+  other an interface. If the overlap is structural rather than incidental,
+  stop one worker and fold its task into the other. Two workers converging on
+  one file is slower than one worker doing both.
+- **`mine == 1` — a cross-run conflict, and the most dangerous kind**, because
+  neither orchestrator can fix it alone and both may believe they own the file.
+  You have authority over exactly half of it. Mail the *peer orchestrator* with
+  the path, your worker, and a concrete proposal for ownership; tell your own
+  worker to hold off on that file and give it other work. **Never stop,
+  re-task, or re-scope another run's worker** — it takes instructions from the
+  run that spawned it. If the peer does not agree quickly, escalate to the
+  human: two runs silently racing one file is the failure the radar exists to
+  prevent, and a human owns the tie-break.
+- **`mine == 0` — not your conflict.** Do not act on it and do not mail either
+  side. Mention it to the human only if it touches a file your run depends on.
+
+Never resolve an overlap by editing the file yourself.
+
 ### Reaping finished worktrees
 
 `bin/crew-reap` is the radar's companion: the radar says who is still working,
