@@ -17,7 +17,9 @@ token it cannot spend on dispatch. Follow these rules:
   to cut generation token costs by >85%.
 - **Never re-read sub-agent output.** Check that the sub-agent completed
   (`archive.sh` pushed successfully) and move on. The worklog commit is the
-  evidence, not the orchestrator's recollection.
+  evidence, not the orchestrator's recollection. This governs the *completion
+  signal* only — see "Relaying a delegate's claim" below before any conclusion
+  of a delegate's travels further.
 - **Sub-agents own verification.** The sub-agent runs verification, writes
   results to the task file, checkpoints, and returns. The orchestrator only
   confirms the task is archived.
@@ -164,6 +166,29 @@ python3 <skill-dir>/scripts/loop_state.py advance \
   --evidence "<slug>: archived" \
   --next-action "Claim next project task"
 ```
+
+### Relaying a delegate's claim makes it yours
+
+Adopted from Fleet Deck's orchestrator doctrine, which paid for it. A delegate's
+return carries two different kinds of thing, and the token rule above covers
+only the first:
+
+- **Facts about the run** — branch pushed, file moved, task archived. Cheap to
+  check against the board, the worklog commit, or `git`. Take them as given.
+- **Claims about the domain** — "X is the rollout gate", "that field is
+  unused", "the migration is safe". These are conclusions, not evidence, and
+  the delegate's context that produced them is gone.
+
+Verify a domain claim before it shapes another child's context pack, reaches a
+PR description, a ticket, or the human — or pass it on explicitly as that
+delegate's *unverified* claim. Measured cost of skipping this: a wrong "the
+`publish.py` weights are the rollout gate" travelled into an MR, a ticket and a
+human update before anyone read the code; the real gate was upstream, and the
+retraction cost more than the check would have.
+
+This does not reopen the no-re-read rule. Archiving a child still needs nothing
+but its one status line. The gate applies at the moment a conclusion leaves the
+child's own task file — which is exactly when the cheap path stops being cheap.
 
 Cycle decision record: Before any action that changes the hypothesis, write a
 compact three-part record (`hypothesis: <claim>`, `falsifier: <observable result
