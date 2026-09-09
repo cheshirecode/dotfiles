@@ -142,6 +142,16 @@ only on overlap rows, so a clean repo shows nothing either way.
 Two worktrees changing one file is a merge conflict surfacing early. Treat it as
 evidence that **the split was wrong**, not that a worker misbehaved.
 
+`--remote[=<glob>]` (default glob `origin/*`) additionally treats remote-tracking
+branches as owners, for peers that exist only as a push: a `isolation: "remote"`
+subagent, or another machine. **Leave it off for a local fleet** — `git worktree
+list` is already the complete roster there, and every stale `origin/*` branch
+would otherwise register as a live owner. A local branch's own pushed
+counterpart is deduped to one owner, so a worker never collides with its own
+push. The lane is only as fresh as the last fetch: without `--fetch` the JSON
+reports `remote_fetch: "stale"`, which is a verdict about the lane, not the
+repo. `comparable: false` in the JSON is the single-owner case above.
+
 ```bash
 <skill-dir>/bin/crew-radar [--base <ref>] [--roster <file|list|->] [--json] [--quiet] [--strict] <repo>
 ```
