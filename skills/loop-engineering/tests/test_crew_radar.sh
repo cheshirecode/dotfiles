@@ -186,5 +186,21 @@ echo z > "$TMP/agent-deadbeef01/a|b.txt"
 ck "roster matches an agent-<id> worktree" 2 'pfeat-c@deadbeef01' \
   --base main --roster 'deadbeef01,' "$RP"
 
+# --- single-owner honesty ----------------------------------------------------
+# A repo with one owner cannot produce an overlap, so `clean` there reports the
+# absence of a comparison, not a graded verdict. This is the shape a single
+# orchestrator hits when its subagents share one worktree: exit 0 forever, and
+# the collisions it was armed to catch are structurally undetectable.
+SO=$TMP/solo
+G init -q -b main "$SO"; ( cd "$SO" && G commit -q --allow-empty -m init )
+echo x > "$SO/f.txt"
+ck "single owner is not a graded clean" 0 'single owner' --base main "$SO"
+so_cmp=$("$RADAR" --json --base main "$SO" | jq -r '.comparable')
+if [ "$so_cmp" = false ]; then ok "json: comparable=false with one owner"
+else bad "json: comparable=false with one owner (got '$so_cmp')"; fi
+mc=$("$RADAR" --json --base main "$RP" | jq -r '.comparable')
+if [ "$mc" = true ]; then ok "json: comparable=true with two owners"
+else bad "json: comparable=true with two owners (got '$mc')"; fi
+
 printf "\n  %d passed, %d failed\n" "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
