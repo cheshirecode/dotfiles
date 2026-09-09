@@ -334,11 +334,18 @@ done < <(printf '%s\n' "${OWNER_PATHS[@]}" | LC_ALL=C sort)
 collision=$nwarn
 [ "$STRICT" -eq 1 ] && collision=$((nwarn + ninfo))
 
+# With a single owner no overlap is expressible, so exit 0 reports the absence
+# of a comparison rather than a graded verdict. An orchestrator whose subagents
+# share one worktree sits here permanently: every write lands under one label,
+# and the collisions the radar exists to catch cannot be represented at all.
+COMPARABLE=true
+[ "${#LABELS[@]}" -ge 2 ] || COMPARABLE=false
+
 # --- report -------------------------------------------------------------------
 if [ "$QUIET" -eq 0 ]; then
   if [ "$FMT" = json ]; then
-    printf '{"base":"%s","worktrees":%d,"warn":%d,"info":%d,"overlaps":[' \
-      "$(json_escape "$BASE")" "${#LABELS[@]}" "$nwarn" "$ninfo"
+    printf '{"base":"%s","worktrees":%d,"comparable":%s,"warn":%d,"info":%d,"overlaps":[' \
+      "$(json_escape "$BASE")" "${#LABELS[@]}" "$COMPARABLE" "$nwarn" "$ninfo"
     first=1
     while IFS= read -r row; do
       [ -n "$row" ] || continue
@@ -352,7 +359,11 @@ if [ "$QUIET" -eq 0 ]; then
   else
     printf '%s  base=%s  worktrees=%d\n' "$PROG" "$BASE" "${#LABELS[@]}"
     if [ "${#ROWS[@]}" -eq 0 ]; then
-      printf 'clean — no overlapping paths\n'
+      if [ "$COMPARABLE" = false ]; then
+        printf 'single owner — nothing to compare; no overlap is expressible here\n'
+      else
+        printf 'clean — no overlapping paths\n'
+      fi
     else
       while IFS= read -r row; do
         [ -n "$row" ] || continue

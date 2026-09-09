@@ -76,7 +76,16 @@ def radar_line(repo):
     paths = ",".join(o.get("path", "?") for o in data.get("overlaps") or [])
     if proc.returncode == 0:
         # Exit 0 with overlaps is info-only (stacked branches), not a warn.
-        return "radar: info paths=%s" % cell(paths) if paths else "radar: clean"
+        if paths:
+            return "radar: info paths=%s" % cell(paths)
+        # One owner cannot overlap with anything, so `clean` there would grade
+        # a comparison that never happened -- the reading that lets an
+        # orchestrator skip serializing writes while its subagents share a
+        # single worktree. Absence of the field means an older radar, which is
+        # not evidence of a single owner, so only an explicit false counts.
+        if data.get("comparable") is False:
+            return "radar: single-owner"
+        return "radar: clean"
     warn = data.get("warn")
     if not isinstance(warn, int) or isinstance(warn, bool):
         # No count to report. `warn=?` was indistinguishable from a graded

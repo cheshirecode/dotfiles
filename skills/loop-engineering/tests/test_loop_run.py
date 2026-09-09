@@ -191,12 +191,14 @@ class LoopRunTest(unittest.TestCase):
         )
         r = self.init_run(["--repo", str(repo)])
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("radar: clean", r.stdout)
+        # One worktree: the radar ran, and says so honestly rather than
+        # grading a comparison it could not make.
+        self.assertIn("radar: single-owner", r.stdout)
         # The repo is remembered: the next cycle re-runs the radar unprompted.
         r2 = run(
             [self.run_dir, "--evidence", "command: true — ok"], cwd=self.cwd
         )
-        self.assertIn("radar: clean", r2.stdout)
+        self.assertIn("radar: single-owner", r2.stdout)
 
     def _radar_cell(self, code, stdout, stderr=""):
         """Run radar_line against a crew-radar stub with a fixed exit code."""
@@ -255,6 +257,34 @@ class LoopRunTest(unittest.TestCase):
             '{"sev":"warn","path":"b.py","owners":"f-b"}]}',
         )
         self.assertEqual(cell, "radar: warn=1 paths=a.py,b.py")
+
+    def test_radar_single_owner_is_not_rendered_as_clean(self):
+        # A repo with one owner cannot express an overlap, so exit 0 there is
+        # the absence of a comparison. Rendering it `clean` is the reading that
+        # makes an orchestrator skip serializing writes: subagents sharing one
+        # worktree collide under a single label and the radar cannot see it.
+        cell = self._radar_cell(
+            0,
+            '{"base":"HEAD","worktrees":1,"comparable":false,'
+            '"warn":0,"info":0,"overlaps":[]}',
+        )
+        self.assertEqual(cell, "radar: single-owner")
+
+    def test_radar_clean_requires_an_actual_comparison(self):
+        cell = self._radar_cell(
+            0,
+            '{"base":"HEAD","worktrees":2,"comparable":true,'
+            '"warn":0,"info":0,"overlaps":[]}',
+        )
+        self.assertEqual(cell, "radar: clean")
+
+    def test_radar_without_comparable_field_still_reads_clean(self):
+        # An older crew-radar omits the field; absence is not proof of a
+        # single owner, so the cell must not invent one.
+        cell = self._radar_cell(
+            0, '{"base":"HEAD","worktrees":2,"warn":0,"info":0,"overlaps":[]}'
+        )
+        self.assertEqual(cell, "radar: clean")
 
     def test_queue_off_without_project(self):
         r = self.init_run()
