@@ -21,6 +21,47 @@ Map available primitives by capability, not by a different host's tool names:
 | overlapping worktree edits | run deterministic conflict evidence | `bin/crew-radar` (below) | `bin/crew-radar` (below) — same repo, same radar |
 | durable claim, stale reap, resume | use the Worklog claim lifecycle | `project.sh claim` / `reap` / `context.sh --for=resume` | `$WORKLOG_BIN/project.sh` / `context.sh` — host-agnostic paths |
 
+### Claude Code: isolation is real, and it is a parameter
+
+Verified 2026-09-09 by probe. The Agent tool takes `isolation: "worktree"`,
+and it creates a genuine git worktree:
+
+```
+worktree /workspace/dotfiles/.claude/worktrees/agent-<id>
+branch   worktree-agent-<id>          (locked)
+```
+
+It appears in `git worktree list`, so `bin/crew-radar` already sees it with no
+remote lane and no network. Three consequences:
+
+- **Parallel writers are permitted here.** The read-only default above is a
+  response to *unproven* isolation. On Claude Code with
+  `isolation: "worktree"`, isolation is proven per dispatch, so concurrent
+  delegates may write their own worktrees. `WORKLOG_REPO` is still shared and
+  its mutating helpers still serialize — that carve-out is unchanged.
+- **Without the parameter there is no isolation**, and the failure is silent
+  in the worst way: every subagent writes into the orchestrator's own
+  worktree, so all their edits land under one radar label. Two agents
+  clobbering one file produce one owner and the radar reports **exit 0**. It
+  is not that no collision was found; no collision was *expressible*. The
+  radar now says `single owner — nothing to compare` rather than `clean`, and
+  the driver cell reads `radar: single-owner`. Treat that cell as "conflict
+  detection is off", not as a green light.
+- **`isolation: "remote"` is the genuinely blind case.** A remote-isolated
+  agent has no local worktree, so it is invisible until it pushes. That is
+  what `crew-radar --remote` is for (below) — not the local fleet.
+
+Roster note: the harness names these worktrees `agent-<id>` while `ListAgents`
+rows carry the bare `<id>`. Both `crew-radar` and `crew-reap` compare the
+de-prefixed basename, so a bare-id roster matches. Before that fix the pair
+matched nothing on this harness: every owner annotated `@?`, and crew-reap's
+ownership gate went inert (`roster_matched: 0`) on the one host that actually
+has isolation.
+
+Subagents also carry their own `Skill` tool, so a delegate can invoke skills
+independently. Give it the objective and let it route; do not paste the parent
+transcript.
+
 ### Isolation follows the shell, not the flag
 
 A harness that creates a private worktree per worker builds it from the
@@ -66,7 +107,7 @@ applies at most one write set at a time, verifies it, runs the radar, and only
 then starts the next write. Manually naming different directories does not
 upgrade this harness into proven isolation. This applies on every host: Codex
 subagents, OpenCode task dispatch, Cursor subagents — none provide filesystem
-isolation by default.
+isolation by default. **Claude Code is the exception**; see below.
 
 Two boundaries are not negotiable. **Never answer another session's permission
 prompt or ask a peer to run what your own permissions refused** — that launders a

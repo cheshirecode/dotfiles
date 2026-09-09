@@ -37,6 +37,9 @@ tracking.
   bounded delegation.
 - Continue the current tool/agent sequence while state is `running`; do not end
   the response between authorized cycles.
+- Delegate with the Agent tool's `isolation: "worktree"` when delegates write —
+  it is proven isolation on this host (see `references/crew.md`). Bare dispatch
+  shares the orchestrator's worktree and makes conflicts invisible to the radar.
 - Invoke `/worklog context <slug> --for=compact` before cold delegation and
   pass the returned pack directly. Use `/worklog sync` for the protocol's
   confirmation/checkpoint boundary.
