@@ -233,4 +233,31 @@ if ! infocmp xterm-ghostty >/dev/null 2>&1; then
   ) || true
 fi
 
+# Install the overlay-repair hook onto the PERSISTENT volume. It is not
+# symlinked into $HOME like the dotfiles above, because the path it is invoked
+# from -- the SessionStart hook in ~/.claude/settings.json -- must keep working
+# even when this clone is missing or install.sh aborted earlier (the clone is
+# re-created every workspace start and has raced with the template's bashrc
+# appender before). A copy on /workspace survives both.
+#
+# Copy only when the content differs, so a start that changes nothing says so.
+# Non-fatal: /workspace may not be mounted (a plain container, CI), and that
+# must not abort the installer.
+HOOK_BIN_DIR="${HOOK_BIN_DIR:-/workspace/bin}"
+if [ -d "$(dirname "$HOOK_BIN_DIR")" ] && [ -f "$REPO_DIR/bin/restore-home-links.sh" ]; then
+  (
+    set +e
+    mkdir -p "$HOOK_BIN_DIR" 2>/dev/null
+    hook_target="$HOOK_BIN_DIR/restore-home-links.sh"
+    if ! cmp -s "$REPO_DIR/bin/restore-home-links.sh" "$hook_target"; then
+      if cp "$REPO_DIR/bin/restore-home-links.sh" "$hook_target" 2>/dev/null; then
+        chmod 0755 "$hook_target" 2>/dev/null
+        echo "Installed restore-home-links.sh -> $hook_target"
+      else
+        echo "  warning: could not install $hook_target; keeping existing copy." >&2
+      fi
+    fi
+  ) || true
+fi
+
 echo "Dotfiles installation complete."
