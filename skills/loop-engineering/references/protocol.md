@@ -226,6 +226,30 @@ status`, `next action`, `typed evidence reference`, and `approval boundary`.
 The successor must validate the state and replay the recorded next action
 before making a new claim.
 
+### Why run state must not live in the worktree
+
+`SKILL.md` requires transient loop state, evidence JSON, logs and snapshots to
+live in a system temp directory rather than the worktree. Two mechanisms, both
+measured here on 2026-09-09, make a worktree-local run file worse than untidy:
+
+- **A run file collides with tracked content.** `CLAUDE.md` is tracked in four
+  of the repos on this machine (`decision-engine`, `dotfiles`, `midas`,
+  `product-analytics`), so a per-run file written to that conventional name
+  clobbers a file the human owns.
+- **Hiding it leaks into the primary checkout.** A worktree's exclude path is
+  not local to the worktree:
+
+  ```
+  main repo : .git/info/exclude
+  worktree  : /workspace/dotfiles/.git/info/exclude   # the MAIN repo's gitdir
+  ```
+
+  So excluding a run artifact from inside a delegate's worktree writes an
+  exclude rule into the human's primary checkout, where nothing points back at
+  the run that added it.
+
+A home- or temp-directory path gets the same durability and touches no repo.
+
 ## Delegation
 
 - Delegate a bounded lookup, research, or verification question.
