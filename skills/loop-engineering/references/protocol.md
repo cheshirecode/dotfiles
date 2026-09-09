@@ -207,6 +207,14 @@ If worklog is unavailable, use the host tracker plus one authorized durable
 project file. Label the run `worklog-checkpoint: unavailable — local fallback`
 and do not claim a worklog checkpoint.
 
+**Write the artifact before the message that points at it.** Any handoff whose
+instruction is "read X" — a context pack, a manifest, a re-brief, a task file —
+must have X already durable when the message goes out. Send first and the
+recipient may obey promptly and read the *stale* value, which is the one
+failure the handoff existed to prevent. This is the same ordering as "commit
+and push before any checkpoint claiming an artifact", one level up: there the
+claim outran the work, here the pointer outruns the target.
+
 At compaction, delegation, retry exhaustion, scheduled handoff, or
 termination, checkpoint exactly: `state path`, `state fingerprint`, `terminal
 status`, `next action`, `typed evidence reference`, and `approval boundary`.
