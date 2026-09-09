@@ -388,7 +388,14 @@ checks = {
         and "spawn_agent" in crew
         and "wait_agent" in crew
         and "there is no `Monitor` primitive" in crew
-        and 'isolation: "worktree"' not in crew
+        # Was: 'isolation: "worktree"' not in crew -- a file-wide ban on the
+        # string, from when no documented harness had isolation. Claude Code
+        # does (verified 2026-09-09: the Agent tool builds a real worktree at
+        # .claude/worktrees/agent-<id>), so the ban now forbids an accurate
+        # section. Guard what it was protecting instead: Codex specifically
+        # must still be documented as unisolated, which is the claim the
+        # read-only rule below rests on.
+        and "no isolation flag, shared filesystem" in crew
         and "parallel delegates are **read-only**" in crew
         and "single writer" in crew
         and "project.sh" in crew
