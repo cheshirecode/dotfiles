@@ -37,7 +37,26 @@ tracking.
   bounded delegation.
 - Continue the current tool/agent sequence while state is `running`; do not end
   the response between authorized cycles.
-- Delegate with the Agent tool's `isolation: "worktree"` when delegates write —
+- The driver is **pull-only**: it learns nothing until you call it, so a "loop"
+  left alone is a stopped loop. For recurrence use a real primitive —
+  `CronCreate` for scheduled runs, the `Monitor` tool or a `PostToolUse` hook to
+  arm `bin/crew-radar` (it runs no model and costs no tokens, so arming it is
+  free). Without one, finish `continue_scheduled` and say so; never imply a
+  cycle observed an interval it only sampled at both ends.
+- **A watch fingerprint must cover everything that changes independently.**
+  Leave one dimension out and you sleep through it. For a crew run that is at
+  least: delegate status, the conflict verdict, your own inbox, and delegate
+  *identity* (a reset delegate keeps its name). Narrowing one dimension is safe
+  only when another stays wide — drop a noisy worker from the status set and
+  you still wake on its blocked questions, but drop it from both and it has
+  gone dark. Normalise and dedupe the verdict so a recurring `info` row does
+  not re-wake you every tick.
+- **Sensors die quietly.** When the host or daemon behind a watch restarts, the
+  watch ends and nothing tells you; a run whose delegates came back and whose
+  orchestrator's watches did not looks healthy and is blind. After any such
+  restart, re-read state, rewrite the fingerprint, and re-arm before trusting a
+  quiet interval.
+- Delegate with the Agent tool's `isolation: "worktree"` when delegates write —- Delegate with the Agent tool's `isolation: "worktree"` when delegates write —
   it is proven isolation on this host (see `references/crew.md`). Bare dispatch
   shares the orchestrator's worktree and makes conflicts invisible to the radar.
 - Invoke `/worklog context <slug> --for=compact` before cold delegation and
