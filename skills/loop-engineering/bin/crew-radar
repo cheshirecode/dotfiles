@@ -44,6 +44,14 @@ Options:
                    comma-separated list, or - for stdin; a bare word is refused
                    as a likely typo'd filename, so for one name append a comma.
                    Ownership is not inferable from a worktree's path or mtime.
+  --remote[=<glob>]  also treat remote-tracking branches as owners, so a peer
+                   that only exists as a push (a cloud/remote-isolated agent, or
+                   another machine) is visible. Default glob: origin/*. Off by
+                   default: locally-dispatched worktree agents are already
+                   complete in `git worktree list`, and every stale origin/*
+                   branch would otherwise register as a live owner.
+  --fetch          fetch before the remote lane runs; without it the lane is
+                   only as fresh as the last fetch and reports remote_fetch=stale
   --quiet          suppress output, exit code only
   --strict         treat 'info' (stacked-branch) overlaps as collisions too
   -h, --help       this text
@@ -55,6 +63,7 @@ Examples:
   $PROG --json /workspace/midas | jq -S -c .          # fingerprint for Monitor
   $PROG --quiet /workspace/midas || echo "crew collision"
   $PROG --roster a,b /workspace/midas                 # inline names
+  $PROG --remote --fetch /workspace/midas             # include pushed peers
   ListAgents-names | $PROG --roster - /workspace/midas
 EOF
 }
@@ -79,6 +88,7 @@ die() {
 }
 
 BASE=""; QUIET=0; STRICT=0; REPO=""; ROSTER_SRC=""
+REMOTE=0; REMOTE_GLOB="origin/*"; FETCH=0
 while [ $# -gt 0 ]; do
   case $1 in
     --base) [ $# -ge 2 ] || die "--base needs a ref"; BASE=$2; shift 2 ;;
@@ -86,6 +96,9 @@ while [ $# -gt 0 ]; do
     --json) FMT=json; shift ;;
     --roster) [ $# -ge 2 ] || die "--roster needs a file or -"; ROSTER_SRC=$2; shift 2 ;;
     --roster=*) ROSTER_SRC=${1#*=}; shift ;;
+    --remote) REMOTE=1; shift ;;
+    --remote=*) REMOTE=1; REMOTE_GLOB=${1#*=}; shift ;;
+    --fetch) FETCH=1; shift ;;
     --quiet|-q) QUIET=1; shift ;;
     --strict) STRICT=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -116,7 +129,7 @@ git -C "$ROOT" rev-parse --verify -q "${BASE}^{commit}" >/dev/null 2>&1 \
   || die "base ref not found: $BASE"
 
 # --- enumerate worktrees ------------------------------------------------------
-declare -a LABELS=() WTPATHS=() HEADS=()
+declare -a LABELS=() WTPATHS=() HEADS=() KINDS=()
 wt=""; head=""; branch=""; bare=0
 label_exists() {
   local candidate=$1 existing
@@ -139,7 +152,7 @@ flush_wt() {
     else label="$base"; fi
     # keep labels unique so two detached worktrees never merge into one row
     if label_exists "$label"; then label="$label($base)"; fi
-    LABELS+=("$label"); WTPATHS+=("$wt"); HEADS+=("$head")
+    LABELS+=("$label"); WTPATHS+=("$wt"); HEADS+=("$head"); KINDS+=("wt")
   fi
   wt=""; head=""; branch=""; bare=0
 }
@@ -155,6 +168,46 @@ done < <(git -C "$ROOT" worktree list --porcelain 2>/dev/null)
 flush_wt
 
 [ "${#LABELS[@]}" -gt 0 ] || die "no usable worktrees found under $ROOT"
+NWT=${#LABELS[@]}
+
+# --- remote lane (opt-in) -----------------------------------------------------
+# A locally dispatched agent already appears in `git worktree list`; that roster
+# is complete for a single orchestrator and needs no network. A peer that exists
+# only as a push -- a remote-isolated subagent, or another machine -- does not,
+# and this lane is the only way it becomes an owner. Off by default because
+# every stale origin/* branch would otherwise read as a live worker.
+REMOTE_FETCH=off
+NREMOTE=0
+if [ "$REMOTE" -eq 1 ]; then
+  REMOTE_FETCH=stale
+  if [ "$FETCH" -eq 1 ]; then
+    # The remote name is the glob's first segment; a glob without one ("*")
+    # falls back to origin rather than fetching every configured remote.
+    rname=${REMOTE_GLOB%%/*}
+    case $rname in ''|'*') rname=origin ;; esac
+    if git -C "$ROOT" fetch --quiet --prune "$rname" 2>/dev/null; then
+      REMOTE_FETCH=fetched
+    else
+      REMOTE_FETCH=fetch-failed
+    fi
+  fi
+  base_short=${BASE#refs/remotes/}
+  while IFS= read -r rref; do
+    [ -n "$rref" ] || continue
+    # origin/HEAD is a symref to the default branch, not a peer's work.
+    case $rref in */HEAD) continue ;; esac
+    [ "$rref" = "$base_short" ] && continue
+    # Dedupe against local owners. A worktree on `feat-a` and its own pushed
+    # `origin/feat-a` are ONE worker; counting both invents a collision
+    # between an agent and its own push.
+    rbranch=${rref#*/}
+    if label_exists "$rbranch"; then continue; fi
+    rhead=$(git -C "$ROOT" rev-parse --verify -q "${rref}^{commit}" 2>/dev/null) || continue
+    LABELS+=("$rref"); WTPATHS+=(""); HEADS+=("$rhead"); KINDS+=("remote")
+    NREMOTE=$((NREMOTE+1))
+  done < <(git -C "$ROOT" for-each-ref --format='%(refname:short)' \
+             "refs/remotes/$REMOTE_GLOB" 2>/dev/null)
+fi
 
 # --- ownership ----------------------------------------------------------------
 # A worktree in this list may belong to another session, and neither its path
@@ -216,6 +269,7 @@ EOF
 declare -a AGENTS=()
 if [ "$ROSTER_SET" -eq 1 ]; then
   for i in "${!LABELS[@]}"; do
+    if [ "${KINDS[$i]}" = remote ]; then AGENTS[$i]=""; continue; fi
     b=${WTPATHS[$i]##*/}
     a=$(agent_for "$b")
     AGENTS[$i]=${a:-?}
@@ -265,6 +319,19 @@ agent_for_label() { # $1 label
 
 for i in "${!LABELS[@]}"; do
   label=${LABELS[$i]}; path=${WTPATHS[$i]}
+  if [ "${KINDS[$i]}" = remote ]; then
+    # A remote ref has no working tree, so it is never dirty -- it can only
+    # ever contribute committed paths, and can legitimately sit in an
+    # ancestry chain with a local branch stacked on it.
+    mb=$(git -C "$ROOT" merge-base "$BASE" "$label" 2>/dev/null) || mb=""
+    if [ -n "$mb" ]; then
+      while IFS= read -r -d '' f; do
+        [ -n "$f" ] || continue
+        add_owner "$f" "$label"
+      done < <(git -C "$ROOT" diff --name-only -z "$mb" "$label" -- 2>/dev/null)
+    fi
+    continue
+  fi
   [ -d "$path" ] || continue
   mb=$(git -C "$path" merge-base "$BASE" HEAD 2>/dev/null) || mb=""
   if [ -n "$mb" ]; then
@@ -344,8 +411,9 @@ COMPARABLE=true
 # --- report -------------------------------------------------------------------
 if [ "$QUIET" -eq 0 ]; then
   if [ "$FMT" = json ]; then
-    printf '{"base":"%s","worktrees":%d,"comparable":%s,"warn":%d,"info":%d,"overlaps":[' \
-      "$(json_escape "$BASE")" "${#LABELS[@]}" "$COMPARABLE" "$nwarn" "$ninfo"
+    printf '{"base":"%s","worktrees":%d,"comparable":%s,"remote_branches":%d,"remote_fetch":"%s","warn":%d,"info":%d,"overlaps":[' \
+      "$(json_escape "$BASE")" "$NWT" "$COMPARABLE" "$NREMOTE" \
+      "$REMOTE_FETCH" "$nwarn" "$ninfo"
     first=1
     while IFS= read -r row; do
       [ -n "$row" ] || continue
@@ -357,7 +425,9 @@ if [ "$QUIET" -eq 0 ]; then
     done < <(printf '%s\n' "${ROWS[@]:-}" | LC_ALL=C sort)
     printf ']}\n'
   else
-    printf '%s  base=%s  worktrees=%d\n' "$PROG" "$BASE" "${#LABELS[@]}"
+    printf '%s  base=%s  worktrees=%d' "$PROG" "$BASE" "$NWT"
+    [ "$REMOTE" -eq 1 ] && printf '  remote=%d(%s)' "$NREMOTE" "$REMOTE_FETCH"
+    printf '\n'
     if [ "${#ROWS[@]}" -eq 0 ]; then
       if [ "$COMPARABLE" = false ]; then
         printf 'single owner — nothing to compare; no overlap is expressible here\n'

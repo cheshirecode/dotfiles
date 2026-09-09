@@ -177,15 +177,6 @@ ck "unreadable roster path with comma fails closed" 1 'cannot read roster' \
 ck "empty roster annotates owners @?" 2 'pfeat-a@[?]' \
   --roster "$TMP/empty.roster" --base main "$RP"
 
-# Claude Code names an isolated subagent worktree `agent-<id>` while the roster
-# from ListAgents carries the bare `<id>`. Matching only basename/basename-*
-# annotated every one of them `@?` -- "no live agent holds this" -- and left
-# crew-reap's ownership gate inert on exactly the harness that has isolation.
-G -C "$RP" worktree add -q "$TMP/agent-deadbeef01" -b pfeat-c
-echo z > "$TMP/agent-deadbeef01/a|b.txt"
-ck "roster matches an agent-<id> worktree" 2 'pfeat-c@deadbeef01' \
-  --base main --roster 'deadbeef01,' "$RP"
-
 # --- single-owner honesty ----------------------------------------------------
 # A repo with one owner cannot produce an overlap, so `clean` there reports the
 # absence of a comparison, not a graded verdict. This is the shape a single
@@ -201,6 +192,62 @@ else bad "json: comparable=false with one owner (got '$so_cmp')"; fi
 mc=$("$RADAR" --json --base main "$RP" | jq -r '.comparable')
 if [ "$mc" = true ]; then ok "json: comparable=true with two owners"
 else bad "json: comparable=true with two owners (got '$mc')"; fi
+
+# --- roster matches the harness worktree prefix ------------------------------
+# Claude Code names an isolated subagent worktree `agent-<id>` while the roster
+# from ListAgents carries the bare `<id>`. Matching only basename/basename-*
+# annotated every one of them `@?` -- "no live agent holds this" -- and left
+# crew-reap's ownership gate inert on exactly the harness that has isolation.
+G -C "$RP" worktree add -q "$TMP/agent-deadbeef01" -b pfeat-c
+echo z > "$TMP/agent-deadbeef01/a|b.txt"
+ck "roster matches an agent-<id> worktree" 2 'pfeat-c@deadbeef01' \
+  --base main --roster 'deadbeef01,' "$RP"
+
+# --- remote lane -------------------------------------------------------------
+# Off by default: a cloud/remote-isolated peer is invisible until asked for.
+RB=$TMP/bare.git; G init -q --bare -b main "$RB"
+RL=$TMP/rlocal; G clone -q "$RB" "$RL" 2>/dev/null
+( cd "$RL" && G commit -q --allow-empty -m init && echo base > shared.txt \
+  && G add -A && G commit -qm add && G push -q origin main )
+PEER=$TMP/peer; G clone -q "$RB" "$PEER" 2>/dev/null
+( cd "$PEER" && G checkout -q -b cloud-feat && echo peer > shared.txt \
+  && G commit -qam peer && G push -q origin cloud-feat )
+G -C "$RL" fetch -q origin
+G -C "$RL" worktree add -q "$TMP/wl" -b local-feat
+echo mine > "$TMP/wl/shared.txt"
+ck "remote lane is off by default"      0 'clean'            --base origin/main "$RL"
+ck "remote lane sees the cloud branch"  2 'origin/cloud-feat' --remote --base origin/main "$RL"
+ck "--remote is documented in --help"   0 'remote'            --help
+
+# A local branch's own remote counterpart is one owner, not two. Counting both
+# invents a collision between a worker and its own push -- the phantom-owner
+# shape the spaced-basename fixture above already pins for worktrees.
+( cd "$TMP/wl" && echo s > solo-l.txt && G add -A && G commit -qm solo \
+  && G push -q origin local-feat )
+G -C "$RL" fetch -q origin
+dedup_raw=$("$RADAR" --json --remote --base origin/main "$RL")
+# Assert the lane actually ran in this very payload. Checking only that
+# solo-l.txt is absent passes just as well when --remote is rejected outright
+# and the payload is {"error":...} -- a test that certifies the bug.
+dedup=$(printf '%s' "$dedup_raw" | jq -r \
+  'if (.overlaps|type) != "array" then "lane-did-not-run"
+   elif ([.overlaps[].path] | index("shared.txt")) == null then "lane-found-nothing"
+   elif ([.overlaps[].path] | index("solo-l.txt")) != null then "phantom"
+   else "absent" end')
+if [ "$dedup" = absent ]; then ok "remote counterpart is not a phantom owner"
+else bad "remote counterpart is not a phantom owner ($dedup)"; fi
+
+# The lane is only as fresh as the last fetch, and an unfetched lane that
+# renders like a fetched one is the stale-ref trap crew-reap already documents.
+rf=$("$RADAR" --json --remote --base origin/main "$RL" | jq -r '.remote_fetch')
+if [ "$rf" = stale ]; then ok "unfetched remote lane declares itself stale"
+else bad "unfetched remote lane declares itself stale (got '$rf')"; fi
+rf2=$("$RADAR" --json --remote --fetch --base origin/main "$RL" | jq -r '.remote_fetch')
+if [ "$rf2" = fetched ]; then ok "--fetch declares the lane fetched"
+else bad "--fetch declares the lane fetched (got '$rf2')"; fi
+off=$("$RADAR" --json --base origin/main "$RL" | jq -r '.remote_fetch')
+if [ "$off" = off ]; then ok "lane off renders as off, not stale"
+else bad "lane off renders as off, not stale (got '$off')"; fi
 
 printf "\n  %d passed, %d failed\n" "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
