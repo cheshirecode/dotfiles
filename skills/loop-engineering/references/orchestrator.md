@@ -226,6 +226,26 @@ mirror image (declared in `tasks:`, file never written): exit 2. Both are pinned
 by `skills/worklog/tests/project/test_add_child.sh`.
 `project verify` must exit 0 before the rereview claim.
 
+### Plan before you pay for an expensive child
+
+`interrogate.md` gates the *run*; this gates a *child*. When a child is costly
+or its approach is genuinely unclear, spend one cycle producing a plan and
+review that, rather than reviewing a branch. A bad split caught at plan time
+costs one cheap delegate; caught at review time it costs the implementation,
+the review, and the re-cut.
+
+Dispatch the child in plan mode, have it return the plan rather than execute
+it, and decide: approve (dispatch a fresh delegate to build it), revise, or
+drop. Record the decision in the child's task file so the next cycle sees a
+reviewed plan and not a fresh question. Where the right design is genuinely
+contested, racing two or three planners on the same child and picking one is
+still cheap next to building the wrong thing once.
+
+Keep this off the default path. Most children are well-scoped enough that a
+plan phase is pure overhead — use it when the child is expensive, irreversible,
+or the decomposition itself was uncertain (the same trigger that sends
+decomposition to `$council`).
+
 ### 4. Terminal
 
 When budget is consumed or the project queue is empty, capture the complete
