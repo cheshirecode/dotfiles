@@ -97,8 +97,16 @@ for op in view diff ci-status; do
   else
     pass "pr-query $op accepts a PR number"
   fi
-  # A network-less run may fail, but never as a usage error.
-  if [[ "$st" -eq 2 ]]; then
+  # A network-less run may fail, but never as a usage error. pr-query.sh's
+  # header (exit code 2) covers two different things: a usage error AND "the
+  # forge/CLI could not be resolved". On a machine with no `gh` the second arm
+  # is correct behaviour, and scoring it as a usage regression made this
+  # fixture fail for the environment rather than for the contract. Classify by
+  # the message so the usage half stays covered either way -- an exit 2 that is
+  # not the CLI arm is still a real failure.
+  if [[ "$st" -eq 2 && "$err" == *"unavailable for"* ]]; then
+    pass "pr-query $op exits 2 only because the forge CLI is absent"
+  elif [[ "$st" -eq 2 ]]; then
     fail "pr-query $op exited 2 (usage) on valid args: $err"
   else
     pass "pr-query $op does not exit 2 on valid args"
