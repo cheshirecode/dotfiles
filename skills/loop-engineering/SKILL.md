@@ -119,7 +119,8 @@ Each call prints exactly one line with the script-run mechanics folded in:
 Override defaults (`--budget`, `--allowed-effect`, `--approval-boundary`, or
 raw `loop_state.py` subcommands) only when the run needs it; declare
 `--allowed-effect` and `--approval-boundary` whenever writes or external
-effects are possible. If `python3` is unavailable, preserve `goal`,
+effects are possible. **Deploys are not tracked here**: nothing observes a
+rollout — declare `deploy`, gate with `$evidence-gate`, read CI (crew.md). If `python3` is unavailable, preserve `goal`,
 `progress_evidence` (list), `budget` (unit/limit/used), `next_action`, and
 `terminal_status` manually in JSON and label the run a non-deterministic
 fallback.
