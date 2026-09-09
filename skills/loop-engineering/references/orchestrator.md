@@ -172,8 +172,16 @@ record in [references/protocol.md](references/protocol.md) for the full contract
 This prevents false positives when fixes are applied incrementally.
 
 That's it. The diff, the findings, the verification — all in the worklog
-commit, not in the orchestrator's loop state. This keeps the orchestrator's
-context footprint at ~1KB even after 100+ cycles.
+commit, not in the orchestrator's loop state.
+
+What that actually costs, measured over 100 cycles (2026-09-09): the state
+file reaches **23KB** — one evidence line plus one history entry per cycle,
+~230 bytes each — but the orchestrator never re-reads it. Only the driver's
+single printed line enters context, at ~120 bytes, so 100 cycles cost about
+**12KB of transcript**. Quote the transcript figure, not the file size; an
+earlier "~1KB even after 100+ cycles" here understated the file by ~23x and
+invited the state file to be treated as a free scratchpad. It is an index, and
+the per-cycle line is the budget.
 
 PR-watch / in-flight HEAD moves: if a host-native fingerprint watcher reports a
 move while a review delegate is still running, record one evidence line
