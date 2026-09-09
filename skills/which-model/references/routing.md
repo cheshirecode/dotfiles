@@ -4,7 +4,13 @@ Read this file for `/which-model <task prose or capability>`. Apply the root dat
 
 ## Routing heuristics
 
-### 0. Opencode-first lane definitions
+### 0. Lane definitions by harness
+
+Read only the subsection for the harness in play. Lanes are not portable between
+harnesses: the model ids differ, and so does whether a route can actually be
+selected.
+
+#### OpenCode
 
 These lanes are **verified against the current opencode catalog** (`~/.cache/which-model/catalog.opencode.json`). Use them when the user is in an opencode session. Each entry maps to a model ID the user can paste into `opencode.json`'s `model` or `small_model` field.
 
