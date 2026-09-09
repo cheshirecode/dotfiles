@@ -23,6 +23,61 @@ These lanes are **verified against the current opencode catalog** (`~/.cache/whi
 | **parallel voter / mechanical search** | `openrouter/~anthropic/claude-haiku-latest`, `openrouter/gemini-flash-latest`, `openrouter/qwen/qwen3.5-flash-02-23`, `openrouter/poolside/laguna-xs-2.1:free` | 🟢 Cheap — bulk work goes here | mechanical_search or cheap_parallel_voter only | bulk grep-heavy search, classification, extraction, council voting (3+ voters), status checks, inventory sweeps |
 | **visual / multimodal** | `openrouter/~anthropic/claude-opus-latest`, `openrouter/google/gemini-2.5-pro`, `openrouter/qwen/qwen3-vl-235b-a22b-instruct` | 🟡 Mid (image input not catalog-tagged) | known multimodal (image input) from provider docs | UI screenshots, Figma analysis, rendered-state inspection, accessibility review of visual elements |
 
+#### Claude Code
+
+Verified 2026-09-09 against `bin/model-catalog --env claude` (21 records; the
+ranking column is that helper's `recommendations`, not a guess).
+
+| Lane | Delegation alias | Catalog top pick | When to pick |
+|---|---|---|---|
+| **mechanical search / parallel voter** | `haiku` | `claude-haiku-4-5` | bulk grep, classification, extraction, status sweeps, 3+ council voters |
+| **routine coding** | `sonnet` | `claude-sonnet-5` | targeted patches, single- and multi-file edits, tests from a clear spec |
+| **planning / final synthesis** | `fable`, else `opus` | `claude-fable-5-1`, `claude-opus-5` | decomposition, conflict resolution, design docs, cross-context judgment |
+| **visual / multimodal** | `fable`, `opus`, `sonnet` | `claude-fable-5-1` | screenshots, rendered state, Figma, visual accessibility |
+
+Two picker facts that are not model choices and are often mistaken for them:
+
+- **Fast mode** (`/fast`) makes Claude Opus emit faster. It is not a downgrade
+  to a smaller model, so never present it as a cheap lane.
+- The catalog carries **active models with no delegation alias** —
+  `claude-mythos-5` and `claude-mythos-5-1` are `requires_program_enrollment`.
+  They are legitimate answers to "which model exists" and never to "what should
+  this subagent run"; nothing can select them for a delegate.
+
+Deprecated ids (`claude-opus-4-0`, `claude-opus-4-1`, `claude-sonnet-4-0`,
+`claude-3-haiku-20240307`) stay `selectable_if_configured` and must still not be
+recommended; retired ids cannot be served at all.
+
+### Delegation model selection
+
+Distinct from the picker: the picker sets what *this* session runs, delegation
+sets what a *subagent* runs. In Claude Code this is **enforceable**, not
+advisory — say so, because the skill's default caveat is the opposite.
+
+Precedence, strongest first:
+
+1. the `model` argument on the dispatch call — one of `sonnet`, `opus`,
+   `haiku`, `fable`
+2. the agent definition's `model:` frontmatter (`.claude/agents/*.md`, or the
+   SDK `agents` map)
+3. a configured default subagent model
+4. otherwise the delegate inherits the parent's model
+
+**An alias names a family, not a version.** `opus` selects the harness's current
+Opus, which is why a recommendation may name `claude-opus-5` for reasoning but
+must be *passed* as `opus`. Never promise an exact id through an alias, and
+never pass a catalog id where an alias is expected — it is not in the accepted
+set and the dispatch is rejected.
+
+Two exceptions worth knowing before routing a lane to a delegate:
+
+- **A fork inherits the parent model and ignores a `model` override.** Routing a
+  cheap lane to a fork silently buys nothing; if the point was to spend less,
+  use a fresh agent type instead.
+- **Tool access is fixed per agent type and is a routing constraint of its own.**
+  A read-only explorer cannot run a lane that needs to edit, however well the
+  model fits — filter on tools before comparing models.
+
 ### 1. Task-type routing rules
 
 - **Mechanical search, inventory, or status:** cheapest reliable model with tool access. Prefer parallel-voter lanes above. If the search needs semantic understanding beyond keyword matching, use mid-tier generalist instead.
