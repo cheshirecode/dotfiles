@@ -190,12 +190,14 @@ class LoopRunTest(unittest.TestCase):
         )
         r = self.init_run(["--repo", str(repo)])
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("radar: clean", r.stdout)
+        # One worktree: the radar ran, and says so honestly rather than
+        # grading a comparison it could not make.
+        self.assertIn("radar: single-owner", r.stdout)
         # The repo is remembered: the next cycle re-runs the radar unprompted.
         r2 = run(
             [self.run_dir, "--evidence", "command: true — ok"], cwd=self.cwd
         )
-        self.assertIn("radar: clean", r2.stdout)
+        self.assertIn("radar: single-owner", r2.stdout)
 
     def _radar_cell(self, code, stdout, stderr=""):
         """Run radar_line against a crew-radar stub with a fixed exit code."""
