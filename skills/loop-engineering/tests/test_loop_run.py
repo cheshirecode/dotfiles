@@ -266,6 +266,7 @@ class LoopRunTest(unittest.TestCase):
         cell = self._radar_cell(
             0,
             '{"base":"HEAD","worktrees":1,"comparable":false,'
+            '"remote_branches":0,"remote_fetch":"off",'
             '"warn":0,"info":0,"overlaps":[]}',
         )
         self.assertEqual(cell, "radar: single-owner")
@@ -274,6 +275,7 @@ class LoopRunTest(unittest.TestCase):
         cell = self._radar_cell(
             0,
             '{"base":"HEAD","worktrees":2,"comparable":true,'
+            '"remote_branches":0,"remote_fetch":"off",'
             '"warn":0,"info":0,"overlaps":[]}',
         )
         self.assertEqual(cell, "radar: clean")
@@ -285,6 +287,25 @@ class LoopRunTest(unittest.TestCase):
             0, '{"base":"HEAD","worktrees":2,"warn":0,"info":0,"overlaps":[]}'
         )
         self.assertEqual(cell, "radar: clean")
+
+    def test_radar_remote_flag_reaches_crew_radar(self):
+        argv = Path(self._tmp.name) / "radar-argv"
+        stub = Path(self._tmp.name) / "crew-radar-argv"
+        stub.write_text(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > " + shlex.quote(str(argv))
+            + "\nprintf '%s' '{\"base\":\"H\",\"worktrees\":2,"
+              "\"comparable\":true,\"warn\":0,\"info\":0,\"overlaps\":[]}'\n"
+        )
+        stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+        real = loop_run.CREW_RADAR
+        loop_run.CREW_RADAR = stub
+        self.addCleanup(setattr, loop_run, "CREW_RADAR", real)
+
+        loop_run.radar_line(str(Path(self._tmp.name)))
+        self.assertNotIn("--remote", argv.read_text().split("\n"))
+
+        loop_run.radar_line(str(Path(self._tmp.name)), remote=True)
+        self.assertIn("--remote", argv.read_text().split("\n"))
 
     def test_queue_off_without_project(self):
         r = self.init_run()
