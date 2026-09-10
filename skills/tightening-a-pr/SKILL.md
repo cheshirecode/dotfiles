@@ -1,6 +1,6 @@
 ---
 name: tightening-a-pr
-description: DEPRECATED — use $pr-review instead. Thin shim kept so existing routing keeps working. Loads $pr-review, runs its closeout entry point (steps 1-4), and relabels the output to tightening-a-pr's original schema for consumers that still expect it. Triggers "tighten up PR #N", "wrap up this PR", "distill the learnings from this PR", "deslop this PR before handoff".
+description: Compatibility alias for explicit tightening-a-pr invocations. Delegates to pr-review closeout and preserves the legacy output schema.
 ---
 # DEPRECATED: tightening-a-pr delegates to pr-review
 

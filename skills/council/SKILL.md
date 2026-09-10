@@ -122,142 +122,43 @@ a survival status never reaches the ballot.
 Read `references/templates.md` before spawning any Stage 1, 3, 4, or 5 sub-agent, and use its
 template verbatim. It also fixes the Stage 5 ballot's exact accepted line shapes.
 
-## Recipe
+## Execution
 
-1. **Decompose the topic.** State the question. Pick 3-5 research angles that do not overlap.
-2. **Spawn research sub-agents** (Stage 1). Read `references/templates.md` before spawning a stage agent. Each prompt must use the Stage 1 template and include the exact no-cross-angle sentence. Each agent output must include `Candidate items proposed by this angle:` plus the required falsifier/counterexample, verification recipe, and evidence state for every item.
-3. **Collect findings** (Stage 2). Read each return; quote-tag key claims; extract candidate IDs and their evidence fields per angle.
-4. **Run discussion** (Stage 3). Use the Stage 3 template from `references/templates.md`, assign every candidate a counterexample survival status — including each `D-iN` item the discussion agent proposes itself, or Stage 4 will drop it before voting — and record additional `D-iN` candidates only when tied to a cross-angle gap.
-5. **Run candidate collation** (Stage 4). Use the Stage 4 template from `references/templates.md`. Drop collator-invented, untagged, or evidence-incomplete items before voting.
-6. **Run voting** (Stage 5). Use at least 3 odd-count independent voters. Use the Stage 5 template from `references/templates.md`, including its exact-line-shape rule. Retry malformed voters, including forbidden approvals over unresolved material counterexamples, once.
-6a. **Save ballots to files.** For each returned voter, write its ballot output to a temp file (e.g. `/tmp/council-ballot-<voter_n>.txt`).
-7. **Tally + conclude** (Stage 6). Validate each ballot file with `python3 <skill-dir>/bin/validate-ballot.py --items <N> --unresolved <item numbers|none> <ballot-file>` (both arguments are required Stage 4 list positions), resolve QUALIFY conditions, enforce majority-plus-one support, apply hard-reject vetoes, and produce the final report.
+Follow the stage order in the Stages table. Before spawning a stage agent, read
+`references/templates.md` and use the matching template. Collect Stage 1 IDs
+and evidence into Stage 2; carry the four candidate fields unchanged through
+Stage 4, with Stage 3 assigning survival status to every candidate, including
+its own `D-iN` items. Save returned ballots verbatim to system temporary files.
+At Stage 6 apply the validator and tally rules above before reporting.
 
-## Run-until-completion behavior
-
-The skill must finish all 6 stages in one invocation.
-
-- If foreground mode: spawn Stage 1 research agents in parallel and wait up to the foreground timeout, then walk stages 2-6 inline.
-- If background mode for Stage 1: spawn N background research agents and monitor until quorum or timeout. Stages 2-6 stay foreground.
-- Never partial-return. If retries are exhausted, continue only when quorum rules allow it and mark incomplete evidence as `UNVERIFIED`.
+Finish all six stages in one invocation. Stage 1 alone may run in the background;
+wait for quorum or its timeout, then continue foreground. Exhausted retries
+permit continuation only under the quorum rules; label incomplete evidence
+`UNVERIFIED` rather than returning a partial success.
 
 ## Output format
 
-### Status verdict style
-
-When emitting a status verdict, use telegraphic keyword phrases. Valid status words are `RUN`, `SKIP`, `KEPT`, `REJECTED`, and `UNVERIFIED`.
-
-Examples:
-
-- `RUN multi-angle research justified`
-- `SKIP single-agent answer`
-- `KEPT support threshold met`
-- `REJECTED hard reject veto N-THRESHOLD-MET`
-- `UNVERIFIED insufficient valid ballots`
-
-### Live progress log
-
-During execution, short progress notes are fine:
-
-- `Stage 1 research: 3 angles spawned`
-- `Stage 4 candidate list: 12 items, 0 invented`
-- `Stage 5 voting: 3 of 3 voters returned`
-
-Do not present the live progress log as the final answer.
-
-### Final report
-
-The final report is outcome-first. The first 25 rendered lines should show the decision summary, not ballots. Use the following section headings and table formats verbatim in the output:
-
-## Outcome
-
-| Field | Value |
-|---|---|
-| Status | `VERIFIED` or `UNVERIFIED: <reason>` |
-| Mode | `<foreground|background>` |
-| Angles | `<returned>/<planned>` |
-| Voters | `<returned>/<planned>` |
-| Kept | `<count>` |
-| Rejected | `<count>` |
-
-## Kept Items
-
-| Item | Source | Approve | Qualify | Reject | Decision | Reason |
-|---|---|---:|---:|---:|---|---|
-| 1 | A1-i2, D-i1 | 3 | 0 | 0 | KEPT | support threshold met |
-
-## Rejected Items
-
-| Item | Source | Approve | Qualify | Reject | Decision | Reason |
-|---|---|---:|---:|---:|---|---|
-| 2 | A2-i4 | 2 | 0 | 1 | REJECTED | hard reject veto SOLVES-EXTANT-PAIN |
-
-## Stage Notes
-
-- Stage 1 research: one-line summary per angle.
-- Stage 3 discussion: agreements, disagreements, and gaps.
-- Stage 4 collation: `0 items invented; X items deduped`.
-- Stage 6 tally: support threshold `ceil(M_returned / 2 + 1)` with odd `M_returned >= 3` and at least 3 valid ballots per kept item.
-
-## Audit Appendix
-
-Put full Stage 5 ballots here, after the outcome and vote tables.
+At Stage 6, read [references/report.md](references/report.md) for the
+outcome-first report and audit appendix. During execution report only short
+stage progress; the final answer is the decision, not the progress log.
 
 ## Meta-orchestration
 
 - **Token budget line before fanout.** Before spawning N sub-agents, emit a one-line estimate. Refuse >20k tokens of simultaneous research without explicit user OK.
-- **Voter ballot isolation.** Stage 5 voters receive only the Stage 4 candidate list, Stage 2 findings, Stage 3 discussion, criteria table, and original user request.
 - **Verify absence claims before voters see them.** Any "verified fact" of absence fed to voters (zero callers, zero tests, unused) must be orchestrator-verified with a concrete search first — one angle's absence claim can be contradicted by another angle's findings, and a REJECT veto resting on an unverified absence claim is invalid. If a veto's factual basis turns out false at tally time, mark the item UNVERIFIED and state the correction rather than honoring the veto.
-- **Collator has no creative authority.** If the collator outputs an untagged or coarse-tagged item, drop it before Stage 5 and note the violation.
 - **Fresh-agent invocations per stage.** Siblings in the same stage share no parent context beyond their prompt. Across stages, pass only the explicit deliverable.
 - **Worklog default.** `worklog plan` is an optional pairing. If the user says no worklog tracking, do not invoke `/worklog plan` or write task notes for that council.
 
-## Anti-patterns
+## Stage discipline
 
-- Do not let research agents talk during Stage 1.
-- Do not let the collator invent items.
-- Do not use the same sub-agent for collation and voting.
-- Do not skip Stage 3 discussion when collation looks easy.
-- Do not auto-pick a side on tied votes. Ties are rejected.
-- Do not call the majority-plus-one rule "majority approve."
-- Do not bury the outcome behind raw ballots.
-- Do not keep an item with fewer than 3 valid item ballots.
-- Do not count unresolved QUALIFY conditions as support.
-- Do not trust specific post-cutoff claims without a verification pass.
-- Do not downgrade a material counterexample to minor merely to keep an item voteable.
-- Do not run a council on a one-shot question.
+Do not reuse the collator as a voter or skip Stage 3 because collation looks easy.
+Do not call the majority-plus-one rule "majority approve."
+Do not downgrade a material counterexample to minor merely to keep it voteable.
+Verify time-sensitive factual claims before feeding them to voters.
 
 ## Pairings
 
-- `task` tool: every sub-agent in every stage is a `task` call with `subagent_type: general-purpose` — Claude Code's built-in type. Council ships no custom agent types; stage behavior comes from the stage prompt in `references/templates.md`, not from a specialized agent.
+- Use the host’s available subagent primitive with independent stage prompts. Never assume another harness’s tool name or custom agent type.
 - `$karpathy-guidelines`: the council criteria above operationalize Think-Before, Simplicity-First, Surgical-Changes, and Goal-Driven.
 - For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
 - `$worklog`: `worklog plan` only when the user has not opted out of worklog tracking. Feed the council's kept list into `/worklog plan <task>` for planning artifacts.
-
-## Examples
-
-### Quick foreground council with voting
-
-```
-User: /council "should we adopt MinishLab/semble for code search?"
-Claude: RUN multi-angle research justified
-        Mode: foreground
-        Stage 1 research: 4 angles returned
-        Stage 2 findings: 8 candidates extracted
-        Stage 3 discussion: 1 additional candidate from gap
-        Stage 4 candidate list: 8 items, 0 invented
-        Stage 5 voting: 3 of 3 voters returned
-        Stage 6 tally: 5 KEPT, 3 REJECTED
-        Final report starts with ## Outcome.
-```
-
-### Council declines itself
-
-```
-User: /council "what's 2+2?"
-Claude: SKIP single-agent answer: 4
-```
-
-## Why voting
-
-A single synthesis agent inventing items and verifiers cleaning them up is structurally backwards. Items should clear an explicit bar to enter, not enter by default and need removal. Voting flips it: the collator only gathers, voters apply explicit criteria, and items need positive majority-plus-one support to be kept.

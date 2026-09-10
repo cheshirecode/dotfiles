@@ -5,52 +5,20 @@ description: Collect a typed AI cost payload for a newly created GitHub PR, pers
 
 # pr-cost
 
-Use this skill from harness-specific hook adapters after a successful `gh pr create`.
-It is dry by default: it always prefers the local ledger, and it only writes a
-GitHub PR comment when `PR_COST_HOOK_LIVE=1`.
+Collect session usage after successful PR creation. Prefer the local ledger;
+GitHub comments require explicit authorization and `PR_COST_HOOK_LIVE=1`.
+Resolve the skill directory from this file's load path and run commands there.
 
-Install and verify: [INSTALL.md](INSTALL.md). Adapters live in `adapters/{cursor,claude,codex}/`.
+## Route first
 
-To comment cost on an already-open PR, follow
-[Comment cost on an open PR](#comment-cost-on-an-open-pr) below. To check that
-the lanes still work, run the doctor: see [Self-diagnosis](#self-diagnosis).
+- Hook setup or adapter installation: read [INSTALL.md](INSTALL.md).
+- Construct or validate a payload, invoke a collector, or select a usage reader:
+  read [references/payload.md](references/payload.md).
+- Diagnose a harness lane: read [references/diagnosis.md](references/diagnosis.md).
+- Add cost to an existing PR: read [references/annotate.md](references/annotate.md).
 
-## Files
-
-- Collector: `scripts/pr_cost_collect.py`
-- Usage readers: `scripts/claude_session_usage.py`,
-  `scripts/codex_session_usage.py`, `scripts/opencode_session_usage.py`
-- Doctor: `scripts/pr_cost_doctor.py`
-- Tests: `tests/test_pr_cost_collect.py`, `tests/test_pr_cost_doctor.py`,
-  `tests/test_usage_key_contract.py`, `tests/test_opencode_reader.py`,
-  `tests/test_no_hardcoded_paths.py`, `tests/test_skill_doc_matches_doctor.py`
-- Fixtures: `tests/fixtures/`
-
-## Contract
-
-The collector emits one JSON object with this required shape:
-
-```json
-{
-  "schema_version": "pr-cost/v1",
-  "harness": "claude | cursor | codex | opencode",
-  "confidence": "metered | estimated | unavailable",
-  "usd": 1.23,
-  "tokens_in": 1200,
-  "tokens_out": 3400,
-  "model": "claude-sonnet-4-20250514",
-  "session_id": "session-123",
-  "window_start": "2026-08-20T19:00:00+00:00",
-  "window_end": "2026-08-20T19:05:00+00:00",
-  "pr_url": "https://github.com/owner/repo/pull/123",
-  "generated_at": "2026-08-20T19:05:01+00:00",
-  "notes": "optional"
-}
-```
-
-`usd`, `tokens_in`, `tokens_out`, `model`, `session_id`, `pr_url`, and `notes`
-may be `null` when the harness cannot supply them. The keys still remain
-present so downstream adapters receive a stable typed contract.
+Load only the reference needed by the request. Adapters live in
+`adapters/{cursor,claude,codex}/`; the collector is `scripts/pr_cost_collect.py`.
 
 ## Privacy rules
 
@@ -61,194 +29,9 @@ present so downstream adapters receive a stable typed contract.
 - Cursor and Codex adapters should treat unavailable data as `null`, not as a
   reason to scrape unrelated local state.
 
-## Harness guidance
-
-- `cursor`: hook payload can detect `gh pr create`, but it does not expose
-  token or USD usage. Default confidence is `unavailable`.
-- `claude`: `PostToolUse` can observe `gh pr create`. If an adapter already has
-  token or pricing inputs, pass them as CLI flags so the collector can emit an
-  `estimated` payload. Otherwise it will fall back to `unavailable`.
-- `codex`: there is no native PR creation hook. Use a wrapper that feeds a
-  matching hook JSON shape to `from-hook`, or call `emit` / `annotate`
-  directly with explicit payload fields.
-- `opencode`: sessions live in SQLite at
-  `~/.local/share/opencode/opencode.db`, not in a JSONL transcript, so its
-  reader takes `--db` / `--session-id` / `--cwd` rather than a file path.
-  Each assistant message carries the provider's own `cost`, so this lane
-  reports what the provider billed instead of inferring a price, and its
-  payload says `usd_basis: provider-reported`.
-
-## Self-diagnosis
-
-`scripts/pr_cost_doctor.py` classifies every lane. A lane is one harness plus
-the reader that turns its transcript into a cost.
-
-```bash
-python3 scripts/pr_cost_doctor.py --self-check   # portable, no harness needed
-python3 scripts/pr_cost_doctor.py --live         # this machine's newest transcript
-python3 scripts/pr_cost_doctor.py                # neither flag means both
-python3 scripts/pr_cost_doctor.py --json         # the report as JSON
-```
-
-The six statuses:
-
-| status | meaning | exit |
-|---|---|---|
-| `ok` | the reader ran and satisfied the shared contract | 0 |
-| `broken` | the reader ran and violated the contract, or crashed | **1** |
-| `no-signal` | the reader returned zero tokens from real input | **1** |
-| `unavailable` | the lane exists, but this machine has no transcript to read | 0 |
-| `adapter-only` | a hook adapter exists, but no usage reader | 0 |
-| `unsupported` | the skill claims no lane for that harness | 0 |
-
-Only `broken` and `no-signal` exit non-zero.
-
-**`unavailable` is not a pass.** It means the doctor could not test the lane at
-all. A machine without Codex installed is not a Codex lane that works, and
-telling those two apart is the whole reason to run this. Read the per-run
-columns (`self-check=` and `live=`), not just the lane status.
-
-`--self-check` is the portable mode. It runs every lane against a synthetic
-transcript the doctor generates, so the contract is provable on a machine with
-none of these harnesses installed, and in CI. `--live` reads the newest
-non-empty transcript under `~/.claude/projects/` or `~/.codex/sessions/` and is
-therefore machine-dependent.
-
-`usd_basis` is reported per lane, because the lanes no longer share one basis:
-
-```
-usd_basis: claude=default-rates, codex=default-rates, opencode=provider-reported
-```
-
-`default-rates` means the reader priced the session at fixed rates and never
-used the model name it reports, so a cheap-model session is billed at the
-default lane rate. `model-rates` means the model name matched a prefix in the
-reader's rate table (claude: sonnet/haiku/opus-4 families; codex: gpt-5,
-gpt-4.1, o3/o4-mini, codex-mini), so the estimate uses that model's public
-list prices — still list prices, not the account's actual billing. Explicit
-CLI rate flags override the table and report `default-rates`. The codex
-reader prices `cached_input_tokens` (a subset of `input_tokens`) at the
-cache-read rate; the claude reader keeps cache tokens out of `tokens_in` and
-prices the read/write split directly.
-`provider-reported` means the harness recorded what the provider actually
-billed.
-
-Neither value means `measured`. `provider-reported` is a number this repo
-copied rather than computed, and nothing here verifies it against an invoice.
-Read it as better sourced than an estimate, not as an audited figure.
-
 ## Environment
 
 - `PR_COST_LEDGER`: optional ledger override. Defaults to
   `~/.local/share/pr-cost/ledger.jsonl`.
 - `PR_COST_HOOK_LIVE=1`: enables live `gh pr comment` writes. Unset keeps the
   collector dry and ledger-only.
-
-## Commands
-
-Validate and print a payload:
-
-```bash
-python3 scripts/pr_cost_collect.py emit \
-  --harness claude \
-  --confidence estimated \
-  --usd 1.23 \
-  --tokens-in 1200 \
-  --tokens-out 3400 \
-  --model claude-sonnet-4-20250514 \
-  --session-id session-123 \
-  --window-start 2026-08-20T19:00:00+00:00 \
-  --window-end 2026-08-20T19:05:00+00:00 \
-  --pr-url https://github.com/owner/repo/pull/123
-```
-
-Append to the ledger and optionally comment on the PR:
-
-```bash
-python3 scripts/pr_cost_collect.py annotate \
-  --fixture tests/fixtures/emit_valid.json
-```
-
-Run from a hook adapter by piping the native hook JSON to stdin:
-
-```bash
-printf '%s\n' '{"command":"gh pr create ...","exit_code":0,"stdout":"https://github.com/owner/repo/pull/123"}' \
-  | python3 scripts/pr_cost_collect.py from-hook \
-      --harness cursor
-```
-
-`from-hook` is fail-open by design:
-
-- It ignores `gh pr view`, `gh pr comment`, and unrelated commands.
-- It exits `0` on parse failures so the harness never blocks PR creation.
-- It skips duplicate annotations when the ledger already contains the same
-  `pr_url` and `session_id`.
-
-## Comment cost on an open PR
-
-This is the live-annotate recipe. It replaces the one-off handover note that
-used to carry it, which froze one machine's absolute paths, one interpreter and
-one PR number into the only copy of the procedure.
-
-Run it from this skill directory. Supply the PR number yourself — nothing here
-knows which PR you mean.
-
-```bash
-PR=<pr-number>
-REPO=<owner/name>        # omit to use the current checkout's default remote
-READER=scripts/claude_session_usage.py   # or scripts/codex_session_usage.py
-READER_FLAG=--jsonl                      # or --path, for the codex reader
-HARNESS=claude                           # or codex
-
-# The doctor already knows where this machine keeps transcripts, and picks the
-# newest non-empty one. Confirm its session_id is THIS conversation before you
-# annotate: newest is not the same as current.
-TRANSCRIPT="$(python3 scripts/pr_cost_doctor.py --live --json \
-  | python3 -c 'import json,sys
-report = json.load(sys.stdin)
-for lane in report["lanes"]:
-    if lane["harness"] == sys.argv[1]:
-        print(lane.get("live", {}).get("transcript", ""))' "$HARNESS")"
-
-USAGE="$(python3 "$READER" "$READER_FLAG" "$TRANSCRIPT")"
-printf '%s\n' "$USAGE"        # eyeball session_id and the token counts first
-
-key() {
-  python3 -c 'import json,sys
-value = json.load(sys.stdin).get(sys.argv[1])
-print(value if value is not None else sys.argv[2])' "$1" "${2-}" <<<"$USAGE"
-}
-
-PR_URL="$(gh pr view "$PR" ${REPO:+--repo "$REPO"} --json url -q .url)"
-
-PR_COST_HOOK_LIVE=1 python3 scripts/pr_cost_collect.py annotate \
-  --harness "$HARNESS" \
-  --confidence estimated \
-  --usd "$(key usd_estimated)" \
-  --tokens-in "$(key tokens_in)" \
-  --tokens-out "$(key tokens_out)" \
-  --model "$(key model "$HARNESS")" \
-  --session-id "$(key session_id unknown)" \
-  --window-start "$(key window_start)" \
-  --window-end "$(key window_end)" \
-  --pr-url "$PR_URL" \
-  --notes "Session usage summed by $READER. Cache read/write included in tokens_in where the harness reports it. USD uses that reader's default rates, not the rate of the model named above."
-```
-
-All three readers emit the same eight shared keys, so `READER`, `READER_FLAG`
-and `HARNESS` are what change between the claude and codex lanes.
-
-The opencode lane needs the two reader lines changed rather than swapped: it
-selects a session with `--db` / `--session-id` / `--cwd` instead of a
-transcript path, so the `TRANSCRIPT` step above does not apply. The collector
-accepts `--harness opencode`, so the annotate command itself is unchanged.
-
-`--confidence estimated` is the honest level for the two lanes above: the
-figure comes from default rates, never from metered billing.
-
-`PR_COST_HOOK_LIVE=1` is scoped to that one command on purpose. Exporting it
-leaves every later `annotate` in the shell live.
-
-Privacy: do not paste prompts, diffs, or file contents into the PR comment.
-The collector already wraps a JSON payload. If annotate reports
-`"status": "duplicate"`, stop — the Claude cost is already on the PR.

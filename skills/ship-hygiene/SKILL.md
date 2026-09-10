@@ -7,6 +7,8 @@ description: "Periodic multi-PR sweep — dashboard of open PRs across repos. Su
 
 A periodic sweep skill. Three surfaces share the same staleness pattern: a worklog task accumulates iteration drama; open PRs accumulate title typos / outdated bodies / bot-comment noise; the PR stack accumulates CI red and unresolved threads. Doing them all at once amortizes the context cost.
 
+`bin/leak-scan.sh` is a compatibility launcher requiring installed `pr-review`; the scanner and token list live there.
+
 **Delegates per-PR operations to `$pr-review`** (code review, self-check, closeout). This skill owns the **multi-PR dashboard sweep** only.
 
 ## Resolve `$WORKLOG_BIN`
@@ -53,9 +55,7 @@ Skip if: only one PR open, body is short, no recent worklog activity. Overhead n
     If a `[POST-MERGE-CLEANUP]` note for this PR already exists, refresh it rather than duplicating.
 10. **Checkpoint** the worklog body change(s): `"$WORKLOG_BIN/checkpoint.sh" <slug>`. Don't bundle unrelated working-tree changes. Use the plain command — its staged-scope guard is what enforces that. `worklog/modes/sync.md` owns the guard's exit codes, `--include=<path>`, and the force bypass.
 
-    **Hard failures** (nothing was committed — fix and re-run):
-    - **exit 1** — staged paths outside the slug's scope. Re-run with `--include=<path>` for each path that belongs with this slug, or `git restore --staged <path>` for the ones that belong to a different commit.
-    - **exit 2** — `--status=blocked` without a `Waiting on ...` next_action. Supply `--next="Waiting on <who or what>"`.
+    On a non-zero exit, read Worklog’s `modes/sync.md` checkpoint failure rules before retrying; do not report a refused checkpoint as saved.
 
 ## Output format
 

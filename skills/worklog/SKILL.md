@@ -58,8 +58,6 @@ flags detail: see modes/<name>.md
 
 Once a known mode is parsed: run preamble (per table), read `modes/<mode>.md`, follow it. Read `references/protocol.md` only when the table says so or the selected mode explicitly directs it. Do not preload other mode or reference files.
 
-**Unknown mode:** if the first argument is not `help`, `-h`, `--help`, or a known mode name, print the menu verbatim and stop. Do not guess or suggest corrections.
-
 ## Mode → preamble requirement
 
 | Mode    | Preamble | `references/protocol.md` | Reads AGENTS.md? | lessons.md? |

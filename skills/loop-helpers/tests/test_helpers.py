@@ -204,8 +204,10 @@ class PixelModelContractTest(unittest.TestCase):
         # A claim about another tool's model ids goes stale silently. Naming
         # the version it was measured against is what makes the next reader
         # able to tell whether it still holds.
-        self.assertIn("bin-v1.1.4", self.skill)
-        self.assertIn("pixel simulate", self.skill)
+        self.assertIn("references/pixel-verification.md", self.skill)
+        evidence = (SKILL_DIR / "references/pixel-verification.md").read_text()
+        self.assertIn("bin-v1.1.4", evidence)
+        self.assertIn("pixel simulate", evidence)
 
     def test_skill_says_decision_use_is_not_sufficient(self) -> None:
         # caveman's own think.pixel.models defaults to [], so this gate

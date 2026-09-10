@@ -143,6 +143,8 @@ class LoopStateTest(unittest.TestCase):
         ):
             self.assertIn(signal, route)
         self.assertIn("load only the needed rules", route)
+        for name in ("interrogate", "crew", "hosts", "protocol"):
+            self.assertIn(f"(references/{name}.md)", route)
 
     def test_compositional_route_declares_owner_trigger_handoff_and_skip(self) -> None:
         skill_text = SKILL.read_text()
@@ -254,12 +256,11 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("$which-model", routing)
         self.assertIn("current harness exposes it", routing)
         self.assertIn("data-policy gate", routing)
-        self.assertIn("model lane, not an unverified exact", routing)
         self.assertIn("If no dispatch tool, target skill, or required", routing)
         self.assertIn("model-routing: skipped", routing)
         self.assertIn("do not spend a cycle", routing)
         self.assertIn("advisory-only", routing)
-        self.assertIn("never claim a model switch the harness cannot enforce", routing)
+        self.assertIn("never claim a model switch the harness cannot enforce", " ".join(routing.split()))
 
     def test_payload_transport_is_optional_recoverable_and_byte_preserving(self) -> None:
         skill_text = SKILL.read_text()
@@ -314,9 +315,8 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("typed", output)
         self.assertIn("state/worklog artifact", output)
 
-        durable = section(
-            skill_text, "## Preserve durable context", H_ORCHESTRATOR
-        )
+        self.assertIn("references/durable-context.md", skill_text)
+        durable = (SKILL.parent / "references/durable-context.md").read_text()
         for field in (
             "objective",
             "known evidence",
@@ -347,9 +347,8 @@ class LoopStateTest(unittest.TestCase):
 
     def test_skill_makes_worklog_resume_and_local_fallback_executable(self) -> None:
         skill_text = SKILL.read_text()
-        durable = section(
-            skill_text, "## Preserve durable context", H_ORCHESTRATOR
-        )
+        self.assertIn("references/durable-context.md", skill_text)
+        durable = (SKILL.parent / "references/durable-context.md").read_text()
         self.assertIn("context.sh <slug> --for=resume", durable)
         self.assertIn("context <slug> --for=compact", durable)
         self.assertIn("worklog-checkpoint: unavailable", durable)
