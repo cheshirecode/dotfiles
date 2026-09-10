@@ -108,19 +108,18 @@ class LoopStateTest(unittest.TestCase):
         self.assertIn("do\nnot leave ad hoc run artifacts behind", initialization)
 
     def test_orchestrator_terminal_example_supplies_required_verification(self) -> None:
-        skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
-        terminal_example = skill_text.split(
-            "When budget is consumed or the project queue is empty", 1
-        )[1].split("If the queue still has tasks", 1)[0]
-        self.assertIn("project verify <slug>", terminal_example)
-        self.assertIn("project next reported all tasks archived", terminal_example)
-        self.assertIn("project queue empty: typed command output", terminal_example)
-        self.assertIn('"$WORKLOG_BIN/project.sh" verify "$program_slug"; then', terminal_example)
+        terminal_example = ORCHESTRATOR.read_text().split("### 4. Terminal", 1)[1]
+        self.assertIn('"$EVIDENCE_GATE" check --gate "$completion_gate"', terminal_example)
+        self.assertIn('"$WORKLOG_BIN/project.sh" verify "$program_slug"', terminal_example)
+        self.assertIn('"$WORKLOG_BIN/archive.sh" "$program_slug"', terminal_example)
+        self.assertIn('--stop complete --verification "$verification"', terminal_example)
 
     def test_orchestrator_does_not_treat_any_next_exit_one_as_success(self) -> None:
-        skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
-        terminal = skill_text.split("When budget is consumed or the project queue is empty", 1)[1]
-        self.assertIn("Exit 1 alone is\nnot proof of an empty queue", terminal)
+        terminal = ORCHESTRATOR.read_text().split("### 4. Terminal", 1)[1]
+        self.assertIn("never infer completion from exit 1 alone", terminal)
+        self.assertIn('data.get("schema_version") == "worklog-project-next/v1"', terminal)
+        self.assertIn('data.get("status") == "empty"', terminal)
+        self.assertIn('data.get("task") is None', terminal)
         self.assertIn("blocked or missing", terminal)
 
     def test_orchestrator_preserves_explicit_budget_and_minimum(self) -> None:
