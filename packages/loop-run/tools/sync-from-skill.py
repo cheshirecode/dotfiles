@@ -37,13 +37,13 @@ LOOP_STATE = PKG_DIR / "loop_state.py"
 CREW_RADAR = PKG_DIR / "bin" / "crew-radar"''',
     ),
     (
-        '''from loop_state import RESUMABLE_STATUSES, TERMINAL_STATUSES  # noqa: E402''',
+        '''from loop_state import RESUMABLE_STATUSES, TERMINAL_STATUSES, state_lock  # noqa: E402''',
         '''# Support both invocation styles: `python3 loop_run.py` (script) and
 # `import looprun.loop_run` / console script (package).
 try:
-    from loop_state import RESUMABLE_STATUSES, TERMINAL_STATUSES  # noqa: E402
+    from loop_state import RESUMABLE_STATUSES, TERMINAL_STATUSES, state_lock  # noqa: E402
 except ImportError:  # package import
-    from looprun.loop_state import RESUMABLE_STATUSES, TERMINAL_STATUSES  # noqa: E402''',
+    from looprun.loop_state import RESUMABLE_STATUSES, TERMINAL_STATUSES, state_lock  # noqa: E402''',
     ),
 ]
 

@@ -153,6 +153,15 @@ redirect successful `init`/`record` stdout to `/dev/null` when compact output is
 preserve stderr, and run the final `check` **without** `--quiet` — its index line omits the
 verification value step 6 requires. Never trade away exit codes to reduce output.
 
+Driver probes have a 10-second bound each; timeout/unavailable results are errors,
+not clean/empty verdicts. Radar previews show at most five warning paths and
+reference `run-dir/radar-<digest>.json` for the complete result. Remote coverage displays
+its freshness; `--radar-remote` can also enable it on a later call without fetching.
+Invalid/missing `run.json` on an existing run is a configuration error. Recover
+from a verified configuration copy; rejected calls do not rewrite it. Driver
+calls serialize configuration and state transitions; use the raw state CLI only
+outside a concurrently running driver.
+
 **Exit codes:** The driver and state CLI exit `0` on success, `2` with a `usage:` error
 for malformed CLI usage, and `3` with a `loop-state:` error when the state
 contract rejects the transition. See
