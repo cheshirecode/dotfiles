@@ -5,7 +5,7 @@
 # Required per record: slug. Optional: status, next, pr.
 #
 # For each record:
-#   1. Validate slug resolves to people/*/active/<slug>.md
+#   1. Validate slug resolves to the caller's people/<LDAP>/active/<slug>.md
 #   2. Rewrite frontmatter (last_updated → today; status/next/pr per record)
 #   3. Stage the file
 #
@@ -30,6 +30,7 @@ REPO_ROOT="$(resolve_worklog_repo)" || exit 1
 cd "$REPO_ROOT"
 
 verify_provenance || exit 1
+LDAP="$(resolve_ldap)"
 
 # Read entire stdin as JSON array.
 INPUT="$(cat)"
@@ -37,8 +38,8 @@ INPUT="$(cat)"
 
 # Validate JSON + drive frontmatter rewrites via Python.
 # Output: TSV per record — slug, action_summary, status_flipped (true/false), task_file
-PLAN="$(python3 - "$INPUT" <<'PY'
-import json, sys, re, pathlib, datetime
+PLAN="$(BATCH_LDAP="$LDAP" python3 - "$INPUT" <<'PY'
+import json, sys, re, pathlib, datetime, os, subprocess
 records = json.loads(sys.argv[1])
 if not isinstance(records, list):
     print("checkpoint-batch: input must be a JSON array", file=sys.stderr)
@@ -46,8 +47,16 @@ if not isinstance(records, list):
 today = datetime.date.today().isoformat()
 STATUSES = {"draft", "in-progress", "in-review", "blocked", "shipping"}
 
+ldap = os.environ["BATCH_LDAP"]
+if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", ldap):
+    sys.exit("checkpoint-batch: invalid namespace")
+namespace = pathlib.Path("people") / ldap / "active"
+if any(p.is_symlink() for p in (namespace, namespace.parent, namespace.parent.parent)):
+    sys.exit("checkpoint-batch: symlinked namespace refused")
+
 def find_task(slug):
-    for p in pathlib.Path("people").glob(f"*/active/{slug}.md"):
+    p = namespace / f"{slug}.md"
+    if p.is_file() and not p.is_symlink() and p.resolve().parent == namespace.resolve():
         return p
     return None
 
@@ -101,8 +110,8 @@ for rec in records:
         errors.append("record must be an object")
         continue
     slug = rec.get("slug")
-    if not slug:
-        errors.append("record missing 'slug'")
+    if not isinstance(slug, str) or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug):
+        errors.append("record requires a valid task slug")
         continue
     if slug in seen:
         errors.append(f"duplicate slug '{slug}'")
@@ -111,6 +120,14 @@ for rec in records:
     p = find_task(slug)
     if p is None:
         errors.append(f"no active task file for slug '{slug}'")
+        continue
+    if any(key in rec and not isinstance(rec[key], str) for key in ("status", "next")):
+        errors.append(f"{slug}: status and next must be strings when supplied")
+        continue
+    pr = rec.get("pr")
+    if pr is not None and any(isinstance(v, bool) or not isinstance(v, (str, int))
+                              for v in (pr if isinstance(pr, list) else [pr])):
+        errors.append(f"{slug}: pr must be a number, string or list of these")
         continue
     requested_status = rec.get("status")
     if requested_status:
@@ -145,6 +162,13 @@ for rec in records:
         summary_parts.append("last_updated bump")
     plan.append((slug, ", ".join(summary_parts), "true" if flipped else "false", str(p), requested_status or "", text))
 
+allowed = {row[3] for row in plan}
+staged = subprocess.run(["git", "diff", "--cached", "--name-only", "-z"],
+                        capture_output=True, check=True).stdout
+unexpected = [os.fsdecode(p) for p in staged.split(b"\0") if p and os.fsdecode(p) not in allowed]
+if unexpected:
+    errors.append("unexpected staged paths outside batch scope: " + ", ".join(unexpected))
+
 if errors:
     for e in errors:
         print(f"ERROR: {e}", file=sys.stderr)
@@ -164,6 +188,7 @@ COUNT=0
 SUBJECT_LINES=()
 TRAILER_LINES=()
 SLUGS=()
+FILES=()
 while IFS=$'\t' read -r slug summary flipped file status; do
   [[ -z "$slug" ]] && continue
   git add "$file"
@@ -174,6 +199,7 @@ while IFS=$'\t' read -r slug summary flipped file status; do
     TRAILER_LINES+=("Worklog-Status: $status")
   fi
   SLUGS+=("$slug")
+  FILES+=("$file")
 done <<< "$PLAN"
 
 if git diff --cached --quiet; then
@@ -190,7 +216,15 @@ SUBJECT="worklog-batch: $COUNT tasks updated"
 BODY=$(printf '%s\n' "${SUBJECT_LINES[@]}")
 TRAILERS=$(printf '%s\n' "${TRAILER_LINES[@]}")
 
-git commit -q -m "$SUBJECT" -m "$BODY" -m "$TRAILERS"
+# Recheck after pull/staging; --only also keeps a late index write out of this commit.
+python3 - "${FILES[@]}" <<'PY_CHECK'
+import os, subprocess, sys
+staged = subprocess.check_output(["git", "diff", "--cached", "--name-only", "-z"])
+unexpected = [os.fsdecode(p) for p in staged.split(b"\0") if p and os.fsdecode(p) not in sys.argv[1:]]
+if unexpected:
+    sys.exit("checkpoint-batch: unexpected staged paths before commit: " + ", ".join(unexpected))
+PY_CHECK
+git commit --only -q -m "$SUBJECT" -m "$BODY" -m "$TRAILERS" -- "${FILES[@]}"
 push_with_retry || exit 1
 for s in "${SLUGS[@]}"; do
   record_session_touch "$s" "checkpoint-batch"
