@@ -17,9 +17,35 @@ Skip optional delegation routing if no delegate surface exists or in-band work i
 
 ## Resolve the skill directory
 
-The skill root is the directory this `SKILL.md` was loaded from; its location varies by install (repo checkout, `~/.claude/skills/`, agent-managed). Never hardcode a path.
+Do not assume the payload sits next to this file. Some installers flatten
+`SKILL.md` on its own — super-ruler copies it to `~/.claude/commands/which-model.md`
+and mirrors `bin/`, `references/` and `agents/` to `~/.claude/which-model/` — so a
+same-directory path like `bin/model-catalog` resolves into the commands folder and
+fails. Resolve the root once:
 
-Run helpers from that root as `bin/model-catalog ...`, and read references as `references/routing.md` and `references/catalog.md` — both relative to it. Use `cd` into the root once rather than prefixing each command with an absolute path.
+```bash
+SKILL_ROOT=""
+for d in "$HOME/.claude/which-model" \
+         "$HOME/.claude/skills/which-model" \
+         "${SUPER_RULER:-$HOME/.super-ruler}/.ruler/skills/which-model" \
+         "/workspace/super-ruler/.ruler/skills/which-model" \
+         "$HOME/super-ruler/.ruler/skills/which-model" \
+         "$PWD/.claude/skills/which-model" \
+         "$PWD"; do
+  if [ -x "$d/bin/model-catalog" ]; then SKILL_ROOT="$d"; break; fi
+done
+echo "${SKILL_ROOT:-not found}"
+```
+
+Every `bin/…` and `references/…` path below is relative to `$SKILL_ROOT`. Run
+helpers as `"$SKILL_ROOT/bin/model-catalog" ...`, or `cd "$SKILL_ROOT"` once.
+
+- **Found** → proceed by the routes below.
+- **Not found** → the no-arguments route still works, because `## Guideline` and
+  `## Data policy gate` are in this file. Print those and say the payload is
+  missing (restart the workspace to re-run the installer, or clone super-ruler);
+  do not invent prices, context windows or model ids from memory for the routes
+  that need `references/catalog.md`.
 
 ## Route first
 
@@ -33,7 +59,7 @@ Do not preload references that the selected route does not require.
 
 ## Task requests
 
-See [references/routing.md](references/routing.md) for the decomposition
+See `references/routing.md` (under `$SKILL_ROOT`) for the decomposition
 procedure and the per-agent sequential-thinking namespaces.
 ## Guideline
 
