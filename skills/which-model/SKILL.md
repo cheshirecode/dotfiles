@@ -7,21 +7,11 @@ description: Choose the best-value model lane for a task by comparing capability
 
 Choose by capability and cost for the job, not provider reputation. Treat OpenAI, Anthropic, Chinese models, and local/open-weight routes as first-class candidates.
 
-## When to use
-
-- User invokes `/which-model`, asks which model to use, or wants value-for-token model suggestions
-- Session-level model-selection guidelines are needed
-- `/which-model` with no arguments prints the guideline; `/which-model task prose or capability` returns 1-3 model suggestions
-
 Skip optional delegation routing if no delegate surface exists or in-band work is sufficient. Explicit model-advice requests still follow the routes below.
 
 ## Resolve the skill directory
 
-Do not assume the payload sits next to this file. Some installers flatten
-`SKILL.md` on its own — super-ruler copies it to `~/.claude/commands/which-model.md`
-and mirrors `bin/`, `references/` and `agents/` to `~/.claude/which-model/` — so a
-same-directory path like `bin/model-catalog` resolves into the commands folder and
-fails. Resolve the root once:
+Flattening installers separate this file from its payload. Resolve the root once:
 
 ```bash
 SKILL_ROOT=""
@@ -37,15 +27,10 @@ done
 echo "${SKILL_ROOT:-not found}"
 ```
 
-Every `bin/…` and `references/…` path below is relative to `$SKILL_ROOT`. Run
-helpers as `"$SKILL_ROOT/bin/model-catalog" ...`, or `cd "$SKILL_ROOT"` once.
-
-- **Found** → proceed by the routes below.
-- **Not found** → the no-arguments route still works, because `## Guideline` and
-  `## Data policy gate` are in this file. Print those and say the payload is
-  missing (restart the workspace to re-run the installer, or clone super-ruler);
-  do not invent prices, context windows or model ids from memory for the routes
-  that need `references/catalog.md`.
+Resolve every `bin/…` and `references/…` path below under `$SKILL_ROOT`.
+If missing, print the guideline and data gate, report the missing payload, and
+suggest restarting the installer or cloning super-ruler. Do not invent prices,
+context windows, or model IDs for routes requiring the catalog.
 
 ## Route first
 
@@ -57,10 +42,6 @@ helpers as `"$SKILL_ROOT/bin/model-catalog" ...`, or `cd "$SKILL_ROOT"` once.
 
 Do not preload references that the selected route does not require.
 
-## Task requests
-
-See `references/routing.md` (under `$SKILL_ROOT`) for the decomposition
-procedure and the per-agent sequential-thinking namespaces.
 ## Guideline
 
 1. Identify the job: mechanical search, code edit, long-context review, visual judgment, adversarial verification, planning, synthesis, or final decision.
