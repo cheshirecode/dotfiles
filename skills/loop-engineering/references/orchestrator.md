@@ -218,12 +218,10 @@ do not imply continuous observation.
 After it lands, compare `gh pr view --json headRefOid` to the SHA in the archive
 summary; mismatch → claim a pre-declared `review-pr-N-r2` child (or start a new
 wave project), or add one with `project.sh add-child <project> <child>`. Do not
-hand-write an orphan `review-pr-N` with `project:` set but missing from the
-parent's `tasks:` block: `project verify` does **not** catch that. It walks only
-the parent's `tasks:` block, so it stays exit 0 while `project next` can never
-hand the task out — the work exists and is unreachable. The loud half is the
-mirror image (declared in `tasks:`, file never written): exit 2. Both are pinned
-by `skills/worklog/tests/project/test_add_child.sh`.
+hand-write an orphan `review-pr-N` with a project back-reference but no
+parent `tasks:` entry. `project verify` now rejects both undeclared children and
+missing declared child files; `add-child` is the supported way to make work
+reachable. These cases are pinned by the Worklog project fixtures.
 `project verify` must exit 0 before the rereview claim.
 
 ### Plan before you pay for an expensive child
@@ -248,55 +246,48 @@ decomposition to `$council`).
 
 ### 4. Terminal
 
-When budget is consumed or the project queue is empty, capture the complete
-`project next` result and verify the project before finishing. Exit 1 alone is
-not proof of an empty queue: it also covers blocked or missing children. Treat
-the queue as empty only when `project next` reports `all tasks ... are archived
-(nothing left)` and `project verify <slug>` exits 0.
+Use `project.sh next <slug> --json`: schema `worklog-project-next/v1` reports
+`eligible`, `empty`, `blocked`, `missing`, or `error`. Exit 0 accompanies an
+eligible task; other statuses use exit 1. Bootstrap failures may have no JSON.
+Validate both the result and exit code; never infer completion from exit 1 alone.
+Claims remain the responsibility of `project.sh claim next`.
 
-Before running the gate, rewrite the parent project file's `next_action` to
-its rollup/completion step and checkpoint it: the default that `project.sh
-new` writes ("Kick off — claim first eligible child ...") still requests
-child work, so `project verify` warns and exits 1 on a legitimately finished
-project (verified live 2026-08-31). Archive the parent after the gate passes.
+For completion, set `run_dir`, `program_slug`, `LOOP_RUN` (the driver path),
+`EVIDENCE_GATE` (the evidence-gate script), and `completion_gate`. The gate must
+already contain verified evidence for the project's goal outcomes; it is not a
+substitute for the checkpoint, project verification, and successful archive push
+below. This recipe's gate covers goal outcomes; the archive is separately checked
+and recorded in the terminal evidence. If your gate also declares archive delivery,
+record that criterion and recheck its digest after the successful archive instead.
 
 ```bash
-# Rewrite parent project next_action so verify doesn't warn on a finished project
-"$WORKLOG_BIN/project.sh" set-next-action "$program_slug" complete || true
-"$WORKLOG_BIN/project.sh" checkpoint "$program_slug" || true
-
-next_output="$("$WORKLOG_BIN/project.sh" next "$program_slug" 2>&1)" || true
-if grep -Fq "all tasks for '$program_slug' are archived (nothing left)" <<<"$next_output"; then
-  if "$WORKLOG_BIN/project.sh" verify "$program_slug"; then
-    python3 <skill-dir>/scripts/loop_state.py finish \
-      --state <state-file> --status complete \
-      --verification "project next reported all tasks archived; project verify exited 0" \
-      --evidence "project queue empty: typed command output and project verification"
-  else
-    echo "project verification failed" >&2
-    exit 1
-  fi
-elif grep -Fq "blocked\|missing" <<<"$next_output"; then
-  echo "$next_output" >&2
-  python3 <skill-dir>/scripts/loop_state.py finish \
-    --state <state-file> --status needs_human \
-    --verification "project next reported blocked or missing work" \
-    --evidence "$next_output"
-elif [ "$budget_remaining" -le 0 ] && ! grep -Fq "all tasks.*are archived" <<<"$next_output"; then
-  echo "budget exhausted, queue still has tasks" >&2
-  python3 <skill-dir>/scripts/loop_state.py finish \
-    --state <state-file> --status budget_exhausted \
-    --verification "budget consumed; queue not empty" \
-    --evidence "$next_output"
-else
-  echo "$next_output" >&2
-  exit 1
-fi
+set -e
+queue_rc=0
+"$WORKLOG_BIN/project.sh" next "$program_slug" --json > "$run_dir/project-next.json" || queue_rc=$?
+python3 - "$run_dir/project-next.json" "$queue_rc" "$program_slug" <<'PY_QUEUE'
+import json, sys
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+if not (sys.argv[2] == "1" and data.get("schema_version") == "worklog-project-next/v1"
+        and data.get("project") == sys.argv[3] and data.get("status") == "empty"
+        and data.get("task") is None):
+    sys.exit("project is not complete: " + str(data.get("reason") or data.get("status")))
+PY_QUEUE
+python3 "$EVIDENCE_GATE" check --gate "$completion_gate" > "$run_dir/gate-check.json"
+verification="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["verification"])' "$run_dir/gate-check.json")"
+"$WORKLOG_BIN/checkpoint.sh" "$program_slug" --next="Verify rollup and archive project"
+"$WORKLOG_BIN/project.sh" verify "$program_slug" > "$run_dir/project-verify.log"
+"$WORKLOG_BIN/archive.sh" "$program_slug" --reason=shipped --summary="Project goal verified; child tasks archived"
+archive_sha="$(git -C "$WORKLOG_REPO" rev-parse HEAD)"
+python3 "$LOOP_RUN" "$run_dir" --stop complete --verification "$verification" \
+  --evidence "git: $archive_sha — project verified and parent archive pushed"
 ```
 
-If `next_output` reports blocked or missing work, keep the state running or
-finish `needs_human` with the exact replay check. If the queue still has tasks
-but budget is exhausted, finish with `budget_exhausted` and the next eligible
-task slug.
+A failed checkpoint, verification, gate, or archive push stops this recipe before
+loop completion. Keep the run recoverable and inspect the exact failed command;
+an archive file or local commit alone does not prove its push succeeded. For
+blocked or missing work, use the driver's resumable stop with a concrete replay
+`--next-action`. Budget exhaustion is owned by the state machine; do not compute
+or invent a second budget in this recipe.
 
-Return to `SKILL.md` for the bounded-cycle, evidence, and terminal-state rules.
+Return to `SKILL.md` for bounded-cycle and effect rules.
