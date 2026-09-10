@@ -48,7 +48,9 @@ def documented_aliases() -> set[str]:
 def catalog_models() -> list[dict]:
     proc = subprocess.run(
         [str(CATALOG), "--env", "claude"],
-        capture_output=True, text=True, timeout=120,
+        capture_output=True,
+        text=True,
+        timeout=120,
     )
     if proc.returncode != 0:
         raise unittest.SkipTest("model-catalog --env claude unavailable")
@@ -69,14 +71,19 @@ class DelegationAliasTest(unittest.TestCase):
         self.assertEqual(self.aliases, {"haiku", "sonnet", "opus", "fable"})
 
     def test_every_selectable_active_family_has_an_alias(self) -> None:
-        missing = {
-            family(m["id"])
-            for m in self.models
-            if m.get("lifecycle") == "active"
-            and m.get("availability") == "selectable_if_configured"
-        } - self.aliases - UNALIASED_FAMILIES
+        missing = (
+            {
+                family(m["id"])
+                for m in self.models
+                if m.get("lifecycle") == "active"
+                and m.get("availability") == "selectable_if_configured"
+            }
+            - self.aliases
+            - UNALIASED_FAMILIES
+        )
         self.assertEqual(
-            missing, set(),
+            missing,
+            set(),
             "catalog families with no delegation alias row in routing.md: "
             f"{sorted(x for x in missing if x)}",
         )
@@ -88,7 +95,8 @@ class DelegationAliasTest(unittest.TestCase):
         for m in self.models:
             if family(m["id"]) in UNALIASED_FAMILIES:
                 self.assertNotEqual(
-                    m.get("availability"), "selectable_if_configured",
+                    m.get("availability"),
+                    "selectable_if_configured",
                     f"{m['id']} became selectable but has no alias row",
                 )
 
