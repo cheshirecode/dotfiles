@@ -50,8 +50,10 @@ link /workspace/.claude-mcp.json   "$HOME/.claude/.mcp.json"
 # Credentials: rebuild only when a token is actually missing, so we never
 # churn the file needlessly.
 if [ -r "$SECRETS" ]; then
-  # shellcheck source=/dev/null
-  set -a; . "$SECRETS" 2>/dev/null; set +a
+  set -a
+# shellcheck disable=SC1090
+. "$SECRETS" 2>/dev/null
+set +a
   cred="$HOME/.git-credentials"
   want_gl="${GITLAB_TOKEN:-${GITLAB_PAT:-}}"
   need=0
