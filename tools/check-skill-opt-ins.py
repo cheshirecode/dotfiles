@@ -8,11 +8,7 @@ import pathlib
 import sys
 
 SKILL_NAME = "example-led-instructions"
-CANONICAL_PREAMBLE = (
-    "For brittle outputs, invoke $example-led-instructions: "
-    "0/1/few-shot gate, max 1-3 examples, skip if obvious."
-)
-CONSUMER_PREAMBLE = (
+PREAMBLE = (
     "For brittle outputs, invoke `$example-led-instructions`: "
     "0/1/few-shot gate, max 1-3 examples, skip if obvious."
 )
@@ -53,7 +49,7 @@ def validate_home_skill(root: pathlib.Path, problems: list[str]) -> None:
         return
 
     text = skill_md.read_text()
-    for term in (CANONICAL_PREAMBLE, *OUTPUT_FIELDS):
+    for term in (PREAMBLE, *OUTPUT_FIELDS):
         if term not in text:
             problems.append(f"{relative(skill_md, root)}: missing {term!r}")
 
@@ -145,7 +141,7 @@ def validate_reference_line(
 
     if in_fence:
         problems.append(f"{rel}:{line_number}: $example-led-instructions opt-in is inside a code fence")
-    if reference != CONSUMER_PREAMBLE:
+    if reference != PREAMBLE:
         problems.append(
             f"{rel}:{line_number}: $example-led-instructions must use the exact compact opt-in preamble"
         )

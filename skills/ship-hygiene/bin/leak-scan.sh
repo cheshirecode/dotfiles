@@ -1,102 +1,13 @@
 #!/usr/bin/env bash
-# leak-scan.sh — find internal-process references in reviewer-facing text.
-#
-# Reads the text to scan on stdin. One place owns the pattern; SKILL.md step 7b
-# used to carry two near-identical copies of it (one for the PR body, one for
-# the diff), free to drift apart and duplicated in every fix.
-#
-# Usage:
-#   gh pr view <n> --json title,body -q '.title + "\n" + .body' | leak-scan.sh --label body
-#   gh pr diff <n> | grep -E '^\+' | leak-scan.sh --label diff
-#   leak-scan.sh --print-pattern      # the regex, for ad hoc use
-#
-# Exit: 0 clean, 1 leaks found (a VERDICT, printed to stdout), 2 usage or a
-# refusal to judge. Capture the status before parsing; do not pipe this into
-# anything under `set -o pipefail` and read the pipeline's status as the
-# verdict.
-#
-# It refuses to say "clean" over empty input. A failed `gh` call produces no
-# bytes, and a scan of nothing is indistinguishable from a scan that found
-# nothing -- which is the whole failure this script exists to avoid.
-
+# Compatibility entrypoint; pr-review owns the scanner and its token list.
 set -euo pipefail
-
-PROG=${0##*/}
-
-# One token per line, joined below. Keep it explicit: a generic "slash command"
-# pattern also matches any URL path segment with a hyphen, and a false positive
-# on a legitimate link trains people to ignore the scan.
-TOKENS=(
-  'worklog:'                          # the trailer form, not bare "worklog"
-  'worklog [a-z0-9]+(-[a-z0-9]+){1,}'  # prose "worklog <slug>", no colon, no slash
-  '\[POST-MERGE'
-  'next_action'
-  'people/[A-Za-z0-9._-]+/(active|archive)'   # task paths, either state
-  'worklog/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+'   # the worklog_id frontmatter form
-  'iteration [0-9]'
-  'per the (audit|critique)'
-  'scope chosen'
-)
-
-# Slash-command names. Every skill in this repo is a leakable command name, and
-# tests/test_leak_scan.sh fails if a sibling skill directory is missing here --
-# so adding a skill without extending this list is caught at the moment the
-# skill is added, not the next time a leak ships.
-SKILL_COMMANDS=(
-  brainstorm council evidence-gate example-led-instructions job-application
-  karpathy-guidelines loop-engineering loop-helpers pr-cost pr-review serena-rg-search
-  ship-hygiene tightening-a-pr which-model worklog
-)
-
-build_pattern() {
-  local joined commands
-  joined="$(printf '%s|' "${TOKENS[@]}")"
-  commands="$(printf '%s|' "${SKILL_COMMANDS[@]}")"
-  printf '%s/(%s)' "$joined" "${commands%|}"
-}
-
-PATTERN="$(build_pattern)"
-LABEL="input"
-
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    --label) LABEL="${2:?--label needs a value}"; shift 2 ;;
-    --print-pattern) printf '%s\n' "$PATTERN"; exit 0 ;;
-    -h|--help) sed -n '2,20p' "$0" | sed 's/^# \?//'; exit 0 ;;
-    *) echo "$PROG: unknown argument: $1" >&2; exit 2 ;;
-  esac
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+for owner in "$HERE/../../pr-review" \
+  "$HOME/.agents/skills/pr-review" "$HOME/.claude/skills/pr-review" \
+  "$HOME/.codex/skills/pr-review" "$HOME/.cursor/skills/pr-review"; do
+  if [ -f "$owner/bin/leak-scan.sh" ]; then
+    exec bash "$owner/bin/leak-scan.sh" "$@"
+  fi
 done
-
-# The input is a whole PR body or diff, and one generated bundle line can be
-# megabytes. Holding it in a shell variable cost far more than the scan: on an
-# 8MB single line the script took 2292ms where grep alone took 123ms. The read
-# plus the whitespace-stripping copy alone were 1099ms of that, and the clean
-# path then streamed the whole variable through a pipe twice more. Stage stdin
-# in a temp file and let grep and wc read it directly, so no copy of the input
-# is ever built in the shell. Created after the option loop, so --print-pattern
-# and --help still touch no filesystem.
-INPUT_FILE="$(mktemp "${TMPDIR:-/tmp}/leak-scan.XXXXXX")"
-trap 'rm -f "$INPUT_FILE"' EXIT
-cat > "$INPUT_FILE"
-
-# Stops at the first non-space byte instead of copying the input to strip them.
-if ! grep -q '[^[:space:]]' "$INPUT_FILE"; then
-  echo "$PROG: refusing to report '$LABEL' clean: nothing was read on stdin." >&2
-  echo "  A failed gh call and a leak-free PR both produce no bytes here." >&2
-  exit 2
-fi
-
-# grep exits 1 for "no matches", which is the clean verdict, not an error.
-HITS="$(grep -inE "$PATTERN" "$INPUT_FILE" || true)"
-if [ -n "$HITS" ]; then
-  printf '%s: %s — internal-ref leaks:\n' "$PROG" "$LABEL"
-  printf '%s\n' "$HITS"
-  exit 1
-fi
-# `grep -c ''` counts a final line that has no newline. The previous form was
-# `printf '%s\n' "$INPUT" | wc -l`, and command substitution had already
-# stripped the trailing newline, so it counted that line too. `wc -l < file`
-# would report one fewer for such input and quietly change the reported total.
-printf '%s: %s — clean (%s lines scanned)\n' "$PROG" "$LABEL" \
-  "$(grep -c '' "$INPUT_FILE")"
-exit 0
+printf '%s\n' 'leak-scan.sh: install pr-review to use the compatibility scanner' >&2
+exit 2
