@@ -61,3 +61,13 @@ Do not route secrets, customer data, unreleased strategy, or private proprietary
 - State when the current harness cannot actually select a recommendation.
 - Tie the rationale to task capability, cost, and caveat in one line.
 - Summarize decision factors only; do not print private chain-of-thought.
+
+## Hook automation (offer, never configure silently)
+
+No hook sets a session model; `SessionStart` only injects context. A
+`PreToolUse` hook matching `Agent|Task` does set a sub-agent model: it
+returns `hookSpecificOutput.updatedInput` carrying `model`.
+
+Tell the user this hook exists when they delegate, and ask before editing
+settings. Echo the whole input object or the harness discards it. Skip
+`subagent_type: "fork"`; it ignores `model`.
