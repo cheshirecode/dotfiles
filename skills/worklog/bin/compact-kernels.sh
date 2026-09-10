@@ -51,8 +51,10 @@ if ! ls "$ACTIVE_DIR"/*.md >/dev/null 2>&1; then
   exit 0
 fi
 
-python3 - "$ACTIVE_DIR" "$OUT_MD_TMP" "$OUT_JSON_TMP" <<'PY'
-import json, pathlib, re, sys, subprocess, datetime
+python3 - "$ACTIVE_DIR" "$OUT_MD_TMP" "$OUT_JSON_TMP" "$SCRIPT_DIR" <<'PY'
+import json, pathlib, sys, subprocess, datetime
+sys.path.insert(0, sys.argv[4])
+from _task_context import parse_task_file, make_kernel, kernel_markdown
 
 active_dir = pathlib.Path(sys.argv[1])
 out_md = pathlib.Path(sys.argv[2])
@@ -90,59 +92,13 @@ md_sections = []
 
 for f in files:
   text = f.read_text()
-  m = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
-  if not m:
+  fm, body = parse_task_file(text)
+  if not fm:
     continue
-  fm_text, body = m.group(1), text[m.end():]
-  # Frontmatter parse — simple key:value lines (deliberately permissive).
-  fm = {}
-  for line in fm_text.split("\n"):
-    mm = re.match(r"^([a-z_]+):\s*(.+)$", line)
-    if mm:
-      fm[mm.group(1)] = mm.group(2).strip().strip('"')
-  slug = fm.get("slug", f.stem)
-  status = fm.get("status", "—")
-  last_updated = fm.get("last_updated", "—")
-  next_action = fm.get("next_action", "").strip('"')
-
-  # Open items: unchecked `- [ ]` under `## Next` or deeper headings.
-  open_items = []
-  in_next = False
-  for line in body.split("\n"):
-    if re.match(r"^##+\s+Next\b", line):
-      in_next = True
-      continue
-    if in_next and re.match(r"^##+\s+", line):
-      break
-    if in_next:
-      mm = re.match(r"^\s*-\s+\[\s\]\s+(.+?)\s*$", line)
-      if mm:
-        open_items.append(mm.group(1)[:200])
-
-  last_sha, last_subject = last_sha_by_path.get(str(f.resolve()), ("—", "—"))
-
-  # JSON record
-  records.append({
-    "slug": slug,
-    "status": status if status != "—" else "",
-    "last_updated": last_updated if last_updated != "—" else "",
-    "last_sha": last_sha if last_sha != "—" else "",
-    "next_action": next_action,
-    "open_items": open_items[:5],
-  })
-
-  # MD section (mirrors bin/context.sh --for=compact output shape).
-  lines = [f"### {slug}", ""]
-  lines.append(f"slug: {slug}")
-  lines.append(f"status: {status}")
-  lines.append(f"last_updated: {last_updated}")
-  lines.append(f"last_sha: {last_sha}  {last_subject}")
-  lines.append(f"next: {next_action or '—'}")
-  if open_items:
-    lines.append("open:")
-    for t in open_items[:5]:
-      lines.append(f"  - {t}")
-  md_sections.append("\n".join(lines))
+  last_sha, last_subject = last_sha_by_path.get(str(f.resolve()), ("", ""))
+  kernel = make_kernel(f.stem, fm, body, text, f, last_sha, last_subject, now, "file")
+  records.append(kernel)
+  md_sections.append(f"### {kernel['slug']}\n\n" + kernel_markdown(kernel))
 
 # Emit md.
 with out_md.open("w") as fh:
