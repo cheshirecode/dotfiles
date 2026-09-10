@@ -1,6 +1,6 @@
 ---
 name: brainstorm
-description: "Generate and evaluate new product or tooling ideas from observed pains. Sources seeds, excludes already-evaluated ideas, dispatches 4 standard research angles, then routes evaluation to council and records outcomes in the worklog vault. Triggers: 'product ideation', 'brainstorm ideas', 'find N new ideas', `/brainstorm`. Not for evaluating one predetermined idea — use council directly."
+description: Generate new product or tooling ideas from observed pains, exclude prior evaluations, and route independent evaluation to council. Use for brainstorm or ideation requests; evaluate a predetermined idea with council directly.
 ---
 
 # brainstorm

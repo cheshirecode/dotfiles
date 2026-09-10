@@ -13,7 +13,7 @@ Choose by capability and cost for the job, not provider reputation. Treat OpenAI
 - Session-level model-selection guidelines are needed
 - `/which-model` with no arguments prints the guideline; `/which-model task prose or capability` returns 1-3 model suggestions
 
-Skip if: no delegate surface, or in-band work is sufficient for the task.
+Skip optional delegation routing if no delegate surface exists or in-band work is sufficient. Explicit model-advice requests still follow the routes below.
 
 ## Resolve the skill directory
 

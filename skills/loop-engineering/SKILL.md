@@ -19,31 +19,16 @@ Convention: `$skill-name` means invoke installed skill `skill-name`; skip and re
 
 ## Route
 
-1. Skip this skill when one action plus one check is sufficient.
-2. For a fuzzy, thin, or irreversible-effect goal, interrogate the plan
-   before init — [references/interrogate.md](references/interrogate.md);
-   self-review by default, `$council` on its escalation triggers.
-3. For interactive, resumable, or delegated loops, use the driver below —
-   one `loop_run.py` call per cycle, no mode parameters.
-4. For concurrent delegates or workers, also read
-   [references/crew.md](references/crew.md); prove the runtime's isolation or
-   keep delegates read-only, and capture `bin/crew-radar` evidence.
-5. For scheduled loops or installation drift, also read
-   [references/hosts.md](references/hosts.md); require a real recurrence
-   primitive for scheduling and use its audit command for duplicate copies.
-6. For exact transition, effect, worklog, or handoff rules, read
-   [references/protocol.md](references/protocol.md).
-
-Use this compact route matrix before loading references:
+Use this route matrix before loading references:
 
 | Signal | Route | Additional context |
 | --- | --- | --- |
 | one action + one check | one-shot | no loop state |
-| fuzzy goal, thin repo, or irreversible effects | interrogate first | load interrogate.md; init only on a Ready verdict |
+| fuzzy goal, thin repo, or irreversible effects | interrogate first | load [interrogate.md](references/interrogate.md); init only on a Ready verdict |
 | repeated, resumable, or delegated work | driver | one `loop_run.py` call per cycle |
-| delegates run concurrently | driver + crew | load crew.md; serialize writes unless proven isolation |
-| recurrence or installation drift | driver + hosts | verify host primitive or audit |
-| exact transition, effect, worklog, or handoff question | selected route + protocol | load only the needed rules |
+| delegates run concurrently | driver + crew | load [crew.md](references/crew.md); serialize writes unless proven isolation |
+| recurrence or installation drift | driver + hosts | load [hosts.md](references/hosts.md); verify host primitive or audit |
+| exact transition, effect, worklog, or handoff question | selected route + protocol | load only the needed rules in [protocol.md](references/protocol.md) |
 
 ## Compose with installed skills
 
@@ -69,20 +54,8 @@ Routing example: `multi-repo search with uncertain ownership` → `serena-rg-sea
 
 ## Resolve the skill directory
 
-Resolve `<skill-dir>` to this `SKILL.md`'s directory (usually the load path). When unsure, run your host's line — tests/test_skill_dir_resolvers.py executes each one:
-
-```bash
-# Claude Code (empty when absent — never a bogus "./.."):
-SKILL_DIR="$(f=$(find -L ~/.claude/skills -name loop_state.py -print -quit 2>/dev/null); [ -n "$f" ] && dirname "$(dirname "$f")")"
-# Codex:
-SKILL_DIR="$(f=$(find -L ~/.agents/skills -name loop_state.py -print -quit 2>/dev/null); [ -n "$f" ] && dirname "$(dirname "$f")")"
-# Cursor:
-SKILL_DIR="$(f=$(find -L ~/.cursor/skills -name loop_state.py -print -quit 2>/dev/null); [ -n "$f" ] && dirname "$(dirname "$f")")"
-# Opencode / git worktree (empty unless the repo really carries the skill):
-SKILL_DIR="$(r=$(git rev-parse --show-toplevel 2>/dev/null); [ -d "$r/skills/loop-engineering" ] && printf '%s' "$r/skills/loop-engineering")"
-# Fallback — roots checked in order (a parallel find races -quit across roots):
-SKILL_DIR="$(for r in ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills; do f=$(find -L "$r" -name loop_state.py -print -quit 2>/dev/null); [ -n "$f" ] && { dirname "$(dirname "$f")"; break; }; done)"
-```
+Use this `SKILL.md` file's directory. Only if the load path is unknown, read
+[references/resolvers.md](references/resolvers.md) for the tested host fallbacks.
 
 The driver below wraps `scripts/loop_state.py`; every cycle is one call to `python3 <skill-dir>/scripts/loop_run.py`.
 
@@ -134,15 +107,12 @@ not leave ad hoc run artifacts behind.
 
 ### Optional model routing
 
-For a non-trivial loop, invoke `$which-model` before dispatch only when the
-current harness exposes it and the task has materially different capability,
-context, privacy, or cost needs. Ask for a model lane, not an unverified exact
-model. Apply its data-policy gate before delegation.
-If no dispatch tool, target skill, or required supporting tool exists, skip
-routing and record `model-routing: skipped — <reason>` as one-line evidence;
-do not spend a cycle on selection ceremony. If a delegate surface exists but
-no model selector does, treat the returned lane as advisory-only and use the
-host default; never claim a model switch the harness cannot enforce.
+Use `$which-model` only when the current harness exposes it and delegation has
+materially different requirements. The owner supplies the data-policy gate and
+model-selection procedure. If no dispatch tool, target skill, or required tool
+exists, record `model-routing: skipped — <reason>`; do not spend a cycle on it.
+When the harness cannot select a model, routing is advisory-only; never claim a
+model switch the harness cannot enforce.
 
 ### Optional payload transport
 
@@ -151,10 +121,6 @@ recoverable compression (Caveman shrink/Pixel) may be used; read
 [references/transport.md](references/transport.md) before doing so. On missing
 capability or no measured win, record `pixel-transport: skipped — <reason>`
 and pass bytes unchanged.
-
-### Search tool routing
-
-For multi-faceted search (symbols, text, JSON, history, logs), invoke `$serena-rg-search` which uses `zg` (zvec-grep, version ≥ 0.2.1, installed via `npm install -g @zvec/zvec-grep`). If `command -v zg` fails, fall back to `rg` (ripgrep) or your host's native search tool. Record `search-tool: skipped — no zg/rg available` as evidence when search is unavailable.
 
 ### Compaction-friendly output
 
@@ -216,30 +182,9 @@ the successor is `running`. Never reopen the predecessor.
 
 ## Preserve durable context
 
-**Uncommitted working-tree state is not durable state.** A checkpoint records
-that work exists; it does not make it exist. Commit and push before any
-checkpoint claiming an artifact, and confirm with `git ls-remote` — local
-`git log` only proves the commit reached this machine, and a forge API can serve
-a stale head SHA. Observed 2026-08-28: worktree fixes checkpointed, instance
-died, record survived, work did not.
-
-When the installed `worklog` protocol is available, hydrate resume context
-before initialization and checkpoint verified state at compaction, delegation,
-retry exhaustion, scheduled handoff, or termination. Resolve `$WORKLOG_BIN` to
-the worklog skill's `bin/` directory (`~/.claude/skills/worklog/bin`, `~/.agents/skills/worklog/bin`, or the repo's `skills/worklog/bin`). For an existing task, run
-`direnv exec <clone-dir> "$WORKLOG_BIN"/context.sh <slug> --for=resume`, where `<clone-dir>` is the target repo clone whose `.envrc` sets `WORKLOG_REPO`. `direnv exec` loads that env but does **not** change directory (measured), so with no `.envrc` it adds nothing and the slug resolves against your *current* repo — the wrong vault, silently. If `direnv` or the `.envrc` is missing, pass the target explicitly: `WORKLOG_REPO=<clone-dir> "$WORKLOG_BIN"/context.sh <slug> --for=resume`, and label the run `worklog-checkpoint: unavailable — local fallback`.
-Before cold delegation, pass the returned
-`context <slug> --for=compact` pack directly; do not pass the parent transcript
-or imply that `spawn` enriches the pack. If Worklog or its environment is not
-available, use the explicit state path plus one authorized artifact and label
-the run `worklog-checkpoint: unavailable — local fallback`.
-
-Pack before compaction: pass only the objective, known evidence, constraints,
-budget, requested return, and recovery handles. Keep raw output in system temp
-or CCR; never rebuild a handoff by replaying the parent transcript.
-
-For brittle state classification or handoff sequencing, read
-[references/examples.md](references/examples.md). Otherwise stay zero-shot.
+Before resuming, delegating, compacting, or checkpointing, read
+[references/durable-context.md](references/durable-context.md) for verified
+artifact durability, Worklog environment resolution, and compact handoffs.
 
 ## Orchestrator mode (multi-task program)
 

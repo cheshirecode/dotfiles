@@ -21,12 +21,6 @@ Skill authors: copy this line verbatim into your SKILL.md, outside any code fenc
 
 For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
 
-Do not copy the next block — it exists only so the linter can pin this skill's own canonical text, and a consumer skill carrying it un-backticked will fail CI:
-
-```text
-For brittle outputs, invoke $example-led-instructions: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
-```
-
 Agents: when you see this line or are asked to apply the skill, run the gate below and apply the output contract.
 
 **Where the contract goes.** When invoked via the opt-in line inside another skill, keep the contract internal and apply it to that skill's output; emit the contract block only when the user asked for an instruction review.

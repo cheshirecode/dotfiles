@@ -368,7 +368,7 @@ checks = {
         and "verify state ownership" in protocol
     ),
     # Exact-set, so a legitimately added reference must be declared here.
-    "host differences deferred": references == {"crew.md", "examples.md", "hosts.md", "interrogate.md", "orchestrator.md", "protocol.md", "transport.md"},
+    "host differences deferred": references == {"crew.md", "examples.md", "hosts.md", "interrogate.md", "orchestrator.md", "protocol.md", "transport.md", "resolvers.md", "durable-context.md"},
     # Plan interrogation is a gate, not a vibe: the root must route to it, the
     # reference must keep the one-question protocol, the skip line, the council
     # escalation, and a verdict that can refuse init.
@@ -478,7 +478,9 @@ import pathlib
 import re
 
 text = pathlib.Path("skills/council/SKILL.md").read_text()
+report = pathlib.Path("skills/council/references/report.md").read_text()
 checks = {
+    "report route": "references/report.md" in text and "At Stage 6" in text,
     # Council was the last root with no size ceiling and had grown to 353
     # lines; the prompt templates and tiering table now live in references/.
     # Pin the root so dispatch-time payload does not creep back into it.
@@ -493,9 +495,9 @@ checks = {
     "odd returned voters": "`M_returned` must be odd and at least 3" in text,
     "invalid denominator": "Invalid item ballots never lower the denominator" in text,
     "unresolved qualify": "Do not silently count unresolved conditions" in text,
-    "kept status": "KEPT support threshold met" in text,
-    "outcome first": "The final report is outcome-first" in text,
-    "audit appendix": "## Audit Appendix" in text,
+    "kept status": "KEPT support threshold met" in report,
+    "outcome first": "The final report is outcome-first" in report,
+    "audit appendix": "## Audit Appendix" in report,
     "exact provenance": "[proposed-by: A1-i2, D-i1]" in text,
     "worklog opt-in": "If the user says no worklog tracking" in text,
     "background rule": "background only if total estimate >10min" in text,
@@ -517,7 +519,7 @@ headings = [
     "## Stage Notes",
     "## Audit Appendix",
 ]
-positions = [text.find(h) for h in headings]
+positions = [report.find(h) for h in headings]
 checks["final report section order"] = all(pos >= 0 for pos in positions) and positions == sorted(positions)
 checks["no standalone SURVIVE"] = not re.search(r"\bSURVIVE\b", text)
 majority_approve_hits = [m.start() for m in re.finditer("majority approve", text)]
@@ -1089,28 +1091,19 @@ PYD
   fi
   rm -rf "$resolve_home" "$resolve_repo_parent"
 
-  if python3 - <<'PY'
-import re
-
-leak_re = re.compile(
-    r"worklog|\[POST-MERGE|next_action|/ship-hygiene|/impeccable|/worklog|"
-    r"people/[a-z]+/active|iteration [0-9]|per the (audit|critique)|scope chosen",
-    re.I,
-)
-
-def flagged(line, changed_paths):
-    skill_surface = any(
-        path.startswith("skills/") or path == "manifest/skills.yaml"
-        for path in changed_paths
-    )
-    if skill_surface and re.search(r"/(ship-hygiene|impeccable|worklog)\b", line):
-        return False
-    return bool(leak_re.search(line))
-
-assert not flagged("+ Document /ship-hygiene usage for skill PRs", ["skills/ship-hygiene/SKILL.md"])
-assert flagged("+ next_action from people/oss/active/foo.md", ["README.md"])
-PY
-  then ok "ship-hygiene skill PR leak exception"; else fail "ship-hygiene skill PR leak exception"; fi
+  if python3 - <<'PYTEST'
+import pathlib
+import subprocess
+scanner = pathlib.Path("skills/pr-review/bin/leak-scan.sh")
+for text, expected in (("Document /ship-hygiene usage", 1), ("next_action: internal", 1), ("Describe the product behavior", 0)):
+    result = subprocess.run(["bash", str(scanner)], input=text, text=True, capture_output=True)
+    assert result.returncode == expected, result
+# Skill-name exceptions are human judgment on actual changed paths, not a
+# second scanner implementation with a stale token list.
+policy = pathlib.Path("skills/pr-review/references/title-body.md").read_text()
+assert "If the PR changes `skills/**` or skill docs" in policy
+PYTEST
+  then ok "PR scanner and skill-doc exception policy"; else fail "PR scanner and skill-doc exception policy"; fi
 
   if python3 - <<'PY'
 import pathlib

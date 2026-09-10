@@ -81,8 +81,8 @@ repos: one with no remote at all, one with an `upstream` but no `origin`.
 |---|------|----------|---------------|
 | 5a | Loop-engineering can find $pr-review | `$pr-review` resolves correctly in routing table | Search loop-engineering/SKILL.md for pr-review entry |
 | 5b | Tightening-a-pr shim delegates to pr-review | Loading tightening-a-pr triggers pr-review | Load both skills; verify tightening-a-pr SKILL.md says "delegates to $pr-review" |
-| 5c | Ship-hygiene still references leak-scan.sh | No broken delegation in ship-hygiene step 7 | Read ship-hygiene/SKILL.md step 7b, confirm `<skill-dir>` resolution still works |
-| 5d | SKILL_DIR resolver finds pr-review across all roots | `find -L ~/.claude/skills ...` and `~/.agents/skills ...` both locate pr-review | Run the resolver pattern against pr-review name |
+| 5c | Legacy scanner delegates to pr-review | No broken delegation in the compatibility entrypoint | Run test_scanner_compatibility.py in separate installed roots |
+| 5d | Loaded skill path resolves pr-review helpers | Helpers are anchored to the directory containing the loaded SKILL.md | Verify preflight uses `<skill-dir>/bin`, independently of the target repo cwd |
 
 ### 6. Edge-case scenarios (review modes)
 
