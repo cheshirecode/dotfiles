@@ -8,6 +8,9 @@ configured, and prints exactly one line whose tail is the only LLM decision
 """
 
 import os
+import json
+import io
+from contextlib import redirect_stdout
 import shlex
 import stat
 import subprocess
@@ -39,6 +42,15 @@ def run(args, env_extra=None, cwd=None):
         env=env,
         cwd=cwd,
     )
+
+
+def queue_stub(status, task=None, reason=None, stderr=""):
+    data = json.dumps({"schema_version":"worklog-project-next/v1", "project":"prog-x",
+                       "status":status, "task":task, "reason":reason})
+    return ("#!/bin/sh\n[ \"$*\" = 'next prog-x --json' ] || exit 2\n"
+            + "printf '%s' " + shlex.quote(data) + "\n"
+            + "printf '%s' " + shlex.quote(stderr) + " >&2\n"
+            + "exit %d\n" % (0 if status == "eligible" else 1))
 
 
 class LoopRunTest(unittest.TestCase):
@@ -243,20 +255,20 @@ class LoopRunTest(unittest.TestCase):
         cell = self._radar_cell(
             0,
             '{"base":"HEAD","worktrees":2,"warn":0,"info":1,'
-            '"overlaps":[{"sev":"info","path":"a.py","owners":"f-a"}]}',
+            '"overlaps":[{"severity":"info","path":"a.py","owners":"f-a"}]}',
         )
-        self.assertEqual(cell, "radar: info paths=a.py")
+        self.assertEqual(cell, "radar: info=1 paths=a.py")
 
     def test_radar_collision_reports_count_and_paths(self):
         # Pin (passes before and after the fix): exit 2 stays the one cell
         # that carries a warn count.
         cell = self._radar_cell(
             2,
-            '{"base":"HEAD","worktrees":2,"warn":1,"info":0,'
-            '"overlaps":[{"sev":"warn","path":"a.py","owners":"f-a"},'
-            '{"sev":"warn","path":"b.py","owners":"f-b"}]}',
+            '{"base":"HEAD","worktrees":2,"warn":2,"info":0,'
+            '"overlaps":[{"severity":"warn","path":"a.py","owners":"f-a"},'
+            '{"severity":"warn","path":"b.py","owners":"f-b"}]}',
         )
-        self.assertEqual(cell, "radar: warn=1 paths=a.py,b.py")
+        self.assertEqual(cell, "radar: warn=2 info=0 paths=a.py,b.py")
 
     def test_radar_single_owner_is_not_rendered_as_clean(self):
         # A repo with one owner cannot express an overlap, so exit 0 there is
@@ -315,7 +327,7 @@ class LoopRunTest(unittest.TestCase):
         stub_bin = Path(self._tmp.name) / "wbin"
         stub_bin.mkdir()
         stub = stub_bin / "project.sh"
-        stub.write_text("#!/bin/sh\necho task-alpha\n")
+        stub.write_text(queue_stub("eligible", "task-alpha"))
         stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
         r = run(
             [self.run_dir, "--goal", "test goal", "--project", "prog-x"],
@@ -329,10 +341,7 @@ class LoopRunTest(unittest.TestCase):
         stub_bin = Path(self._tmp.name) / "wbin"
         stub_bin.mkdir()
         stub = stub_bin / "project.sh"
-        stub.write_text(
-            "#!/bin/sh\necho \"project next: all tasks for 'prog-x' are"
-            " archived (nothing left)\"\nexit 1\n"
-        )
+        stub.write_text(queue_stub("empty"))
         stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
         r = run(
             [self.run_dir, "--goal", "test goal", "--project", "prog-x"],
@@ -367,10 +376,7 @@ class LoopRunTest(unittest.TestCase):
     def test_queue_slug_is_read_from_stdout_only(self):
         # project.sh prints the slug on stdout and warnings on stderr. Reading
         # a merged stream hands the last warning back as a task name.
-        r = self.init_with_stub(
-            "#!/bin/sh\necho task-alpha\n"
-            "echo 'warning: vault is behind origin' >&2\n"
-        )
+        r = self.init_with_stub(queue_stub("eligible", "task-alpha", stderr="warning: vault is behind origin"))
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(self._queue_cell(r.stdout), "queue: task-alpha")
 
@@ -387,10 +393,7 @@ class LoopRunTest(unittest.TestCase):
         self.assertEqual(len(body), 1)
 
     def test_queue_blocked_only_for_the_dependency_verdict(self):
-        r = self.init_with_stub(
-            "#!/bin/sh\necho \"project next: no claim-eligible task;"
-            " b: blocked on a\" >&2\nexit 1\n"
-        )
+        r = self.init_with_stub(queue_stub("blocked"))
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(self._queue_cell(r.stdout), "queue: blocked")
 
@@ -489,6 +492,113 @@ class LoopRunTest(unittest.TestCase):
             found, why = loop_run.resolve_project_sh()
         self.assertIsNone(why)
         self.assertEqual(found, bin_dir / "project.sh")
+
+
+    def test_corrupt_config_rejected_without_transition(self):
+        self.init_run()
+        config = Path(self.run_dir) / "run.json"
+        state = Path(self.run_dir) / "loop_state.json"
+        for corrupt in ["{", "[]", '{"repo": true}', None]:
+            if corrupt is None:
+                config.unlink(missing_ok=True)
+            else:
+                config.write_text(corrupt)
+            before = state.read_bytes()
+            r = run([self.run_dir, "--evidence", "command: check — ok"], cwd=self.cwd)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertEqual(state.read_bytes(), before)
+            self.assertEqual(config.read_text() if config.exists() else None, corrupt)
+
+    def test_rejected_calls_do_not_change_config(self):
+        self.init_run()
+        config = Path(self.run_dir) / "run.json"
+        before = config.read_bytes()
+        for args in [[], ["--stop", "complete"], ["--evidence", " "]]:
+            r = run([self.run_dir, "--repo", "different"] + args, cwd=self.cwd)
+            self.assertNotEqual(r.returncode, 0)
+            self.assertEqual(config.read_bytes(), before)
+
+    def test_remote_selection_on_later_cli_invocation(self):
+        self.init_run()
+        argv_file = Path(self._tmp.name)/"argv"
+        stub = Path(self._tmp.name)/"radar"
+        stub.write_text("#!/bin/sh\nprintf '%s\\n' \"$@\" > " + shlex.quote(str(argv_file))
+                        + "\necho '{\"comparable\":true,\"warn\":0,\"overlaps\":[],\"remote_fetch\":\"stale\"}'\n")
+        stub.chmod(0o755)
+        argv = [str(LOOP_RUN), self.run_dir, "--repo", "fixture", "--evidence", "command: check — ok", "--radar-remote"]
+        out = io.StringIO()
+        with mock.patch.object(sys, "argv", argv), mock.patch.object(loop_run, "CREW_RADAR", stub), redirect_stdout(out):
+            self.assertEqual(loop_run.main(), 0)
+        self.assertIn("--remote", argv_file.read_text().splitlines())
+        self.assertIn("remote=stale", out.getvalue())
+        self.assertTrue(json.loads((Path(self.run_dir)/"run.json").read_text())["remote"])
+
+    def test_concurrent_config_changes_are_not_lost(self):
+        self.init_run()
+        env = {**os.environ, "WORKLOG_BIN":str(Path(self._tmp.name)/"absent")}
+        common = [sys.executable, str(LOOP_RUN), self.run_dir, "--evidence", "command: concurrent — ok"]
+        procs = [subprocess.Popen(common + args, cwd=self.cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                 for args in [["--project","prog-x"], ["--radar-remote"]]]
+        for proc in procs:
+            stdout, stderr = proc.communicate(timeout=20)
+            self.assertEqual(proc.returncode, 0, (stdout,stderr))
+        config = json.loads((Path(self.run_dir)/"run.json").read_text())
+        self.assertEqual(config["project"], "prog-x")
+        self.assertTrue(config["remote"])
+        self.assertEqual(json.loads((Path(self.run_dir)/"loop_state.json").read_text())["budget"]["used"],2)
+
+    def test_permission_denied_probe_still_reports_stopped(self):
+        self.init_run(["--project", "prog-x"])
+        stub_bin = Path(self._tmp.name)/"wbin"
+        stub_bin.mkdir()
+        (stub_bin/"project.sh").write_text("not executable")
+        r = run([self.run_dir, "--stop", "complete", "--verification", "command: test — passed"],
+                env_extra={"WORKLOG_BIN":str(stub_bin)}, cwd=self.cwd)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("queue: error=", r.stdout)
+        self.assertIn("decide: stopped", r.stdout)
+        state = json.loads((Path(self.run_dir)/"loop_state.json").read_text())
+        self.assertEqual(state["terminal_status"], "complete")
+        self.assertEqual(state["budget"]["used"], 0)
+
+    def test_probe_timeout_has_a_bounded_error(self):
+        stub_bin = self._stub("#!/bin/sh\nsleep 60 &\nwait\n")
+        with mock.patch.dict(os.environ, {"WORKLOG_BIN":stub_bin}), mock.patch.object(loop_run, "PROBE_TIMEOUT", 0.05):
+            self.assertIn("error=timeout", loop_run.queue_line("prog-x")[0])
+            with mock.patch.object(loop_run, "CREW_RADAR", Path(stub_bin)/"project.sh"):
+                self.assertIn("error=timeout", loop_run.radar_line("repo"))
+
+    def test_radar_artifacts_are_immutable(self):
+        with mock.patch.object(loop_run, "run_probe") as probe:
+            for name in ("first", "second"):
+                probe.return_value = subprocess.CompletedProcess([],2,json.dumps({"warn":1,"info":0,"overlaps":[{"severity":"warn","path":name}]}),"")
+                loop_run.radar_line("repo", artifact_dir=Path(self._tmp.name))
+        files = list(Path(self._tmp.name).glob("radar*.json"))
+        self.assertEqual(len(files),2)
+        self.assertEqual({json.loads(json.loads(p.read_text())["stdout"])["overlaps"][0]["path"] for p in files},{"first","second"})
+
+    def test_inconsistent_radar_is_an_error(self):
+        for code, data in [(0,{"warn":1,"info":0,"overlaps":[{"severity":"warn","path":"a"}]}),
+                           (0,{"warn":0,"info":1,"overlaps":[{"severity":"unknown","path":"a"}]}),
+                           (2,{"warn":1,"info":0,"overlaps":[]})]:
+            with self.subTest(code=code,data=data):
+                self.assertIn("radar: error=",self._radar_cell(code,json.dumps(data)))
+
+    def test_mixed_radar_preview_and_full_artifact(self):
+        overlaps = [{"severity":"warn", "path":f"warn-{i}"} for i in range(8)]
+        overlaps += [{"severity":"info", "path":f"info-{i}"} for i in range(1000)]
+        payload = {"warn":8,"info":1000,"overlaps":overlaps,"remote_fetch":"stale"}
+        proc = subprocess.CompletedProcess([],2,json.dumps(payload),"")
+        with mock.patch.object(loop_run, "run_probe", return_value=proc):
+            line = loop_run.radar_line("repo", remote=True, artifact_dir=Path(self._tmp.name))
+        self.assertIn("warn=8 info=1000", line)
+        self.assertIn("omitted=3", line)
+        self.assertIn("remote=stale", line)
+        self.assertNotIn("info-0", line)
+        self.assertNotIn("warn-5", line)
+        self.assertLess(len(line.encode()), 600)
+        saved = json.loads(next(Path(self._tmp.name).glob("radar-*.json")).read_text())
+        self.assertEqual(json.loads(saved["stdout"])["overlaps"], overlaps)
 
 
 if __name__ == "__main__":
