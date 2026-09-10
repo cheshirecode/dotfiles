@@ -205,9 +205,11 @@ exit code separately, then project the JSON to one evidence line:
 ```bash
 RADAR=<skill-dir>/bin/crew-radar
 if raw=$("$RADAR" --json <repo> 2>/dev/null); then radar_rc=0; else radar_rc=$?; fi
-cur=$(printf '%s' "$raw" | jq -S -c '{warn,info,error,paths:[.overlaps[]?.path]}') \
+# Store full paths before projecting a bounded warning preview.
+printf '%s' "$raw" > "$run_dir/crew-radar.json"
+cur=$(printf '%s' "$raw" | jq -S -c '{warn,info,error,remote_fetch,paths:([.overlaps[]? | select(.severity == "warn") | .path][:5])}') \
   || cur='{"error":"radar output unparseable"}'
-printf 'command: crew-radar <repo> — exit %s, %s\n' "$radar_rc" "$cur"
+printf 'command: crew-radar <repo> — exit %s, %s; artifact=%s/crew-radar.json\n' "$radar_rc" "$cur" "$run_dir"
 ```
 
 `--json` answers in JSON on every path, failures included (`{"error": "..."}`).

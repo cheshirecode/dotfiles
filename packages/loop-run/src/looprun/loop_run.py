@@ -18,9 +18,12 @@ Exit codes match loop_state.py: 0 success, 2 usage, 3 contract rejection.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
+import signal
+import tempfile
 import subprocess
 import sys
 from pathlib import Path
@@ -38,11 +41,45 @@ CREW_RADAR = PKG_DIR / "bin" / "crew-radar"
 # Support both invocation styles: `python3 loop_run.py` (script) and
 # `import looprun.loop_run` / console script (package).
 try:
-    from loop_state import RESUMABLE_STATUSES, TERMINAL_STATUSES  # noqa: E402
+    from loop_state import RESUMABLE_STATUSES, TERMINAL_STATUSES, state_lock  # noqa: E402
 except ImportError:  # package import
-    from looprun.loop_state import RESUMABLE_STATUSES, TERMINAL_STATUSES  # noqa: E402
+    from looprun.loop_state import RESUMABLE_STATUSES, TERMINAL_STATUSES, state_lock  # noqa: E402
 
 TERMINAL = TERMINAL_STATUSES
+# Local radar measured ~0.55s; allow headroom without an unbounded cycle.
+PROBE_TIMEOUT = 10
+
+
+def write_json(path, value):
+    fd, name = tempfile.mkstemp(dir=path.parent, prefix="." + path.name)
+    try:
+        with os.fdopen(fd, "w") as out:
+            json.dump(value, out)
+            out.write("\n")
+        os.replace(name, path)
+    finally:
+        if os.path.exists(name):
+            os.unlink(name)
+
+
+def run_probe(cmd):
+    # Kill the POSIX process group, including shell grandchildren, on timeout.
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, errors="replace", start_new_session=os.name != "nt")
+    try:
+        stdout, stderr = proc.communicate(timeout=PROBE_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        if os.name != "nt":
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        else:
+            proc.kill()
+        proc.communicate()
+        raise
+    return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
+
 
 # A worklog task slug: one bare token. project.sh prints nothing else on
 # stdout when it finds one, so anything wider is a broken contract, not a task.
@@ -61,48 +98,60 @@ def loop_state(args):
     return proc.returncode, proc.stdout.strip()
 
 
-def radar_line(repo, remote=False):
-    """One radar verdict cell; never fails the cycle."""
+def radar_line(repo, remote=False, artifact_dir=None):
+    """Bounded verdict preview; full probe output stays in the run artifact."""
     if not repo:
         return "radar: off"
     cmd = [str(CREW_RADAR), "--json"]
     if remote:
         cmd.append("--remote")
     cmd.append(repo)
+    ref = ""
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = run_probe(cmd)
+        if artifact_dir is not None:
+            captured = {"returncode":proc.returncode, "stdout":proc.stdout, "stderr":proc.stderr}
+            digest = hashlib.sha256(json.dumps(captured, sort_keys=True).encode()).hexdigest()[:20]
+            artifact = Path(artifact_dir) / ("radar-" + digest + ".json")
+            write_json(artifact, captured)
+            ref = " artifact=" + str(artifact)
         data = json.loads(proc.stdout)
+        if not isinstance(data, dict):
+            raise ValueError("radar result is not an object")
+    except subprocess.TimeoutExpired:
+        return "radar: error=timeout"
     except (OSError, ValueError):
-        return "radar: error=unrunnable"
-    if data.get("error"):
-        return "radar: error=%s" % cell(str(data["error"]))
-    # crew.md states the whole contract: exit 0 clean or info-only, 2 the
-    # collision verdict, 1 a usage or repo error. Only 0 and 2 are verdicts.
-    # A radar that never inspected the repo rendered as `warn=... paths=-`,
-    # which reads as "it ran and graded the wave" -- the one reading that
-    # makes a caller skip serializing writes.
-    if proc.returncode not in (0, 2):
-        reason = proc.stderr.strip() or "exit %d, no reason given" % proc.returncode
-        return "radar: error=%s" % cell(reason)
-    paths = ",".join(o.get("path", "?") for o in data.get("overlaps") or [])
+        return "radar: error=unrunnable" + ref
+    freshness = " remote=" + cell(str(data.get("remote_fetch", "unknown"))) if remote else ""
+    if data.get("error") or proc.returncode not in (0, 2):
+        reason = str(data.get("error") or proc.stderr.strip() or "exit %d" % proc.returncode)
+        return "radar: error=" + cell(reason[:160] if ref else reason) + ref + freshness
+    overlaps = data.get("overlaps") or []
+    if not isinstance(overlaps, list) or any(not isinstance(o, dict) for o in overlaps):
+        return "radar: error=invalid-overlaps" + ref + freshness
+    if any(o.get("severity") not in ("warn", "info") or not isinstance(o.get("path"), str) for o in overlaps):
+        return "radar: error=invalid-overlaps" + ref + freshness
+    warn_count = sum(o["severity"] == "warn" for o in overlaps)
+    info_count = len(overlaps) - warn_count
+    if (type(data.get("warn")) is not int or data["warn"] != warn_count
+            or ("info" in data and (type(data["info"]) is not int or data["info"] != info_count))
+            or (proc.returncode == 2) != (warn_count > 0)):
+        return "radar: error=inconsistent-verdict" + ref + freshness
+    selected = [o for o in overlaps if o.get("severity") == ("warn" if proc.returncode == 2 else "info")]
+    paths = ",".join(str(o.get("path", "?")) for o in selected[:5])
+    preview = (" paths=" + cell(paths)) if paths else ""
+    if len(selected) > 5:
+        preview += " omitted=%d" % (len(selected) - 5)
     if proc.returncode == 0:
-        # Exit 0 with overlaps is info-only (stacked branches), not a warn.
-        if paths:
-            return "radar: info paths=%s" % cell(paths)
-        # One owner cannot overlap with anything, so `clean` there would grade
-        # a comparison that never happened -- the reading that lets an
-        # orchestrator skip serializing writes while its subagents share a
-        # single worktree. Absence of the field means an older radar, which is
-        # not evidence of a single owner, so only an explicit false counts.
-        if data.get("comparable") is False:
-            return "radar: single-owner"
-        return "radar: clean"
+        if overlaps:
+            return "radar: info=%d%s%s%s" % (len(selected), preview, ref, freshness)
+        verdict = "single-owner" if data.get("comparable") is False else "clean"
+        return "radar: " + verdict + freshness
     warn = data.get("warn")
-    if not isinstance(warn, int) or isinstance(warn, bool):
-        # No count to report. `warn=?` was indistinguishable from a graded
-        # verdict whose label happened to be unknown, so say error instead.
-        return "radar: error=%s" % cell("exit 2 carried no warn count")
-    return "radar: warn=%d paths=%s" % (warn, cell(paths) or "-")
+    if not isinstance(warn, int) or isinstance(warn, bool) or warn < 0:
+        return "radar: error=exit 2 carried no warn count" + ref + freshness
+    info = sum(o.get("severity") == "info" for o in overlaps)
+    return "radar: warn=%d info=%d%s%s%s" % (warn, info, preview, ref, freshness)
 
 
 def cell(text):
@@ -159,28 +208,33 @@ def queue_line(project):
     project_sh, why = resolve_project_sh()
     if project_sh is None:
         return "queue: error=%s" % cell(why), None
-    proc = subprocess.run(
-        [str(project_sh), "next", project], capture_output=True, text=True
-    )
-    # The slug is stdout-only. project.sh writes warnings and every failure
-    # reason to stderr, so a merged stream hands the last warning back as a
-    # task name and the loop goes on to claim it.
-    if proc.returncode == 0:
-        lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
-        slug = lines[-1] if lines else ""
-        if QUEUE_SLUG.match(slug):
-            return "queue: %s" % slug, slug
-        return "queue: error=%s" % cell(slug or "next printed no slug"), None
-    # Exit 1 alone is not proof of an empty or blocked queue (orchestrator.md):
-    # it also covers a missing, mistyped, or childless project. Only the two
-    # verdicts project.sh states in words are queue verdicts; anything else is
-    # a configuration failure the model must see rather than read as a lull.
-    reason = proc.stderr.strip() or proc.stdout.strip()
-    if "(nothing left)" in reason:
-        return "queue: empty", None
-    if "no claim-eligible task" in reason:
-        return "queue: blocked", None
-    return "queue: error=%s" % cell(reason or "rc %d" % proc.returncode), None
+    try:
+        proc = run_probe([str(project_sh), "next", project, "--json"])
+    except subprocess.TimeoutExpired:
+        return "queue: error=timeout", None
+    except OSError as exc:
+        return "queue: error=" + cell(str(exc)), None
+    try:
+        data = json.loads(proc.stdout)
+        if (not isinstance(data, dict) or data.get("schema_version") != "worklog-project-next/v1"
+                or data.get("project") != project):
+            raise ValueError("invalid queue schema")
+        status = data.get("status")
+        slug = data.get("task")
+        expected_rc = 0 if status == "eligible" else 1
+        if proc.returncode != expected_rc:
+            raise ValueError("queue status/exit mismatch")
+        if status == "eligible" and isinstance(slug, str) and QUEUE_SLUG.fullmatch(slug):
+            return "queue: " + slug, slug
+        if slug is not None:
+            raise ValueError("invalid queue task")
+        if status in ("empty", "blocked"):
+            return "queue: " + status, None
+        if status in ("error", "missing"):
+            return "queue: error=" + cell(str(data.get("reason") or status)), None
+        raise ValueError("invalid queue status")
+    except (ValueError, TypeError) as exc:
+        return "queue: error=" + cell(proc.stderr.strip() or str(exc)), None
 
 
 def main():
@@ -210,6 +264,15 @@ def main():
                         default="no merge, deploy, publish, or force-push")
     ns = parser.parse_args()
 
+    try:
+        with state_lock(Path(ns.run_dir) / "driver"):
+            return drive(ns, parser)
+    except (OSError, ValueError) as exc:
+        print("loop-run: " + str(exc), file=sys.stderr)
+        return 3
+
+
+def drive(ns, parser):
     run_dir = Path(ns.run_dir)
     state = run_dir / "loop_state.json"
     config_path = run_dir / "run.json"
@@ -228,7 +291,6 @@ def main():
             repo = probe.stdout.strip() if probe.returncode == 0 else ""
         config = {"repo": repo or "", "project": ns.project or "",
                   "remote": bool(ns.radar_remote)}
-        config_path.write_text(json.dumps(config))
         rc, line = loop_state([
             "init", "--state", str(state),
             "--goal", ns.goal,
@@ -243,13 +305,18 @@ def main():
     else:
         try:
             config = json.loads(config_path.read_text())
-        except (OSError, ValueError):
-            config = {"repo": "", "project": ""}
+        except (OSError, ValueError) as exc:
+            raise ValueError(f"invalid run configuration {config_path}: {exc}") from exc
+        if (not isinstance(config, dict) or not isinstance(config.get("repo"), str)
+                or not isinstance(config.get("project"), str)
+                or not isinstance(config.get("remote", False), bool)):
+            raise ValueError(f"invalid run configuration {config_path}")
+        if ns.radar_remote:
+            config["remote"] = True
         if ns.repo is not None:
             config["repo"] = ns.repo
         if ns.project is not None:
             config["project"] = ns.project
-        config_path.write_text(json.dumps(config))
         if ns.stop:
             if ns.stop == "complete" and not ns.verification:
                 parser.error("--verification is required with --stop complete")
@@ -282,11 +349,14 @@ def main():
     if rc != 0:
         return rc
 
+    # Only successful transitions persist configuration. The driver lock covers
+    # read/transition/write so concurrent invocations cannot lose an update.
+    write_json(config_path, config)
     q_line, _slug = queue_line(config.get("project"))
     status = line.split(" ", 1)[0]
     decide = "stopped" if status in TERMINAL else "continue or stop"
     print("%s | %s | %s | decide: %s" % (
-        line, radar_line(config.get("repo"), config.get("remote", False)),
+        line, radar_line(config.get("repo"), config.get("remote", False), run_dir),
         q_line, decide,
     ))
     return 0
