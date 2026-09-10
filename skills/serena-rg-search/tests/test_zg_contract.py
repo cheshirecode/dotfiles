@@ -36,7 +36,7 @@ SKILL = pathlib.Path(__file__).resolve().parent.parent / "SKILL.md"
 
 class ZgContractTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.text = SKILL.read_text()
+        self.text = SKILL.read_text() + "\n" + (SKILL.parent / "references/commands.md").read_text()
 
     # The pattern must match `zg query --rg ... --files` as ONE command and
     # not a line that merely mentions both. The first draft here matched any

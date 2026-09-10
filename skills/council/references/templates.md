@@ -1,7 +1,9 @@
 # Council: prompt templates
 
 Read this before spawning any Stage 1, 3, 4, or 5 sub-agent. Use the stage's template verbatim.
-Every sub-agent is a `task` call with `subagent_type: general-purpose`.
+Use the host’s available subagent primitive with independent stage prompts.
+On Claude Code, use its `general-purpose` agent type; do not assume that type
+or tool name exists in another harness.
 
 ## Stage 1 research
 

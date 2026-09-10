@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""SKILL.md's status table must match the statuses the doctor can emit.
+"""The skill documentation must match the statuses the doctor can emit.
 
-The six-status table in SKILL.md is a second copy of what
+The six-status table in references/diagnosis.md is a second copy of what
 `scripts/pr_cost_doctor.py` actually does, and the doctor's own module
 docstring is a third. Copies drift, and this particular drift is expensive:
 the table tells a reader which statuses fail a run, so a stale exit column
@@ -19,7 +19,7 @@ Two anchoring notes, because a looser pattern would pass while wrong:
     substring check for `ok` passes against a docstring that never mentions
     the status.
   - The table is read only from inside the `## Self-diagnosis` section. A
-    row-shaped line elsewhere in SKILL.md must not be able to satisfy an
+    row-shaped line elsewhere in the documentation must not be able to satisfy an
     assertion about this table.
 
 The extraction is itself asserted non-empty. A parser that quietly matches
@@ -34,7 +34,6 @@ import unittest
 
 
 SKILL_DIR = pathlib.Path(__file__).resolve().parents[1]
-SKILL_MD = SKILL_DIR / "SKILL.md"
 DOCTOR = SKILL_DIR / "scripts" / "pr_cost_doctor.py"
 
 # `"status": "<name>"` in a returned dict, and `entry["status"] = "<name>"`.
@@ -98,14 +97,14 @@ def collector_harnesses() -> set[str]:
 
 
 def contract_harnesses() -> set[str]:
-    match = CONTRACT_HARNESS.search(SKILL_MD.read_text(encoding="utf-8"))
+    match = CONTRACT_HARNESS.search((SKILL_DIR / "references/payload.md").read_text(encoding="utf-8"))
     if match is None:
         return set()
     return {part.strip() for part in match.group(1).split("|") if part.strip()}
 
 
 def harness_guidance_section() -> str:
-    text = SKILL_MD.read_text(encoding="utf-8")
+    text = (SKILL_DIR / "references/payload.md").read_text(encoding="utf-8")
     start = text.find("## Harness guidance")
     if start == -1:
         return ""
@@ -118,7 +117,7 @@ def documented_harnesses() -> set[str]:
 
 
 def self_diagnosis_section() -> str:
-    text = SKILL_MD.read_text(encoding="utf-8")
+    text = (SKILL_DIR / "references/diagnosis.md").read_text(encoding="utf-8")
     start = text.find("## Self-diagnosis")
     if start == -1:
         return ""
@@ -158,7 +157,7 @@ class SkillDocMatchesDoctorTest(unittest.TestCase):
         self.assertNotEqual(
             rows,
             {},
-            "no table rows matched in SKILL.md's Self-diagnosis section; the "
+            "no table rows matched in references/diagnosis.md; the "
             "extraction is broken, so agreement proves nothing",
         )
         self.assertNotEqual(
@@ -181,7 +180,7 @@ class SkillDocMatchesDoctorTest(unittest.TestCase):
         self.assertNotEqual(
             documented_harnesses(),
             set(),
-            "no bullets matched in SKILL.md's Harness guidance section; the "
+            "no harness bullets matched in references/payload.md; the "
             "extraction is broken, so agreement proves nothing",
         )
         self.assertNotEqual(

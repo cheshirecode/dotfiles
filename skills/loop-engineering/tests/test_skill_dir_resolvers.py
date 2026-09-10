@@ -31,7 +31,8 @@ HOME_ROOTS = (".claude/skills", ".agents/skills", ".cursor/skills")
 
 def snippets() -> list[tuple[str, str]]:
     """(label, command) for each resolver line in SKILL.md's bash block."""
-    text = SKILL.read_text()
+    text = (SKILL.parent / "references/resolvers.md").read_text()
+    assert "references/resolvers.md" in SKILL.read_text(), "resolver route missing"
     if HEADING not in text:
         raise AssertionError("SKILL.md lost the %r section" % HEADING)
     block = text.split(HEADING, 1)[1].split("```bash", 1)[1].split("```", 1)[0]

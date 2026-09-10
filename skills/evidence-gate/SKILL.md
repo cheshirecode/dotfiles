@@ -23,7 +23,7 @@ Skip if: the task has a single observable outcome with one sufficient check (tes
 Resolve `<skill-dir>` to the directory containing this `SKILL.md`. In most
 agent contexts, this is the path from which the skill was loaded. If uncertain,
 search for `evidence_gate.py` under the skill root.
-`loop-engineering/SKILL.md` owns this resolver pattern, including the per-host variants and the fixture that executes them; the line below is the same pattern with this skill's own sentinel file.
+`loop-engineering/references/resolvers.md` owns this resolver pattern, including the per-host variants and the fixture that executes them; the line below is the same pattern with this skill's own sentinel file.
 
 ```bash
 # Roots checked in order; empty when absent — never a bogus "./..":
@@ -32,22 +32,16 @@ SKILL_DIR="$(for r in ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skill
 
 All script invocations below use `python3 <skill-dir>/scripts/evidence_gate.py`.
 
-## Declare every goal clause
+## Record and check coverage
 
-Initialize with `python3 <skill-dir>/scripts/evidence_gate.py init`; see
-[references/recording.md](references/recording.md) for clause wording rules.
-## Record verified evidence
+Read [references/recording.md](references/recording.md) when declaring criteria,
+recording evidence, or checking completion; it owns the CLI examples and exit codes.
+Start with `python3 <skill-dir>/scripts/evidence_gate.py init`.
 
 **Evidence kinds:** `command`, `artifact`, `git`, `github`, `url`. Never
 record model prose as evidence. Evidence of a change is not evidence of its
 health — see [references/health-evidence.md](references/health-evidence.md).
 
-See [references/recording.md](references/recording.md) for the record
-subcommand, evidence kinds, and worked examples.
-## Gate completion
-
-See [references/recording.md](references/recording.md) for the check
-subcommand, its exit codes, and the pass/fail contract.
 ## Inspect the gate
 
 Run `python3 <skill-dir>/scripts/evidence_gate.py show --gate <gate-file>` to

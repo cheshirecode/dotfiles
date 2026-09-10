@@ -13,7 +13,7 @@ parent transcript, or rewrite a canonical skill.
 
 Resolve `<skill-dir>` to the directory containing this `SKILL.md`. If uncertain,
 search for `context_pack.py` under the skill roots.
-`loop-engineering/SKILL.md` owns this resolver pattern, including the per-host variants and the fixture that executes them; the line below is the same pattern with this skill's own sentinel file.
+`loop-engineering/references/resolvers.md` owns this resolver pattern, including the per-host variants and the fixture that executes them; the line below is the same pattern with this skill's own sentinel file.
 
 ```bash
 # Roots checked in order; empty when absent — never a bogus "./..":
@@ -82,11 +82,7 @@ returns. `caveman tools config set` also accepts an unknown model id without
 complaint, so a typo there is caught by nothing — this gate's `skip` is the
 only place a wrong id is reported.
 
-Verified 2026-09-03 against `@caveman-ai/cli` 1.3.1 / binaries `bin-v1.1.4`:
-`caveman-engine pixel simulate --model` gives `claude-fable-5` and `gpt-5.6`
-their own pixel geometry, while an unknown id, a bogus id and an empty id all
-collapse to one identical fallback — which is what makes the first two
-*recognised* rather than merely accepted.
+For the historical CLI probe and version, read [references/pixel-verification.md](references/pixel-verification.md) when diagnosing model recognition.
 
 The helper never claims a token saving is verified: the caller supplies
 measured evidence.
