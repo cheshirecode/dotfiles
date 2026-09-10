@@ -40,10 +40,11 @@ cd "$REPO_ROOT"
 if (( RAW == 1 )); then
   LDAP="$(resolve_ldap)"
   ACTIVE_DIR="people/$LDAP/active"
-  python3 - "$ACTIVE_DIR" "$LIMIT" <<'PY'
+  python3 - "$ACTIVE_DIR" "$LIMIT" "$SCRIPT_DIR" <<'PY'
 import pathlib
-import re
 import sys
+sys.path.insert(0, sys.argv[3])
+from _task_context import parse_task_file
 
 active_dir = pathlib.Path(sys.argv[1])
 limit = int(sys.argv[2])
@@ -51,23 +52,16 @@ records = []
 
 for path in sorted(active_dir.glob("*.md")):
     text = path.read_text(errors="replace")
-    match = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
-    if not match:
+    fields, _ = parse_task_file(text)
+    if not fields:
         continue
-    fields = {}
-    for line in match.group(1).splitlines():
-        field = re.match(r"^([a-z_]+):\s*(.*)$", line)
-        if field:
-            fields[field.group(1)] = field.group(2).strip().strip('"')
-    slug = fields.get("slug")
-    if not slug:
-        continue
+    slug = str(fields.get("slug") or path.stem)
     records.append(
         (
-            fields.get("last_updated", ""),
+            str(fields.get("last_updated") or ""),
             slug,
-            fields.get("status", "-") or "-",
-            fields.get("next_action", "-") or "-",
+            str(fields.get("status") or "-"),
+            " ".join(str(fields.get("next_action") or "-").split()),
         )
     )
 
@@ -91,6 +85,22 @@ age=$(( $(date +%s) - $(stat -c %Y "$JSON" 2>/dev/null || stat -f %m "$JSON") ))
 if (( age > 3600 )); then
   printf '# roster: kernels stale (age=%ss > 3600s) — skipped; run %s/compact-kernels.sh\n' "$age" "$SCRIPT_DIR"
   exit 0
+fi
+freshness="$(python3 - "$JSON" "$SCRIPT_DIR" <<'PY_STATE'
+import json, sys
+sys.path.insert(0, sys.argv[2])
+from _task_context import cache_freshness
+try:
+    with open(sys.argv[1]) as f:
+        print(cache_freshness(json.load(f)))
+except (OSError, ValueError):
+    print("invalid")
+PY_STATE
+)"
+if [[ "$freshness" != "fresh" ]]; then
+  printf '# roster: kernels %s — skipped; run %s/compact-kernels.sh\n' "$freshness" "$SCRIPT_DIR"
+  [[ "$freshness" == "stale" ]] && exit 0
+  exit 1
 fi
 total=$(jq 'length' "$JSON")
 shown=$(( LIMIT < total ? LIMIT : total ))

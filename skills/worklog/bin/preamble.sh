@@ -105,37 +105,34 @@ if [[ -f .cache/compact-kernels.json ]]; then
   # Prints "<count>\t<missing>\t<extra>" — missing = active on disk but absent
   # from the cache (includes tasks compact-kernels.sh silently skipped for
   # unparseable frontmatter), extra = cached but no longer active.
-  kernel_probe="$(python3 - .cache/compact-kernels.json "people/$LDAP/active" <<'PY' 2>/dev/null || echo invalid
+  kernel_probe="$(python3 - .cache/compact-kernels.json "people/$LDAP/active" "$SCRIPT_DIR" <<'PY' 2>/dev/null || echo invalid
 import json
 import pathlib
-import re
 import sys
+sys.path.insert(0, sys.argv[3])
+from _task_context import parse_task_file, cache_freshness
 
 with open(sys.argv[1]) as fh:
     value = json.load(fh)
-if not isinstance(value, list):
-    raise ValueError("kernel cache must be a list")
+freshness = cache_freshness(value)
+if freshness != "fresh":
+    print(freshness)
+    sys.exit(0)
 cached = {str(record.get("slug", "")) for record in value if isinstance(record, dict)}
 
 # Same slug derivation as compact-kernels.sh, so a task whose frontmatter slug
 # differs from its filename does not read as permanent drift.
 live = set()
 for path in sorted(pathlib.Path(sys.argv[2]).glob("*.md")):
-    match = re.match(r"^---\n(.*?)\n---\n", path.read_text(errors="replace"), re.DOTALL)
-    slug = ""
-    if match:
-        for line in match.group(1).split("\n"):
-            field = re.match(r"^slug:\s*(.+)$", line)
-            if field:
-                slug = field.group(1).strip().strip('"')
-                break
-    live.add(slug or path.stem)
+    fields, _ = parse_task_file(path.read_text(errors="replace"))
+    slug = fields.get("slug") or ""
+    live.add(str(slug or path.stem))
 
 print("%d\t%d\t%d" % (len(value), len(live - cached), len(cached - live)))
 PY
 )"
   roster_mode="kernels"
-  if [[ "$kernel_age" -gt 3600 ]]; then
+  if [[ "$kernel_age" -gt 3600 || "$kernel_probe" == "stale" ]]; then
     printf '!! roster-health: stale age=%ss active_namespace=%s active_total=%s\n' "$kernel_age" "${active_namespace:-0}" "${active_total:-0}"
     roster_mode="raw"
   elif [[ "$kernel_probe" == "invalid" ]]; then
