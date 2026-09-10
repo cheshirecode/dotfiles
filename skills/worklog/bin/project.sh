@@ -12,7 +12,7 @@
 #                             Optional: --kind=impl, --title=, --depends-on=a,b,
 #                             --repos=, --dry-run. Idempotent: re-running for a
 #                             child already declared is a no-op.
-#   next <slug>               Print the first declaration-order claim-eligible
+#   next <slug> [--json]      Print the first declaration-order claim-eligible
 #                             child task slug. Exit 0 with slug; exit 1 if none.
 #   claim <child-slug>        Phase 2: claim a child task (writes claim: block).
 #                             --dry-run prints decision without writing.
@@ -287,7 +287,11 @@ for p in json.load(sys.stdin)["paths"]: print(p)')
 cmd_next() {
   local SLUG="${1:-}"
   [[ -z "$SLUG" ]] && { echo "project next: slug required" >&2; return 2; }
-  PROJECT_SLUG="$SLUG" python3 "$SCRIPT_DIR/_project.py" next
+  shift
+  local JSON=0
+  if [[ "${1:-}" == "--json" ]]; then JSON=1; shift; fi
+  [[ $# -eq 0 ]] || { echo "project next: unexpected arguments" >&2; return 2; }
+  PROJECT_SLUG="$SLUG" PROJECT_NEXT_JSON="$JSON" python3 "$SCRIPT_DIR/_project.py" next
 }
 
 # ---------- sub: claim / release / reap (phase 2) ----------

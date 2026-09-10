@@ -8,7 +8,7 @@
 # when it only knows how to write a file — and you get an ORPHAN: a task file
 # carrying `project:`/`parent_slug:` that the parent never declares. Nothing
 # errors. `project verify` walks the parent's `tasks:` block, so it never sees
-# the orphan and stays exit-0-clean, and `project next` can never hand the
+# the orphan in the old implementation, while `project next` cannot hand the
 # orphan to a worker. The work exists on disk and is unreachable forever.
 #
 # So the assertions below are deliberately NOT "add-child exits 0". They are:
@@ -134,14 +134,14 @@ git commit -q -m "ac-orphan: hand-written child stub" --no-verify
 
 # The silent part: verify stays clean because it only walks tasks:.
 rc="$(verify_rc ac-proj)"
-[[ "$rc" -eq 0 ]] || { echo "FAIL: expected the orphan to slip past verify (exit 0), got $rc"; exit 1; }
-# The wrong part: the orphan can never be handed out.
+[[ "$rc" -eq 2 ]] || { echo "FAIL: expected orphan rejection (exit 2), got $rc"; exit 1; }
+# The orphan must still be adopted before the queue can hand it out.
 "$WORKLOG_BIN/archive.sh" ac-a --reason=shipped >/dev/null 2>&1
 if nxt="$("$WORKLOG_BIN/project.sh" next ac-proj 2>/dev/null)"; then
   [[ "$nxt" != "ac-orphan" ]] || { echo "FAIL: fixture broken — orphan was already reachable"; exit 1; }
   echo "FAIL: expected no eligible task, got '$nxt'"; exit 1
 fi
-echo "  ok: orphan is invisible to project next while verify reports clean"
+echo "  ok: orphan is invisible to project next and verify rejects it"
 
 echo ""
 echo "=== 3: add-child adopts the orphan and makes it reachable ==="

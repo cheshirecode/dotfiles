@@ -579,44 +579,74 @@ def _eligible_list(slug: str) -> list[str]:
   return out
 
 
-def cmd_next() -> None:
-  slug = os.environ["PROJECT_SLUG"]
+def queue_result(slug: str) -> dict:
+  def result(status, reason=None, task=None):
+    return {"schema_version": "worklog-project-next/v1", "project": slug,
+            "status": status, "task": task, "reason": reason}
+  if not SLUG_RE.fullmatch(slug):
+    return result("error", "project next: invalid project slug")
   proj_path = find_task_path(slug)
   if proj_path is None:
-    die(f"project next: no task file for '{slug}'", code=1)
+    return result("missing", f"project next: no task file for '{slug}'")
   fm = parse_frontmatter(proj_path)
   if fm.get("kind") != "project":
-    die(f"project next: '{slug}' is kind:{fm.get('kind')} not kind:project", code=1)
-  tasks = fm.get("tasks") or []
+    return result("error", f"project next: '{slug}' is kind:{fm.get('kind')} not kind:project")
+  tasks = fm.get("tasks")
   if not isinstance(tasks, list) or not tasks:
-    die(f"project next: '{slug}' has no tasks: block", code=1)
-
+    return result("error", f"project next: '{slug}' has no tasks: block")
+  seen = set()
+  for t in tasks:
+    if (not isinstance(t, dict) or not isinstance(t.get("slug"), str)
+        or not SLUG_RE.fullmatch(t["slug"]) or t["slug"] in seen
+        or not isinstance(t.get("depends_on", []), list)
+        or any(not isinstance(d, str) or not SLUG_RE.fullmatch(d) for d in t.get("depends_on", []))):
+      return result("error", f"project next: '{slug}' has malformed tasks")
+    seen.add(t["slug"])
+  for t in tasks:
+    child = find_task_path(t["slug"])
+    if child is not None and not parse_frontmatter(child):
+      return result("error", f"project next: invalid task '{t['slug']}'")
+  # Keep declaration order; claims are arbitrated by `claim next`, not here.
   eligible = _eligible_list(slug)
   if eligible:
-    print(eligible[0])
-    return
-
-  # Build a reasons report for the human.
-  reasons: list[str] = []
+    return result("eligible", task=eligible[0])
+  reasons = []
+  missing = False
   for t in tasks:
-    if not isinstance(t, dict) or "slug" not in t:
-      continue
     cs = t["slug"]
     p = find_task_path(cs)
     if p is None:
+      missing = True
       reasons.append(f"{cs}: missing file")
       continue
     cfm = parse_frontmatter(p)
-    cstatus = cfm.get("status") or "draft"
-    if cstatus == "archived":
+    if not cfm:
+      return result("error", f"project next: invalid task '{cs}'")
+    if cfm.get("status") == "archived":
       continue
-    deps = t.get("depends_on") or []
-    blocked = [d for d in deps if (parse_frontmatter(find_task_path(d)).get("status") if find_task_path(d) else "missing") != "archived"]
+    blocked = []
+    for d in t.get("depends_on", []):
+      dp = find_task_path(d)
+      if dp is None:
+        missing = True
+      if dp is None or parse_frontmatter(dp).get("status") != "archived":
+        blocked.append(d)
     if blocked:
       reasons.append(f"{cs}: blocked on {','.join(blocked)}")
   if not reasons:
-    die(f"project next: all tasks for '{slug}' are archived (nothing left)", code=1)
-  die("project next: no claim-eligible task; " + "; ".join(reasons), code=1)
+    return result("empty", f"project next: all tasks for '{slug}' are archived (nothing left)")
+  return result("missing" if missing else "blocked", "project next: no claim-eligible task; " + "; ".join(reasons))
+
+
+def cmd_next() -> None:
+  data = queue_result(os.environ["PROJECT_SLUG"])
+  if os.environ.get("PROJECT_NEXT_JSON") == "1":
+    print(json.dumps(data))
+    sys.exit(0 if data["status"] == "eligible" else 1)
+  if data["status"] == "eligible":
+    print(data["task"])
+    return
+  die(data["reason"], code=1)
 
 
 def _all_projects() -> list[pathlib.Path]:
@@ -708,6 +738,16 @@ def _verify_one(project_path: pathlib.Path) -> tuple[list[str], list[str]]:
     parent = cfm.get("parent_slug")
     if parent != proj_slug:
       warnings.append(f"{proj_slug}: child '{cs}' has parent_slug={parent!r}, expected {proj_slug!r}")
+
+  # Reverse membership: a child with a back-reference must be declared.
+  for state in ("active", "archive"):
+    for cp in pathlib.Path("people").glob(f"*/{state}/*.md"):
+      if cp == project_path:
+        continue
+      cfm = parse_frontmatter(cp)
+      cs = cfm.get("slug") or cp.stem
+      if (cfm.get("parent_slug") == proj_slug or cfm.get("project") == proj_slug) and cs not in declared:
+        errors.append(f"{proj_slug}: undeclared child '{cs}' points to this project")
 
   # Orphan claims with stale heartbeats (active tasks under this project).
   import datetime as _dt
