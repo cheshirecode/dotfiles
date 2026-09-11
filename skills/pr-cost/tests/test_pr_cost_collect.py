@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import pathlib
@@ -16,6 +17,11 @@ import unittest
 SKILL_DIR = pathlib.Path(__file__).parents[1]
 SCRIPT = SKILL_DIR / "scripts" / "pr_cost_collect.py"
 FIXTURES = SKILL_DIR / "tests" / "fixtures"
+
+SPEC = importlib.util.spec_from_file_location("pr_cost_collect", SCRIPT)
+collector = importlib.util.module_from_spec(SPEC)
+assert SPEC.loader is not None
+SPEC.loader.exec_module(collector)
 
 
 class PrCostCollectTest(unittest.TestCase):
@@ -159,6 +165,86 @@ class PrCostCollectTest(unittest.TestCase):
             expected_returncode=2,
         )
         self.assertIn("--allow-duplicate", result.stderr)
+
+    # The posted comment has to be readable, not just correct.
+
+    def test_comment_body_shows_the_split_the_basis_and_the_scope(self) -> None:
+        # The reported defect: the JSON put tokens_in next to usd with nothing
+        # between them, so a reader multiplied one by the input rate. The
+        # figures here are the session that produced that comment.
+        body = collector.comment_body(
+            {
+                "schema_version": "pr-cost/v1",
+                "harness": "claude",
+                "confidence": "estimated",
+                "usd": 602.99,
+                "tokens_in": 720_696_122,
+                "tokens_in_uncached": 2_956,
+                "tokens_in_cache_read": 697_885_763,
+                "tokens_in_cache_write": 22_807_403,
+                "tokens_out": 1_038_408,
+                "usd_basis": "model-rates",
+                "scope": "session-total",
+                "model": "claude-opus-5",
+                "session_id": "s",
+                "window_start": "2026-01-01T00:00:00+00:00",
+                "window_end": "2026-01-01T00:01:00+00:00",
+                "pr_url": None,
+                "generated_at": "2026-01-01T00:01:00+00:00",
+            }
+        )
+        # Assert on the prose above the JSON block: the JSON always held these
+        # numbers, so matching the whole body would pass on the old comment.
+        heading = body.split("```json")[0]
+        self.assertIn("697,885,763 cache read", heading)
+        self.assertIn("96.8% of input", heading)
+        self.assertIn("model-rates", heading)
+        self.assertIn("may cover other PRs", heading)
+
+    def test_a_split_that_does_not_sum_to_tokens_in_is_refused(self) -> None:
+        # A split that does not add up is worse than no split: both numbers
+        # are then in the comment and a reader cannot tell which to believe.
+        payload = {
+            "schema_version": "pr-cost/v1",
+            "harness": "claude",
+            "confidence": "estimated",
+            "usd": 1.0,
+            "tokens_in": 1_000,
+            "tokens_in_uncached": 100,
+            "tokens_in_cache_read": 100,
+            "tokens_in_cache_write": 100,
+            "tokens_out": 10,
+            "model": "claude-opus-5",
+            "session_id": "s",
+            "window_start": "2026-01-01T00:00:00+00:00",
+            "window_end": "2026-01-01T00:01:00+00:00",
+            "pr_url": None,
+            "generated_at": "2026-01-01T00:01:00+00:00",
+        }
+        with self.assertRaises(collector.PrCostError):
+            collector.validate_payload(payload)
+
+    def test_scope_defaults_to_session_total_when_tokens_are_present(self) -> None:
+        # A session reader sums the whole session, which may cover several PRs
+        # and unrelated work. Unlabelled, those numbers read as this PR's cost.
+        result = self.run_cli(
+            "emit",
+            "--harness",
+            "claude",
+            "--confidence",
+            "estimated",
+            "--usd",
+            "1.0",
+            "--tokens-in",
+            "100",
+            "--tokens-out",
+            "10",
+            "--model",
+            "claude-opus-5",
+            "--session-id",
+            "s",
+        )
+        self.assertEqual(json.loads(result.stdout)["scope"], "session-total")
 
 
 if __name__ == "__main__":
