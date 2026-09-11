@@ -1,6 +1,6 @@
 ---
 name: loop-engineering
-description: "Design and run bounded, evidence-driven loops for repeated, resumable, delegated, or scheduled work. Use when iterating toward a verifiable condition, recovering across contexts, coordinating subagents, or deciding on loop vs worklog vs scheduler. Skip one-shot tasks. One invocation, no mode flags: scripts/loop_run.py defaults orchestrator (worklog queue) and crew (conflict radar); the model only decides continue vs stop."
+description: "Run bounded, evidence-driven loops for repeated, resumable, delegated, or scheduled work. Use for iteration toward a verifiable condition, context recovery, subagent coordination, or loop/worklog/scheduler selection. Skip one-shot tasks."
 ---
 
 # loop-engineering
@@ -8,14 +8,6 @@ description: "Design and run bounded, evidence-driven loops for repeated, resuma
 Use deterministic state transitions around agent judgment. Repeated prompting is not a loop design.
 
 Convention: `$skill-name` means invoke installed skill `skill-name`; skip and record reason if unavailable.
-
-## When to use
-
-- Agent must iterate toward a verifiable condition
-- Recover across context boundaries
-- Coordinate subagents
-- Decide whether work belongs in a manual loop, worklog-backed handoff, or host-native scheduler
-- Multi-task programs with sub-agent dispatch (orchestrator mode)
 
 ## Route
 
@@ -57,13 +49,11 @@ Routing example: `multi-repo search with uncertain ownership` → `serena-rg-sea
 Use this `SKILL.md` file's directory. Only if the load path is unknown, read
 [references/resolvers.md](references/resolvers.md) for the tested host fallbacks.
 
-The driver below wraps `scripts/loop_state.py`; every cycle is one call to `python3 <skill-dir>/scripts/loop_run.py`.
-
 ## Drive the loop — one call per cycle
 
 Invoke with `Use loop-engineering. Goal: <goal>.` — no mode parameters.
-Orchestrator and crew mechanics are defaulted by the driver; do not hand-edit
-its state JSON.
+The driver wraps `scripts/loop_state.py` and defaults crew/orchestrator mechanics;
+do not hand-edit its state JSON.
 
 ```bash
 # First call — auto-initializes a bounded run (default budget 20 turns):
@@ -83,11 +73,8 @@ Each call prints exactly one line with the script-run mechanics folded in:
   tasks exist; the driver reports the next eligible child every cycle
   (orchestrator.md carries the claim/archive rules). `queue: empty|blocked`
   are verdicts; `queue: error=<reason>` is a broken project, not an idle queue.
-- **The model decides one thing per cycle:** continue — spend the cycle,
-  usually by delegating the queue task — or stop
-  (`--stop complete|blocked|needs_human|...`). State, budget, radar, and
-  queue are script-run; the decision exists to stop delegating and save
-  tokens as soon as the goal or a terminal condition is met.
+- **Decision:** continue with the next authorized action, or stop at a terminal
+  condition. The driver handles state, budget, radar, and queue.
 
 Override defaults (`--budget`, `--allowed-effect`, `--approval-boundary`, or
 raw `loop_state.py` subcommands) only when the run needs it; declare
@@ -198,18 +185,9 @@ artifact durability, Worklog environment resolution, and compact handoffs.
 
 ## Orchestrator mode (multi-task program)
 
-Use when a high-level goal decomposes into 3+ independent tasks dispatched across
-sub-agents, and the agent acts as project manager: decompose, dispatch, verify,
-track. Token efficiency is the whole design — the orchestrator's own history must
-stay a repeating `claim X -> archive X -> advance` pattern, with per-task evidence
-in worklog task files rather than in its context.
-
-Read [references/orchestrator.md](references/orchestrator.md) before creating a
-project; it carries the decomposition, queue, cycle, and terminal rules. Use the
-regular loop for one or two tasks instead of creating a project.
-
-No separate invocation exists: the same `Use loop-engineering. Goal: <goal>.`
-plus `--project <slug>` on the driver engages it.
-
-For concurrent delegates or isolated worktree workers, read
-[references/crew.md](references/crew.md) — orchestrator mode plus capability-gated concurrency.
+For 3+ independently dispatched Worklog tasks, read
+[references/orchestrator.md](references/orchestrator.md) before creating a
+project, then pass `--project <slug>` to the same driver. Keep task evidence in
+Worklog and the parent history to `claim -> archive -> advance`. Use the regular loop
+for one or two tasks. For concurrent delegates, also read
+[references/crew.md](references/crew.md); serialize writes unless isolation is proven.

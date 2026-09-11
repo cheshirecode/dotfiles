@@ -7,31 +7,6 @@ description: Manage the shared `_worklog` journal across machines and sessions. 
 
 Single entry point for the shared `_worklog` protocol. Canonical protocol lives in `_worklog/AGENTS.md`. This file is a thin router. Mode detail lives in `modes/<name>.md`; the compact protocol reference lives in `references/protocol.md`. Load both only when routed below.
 
-## When to use
-
-- Managing the shared `_worklog` journal across machines and sessions
-- Invoking any worklog mode: `init`, `sync`, `status`, `context`, `plan`, `spawn`, `export`, `import`, `lint`, `project`, `scrape-slack`, `review`
-
-Skip if: no durable task tracking or cross-session context is needed.
-
-## Skill structure
-
-```
-skills/worklog/
-├── SKILL.md              # this file (router)
-├── modes/                # per-mode execution guides
-│   ├── registry.md       # public mode list (consumed by codex-surface-check.sh)
-│   ├── init.md, sync.md, status.md, context.md, plan.md, spawn.md,
-│   │   export.md, import.md, lint.md, project.md, scrape-slack.md, review.md
-├── references/
-│   ├── protocol.md       # compact task-writing and helper reference
-│   └── preamble.md       # environment bootstrap + preamble invocation contract
-├── bin/                  # helper scripts (WORKLOG_BIN)
-├── lib/                  # worklog-manager Node modules (lib/worklog-manager/*.mjs)
-├── templates/            # AGENTS.md template, docs/, cheatsheets
-└── tests/                # e2e harness
-```
-
 ## Routing — first thing, before anything else
 
 Parse the first argument. If empty, `help`, `-h`, `--help`, or unknown, print the menu verbatim and **stop** — no preamble, no tool calls, no file reads.
@@ -71,7 +46,7 @@ Once a known mode is parsed: run preamble (per table), read `modes/<mode>.md`, f
 | export  | none     | no                       | no               | no |
 | import  | none     | no                       | no               | no |
 | lint    | none     | no                       | no               | no |
-| project | `--minimal` (read-only subs: `list`, `verify`, `next`); `--full` (mutating: `new`, `claim`, `release`, `reap`) | no | no | no |
+| project | none for supported `--dry-run`; `--minimal` (read-only subs: `list`, `verify`, `next`); `--full` (mutating: `new`, `add-child`, `claim`, `release`, `reap`) | no | no | no |
 | scrape-slack | none | no                      | no               | no |
 | review  | none     | no                       | yes              | full |
 
@@ -88,14 +63,12 @@ Every example below uses `$WORKLOG_BIN/foo.sh` — these are the dotfiles-shippe
 
 **Key distinction:** `WORKLOG_BIN` is the code (this skill, version-controlled in dotfiles); `WORKLOG_REPO` is the data (the `_worklog` clone, per-machine). They are separate repos with separate lifecycles.
 
-## Environment bootstrap contract
+## Environment and preamble
 
-See [references/preamble.md](references/preamble.md) for the required
-environment shape and the `direnv exec` invocation.
-## Preamble — single call
+Read [references/preamble.md](references/preamble.md) for environment loading
+and any mode-required preamble. It owns the single invocation, emitted fields,
+and tracker hydration.
 
-See [references/preamble.md](references/preamble.md) for the invocation, its
-emitted fields, and tracker hydration.
 ## Slug & shared boundaries
 
 - Only edit files under `people/$LDAP/`. Other namespaces are read-only.

@@ -7,13 +7,7 @@ description: Pick the right tool for multi-faceted code search across symbols, t
 
 Use this skill to pick the fastest search approach for a coding task. Most real questions touch more than one facet — combine tools deliberately instead of reflexively reaching for `rg`.
 
-## When to use
-
-- Finding definitions, references, files, strings, structured config, when-it-changed, or log events
-- Planning a search workflow before reading code
-- Multi-faceted search across symbols, text, JSON, git history, and logs
-
-Skip if: one literal or known-file lookup is sufficient.
+Skip when one literal or known-file lookup is sufficient.
 
 ## Route first
 
@@ -22,21 +16,14 @@ is managed ripgrep, `--fts` adds BM25 ranking, and the bare form adds semantic
 search. If `command -v zg` is empty, every `zg query --rg` below degrades to
 plain `rg` — fall back and continue, don't block on setup.
 
-**Three differences from `rg` that bite, all measured against zvec-grep 0.2.1:**
+**Caveats measured against zvec-grep 0.2.1:**
 
-1. **`zg query --rg` exits 0 when it finds nothing; `rg` exits 1.** So
-   `rg PATTERN || echo absent` fires the absent branch and
-   `zg query --rg PATTERN || echo absent` never does. It prints `No matches.`
-   instead. Read the output, not `$?` — and do not swap `zg query --rg` into an
-   existing script that branches on rg's exit status.
-2. **The indexed lanes always return hits.** `--fts` and the bare semantic form
-   return the top N nearest by ranking, so a query for something absent still
-   comes back full: `zg query --fts "xyzzy plugh frotz nitfol"` returns 10 hits.
-   **These lanes cannot express "not here."** Confirm an absence with
-   `--rg`/`rg`, which can; use the ranked lanes to find candidates, never to
-   prove something does not exist.
-3. **`--fts` needs the index too**, not just the semantic form: without one both
-   fail `WORKSPACE_INDEX_NOT_FOUND`. Only `--rg` works unindexed.
+- `zg query --rg` exits 0 when it finds nothing (`No matches.`); `rg` exits 1.
+  Read output and preserve existing scripts that branch on rg's exit status.
+- Indexed lanes always return hits by nearest ranking and cannot express
+  "not here." Confirm an absence with `--rg`/`rg`; ranked hits are candidates.
+- `--fts` needs the index too: both indexed lanes fail
+  `WORKSPACE_INDEX_NOT_FOUND` without one. Only `--rg` works unindexed.
 
 ## Decision Rule
 
@@ -66,10 +53,7 @@ references matter.
 for t in zg rg jq; do command -v "$t" >/dev/null 2>&1 || echo "missing: $t"; done
 ```
 
-`command -v zg rg jq` looks like the same check and is not: it prints only the
-tools it finds and **exits 0 as long as any one of them exists**, so a missing
-`zg` reads as a clean result unless you count the lines. The loop names what is
-absent and prints nothing when all three are present.
+`command -v zg rg jq` succeeds when any one exists; test each tool separately.
 
 If `zg` is missing: `npm install -g @zvec/zvec-grep` (Node 22+) — or skip it
 and use `rg`; never block a task on installing it. If `rg`/`jq` are missing:
@@ -80,4 +64,4 @@ assumed present in any repo. `zg`'s semantic lane also needs a one-time
 
 Serena is an MCP server, not a binary — `command -v` will never find it. Check the session's tool list for a tool whose name ends in `serena__find_symbol` (Claude Code exposes it as `mcp__serena__find_symbol`); if no such tool is listed, Serena is not activated for this project — use `rg` and do not attempt setup mid-task.
 
-**Serena MCP setup:** Serena is provided by the MCP server — if it isn't activated for the project, fall back to `rg` and don't block on it. To set up the Serena MCP server for Claude Code, Cursor, or OpenCode, read `references/mcp-setup.md`.
+**Serena MCP setup:** Only for a setup request, read `references/mcp-setup.md`.
