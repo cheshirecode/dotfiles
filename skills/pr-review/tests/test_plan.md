@@ -63,7 +63,7 @@ repos: one with no remote at all, one with an `upstream` but no `origin`.
 | 3c | Masked exit code trap | `echo $?` after pipe reports last command's status | `true | false; echo $?` → prints 1 (false's exit, not true's) |
 | 3d | Stale merge-base | Diff against stale merge-base includes already-merged changes | Merge something into main locally, then diff a topic branch against the OLD recorded merge-base vs re-computed one |
 | 3e | Leak-scan exit codes | Clean input → 0, leaks → 1, empty → 2 | Pipe known strings through leak-scan.sh --label body |
-| 3f | Stash+test cycle | `git stash push -u && git stash pop` preserves untracked files | Create a new file, `git stash push -u`, verify file disappears, `git stash pop`, verify file returns |
+| 3f | Regression replay preserves the test | The new test remains present and fails on the old implementation | In an isolated checkout retain new tests/fixtures, revert only implementation, verify the intended assertion fails, then restore implementation and confirm pass |
 
 ### 4. Forge-agnostic integration tests
 
@@ -93,13 +93,17 @@ repos: one with no remote at all, one with an `upstream` but no `origin`.
 | 6c | Review merged PR (retrospective) | other-review | Full adversarial pass possible; no live-edit risk |
 | 6d | Review closed/deleted PR | other-review (conservative) | pr-query.sh view may fail; handle gracefully, flag incomplete data |
 | 6e | Owner detection ambiguous (null author, email-only) | other-review (default) | Cannot confirm PR authorship, so defaults to "other" |
-| 6f | Self-check depth budget exceeded (diff > 500 lines) | self-check | Log warning, either proceed with reduced scope or request confirmation |
+| 6f | Self-check depth budget exceeded (diff > 500 lines) | self-check | Report uncovered scope or deepen as warranted; preserve freshness and distinguish CLI invocations from HTTP requests |
 | 6g | Other-review with green CI + clean leak-scan + coherent body/diff | other-review | Verdict: "correct, here is what I checked." Zero findings. Short output. |
 | 6h | Body claims "no production impact" but diff touches production files | other-review | High-value finding: body ≠ diff contradiction |
+| 6i | Forge-only review; unrelated local checkout is dirty | self-check | Review current remote evidence without checkout, fetch or dependency setup unless local validation becomes necessary |
+| 6j | Same head, changed base or reviewed file scope | either | Invalidate saved diff; head equality alone is insufficient |
+| 6k | Same identity, changed body/draft/CI or tampered saved diff | either | Refresh mutable metadata; reject altered diff bytes; recheck identity after collection |
+| 6l | Read-only delegates share a snapshot | either | Parent collects and refreshes evidence; children inspect bounded scopes without repeated forge requests |
 
 ## Test execution order
 
-Run tests 1a–1f first (fast, no real PRs needed). Then 2a–2e (script mechanics). Then 3a–3f (shell traps + stash cycle). Then 4a–4e (forge detection — 4a–4c are automated against throwaway repos via `--repo`; 4e still needs a live GitLab setup). Then 5a–5d (routing integration). Then 6a–6h and the tighten overlay tests require real GitHub/GitLab data — schedule for a dedicated test session with controlled test repos.
+Run tests 1a–1f first (fast, no real PRs needed). Then 2a–2e (script mechanics). Then 3a–3f (shell traps + isolated regression replay). Then 4a–4e (forge detection — 4a–4c are automated against throwaway repos via `--repo`; 4e still needs a live GitLab setup). Then 5a–5d (routing integration). Scenarios 6a–6l can exercise instruction routing with controlled snapshots; live integration and the tighten overlay tests require controlled GitHub/GitLab data. Manual scenarios are not automated coverage.
 
 ## Known gaps (require real-world testing)
 

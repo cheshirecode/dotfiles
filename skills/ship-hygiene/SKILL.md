@@ -5,8 +5,6 @@ description: "Periodic multi-PR sweep — dashboard of open PRs across repos. Su
 
 # ship-hygiene
 
-A periodic sweep skill. Three surfaces share the same staleness pattern: a worklog task accumulates iteration drama; open PRs accumulate title typos / outdated bodies / bot-comment noise; the PR stack accumulates CI red and unresolved threads. Doing them all at once amortizes the context cost.
-
 `bin/leak-scan.sh` is a compatibility launcher requiring installed `pr-review`; the scanner and token list live there.
 
 **Delegates per-PR operations to `$pr-review`** (code review, self-check, closeout). This skill owns the **multi-PR dashboard sweep** only.
@@ -33,7 +31,7 @@ Skip if: only one PR open, body is short, no recent worklog activity. Overhead n
 
 ## Recipe
 
-1. **Resolve which worklog task to clean.** Default: most-recently-touched active slug. Verify with `ls -t people/$LDAP/active/*.md | head -3`.
+1. **Resolve which worklog task to clean.** Use the named task or a task linked to the current repo/PR. Recency is only a discovery hint; verify ownership and relevance before editing. If no task is identified, skip compression and continue the PR sweep.
 2. **Read it.** Slop trigger: **>150 lines AND the spike/decision is already made**. If shorter or still-active exploration, skip — leave the iteration drama until it's decided.
 3. **Compress** if triggered. **Drop:** ToT/Reflexion scaffolding, multi-row iteration tables, "Assumptions to verify" once verified, redundant intermediate options. **Preserve:** final decision rationale, lessons/gotchas, re-runnable commands, frontmatter, `next_action`, open follow-up items.
 4. **List open PRs** across all repos you contribute to. Use `gh pr list --author @me --state open --json number,title,reviewDecision,isDraft,updatedAt` (omit `--repo` for the default remote, or pass `--repo <owner/name>` for each additional repo).
@@ -46,13 +44,13 @@ Skip if: only one PR open, body is short, no recent worklog activity. Overhead n
    matching. Do not call pr-review's scripts by path: the two skills install
    into separate directories, so a relative path between them resolves only by
    accident.
-7. **CI triage:** group failed checks by name. If the same check fails on N>1 PRs → systemic (workflow config bug, not per-PR). Surface the systemic finding as ONE actionable line.
+7. **CI triage:** group failed checks by name. If the same check fails on N>1 PRs, inspect logs for a shared cause before calling it systemic. Group a confirmed shared cause into one actionable line.
 8. **Comment triage:** check the last comment's author per PR. Bot signatures (`github-actions`, `vercel`, preview-deploy automation under the user's own login) → not unresolved review. Surface only PRs with a real reviewer comment that hasn't been responded to.
 9. **Post-merge cleanup note:** for each open PR backed by a sibling worktree and/or a live preview, assemble the teardown commands and record them as a `[POST-MERGE-CLEANUP]` note in the worklog task (and surface them in the output). Discover the pieces: worktree via `git worktree list | grep <branch-slug>`; preview name from the branch slug / earlier deploy; services from the diff (`frontend`, `ui`, `admin-dashboard`). Template (do NOT run until the PR is merged):
      - preview: `make -C deployment/staging preview-cleanup-<svc> PREVIEW_NAME=<name>` (one per deployed service)
      - worktree: `git worktree remove <path>`
      - branch: usually auto-deleted on squash-merge; otherwise `git push origin --delete <branch>` + `git branch -D <branch>`
-    If a `[POST-MERGE-CLEANUP]` note for this PR already exists, refresh it rather than duplicating.
+    If no relevant Worklog task was identified, include the note only in the report. Otherwise refresh an existing `[POST-MERGE-CLEANUP]` note for this PR rather than duplicating it.
 10. **Checkpoint** the worklog body change(s): `"$WORKLOG_BIN/checkpoint.sh" <slug>`. Don't bundle unrelated working-tree changes. Use the plain command — its staged-scope guard is what enforces that. `worklog/modes/sync.md` owns the guard's exit codes, `--include=<path>`, and the force bypass.
 
     On a non-zero exit, read Worklog’s `modes/sync.md` checkpoint failure rules before retrying; do not report a refused checkpoint as saved.
@@ -94,24 +92,3 @@ Skip if: only one PR open, body is short, no recent worklog activity. Overhead n
 - `$pr-review` — delegates per-PR deep inspection (self-check, other-review, closeout). Ship-hygiene does NOT perform per-PR deslop itself anymore.
 - `karpathy-guidelines` — apply during the title/body flagging step. "Don't refactor what isn't broken" — most PRs need nothing.
 - For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
-
-## Examples
-
-### Single sweep at end of long spike
-
-```
-User: /ship-hygiene
-Claude: [identifies skillopt-setup as the slop-heavy task]
-        [compresses 168 → 84 lines, commits]
-        [scans 18 open PRs — flags #7, #12, #15 for pr-review]
-        [surfaces 3-PR systemic CI workflow bug as a single line]
-        [confirms no real reviewer comments need response]
-        [single checkpoint commit, done]
-```
-
-### Empty case
-
-```
-User: /ship-hygiene
-Claude: Nothing to do — worklog tasks all under 150 lines (no compression triggered), no PRs flagged.
-```
