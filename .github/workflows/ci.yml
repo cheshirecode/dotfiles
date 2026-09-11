@@ -92,7 +92,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # Full history, not the default depth-1. `pr-query.sh merge-base` needs a
+      # base-branch ref, and on a pull_request event a shallow checkout is a
+      # detached merge commit with no origin/main and no local main -- so
+      # default_branch() falls through to the literal "main", which resolves to
+      # nothing. That failed on every PR while every push to main stayed green,
+      # because on a push HEAD *is* main. Fix the checkout, not the assertion.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
