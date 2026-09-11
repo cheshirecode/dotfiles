@@ -7,13 +7,7 @@ description: Design compact examples for brittle reusable agent instructions. Us
 
 Use examples only when they buy reliability.
 
-## When to use
-
-- Writing or reviewing skills, rubrics, schemas, tool-use instructions, strict output contracts, or prompts
-- Format/style is underspecified or recurrently wrong
-- Another skill invokes `$example-led-instructions`
-
-Skip if: the format is standard (JSON, markdown, natural language), the task has no known failure mode, or examples would cost more context than they save.
+Skip examples for standard formats without a known failure mode, or when they cost more context than they save.
 
 ## Opt-in Preamble
 
@@ -41,17 +35,9 @@ Choose shot count by failure mode, not by preference:
 - Include a negative or contrast example only when it prevents a known recurring error.
 - Do not let examples override explicit policy, repo instructions, or user scope.
 
-## Workflow
-
-1. **Identify the brittle output:** What format, schema, or behavior has failed or is likely to fail?
-2. **Apply the gate:** Choose zero/one/few-shot based on the failure mode (see Gate section).
-3. **Draft examples:** Follow the Example Rules. Keep them minimal.
-4. **Fill the output contract:** Fill in the structured assessment below. Emit it only for a user-requested instruction review; when the opt-in line invoked you mid-run inside another skill, keep it internal and apply it to that skill's output.
-5. **Integrate:** If reviewing, suggest where the examples should live in the target skill. If writing, add them.
-
 ## Output Contract
 
-Return this when designing or reviewing an instruction:
+Apply the gate, draft the smallest useful example set, and integrate it where the rule is used. For a user-requested instruction review, return:
 
 ```text
 shot_count: zero | one | few

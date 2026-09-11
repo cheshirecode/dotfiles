@@ -10,13 +10,18 @@ findings without making corrections.
 
 Run this fast. Verify your own work without pretending to attack yourself.
 
-**Depth budget:** aim for ≤3 API calls, no test execution, diff-size cap at 500 lines. If required current evidence exceeds the budget, report the incomplete check or deepen only as the task warrants; never substitute stale evidence to meet the budget.
+**Depth budget:** keep collection compact; count CLI invocations separately from
+HTTP requests, including the final refresh. Neither has a hard three-call cap.
+Default to no test execution and a 500-line diff budget; report uncovered scope
+or deepen as warranted. Fresh ownership, identity and CI evidence take priority.
 
-1. Checkout PR branch at HEAD. Re-verify at PR's current head — heads move.
+1. Use the current forge snapshot from preflight. Check out the verified head only
+   when local source, edits, tests or browser validation require it.
 2. Apply [title-body.md](title-body.md) for leak scanning, title accuracy,
    and body coherence. Fix only within the shared authorization rules.
 3. Quick CI check: did the latest run pass? If not, verify inherited (abbreviated: just merge-base comparison + control PR on same base).
-4. Verdict: **correct**, **correct with N fixable items**, or **blocked**.
+4. Refresh as required by preflight before the verdict: **correct**,
+   **correct with N fixable items**, or **blocked**.
 
 Self-check may fix issues in place (edit files, amend PR body).
 
@@ -42,14 +47,18 @@ Attack assumptions. Every finding must be verified. Manufacturing a finding is w
 
 A clean PR gets: "this is correct, here is what I checked." Nothing more.
 
-**Depth budget:** full battery — diff fetch, grep sweeps, stash+test cycle, CI status investigation.
+**Depth budget:** full battery — diff fetch, grep sweeps, isolated regression
+replay, CI status investigation.
 
 ### How to attack
 
 - Find the load-bearing assumption — the one fact that, if false, makes the change wrong. Attack that first. Not style.
 - For fixes: what invariant does this restore? What else writes to that invariant?
 - For boundaries: do both sides agree (reader/writer, config/query)?
-- For new tests: check whether the test **actually fails without the change**. Stash the patch, run test, restore. A passing test either way protects nothing.
+- For new tests: check whether the test **actually fails without the change**.
+  In an isolated checkout, retain the new tests and fixtures and revert only the
+  implementation. Confirm the intended assertion fails, restore the implementation,
+  and rerun. Stashing the entire patch may remove the test and prove nothing.
 - For constants/enums/config keys: check reachability. Unreachable branches hide silent misclassification later.
 - Ask: second call, empty input, retry. Construct the interleaving that breaks concurrency/cache/ordering changes.
 - Prefer one proven finding over five arguable ones.
