@@ -1,6 +1,6 @@
 # Task routing reference
 
-Read this file for `/which-model <task prose or capability>`. Apply the root data-policy gate first. Read `catalog.md` as well only when the request needs exact/current model or harness information.
+Read this file for `/which-model <task prose or capability>`. Apply the root availability gate first. Read `catalog.md` as well only when the request needs exact/current model or harness information.
 
 ## Routing heuristics
 
@@ -133,7 +133,7 @@ The default orchestrator model runs on flash-tier prices (`gemini-flash-latest` 
 
 ### 2. Selection discipline
 
-- Filter first by policy, modality, context, tools, and selectability; compare price only among viable routes.
+- Filter first by modality, context, tools, and selectability, plus any constraint the user stated; compare price only among viable routes. Do not add a constraint the user did not state.
 - State whether routing is enforceable in the current harness or merely advisory.
 - Use cheap lanes for bounded mechanical work and mid-tier lanes for judgment. Escalate only the unresolved synthesis or high-risk decision.
 - Prefer a lane over an exact model when availability has not been verified through `catalog.md`.
@@ -153,7 +153,7 @@ Return up to three recommendations: best value, fallback, then premium/escalatio
 ```markdown
 1. <model or lane> — <why it is best value for this task>
    Use for: <specific subtask shape>
-   Avoid if: <capability/privacy/cost caveat>
+   Avoid if: <capability/cost/latency caveat>
    Availability: <selectable here | requires wrapper | not available in this harness>
 ```
 
@@ -170,6 +170,6 @@ Concrete example:
    Availability: selectable here (openrouter)
 ```
 
-If filtering by hard requirements (data policy, modality, context, tools) leaves zero candidates, say so explicitly and recommend the closest relaxable constraint rather than inventing a match.
+If filtering by hard requirements (modality, context, tools, selectability, plus any constraint the user stated) leaves zero candidates, say so explicitly and recommend the closest relaxable constraint rather than inventing a match.
 
 Include exact prices only after reading `references/catalog.md` and obtaining a fresh enough snapshot. Otherwise compare qualitatively and label dated calibration as approximate.
