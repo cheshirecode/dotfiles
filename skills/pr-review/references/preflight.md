@@ -71,7 +71,14 @@ These all exit 0 and still lie. In self-check, apply selectively based on risk.
 
 - **Silenced errors.** `cmd ... 2>/dev/null | wc -l` turns permission errors into `0`. Never build an absence claim on silenced output.
 - **Masked exit codes.** `cmd | tail -3; echo $?` reports tail's status. Capture the status of the command you care about.
-- **Stale CI views.** Aggregated check summaries show failures from superseded commits. Read the actual failing job log.
+- **Stale CI views.** Identify CI by exact head SHA, workflow, and run attempt,
+  not by check name alone. A newer successful run at the same head can supersede
+  a cancelled predecessor only when the actual jobs and artifacts prove that
+  relationship. Unrelated current runs and current failing attempts still count.
+- **Mutation behind dry-run labels.** A `--dry-run` flag is not a read-only
+  guarantee. Before and after Graphite planning or submission, snapshot relevant
+  refs and worktree dirt. Do not execute a forbidden mutation merely to test the
+  label, and never revert changes you do not own.
 - **Local toolchain drift.** Check pinned runtime version against what you're running before reporting a failure.
 
 ## Confidence labeling
