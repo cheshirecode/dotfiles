@@ -7,6 +7,13 @@ separate piece of typed evidence for health — the CI verdict at the head SHA f
 an MR, the canary verdict for a deploy. Observed 2026-08-28: an MR re-approved on
 a correctly-read diff while its pipeline was red with 28 errors.
 
+For deployments, treat image build, rollout, and live served behavior as separate
+gates. Attribute each gate to the deployed head, every required service, and the
+endpoint's serving revision; a built image or completed rollout alone does not
+prove the endpoint serves the intended code. If authentication blocks observation,
+runtime evidence is unavailable, not healthy or unhealthy. Retry after access state
+changes.
+
 Health evidence must also **span the failure period**, not merely measure the
 right quantity. A check whose window is shorter than the period of an
 intermittent failure returns clean and means nothing. Measured the same day: a
