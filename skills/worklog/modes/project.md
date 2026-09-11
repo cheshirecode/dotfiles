@@ -2,13 +2,20 @@
 
 Multi-task projects with declaration-order sequencing, `depends_on:` dep graph, and per-task advisory mutex (file-based, session-id arbitrated). Design lives in the `worklog-project-mode` task; this file is the dispatch surface.
 
-**Preamble: minimal.** Resolve LDAP. The driver `"$WORKLOG_BIN/project.sh"` handles its own validation. Read-only subcommands (`list`, `verify`, `next`) skip the worklog repo pull; mutating subcommands (`new`, `claim`, `release`, `reap`) rely on the standard preamble pull-first discipline (run preamble step 3 yourself before invoking).
+**Preamble:** skip for supported `--dry-run` requests (`new`, `add-child`,
+`claim`); use the configured Worklog environment and explicit LDAP directly.
+Even a minimal preamble can create a namespace, and full preamble can autosave.
+Otherwise use minimal for `list`, `verify`, `next`; full for `new`, `add-child`,
+`claim`, `release`, `reap`. The driver validates its inputs. Follow
+`references/preamble.md` for environment and pull-first rules; do not repeat a
+preamble already completed in this session.
 
 ## Subcommands
 
 | Form | Notes |
 |---|---|
 | `"$WORKLOG_BIN/project.sh" new <slug> --goal=... --objective=... [--repos=a,b] [--stale-after=30m] [--dry-run]` | Read tasks-JSON on stdin (preferred) or `--tasks-json=...`. Writes the `kind: project` parent + child stubs. `--dry-run` prints the would-be files. |
+| `"$WORKLOG_BIN/project.sh" add-child <project> <child> [--kind=impl] [--title="..."] [--depends-on=a,b] [--repos=owner/repo] [--dry-run]` | Add child stub and parent membership in one commit; idempotent. `--dry-run` prints the plan without those writes. |
 | `"$WORKLOG_BIN/project.sh" next <slug>` | Print first claim-eligible child (deps satisfied + not held by a different session). Exit 1 with reason if nothing eligible. |
 | `"$WORKLOG_BIN/project.sh" claim <child-slug> [--dry-run]` | Claim a task. Pre-commit arbitrates: rejects if on-disk claim is non-stale + different session. `--dry-run` returns `CLAIM_OK` / `LOCKED_BY=<holder>` / `STALE=...` without writing. |
 | `"$WORKLOG_BIN/project.sh" claim next <slug>` | Combo: `next` then `claim`. Walks past locked tasks. |

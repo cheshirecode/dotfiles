@@ -33,20 +33,11 @@ If the user says not to use a worklog, do not create, update, or suggest a workl
 
 ## Sync vs async
 
-- **Foreground** (default): all stages run inline; small councils (3 research agents, <2min each).
-- **Background**: Stage 1 only, when `N_research_angles * estimated_minutes_per_angle > 10`. Stages 2-6 always run foreground because they consume Stage 1 output and are cheap.
-
-Decision rule:
-```
-if N_research_angles * estimated_minutes_per_angle > 10:
-    research_mode = "background"
-else:
-    research_mode = "foreground"
-```
-
-When announcing the decision, use telegraphic format: `<mode> <N*x>min > 10min threshold` (background) or `<mode> <N*x>min <= 10min threshold` (foreground). Example: `background 12min > 10min threshold`.
-
-The user can override with `/council --bg X` or `/council --fg X`.
+Default to foreground. Use background for Stage 1 only when
+`N_research_angles * estimated_minutes_per_angle > 10`; Stages 2-6 stay
+foreground. The user can override with `/council --bg X` or `/council --fg X`.
+Announce `<mode> <estimated total>min > 10min threshold` (background) or
+`<mode> <estimated total>min <= 10min threshold` (foreground).
 
 ## Timeout and retry defaults
 
@@ -117,11 +108,6 @@ a survival status never reaches the ballot.
 - **Verification evidence** — `PLANNED|EXECUTED-PASS|EXECUTED-FAIL|UNAVAILABLE`, plus an artifact pointer or a reason. Never present a planned check as an executed result; preserve the state and pointer verbatim across stages.
 - **Counterexample survival status** — `SURVIVES|REFUTED|UNRESOLVED MATERIAL|UNRESOLVED MINOR`, assigned by Stage 3 to every candidate including its own.
 
-## Prompt templates
-
-Read `references/templates.md` before spawning any Stage 1, 3, 4, or 5 sub-agent, and use its
-template verbatim. It also fixes the Stage 5 ballot's exact accepted line shapes.
-
 ## Execution
 
 Follow the stage order in the Stages table. Before spawning a stage agent, read
@@ -147,7 +133,7 @@ stage progress; the final answer is the decision, not the progress log.
 - **Token budget line before fanout.** Before spawning N sub-agents, emit a one-line estimate. Refuse >20k tokens of simultaneous research without explicit user OK.
 - **Verify absence claims before voters see them.** Any "verified fact" of absence fed to voters (zero callers, zero tests, unused) must be orchestrator-verified with a concrete search first — one angle's absence claim can be contradicted by another angle's findings, and a REJECT veto resting on an unverified absence claim is invalid. If a veto's factual basis turns out false at tally time, mark the item UNVERIFIED and state the correction rather than honoring the veto.
 - **Fresh-agent invocations per stage.** Siblings in the same stage share no parent context beyond their prompt. Across stages, pass only the explicit deliverable.
-- **Worklog default.** `worklog plan` is an optional pairing. If the user says no worklog tracking, do not invoke `/worklog plan` or write task notes for that council.
+- **Worklog default.** If the user says no worklog tracking, do not invoke `/worklog plan` or write task notes for that council.
 
 ## Stage discipline
 
@@ -161,4 +147,4 @@ Verify time-sensitive factual claims before feeding them to voters.
 - Use the host’s available subagent primitive with independent stage prompts. Never assume another harness’s tool name or custom agent type.
 - `$karpathy-guidelines`: the council criteria above operationalize Think-Before, Simplicity-First, Surgical-Changes, and Goal-Driven.
 - For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
-- `$worklog`: `worklog plan` only when the user has not opted out of worklog tracking. Feed the council's kept list into `/worklog plan <task>` for planning artifacts.
+- `$worklog`: optionally feed the kept list into `/worklog plan <task>`, subject to the Worklog default above.
