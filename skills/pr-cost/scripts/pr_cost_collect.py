@@ -231,15 +231,25 @@ def same_annotation(existing: dict[str, Any], payload: dict[str, Any]) -> bool:
     )
 
 
-def append_ledger(path: pathlib.Path, payload: dict[str, Any]) -> bool:
+def append_ledger(
+    path: pathlib.Path, payload: dict[str, Any], *, allow_duplicate: bool = False
+) -> str:
+    """Append one row. Returns "annotated", "corrected", or "duplicate".
+
+    The guard keys on pr_url + session_id, so a re-run carrying a corrected
+    figure for the same session looks identical to an accidental replay. With
+    `allow_duplicate` the corrected row is appended rather than replacing the
+    first, so the ledger keeps both what was published and what replaced it.
+    """
     rows = load_ledger(path)
-    if any(same_annotation(row, payload) for row in rows):
-        return False
+    duplicate = any(same_annotation(row, payload) for row in rows)
+    if duplicate and not allow_duplicate:
+        return "duplicate"
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(payload, sort_keys=True))
         handle.write("\n")
-    return True
+    return "corrected" if duplicate else "annotated"
 
 
 def comment_body(payload: dict[str, Any]) -> str:
@@ -279,12 +289,12 @@ def command_emit(args: argparse.Namespace) -> dict[str, Any]:
 def command_annotate(args: argparse.Namespace) -> dict[str, Any]:
     payload = payload_from_args(args)
     target_ledger = ledger_path(args.ledger)
-    wrote_ledger = append_ledger(target_ledger, payload)
+    status = append_ledger(target_ledger, payload, allow_duplicate=args.allow_duplicate)
     commented = False
-    if wrote_ledger:
+    if status != "duplicate":
         commented = maybe_comment_pr(payload, live=os.environ.get("PR_COST_HOOK_LIVE") == "1")
     return {
-        "status": "annotated" if wrote_ledger else "duplicate",
+        "status": status,
         "ledger": str(target_ledger),
         "commented": commented,
         "payload": payload,
@@ -367,14 +377,16 @@ def command_from_hook(args: argparse.Namespace) -> int:
         args.pr_url = pr_url
         payload = payload_from_args(args, default_pr_url=pr_url)
         target_ledger = ledger_path(args.ledger)
-        wrote_ledger = append_ledger(target_ledger, payload)
+        # No --allow-duplicate here on purpose: a hook that re-fires must stay
+        # idempotent, or one retried PR create posts the cost twice.
+        status = append_ledger(target_ledger, payload)
         commented = False
-        if wrote_ledger:
+        if status != "duplicate":
             commented = maybe_comment_pr(payload, live=os.environ.get("PR_COST_HOOK_LIVE") == "1")
         print(
             json.dumps(
                 {
-                    "status": "annotated" if wrote_ledger else "duplicate",
+                    "status": status,
                     "ledger": str(target_ledger),
                     "commented": commented,
                     "payload": payload,
@@ -414,6 +426,12 @@ def build_parser() -> argparse.ArgumentParser:
     annotate = subparsers.add_parser("annotate", help="append payload to local ledger and optionally comment")
     add_payload_arguments(annotate)
     annotate.add_argument("--ledger", type=pathlib.Path)
+    annotate.add_argument(
+        "--allow-duplicate",
+        dest="allow_duplicate",
+        action="store_true",
+        help="publish a corrected figure for a session already in the ledger",
+    )
     annotate.set_defaults(handler=command_annotate)
 
     from_hook = subparsers.add_parser("from-hook", help="parse hook stdin and annotate matching PR creates")

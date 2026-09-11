@@ -125,6 +125,41 @@ class PrCostCollectTest(unittest.TestCase):
         rows = [json.loads(line) for line in self.ledger.read_text().splitlines() if line.strip()]
         self.assertEqual(len(rows), 1)
 
+    def test_allow_duplicate_publishes_a_corrected_figure(self) -> None:
+        # The guard keys on pr_url + session_id, so the annotate that carries
+        # a corrected number for the same session was refused -- the case
+        # someone hits first after learning their posted figure was priced
+        # wrong. The corrected row is appended, not substituted, so the ledger
+        # keeps what was published and what replaced it.
+        base_arguments = (
+            "annotate",
+            "--fixture",
+            str(FIXTURES / "emit_valid.json"),
+            "--ledger",
+            str(self.ledger),
+        )
+        first = json.loads(self.run_cli(*base_arguments).stdout)
+        corrected = json.loads(self.run_cli(*base_arguments, "--allow-duplicate").stdout)
+        self.assertEqual(first["status"], "annotated")
+        self.assertEqual(corrected["status"], "corrected")
+        rows = [json.loads(line) for line in self.ledger.read_text().splitlines() if line.strip()]
+        self.assertEqual(len(rows), 2, "the corrected row must be appended, not swapped in")
+
+    def test_from_hook_has_no_allow_duplicate_escape(self) -> None:
+        # A hook that re-fires must stay idempotent, or one retried PR create
+        # posts the cost twice. The flag exists on annotate only.
+        result = self.run_cli(
+            "from-hook",
+            "--harness",
+            "cursor",
+            "--ledger",
+            str(self.ledger),
+            "--allow-duplicate",
+            stdin_text=(FIXTURES / "hook_cursor_pr_create.json").read_text(),
+            expected_returncode=2,
+        )
+        self.assertIn("--allow-duplicate", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
