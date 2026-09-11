@@ -236,7 +236,15 @@ checks = {
     "task route": "read `references/routing.md`" in root,
     "catalog route": "also read `references/catalog.md`" in root,
     "no eager references": "Do not preload references" in root,
-    "data gate stays cold": "Do not route secrets, customer data" in root,
+    "availability gate stays cold": "## Availability gate" in root
+        and "Do not invent a restriction the user did not state" in root,
+    # Red-path guard, not a style rule. The removed gate told the model to
+    # demand a citable approval before routing, so with no approval on file it
+    # invented one and refused work the user had asked for. Two literals, one
+    # per sentence that produced that behaviour -- a pattern class here would
+    # also reject a constraint the USER states, which the skill must honour.
+    "no self-interpreted approval gate": "unapproved provider" not in root
+        and "Approval must be explicit enough to cite" not in root,
     "Kimi detail deferred": "`kimi-k3`" in routing and "`kimi-k3`" not in root,
     "catalog helper deferred": "bin/model-catalog --env auto" in catalog and "--refresh-if-stale" not in root,
     "references one level deep": reference_names == {"routing.md", "catalog.md"},

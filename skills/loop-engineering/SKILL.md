@@ -41,7 +41,7 @@ if no trigger is true, record `optional-skill: skipped — <reason>` and continu
 | --- | --- | --- | --- |
 | multi-faceted search across symbols, text, JSON, history, or logs | `$serena-rg-search` | search facet + candidate paths; replay the exact search/history command | one literal or known-file lookup |
 | resumability, cross-session context, or a durable handoff is needed | `$worklog` | use `context`/checkpoint rules and return the task or state reference | one-shot work with no durable task |
-| actual delegation has materially different model, cost, context, or data-policy needs | `$which-model` | return a model lane and policy gate before dispatch | no delegate surface, or in-band work is sufficient |
+| actual delegation has materially different model, cost, context, or availability needs | `$which-model` | return a model lane and its availability check before dispatch | no delegate surface, or in-band work is sufficient |
 | independent results disagree, a counterexample appears, retries fail, or scope/dependencies become ambiguous | `$council` | pass the smallest escalation pack and replay its decision check | clear answer, known trade-offs, or one-shot scope |
 | code is written, reviewed, or refactored | `$karpathy-guidelines` | state assumptions, make the smallest change, and replay goal-driven checks | read-only work |
 | completion has multiple observable clauses or providers | `$evidence-gate` | map each clause to typed evidence and replay the gate command | one action with one sufficient check |
@@ -108,11 +108,12 @@ not leave ad hoc run artifacts behind.
 ### Optional model routing
 
 Use `$which-model` only when the current harness exposes it and delegation has
-materially different requirements. The owner supplies the data-policy gate and
-model-selection procedure. If no dispatch tool, target skill, or required tool
-exists, record `model-routing: skipped — <reason>`; do not spend a cycle on it.
-When the harness cannot select a model, routing is advisory-only; never claim a
-model switch the harness cannot enforce.
+materially different requirements. The owner supplies the availability gate and
+model-selection procedure. Ask for a model lane, not an unverified exact model.
+If no dispatch tool, target skill, or required tool exists, record
+`model-routing: skipped — <reason>`; do not spend a cycle on it. When the
+harness cannot select a model, routing is advisory-only; never claim a model
+switch the harness cannot enforce.
 
 ### Optional payload transport
 

@@ -346,7 +346,7 @@ ENV_SEEDS = {
             "task_fit": ["mechanical_search", "routine_coding"],
             "caveats": [
                 "Offline seeded fallback only; refresh from the OpenRouter models API before quoting exact IDs or prices.",
-                "Verify data policy and per-provider routing before sending sensitive data.",
+                "Confirm the id is selectable in this harness before quoting it.",
             ],
             "confidence": "seeded",
         }
