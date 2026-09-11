@@ -1,6 +1,6 @@
 ---
 name: which-model
-description: Choose the best-value model lane for a task by comparing capability, cost, context window, modality, latency, tool fit, and harness availability. Use when the user invokes `/which-model`, asks which model to use, asks for value-for-token model suggestions, or wants session-level model-selection guidelines. `/which-model` with no arguments prints the guideline; `/which-model task prose or capability` returns 1-3 model suggestions.
+description: Choose model lanes by task capability, cost, context, modality, latency, tools, and harness availability. Use for /which-model, model recommendations, value-for-token comparisons, or session model-selection guidance.
 ---
 
 # which-model
@@ -11,11 +11,14 @@ Skip optional delegation routing when no delegate surface exists or in-band work
 
 ## Resolve the skill directory
 
-Flattening installers separate this file from its payload. Resolve the root once:
+Use this file's load directory as `$SKILL_ROOT` when it contains `bin/model-catalog`. Only if the load path is unknown or a flattening installer separated the payload, run this fallback:
 
 ```bash
 SKILL_ROOT=""
-for d in "$HOME/.claude/which-model" \
+for d in "$PWD/skills/which-model" \
+         "$HOME/.agents/skills/which-model" \
+         "$HOME/.codex/skills/which-model" \
+         "$HOME/.claude/which-model" \
          "$HOME/.claude/skills/which-model" \
          "${SUPER_RULER:-$HOME/.super-ruler}/.ruler/skills/which-model" \
          "/workspace/super-ruler/.ruler/skills/which-model" \

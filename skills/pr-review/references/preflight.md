@@ -50,20 +50,42 @@ Closed or deleted PRs:
 These apply before either review or closeout:
 
 1. **Verify the PR identity and current diff with the forge CLI.** Record head/base
-   branch names, head SHA, state, draft status, creation time, and whether the
+   branch names, head/base SHAs, state, draft status, creation time, and whether the
    diff is non-empty. `pr-query.sh view` omits some of these fields; use `gh pr
-   view <n> -R "$slug" --json headRefName,headRefOid,baseRefName,state,isDraft,createdAt` or the
-   equivalent GitLab MR fields. Fetch the actual target ref and confirm it.
-2. **Review the exact head in a clean checkout.** Preserve unrelated work;
-   use a separate worktree when checkout or test operations would disturb it.
-3. **Compute the merge-base against that verified target**, using
-   `git merge-base "$base_ref" "$head_sha"`. Do not use `pr-query.sh merge-base`
+   view <n> -R "$slug" --json headRefName,headRefOid,baseRefName,baseRefOid,state,isDraft,createdAt` or the
+   equivalent GitLab MR fields. Use the actual target branch head for base
+   identity, not merely its merge-base. Resolve missing identity before reuse.
+2. **Set up a local checkout only when needed** for source inspection, edits,
+   tests or browser validation. Fetch and verify the actual head and target refs
+   first. Preserve unrelated work; use a separate worktree when operations would
+   disturb it. Forge-only review does not require checkout or dependency setup.
+3. **When ancestry or inherited-CI analysis needs a merge-base**, compute it
+   against the verified target using `git merge-base "$base_ref" "$head_sha"`,
+   or equivalent verified forge evidence. Do not use `pr-query.sh merge-base`
    for this: it resolves the repository's default branch, which may differ from
    this PR's target. Read the forge diff as the review scope.
 4. **Collect title, body and added diff lines for the selected mode.** Capture
    fetch status; missing data is not a clean result. Review applies
    [title-body.md](title-body.md) immediately; closeout applies it at step 3,
    after distillation and codification. Keep preflight read-only.
+
+## Evidence collection and reuse
+
+Keep one compact evidence index in the parent and raw diff/metadata in a unique
+system temporary directory. Bind it to forge, repository, PR/MR number, head/base
+SHAs and ref names, reviewed file scope, and the saved diff's SHA-256.
+
+Only the diff may be reused: fresh identity and scope must match that key, and
+the saved bytes must still match their hash. Missing or mismatched evidence
+requires a new diff. Refresh ownership, title/body, state/draft status and CI on
+each collection and before a final verdict or authorized write. Recheck identity
+after collection; if it moved, discard the mixed snapshot and recollect.
+
+If delegation is warranted and available, give bounded read-only delegates stable
+instructions plus small packets containing the objective, file scope and evidence
+paths. Load only applicable domain guidance; children must not each refetch the
+forge. The parent owns integration, final freshness and all writes. Instruction
+bytes and CLI counts are measurements, not proof of model-token or cache savings.
 
 ## Verification traps (other-review; remember for self-check too)
 

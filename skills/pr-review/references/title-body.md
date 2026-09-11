@@ -1,14 +1,15 @@
 # Shared PR title/body procedure
 
-Used by review and closeout after [preflight.md](preflight.md). Reuse current
-scan evidence if the head, title, and body are unchanged; rerun affected checks
-after a correction. Fetch the body directly through the forge CLI;
-`pr-query.sh view` has no body field.
+Used by review and closeout after [preflight.md](preflight.md), which owns
+evidence collection and diff reuse. Scan its current title, body and added diff
+lines; rerun affected checks after a correction. If preflight has not supplied
+the body, collect it through the forge CLI; `pr-query.sh view` has no body field.
 
 ## Title accuracy and authorization
 
 Derive the title from the current PR diff and verified target/head from preflight.
-Use `git log --format='%s' "$merge_base..$head_sha"` as supporting context.
+For supporting context, use verified forge commit information or, when local
+refs and merge-base are established, `git log --format='%s' "$merge_base..$head_sha"`.
 The title must describe the final change, not merely the most common commit prefix.
 
 For PRs older than seven days, change the title only with explicit user
