@@ -254,6 +254,108 @@ class CacheAwareUsdTest(unittest.TestCase):
         )
         self.assertEqual(data["rate_source"], "cli-default")
 
+    # 3. Model families priced by their own row, and cache writes by TTL.
+
+    def test_opus_4_6_is_not_priced_as_opus_4_0(self) -> None:
+        # Opus 4.6 and later cost 5/25, not Opus 4.0's 15/75. The bare
+        # "claude-opus-4" prefix swallowed them and charged 3x -- a plausible
+        # figure rather than an error, which is why nothing caught it.
+        # 1M uncached input at 5.0 is $5.00; at Opus 4.0's rate it is $15.00.
+        data = self.write_and_run(
+            "opus-4-6.jsonl",
+            claude_event(
+                "msg_1",
+                "claude-opus-4-6-20260101",
+                {"input_tokens": 1_000_000, "output_tokens": 0},
+            ),
+            CLAUDE_SCRIPT,
+        )
+        self.assertAlmostEqual(data["usd_estimated"], 5.0, places=4)
+
+    def test_opus_4_0_keeps_its_own_higher_rate(self) -> None:
+        # The guard for the row above: longest-prefix matching must still put
+        # genuine Opus 4.0 on 15/75. Deleting the 4-6/4-7/4-8 rows makes the
+        # previous test fail; deleting the "claude-opus-4" row makes this one.
+        data = self.write_and_run(
+            "opus-4-0.jsonl",
+            claude_event(
+                "msg_1",
+                "claude-opus-4-20250514",
+                {"input_tokens": 1_000_000, "output_tokens": 0},
+            ),
+            CLAUDE_SCRIPT,
+        )
+        self.assertAlmostEqual(data["usd_estimated"], 15.0, places=4)
+
+    def test_opus_5_is_priced_from_the_table_not_the_defaults(self) -> None:
+        # The dollar figure alone cannot catch this: the flat defaults are
+        # 5/25, which happen to equal Opus 5's real rates, so an unmatched
+        # model produced a correct-looking number under a label saying it was
+        # not priced from the model. Assert the label.
+        data = self.write_and_run(
+            "opus-5.jsonl",
+            claude_event(
+                "msg_1",
+                "claude-opus-5",
+                {"input_tokens": 1_000, "output_tokens": 1_000},
+            ),
+            CLAUDE_SCRIPT,
+        )
+        self.assertEqual(data["rate_source"], "model-table")
+        self.assertEqual(data["usd_basis"], "model-rates")
+
+    def test_one_hour_cache_writes_cost_twice_input(self) -> None:
+        # Sonnet rates 3.0 input: a 5-minute write is 1.25x (3.75) and a
+        # 1-hour write is 2x (6.00). Claude Code runs the 1-hour TTL, so
+        # pricing every write at 1.25x undercharged systematically.
+        # 1M 1-hour write tokens = $6.00, where the flat rate gave $3.75.
+        data = self.write_and_run(
+            "write-1h.jsonl",
+            claude_event(
+                "msg_1",
+                "claude-sonnet-4-20250514",
+                {
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "cache_creation_input_tokens": 1_000_000,
+                    "cache_creation": {
+                        "ephemeral_5m_input_tokens": 0,
+                        "ephemeral_1h_input_tokens": 1_000_000,
+                    },
+                },
+            ),
+            CLAUDE_SCRIPT,
+        )
+        self.assertEqual(data["cache_write_1h_input_tokens"], 1_000_000)
+        self.assertEqual(data["cache_write_5m_input_tokens"], 0)
+        self.assertAlmostEqual(data["usd_estimated"], 6.0, places=4)
+
+    def test_a_missing_cache_creation_breakdown_bills_the_cheaper_rate(self) -> None:
+        # Transcripts predating cache_creation carry no split. Those writes
+        # must land on the 5-minute rate, so a missing breakdown understates
+        # rather than inflates -- and the two split fields must still sum to
+        # cache_creation_input_tokens, or the payload contradicts itself.
+        data = self.write_and_run(
+            "write-no-breakdown.jsonl",
+            claude_event(
+                "msg_1",
+                "claude-sonnet-4-20250514",
+                {
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "cache_creation_input_tokens": 1_000_000,
+                },
+            ),
+            CLAUDE_SCRIPT,
+        )
+        self.assertEqual(data["cache_write_5m_input_tokens"], 1_000_000)
+        self.assertEqual(data["cache_write_1h_input_tokens"], 0)
+        self.assertEqual(
+            data["cache_write_5m_input_tokens"] + data["cache_write_1h_input_tokens"],
+            data["cache_creation_input_tokens"],
+        )
+        self.assertAlmostEqual(data["usd_estimated"], 3.75, places=4)
+
 
 if __name__ == "__main__":
     unittest.main()

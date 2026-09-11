@@ -70,3 +70,11 @@ leaves every later `annotate` in the shell live.
 Privacy: do not paste prompts, diffs, or file contents into the PR comment.
 The collector already wraps a JSON payload. If annotate reports
 `"status": "duplicate"`, stop — this session/PR annotation already exists.
+
+The one reason to override that: the posted figure itself was wrong, and you
+are replacing it. `annotate --allow-duplicate` publishes the corrected
+payload and reports `"status": "corrected"`. It appends a second ledger row
+rather than editing the first, so the ledger keeps both what was published
+and what replaced it. The guard keys on `pr_url` + `session_id`, which is why
+a corrected figure for the same session looks like a replay without the flag.
+`from-hook` has no such flag — a hook that re-fires must stay idempotent.
