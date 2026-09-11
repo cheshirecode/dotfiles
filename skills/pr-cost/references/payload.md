@@ -28,6 +28,42 @@ The collector emits one JSON object with this required shape:
 may be `null` when the harness cannot supply them. The keys still remain
 present so downstream adapters receive a stable typed contract.
 
+### Reading `tokens_in`
+
+`tokens_in` is the sum of three token classes that cost three different
+amounts, so the total on its own cannot be multiplied by the input rate.
+These five keys are additive and nullable — a payload written before they
+existed still validates, and `schema_version` stays `pr-cost/v1`:
+
+```json
+{
+  "tokens_in_uncached": 2956,
+  "tokens_in_cache_read": 697885763,
+  "tokens_in_cache_write": 22807403,
+  "usd_basis": "model-rates | default-rates | provider-reported",
+  "scope": "session-total | this-pr"
+}
+```
+
+Why it matters: a posted comment once read `tokens_in 721,979,117` beside
+`usd ~510`, and its reader took that as 722M tokens bought at input rates.
+96.8% of it was cache reads, billed at a tenth of the input rate. The payload
+held no field for the split, so the comment printed the merged number alone.
+
+Two rules the collector enforces:
+
+- When all three parts are present they must sum to `tokens_in`. A split that
+  does not add up is worse than no split — both numbers reach the comment and
+  a reader cannot tell which to believe.
+- `scope` defaults to `session-total` whenever `tokens_in` is present. A
+  session reader sums the whole session, which may cover other PRs and
+  unrelated work; unlabelled, those numbers read as this PR's cost. Pass
+  `--scope this-pr` only when the figures really were scoped to one PR.
+
+`usd_basis` says how the dollar figure was reached. `default-rates` means flat
+lane rates were used, *not* the rates of the model named in the payload — so
+the number can look right while being priced from the wrong table.
+
 ## Harness guidance
 
 - `cursor`: hook payload can detect `gh pr create`, but it does not expose

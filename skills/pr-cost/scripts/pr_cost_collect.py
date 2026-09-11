@@ -18,6 +18,25 @@ from typing import Any
 SCHEMA_VERSION = "pr-cost/v1"
 HARNESSES = {"claude", "cursor", "codex", "opencode"}
 CONFIDENCE_LEVELS = {"metered", "estimated", "unavailable"}
+USD_BASES = {"model-rates", "default-rates", "provider-reported"}
+SCOPES = {"session-total", "this-pr"}
+
+# tokens_in is the sum of three token classes that cost three different
+# amounts. A reader who sees only the total reads it as uncached input and
+# multiplies by the input rate. On one real posted comment that produced a
+# large over-reading: tokens_in 721,979,117 next to usd ~510, where 96.8% of
+# the total was cache reads billed at a tenth of the input rate.
+#
+# These keys carry the parts, the basis, and what the window covers, so the
+# total can be read. They are additive and nullable, so a pr-cost/v1 payload
+# written before they existed still validates -- the version does not move.
+OPTIONAL_FIELDS = (
+    "tokens_in_uncached",
+    "tokens_in_cache_read",
+    "tokens_in_cache_write",
+    "usd_basis",
+    "scope",
+)
 DEFAULT_LEDGER = "~/.local/share/pr-cost/ledger.jsonl"
 PR_URL_PATTERN = re.compile(r"https://github\.com/[^/\s]+/[^/\s]+/pull/\d+")
 
@@ -95,6 +114,30 @@ def validate_payload(payload: dict[str, Any]) -> dict[str, Any]:
     notes = payload.get("notes")
     if notes is not None and (not isinstance(notes, str) or not notes.strip()):
         raise PrCostError("notes must be a non-empty string or null")
+
+    for field in ("tokens_in_uncached", "tokens_in_cache_read", "tokens_in_cache_write"):
+        if field in payload:
+            validate_nullable_integer(payload, field)
+    usd_basis = payload.get("usd_basis")
+    if usd_basis is not None and usd_basis not in USD_BASES:
+        raise PrCostError("usd_basis must be one of " + ", ".join(sorted(USD_BASES)) + ", or null")
+    scope = payload.get("scope")
+    if scope is not None and scope not in SCOPES:
+        raise PrCostError("scope must be one of " + ", ".join(sorted(SCOPES)) + ", or null")
+
+    # A split that does not add up to the total is worse than no split: both
+    # numbers are then in the comment, and a reader has no way to tell which
+    # one to believe.
+    parts = [
+        payload.get(field)
+        for field in ("tokens_in_uncached", "tokens_in_cache_read", "tokens_in_cache_write")
+    ]
+    if payload.get("tokens_in") is not None and all(part is not None for part in parts):
+        if sum(parts) != payload["tokens_in"]:
+            raise PrCostError(
+                f"tokens_in ({payload['tokens_in']}) must equal uncached + cache read + "
+                f"cache write ({sum(parts)})"
+            )
 
     for field in ("window_start", "window_end", "generated_at"):
         value = payload.get(field)
@@ -193,6 +236,17 @@ def payload_from_args(
         }
     )
 
+    for field in OPTIONAL_FIELDS:
+        supplied = getattr(args, field, None)
+        payload[field] = supplied if supplied is not None else payload.get(field)
+
+    # A session reader sums a whole session: several PRs plus unrelated work,
+    # if that is what the window held. Saying so by default is the honest
+    # label; a caller who really did scope the numbers to one PR passes
+    # --scope this-pr.
+    if payload.get("scope") is None and payload.get("tokens_in") is not None:
+        payload["scope"] = "session-total"
+
     if args.notes is not None:
         payload["notes"] = args.notes
     elif "notes" not in payload:
@@ -251,11 +305,73 @@ def append_ledger(
     return "corrected" if duplicate else "annotated"
 
 
+USD_BASIS_TEXT = {
+    "model-rates": "the published rates of the model named above",
+    "default-rates": "fixed lane rates, NOT the rates of the model named above",
+    "provider-reported": "the cost the provider recorded, copied not recomputed",
+}
+
+SCOPE_TEXT = {
+    "session-total": "whole session, which may cover other PRs and unrelated work",
+    "this-pr": "scoped to this PR",
+}
+
+
+def human_summary(payload: dict[str, Any]) -> list[str]:
+    """The lines a reader sees before the JSON block.
+
+    The JSON alone put `tokens_in` next to `usd` with nothing between them,
+    and a reader who knows the input rate multiplies one by the other. These
+    lines say which parts of tokens_in cost what, on what basis the USD was
+    priced, and what work the window covers.
+    """
+    lines: list[str] = []
+
+    usd = payload.get("usd")
+    headline = f"~${usd:,.2f}" if isinstance(usd, (int, float)) else "cost unavailable"
+    model = payload.get("model") or "model unknown"
+    confidence = payload.get("confidence") or "unknown"
+    lines.append(f"**{headline}** — {model} — confidence: {confidence}")
+
+    basis = payload.get("usd_basis")
+    if basis:
+        lines.append(f"- Priced from: {basis} ({USD_BASIS_TEXT.get(basis, 'see the skill docs')})")
+
+    tokens_in = payload.get("tokens_in")
+    uncached = payload.get("tokens_in_uncached")
+    cache_read = payload.get("tokens_in_cache_read")
+    cache_write = payload.get("tokens_in_cache_write")
+    if tokens_in is not None and None not in (uncached, cache_read, cache_write):
+        share = f" ({cache_read / tokens_in:.1%} of input)" if tokens_in else ""
+        lines.append(
+            f"- Input {tokens_in:,} = {uncached:,} uncached + {cache_read:,} cache read"
+            f"{share} + {cache_write:,} cache write. Cache reads bill at a fraction "
+            "of the input rate, so this total is not input-priced."
+        )
+    elif tokens_in is not None:
+        lines.append(
+            f"- Input {tokens_in:,} tokens, cached and uncached combined; "
+            "this lane did not report the split."
+        )
+
+    tokens_out = payload.get("tokens_out")
+    if tokens_out is not None:
+        lines.append(f"- Output {tokens_out:,} tokens")
+
+    scope = payload.get("scope")
+    if scope:
+        lines.append(f"- Covers: {SCOPE_TEXT.get(scope, scope)}")
+
+    return lines
+
+
 def comment_body(payload: dict[str, Any]) -> str:
     session_marker = payload.get("session_id") or "unknown"
+    summary = "\n".join(human_summary(payload))
     return (
         f"<!-- pr-cost:{session_marker} -->\n"
         "AI cost payload for the session that created this PR:\n\n"
+        f"{summary}\n\n"
         "```json\n"
         f"{json.dumps(payload, indent=2, sort_keys=True)}\n"
         "```"
@@ -412,6 +528,11 @@ def add_payload_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--pr-url")
     parser.add_argument("--generated-at")
     parser.add_argument("--notes")
+    parser.add_argument("--tokens-in-uncached", type=int, dest="tokens_in_uncached")
+    parser.add_argument("--tokens-in-cache-read", type=int, dest="tokens_in_cache_read")
+    parser.add_argument("--tokens-in-cache-write", type=int, dest="tokens_in_cache_write")
+    parser.add_argument("--usd-basis", dest="usd_basis", choices=sorted(USD_BASES))
+    parser.add_argument("--scope", dest="scope", choices=sorted(SCOPES))
 
 
 def build_parser() -> argparse.ArgumentParser:

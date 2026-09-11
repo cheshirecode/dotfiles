@@ -50,8 +50,22 @@ PR_COST_HOOK_LIVE=1 python3 scripts/pr_cost_collect.py annotate \
   --window-start "$(key window_start)" \
   --window-end "$(key window_end)" \
   --pr-url "$PR_URL" \
-  --notes "Session usage from $READER. USD basis: $(key usd_basis unknown). Token counts retain the reader contract; cached tokens are not added again."
+  --tokens-in-uncached "$(key uncached_input_tokens)" \
+  --tokens-in-cache-read "$(key cache_read_input_tokens)" \
+  --tokens-in-cache-write "$(key cache_creation_input_tokens)" \
+  --usd-basis "$(key usd_basis)" \
+  --notes "Session usage from $READER. Token counts retain the reader contract; cached tokens are not added again."
 ```
+
+The three `--tokens-in-*` flags are what make the posted comment readable:
+without them the comment shows only the merged `tokens_in`, which reads as
+uncached input. The reader already emits the split under its own key names
+(`uncached_input_tokens`, `cache_read_input_tokens`,
+`cache_creation_input_tokens`), so these are a rename, not a recomputation —
+and the collector refuses the payload if the three do not sum to `tokens_in`.
+
+`usd_basis` moves out of the free-text note and into its own field, where the
+comment can label what the dollar figure was priced from.
 
 All three readers emit the same eight shared keys, so `READER`, `READER_FLAG`
 and `HARNESS` are what change between the claude and codex lanes.
