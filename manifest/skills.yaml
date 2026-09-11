@@ -143,7 +143,7 @@ skills:
     install_to: ~/.claude/skills/tightening-a-pr
 
   - name: which-model
-    description: Best-value model selection by capability, cost, context, modality, and data policy.
+    description: Best-value model selection by capability, cost, context, modality, and harness availability.
     source:
       type: subpath
       ref: HEAD

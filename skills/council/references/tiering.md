@@ -3,9 +3,9 @@
 Read this before choosing models for a council stage.
 
 Use `$which-model` for provider/model selection. Council owns the stage requirements; `which-model`
-owns model comparison, pricing freshness, first-class Chinese-model treatment, data-policy gates,
+owns model comparison, pricing freshness, first-class Chinese-model treatment, harness availability,
 and sequential-thinking decomposition. If `which-model` is unavailable, use the same principle:
-pick the cheapest model lane that clears the stage's capability and data-policy bar.
+pick the cheapest model lane that clears the stage's capability bar and is selectable here.
 
 The council-specific mapping is (budget-aware, ~$50/2-3mo total):
 

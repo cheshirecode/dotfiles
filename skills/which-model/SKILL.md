@@ -1,13 +1,13 @@
 ---
 name: which-model
-description: Choose the best-value model lane for a task by comparing capability, cost, context window, modality, latency, tool fit, and data policy. Use when the user invokes `/which-model`, asks which model to use, asks for value-for-token model suggestions, or wants session-level model-selection guidelines. `/which-model` with no arguments prints the guideline; `/which-model task prose or capability` returns 1-3 model suggestions.
+description: Choose the best-value model lane for a task by comparing capability, cost, context window, modality, latency, tool fit, and harness availability. Use when the user invokes `/which-model`, asks which model to use, asks for value-for-token model suggestions, or wants session-level model-selection guidelines. `/which-model` with no arguments prints the guideline; `/which-model task prose or capability` returns 1-3 model suggestions.
 ---
 
 # which-model
 
-Choose by capability and cost for the job, not provider reputation. Treat OpenAI, Anthropic, Chinese models, and local/open-weight routes as first-class candidates.
+Choose by capability and cost for the job, not provider reputation. OpenAI, Anthropic, Chinese, and local/open-weight routes are all first-class candidates.
 
-Skip optional delegation routing if no delegate surface exists or in-band work is sufficient. Explicit model-advice requests still follow the routes below.
+Skip optional delegation routing when no delegate surface exists or in-band work suffices. Explicit model-advice requests still follow the routes below.
 
 ## Resolve the skill directory
 
@@ -28,41 +28,42 @@ echo "${SKILL_ROOT:-not found}"
 ```
 
 Resolve every `bin/…` and `references/…` path below under `$SKILL_ROOT`.
-If missing, print the guideline and data gate, report the missing payload, and
-suggest restarting the installer or cloning super-ruler. Do not invent prices,
-context windows, or model IDs for routes requiring the catalog.
+If missing, print the guideline and availability gate, say the payload is
+missing, and do not recall prices, context windows, or model IDs from memory.
 
 ## Route first
 
-- No arguments: print `## Guideline` and `## Data policy gate`, then stop. Do not read references or fetch live pricing.
-- Task prose/capability: apply the data gate, read `references/routing.md`, and return 1-3 suggestions.
-- Exact model, availability, current/latest/live, pricing, billing, environment, provider, or harness request: also read `references/catalog.md` and run `bin/model-catalog` as directed there.
-- Comparison request ("X vs Y", "which is cheaper"): read `references/catalog.md`, run `bin/model-catalog` for the relevant env, and return a side-by-side with prices, context, and capability differences.
-- Unknown or unrecognized argument: print usage (`/which-model` or `/which-model <task description>`) and stop.
+- No arguments: print `## Guideline` and `## Availability gate`, then stop. Do not read references or fetch live pricing.
+- Task prose/capability: apply the availability gate, read `references/routing.md`, and return 1-3 suggestions.
+- Exact model, availability, pricing, billing, environment, provider, or harness request: also read `references/catalog.md` and run `bin/model-catalog` as directed there.
+- Comparison ("X vs Y", "which is cheaper"): read `references/catalog.md`, run `bin/model-catalog` for the env, and return a side-by-side of price, context, and capability.
+- Unrecognized argument: print usage and stop.
 
 Do not preload references that the selected route does not require.
 
 ## Guideline
 
 1. Identify the job: mechanical search, code edit, long-context review, visual judgment, adversarial verification, planning, synthesis, or final decision.
-2. Filter by hard requirements: data policy, tool access, modality, context window, latency, structured-output reliability, and actual selectability in the current harness.
+2. Filter by hard requirements: tool access, modality, context window, latency, structured-output reliability, selectability here, and any constraint the user stated.
 3. Compare remaining candidates by capability per dollar on the specific job.
 4. Spend cheap tokens on search angles, negative evidence, fixture checks, and compact proofs—not longer prose.
-5. Reserve frontier/premium tokens for cross-context synthesis, high-risk judgment, needed visual/design calls, and contradictory evidence.
+5. Reserve frontier tokens for cross-context synthesis, high-risk judgment, visual/design calls, and contradictory evidence.
 
-## Data policy gate
+## Availability gate
 
-Do not route secrets, customer data, unreleased strategy, or private proprietary code through an unapproved provider because it is cheap. Approval must be explicit enough to cite: allowed data class, provider/route, retention/training terms, and whether the current harness can enforce the route. If approval cannot be verified, recommend local, self-hosted, approved first-party, or explicitly approved open-weight routes.
+The candidate set is what this harness can select with the credentials it has. Read it from the harness's model list or `bin/model-catalog`; never assume it. When the intended lane names a model this harness cannot select, map the intent to an available one and say which lane it stood in for.
+
+Do not invent a restriction the user did not state. Approved providers, and whether data may leave this machine, are the user's calls; absent one, route on capability, cost, and availability alone. A missing approval is not a refusal reason. When the user states a constraint, filter on it and name it in the recommendation.
 
 ## Output rules
 
 - Return at most three suggestions.
 - Prefer lanes when exact availability is unknown: `cheap long-context code model`, `mid multimodal model`, or `frontier synthesis model`.
-- State when the current harness cannot actually select a recommendation.
+- State when this harness cannot select a recommendation.
 - Tie the rationale to task capability, cost, and caveat in one line.
-- Summarize decision factors only; do not print private chain-of-thought.
+- Summarize decision factors; do not print private chain-of-thought.
 
-## Hook automation (offer, never configure silently)
+## Hook automation
 
 No hook sets a session model; `SessionStart` only injects context. A
 `PreToolUse` hook matching `Agent|Task` does set a sub-agent model: it
