@@ -11,7 +11,6 @@ import re
 import shlex
 import subprocess
 import sys
-import tempfile
 from datetime import datetime, timezone
 from typing import Any
 
