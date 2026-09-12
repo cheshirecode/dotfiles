@@ -20,6 +20,7 @@ Use this route matrix before loading references:
 | repeated, resumable, or delegated work | driver | one `loop_run.py` call per cycle |
 | delegates run concurrently | driver + crew | load [crew.md](references/crew.md); serialize writes unless proven isolation |
 | recurrence or installation drift | driver + hosts | load [hosts.md](references/hosts.md); verify host primitive or audit |
+| code quality or architectural boundaries need review | selected route + quality | load [quality.md](references/quality.md) |
 | exact transition, effect, worklog, or handoff question | selected route + protocol | load only the needed rules in [protocol.md](references/protocol.md) |
 
 ## Compose with installed skills

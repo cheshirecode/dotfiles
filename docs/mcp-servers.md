@@ -2144,17 +2144,6 @@ rm -rf ~/.npm/_npx
 
 ---
 
-## Change Log
-
-**Version 1.0.0** (2026-01-21):
-- Initial comprehensive documentation
-- Documented all servers from claude-mcp.example.json
-- Added WSL-specific guides
-- Included troubleshooting sections
-- Added security best practices
-
----
-
 ## Contributing
 
 This documentation should evolve as MCP servers are added, updated, or deprecated.

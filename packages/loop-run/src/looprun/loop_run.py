@@ -122,36 +122,49 @@ def radar_line(repo, remote=False, artifact_dir=None):
         return "radar: error=timeout"
     except (OSError, ValueError):
         return "radar: error=unrunnable" + ref
-    freshness = " remote=" + cell(str(data.get("remote_fetch", "unknown"))) if remote else ""
-    if data.get("error") or proc.returncode not in (0, 2):
-        reason = str(data.get("error") or proc.stderr.strip() or "exit %d" % proc.returncode)
-        return "radar: error=" + cell(reason[:160] if ref else reason) + ref + freshness
+    return radar_verdict(data, proc.returncode, proc.stderr, ref, remote)
+
+
+def radar_overlaps(data, returncode):
+    """Validate overlap records and counts; return the records or reject them."""
     overlaps = data.get("overlaps") or []
     if not isinstance(overlaps, list) or any(not isinstance(o, dict) for o in overlaps):
-        return "radar: error=invalid-overlaps" + ref + freshness
+        raise ValueError("invalid-overlaps")
     if any(o.get("severity") not in ("warn", "info") or not isinstance(o.get("path"), str) for o in overlaps):
-        return "radar: error=invalid-overlaps" + ref + freshness
+        raise ValueError("invalid-overlaps")
     warn_count = sum(o["severity"] == "warn" for o in overlaps)
     info_count = len(overlaps) - warn_count
     if (type(data.get("warn")) is not int or data["warn"] != warn_count
             or ("info" in data and (type(data["info"]) is not int or data["info"] != info_count))
-            or (proc.returncode == 2) != (warn_count > 0)):
-        return "radar: error=inconsistent-verdict" + ref + freshness
-    selected = [o for o in overlaps if o.get("severity") == ("warn" if proc.returncode == 2 else "info")]
-    paths = ",".join(str(o.get("path", "?")) for o in selected[:5])
+            or (returncode == 2) != (warn_count > 0)):
+        raise ValueError("inconsistent-verdict")
+    return overlaps
+
+
+def radar_verdict(data, returncode, stderr="", ref="", remote=False):
+    """Interpret a decoded radar response without process or filesystem access."""
+    freshness = " remote=" + cell(str(data.get("remote_fetch", "unknown"))) if remote else ""
+    if data.get("error") or returncode not in (0, 2):
+        reason = str(data.get("error") or stderr.strip() or "exit %d" % returncode)
+        return "radar: error=" + cell(reason[:160] if ref else reason) + ref + freshness
+    try:
+        overlaps = radar_overlaps(data, returncode)
+    except ValueError as exc:
+        return "radar: error=" + str(exc) + ref + freshness
+    severity = "warn" if returncode == 2 else "info"
+    selected = [o for o in overlaps if o["severity"] == severity]
+    paths = ",".join(o["path"] for o in selected[:5])
     preview = (" paths=" + cell(paths)) if paths else ""
     if len(selected) > 5:
         preview += " omitted=%d" % (len(selected) - 5)
-    if proc.returncode == 0:
+    if returncode == 0:
         if overlaps:
             return "radar: info=%d%s%s%s" % (len(selected), preview, ref, freshness)
         verdict = "single-owner" if data.get("comparable") is False else "clean"
         return "radar: " + verdict + freshness
-    warn = data.get("warn")
-    if not isinstance(warn, int) or isinstance(warn, bool) or warn < 0:
-        return "radar: error=exit 2 carried no warn count" + ref + freshness
-    info = sum(o.get("severity") == "info" for o in overlaps)
-    return "radar: warn=%d info=%d%s%s%s" % (warn, info, preview, ref, freshness)
+    return "radar: warn=%d info=%d%s%s%s" % (
+        len(selected), len(overlaps) - len(selected), preview, ref, freshness,
+    )
 
 
 def cell(text):

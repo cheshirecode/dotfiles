@@ -136,7 +136,7 @@ The `.cursor/` directory contains Cursor-specific configurations that are mainta
 ├── CLAUDE.md                    # Main Claude Code development guide
 ├── SETUP-CLAUDE.md              # Claude Code setup instructions
 ├── claude-mcp.example.json      # MCP server configuration template
-├── claude-code-migration.plan.md # Implementation plan (reference)
+├── docs/decisions/              # Maintained architectural decisions
 ├── docs/                        # Supporting documentation
 │   ├── mcp-servers.md          # MCP server details
 │   ├── workflows.md            # Development workflows
