@@ -81,3 +81,36 @@ Run the evidence gate after recording required Git, artifact and delivery checks
 Only its satisfied verification permits `loop_run.py --stop complete`. Blocked
 work retains a concrete replay action under the protocol's resumable outcome.
 The driver owns budget exhaustion; do not calculate a second budget here.
+
+### Whole-project completion recipe
+
+Use only when this run owns the whole project. Set `run_dir`, `program_slug`,
+`LOOP_RUN`, `EVIDENCE_GATE` and `completion_gate` to verified targets. The gate
+must already cover the goal outcomes; this recipe separately checks checkpoint,
+project integrity and archive push. If archive delivery is a gate criterion,
+record it after the archive and recheck the gate before stopping. The Worklog
+fixture executes this block against a local remote, including rejected pushes.
+
+<!-- executable: whole-project-completion -->
+```bash
+set -e
+queue_rc=0
+"$WORKLOG_BIN/project.sh" next "$program_slug" --json > "$run_dir/project-next.json" || queue_rc=$?
+python3 - "$run_dir/project-next.json" "$queue_rc" "$program_slug" <<'PY_QUEUE'
+import json, sys
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+if not (sys.argv[2] == "1" and data.get("schema_version") == "worklog-project-next/v1"
+        and data.get("project") == sys.argv[3] and data.get("status") == "empty"
+        and data.get("task") is None):
+    sys.exit("project is not complete: " + str(data.get("reason") or data.get("status")))
+PY_QUEUE
+python3 "$EVIDENCE_GATE" check --gate "$completion_gate" > "$run_dir/gate-check.json"
+verification="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["verification"])' "$run_dir/gate-check.json")"
+"$WORKLOG_BIN/checkpoint.sh" "$program_slug" --next="Verify rollup and archive project"
+"$WORKLOG_BIN/project.sh" verify "$program_slug" > "$run_dir/project-verify.log"
+"$WORKLOG_BIN/archive.sh" "$program_slug" --reason=shipped --summary="Project goal verified; child tasks archived"
+archive_sha="$(git -C "$WORKLOG_REPO" rev-parse HEAD)"
+python3 "$LOOP_RUN" "$run_dir" --stop complete --verification "$verification" \
+  --evidence "git: $archive_sha — project verified and parent archive pushed"
+```
