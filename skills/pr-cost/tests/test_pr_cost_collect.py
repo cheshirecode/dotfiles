@@ -144,12 +144,23 @@ class PrCostCollectTest(unittest.TestCase):
             "--ledger",
             str(self.ledger),
         )
-        first = json.loads(self.run_cli(*base_arguments).stdout)
-        corrected = json.loads(self.run_cli(*base_arguments, "--allow-duplicate").stdout)
+        # Distinct figures, because the point of the flag is that the second
+        # one is a correction: the original posted number was priced wrong.
+        first = json.loads(self.run_cli(*base_arguments, "--usd", "517.46").stdout)
+        duplicate = json.loads(self.run_cli(*base_arguments, "--usd", "517.46").stdout)
+        corrected = json.loads(
+            self.run_cli(*base_arguments, "--usd", "602.99", "--allow-duplicate").stdout
+        )
         self.assertEqual(first["status"], "annotated")
+        # Without the flag the default stays idempotent, so a re-firing hook
+        # cannot post twice.
+        self.assertEqual(duplicate["status"], "duplicate")
         self.assertEqual(corrected["status"], "corrected")
         rows = [json.loads(line) for line in self.ledger.read_text().splitlines() if line.strip()]
-        self.assertEqual(len(rows), 2, "the corrected row must be appended, not swapped in")
+        # Assert the figures, not just the count: two rows holding the same
+        # wrong number would satisfy a length check while losing the
+        # correction entirely.
+        self.assertEqual([row["usd"] for row in rows], [517.46, 602.99])
 
     def test_from_hook_has_no_allow_duplicate_escape(self) -> None:
         # A hook that re-fires must stay idempotent, or one retried PR create

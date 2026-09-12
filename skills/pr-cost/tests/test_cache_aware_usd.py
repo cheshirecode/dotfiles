@@ -256,21 +256,27 @@ class CacheAwareUsdTest(unittest.TestCase):
 
     # 3. Model families priced by their own row, and cache writes by TTL.
 
-    def test_opus_4_6_is_not_priced_as_opus_4_0(self) -> None:
+    def test_opus_4_6_and_later_are_not_priced_as_opus_4_0(self) -> None:
         # Opus 4.6 and later cost 5/25, not Opus 4.0's 15/75. The bare
         # "claude-opus-4" prefix swallowed them and charged 3x -- a plausible
         # figure rather than an error, which is why nothing caught it.
         # 1M uncached input at 5.0 is $5.00; at Opus 4.0's rate it is $15.00.
-        data = self.write_and_run(
-            "opus-4-6.jsonl",
-            claude_event(
-                "msg_1",
-                "claude-opus-4-6-20260101",
-                {"input_tokens": 1_000_000, "output_tokens": 0},
-            ),
-            CLAUDE_SCRIPT,
-        )
-        self.assertAlmostEqual(data["usd_estimated"], 5.0, places=4)
+        #
+        # All three rows are asserted, not just one: they are separate table
+        # entries, so a test covering only 4-6 leaves 4-7 and 4-8 free to be
+        # deleted back into the overcharging prefix.
+        for model in ("claude-opus-4-6-20260101", "claude-opus-4-7", "claude-opus-4-8"):
+            with self.subTest(model=model):
+                data = self.write_and_run(
+                    f"{model}.jsonl",
+                    claude_event(
+                        "msg_1",
+                        model,
+                        {"input_tokens": 1_000_000, "output_tokens": 0},
+                    ),
+                    CLAUDE_SCRIPT,
+                )
+                self.assertAlmostEqual(data["usd_estimated"], 5.0, places=4)
 
     def test_opus_4_0_keeps_its_own_higher_rate(self) -> None:
         # The guard for the row above: longest-prefix matching must still put
