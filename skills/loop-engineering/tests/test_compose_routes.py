@@ -29,7 +29,9 @@ HEADER = "| Trigger | Owner | Handoff and replay | Skip when |"
 
 def compose_rows() -> list[list[str]]:
     """Return the compose table's data rows as lists of cells."""
-    lines = SKILL.read_text(encoding="utf-8").splitlines()
+    root = SKILL.read_text(encoding="utf-8")
+    assert "(references/composition.md)" in root, "composition route missing"
+    lines = (SKILL.parent / "references/composition.md").read_text(encoding="utf-8").splitlines()
     start = lines.index(HEADER)
     rows = []
     for line in lines[start + 2 :]:  # skip header and its `|---|` separator

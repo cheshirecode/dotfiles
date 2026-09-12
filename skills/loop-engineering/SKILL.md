@@ -53,7 +53,7 @@ Neither option changes a tool's cwd or authorizes dispatch.
 
 1. Observe current evidence and choose the smallest useful action.
 2. Check the target and existing authorization before a mutation. Apply the
-   [effect boundary](references/protocol.md#effect-boundary); serialize shared writes.
+   [effect boundary](references/effects.md); serialize shared writes.
 3. Execute and verify the changed behavior. Batch independent reads when the
    host supports it; inspect every result. Repeat checks only for new changes,
    failures, unresolved concerns, or a required validation gate.
@@ -68,6 +68,7 @@ Each call reports state, radar and queue. `error=` is an unavailable or failed
 probe, never a clean radar or empty queue. A radar sample does not monitor the
 interval between calls, and a single owner does not prove isolation. The driver
 neither delegates work nor schedules wakeups; crew and host guidance own those.
+State lives in `<run-dir>/loop_state.json`; `run.json` holds driver configuration.
 Do not hand-edit state JSON or mix raw state writes with an active driver.
 
 Give brief progress updates when findings or next steps matter. Use concrete
@@ -77,20 +78,6 @@ uncertainty, rather than private reasoning or a process transcript.
 
 ## Compose with installed skills
 
-`$skill-name` means invoke that installed owner when its trigger applies. Pass
-objective, evidence, constraints, budget, and requested return. Do not preload
-owners or duplicate their procedures. Missing optional owners are skipped;
-report a missing required capability with the affected check. Skips cost no cycle.
-
-| Trigger | Owner | Handoff and replay | Skip when |
-| --- | --- | --- | --- |
-| Multi-faceted code search | `$serena-rg-search` | Search scope and replay command | Known-file lookup |
-| Durable work or handoff | `$worklog` | Task context and checkpoint reference | No persistence needed |
-| Delegate needs a different model lane | `$which-model` | Preserve requested model; verify availability before dispatch | No selection or dispatch capability |
-| Material disagreement or uncertain approach | `$council` | Decision question and discriminating replay check | Evidence resolves the issue |
-| Nontrivial implementation | `$karpathy-guidelines` | Scope, assumptions and behavior checks | Read-only observation |
-| Completion evidence | `$evidence-gate` | Criteria mapped to verified evidence | One action with one sufficient check |
-| Brittle reusable instructions | `$example-led-instructions` | Smallest example set and acceptance scenario | Standard prose suffices |
-| Open-ended ideation | `$brainstorm` | Sources, exclusions and acceptance target | Predetermined idea |
-| Multi-PR cleanup | `$ship-hygiene` | Explicit PR scope and refreshed state | One PR |
-| PR review or closeout | `$pr-review` | PR identity and task evidence | No PR or unfinished implementation |
+When choosing another skill, read [composition.md](references/composition.md)
+for triggers and compact handoffs. Use an already-selected owner directly; do
+not preload other skills. Completion still requires `$evidence-gate`.
