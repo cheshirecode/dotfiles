@@ -8,7 +8,7 @@ import json, os, pathlib, re, subprocess, tempfile, unittest
 ROOT = pathlib.Path(os.environ['WORKLOG_BIN']).parents[2]
 LOOP = ROOT/'skills/loop-engineering'
 GATE = ROOT/'skills/evidence-gate/scripts/evidence_gate.py'
-recipe = re.search(r'```bash\n(.*?)\n```', (LOOP/'references/orchestrator.md').read_text().split('### 4. Terminal',1)[1], re.S).group(1)
+recipe = re.search(r'<!-- executable: whole-project-completion -->\s*```bash\n(.*?)\n```', (LOOP/'references/orchestrator.md').read_text(), re.S).group(1)
 
 class Completion(unittest.TestCase):
     def setUp(self):

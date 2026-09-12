@@ -1,255 +1,84 @@
-# Contrastive loop fixtures
+# Executable examples and acceptance scenarios
 
-Read only when state classification, effect ordering, or handoff routing is
-ambiguous.
+Read when state sequencing or verdict handling is unclear. The marked Bash blocks
+are executed by `tests/test_documentation.py` in temporary directories. Set
+`SKILL_DIR`, `EVIDENCE_GATE` (its script path), and `RUN_ROOT` to existing absolute
+paths. For the project-resume example, also set `REPO`, `PROJECT` and the verified
+Worklog environment. Tests provide an isolated repo and queue stub; they need no
+network, live vault, or model API.
 
-## 0. Basic single-task loop
+## 1. Verify before completion
 
-INPUT
-
-> Verify that the API endpoint returns 200 for valid requests. Budget: 5 checks.
-
-OUTPUT
-
-Initialize the loop:
-
+<!-- executable: verified-loop -->
 ```bash
-python3 <skill-dir>/scripts/loop_state.py init \
-  --state /tmp/api-check.json \
-  --goal "API endpoint returns 200 for valid requests" \
-  --evidence "endpoint URL confirmed" \
-  --budget-unit checks \
-  --budget-limit 5 \
-  --next-action "send test request with valid payload"
+set -eu
+run_dir="$RUN_ROOT/verified"
+python3 "$SKILL_DIR/scripts/loop_run.py" "$run_dir" --goal "Verify a local artifact" \
+  --allowed-effect "write artifacts under $RUN_ROOT" --approval-boundary "writes outside fixture"
+printf 'verified\n' > "$RUN_ROOT/result.txt"
+python3 "$EVIDENCE_GATE" init --gate "$RUN_ROOT/gate.json" \
+  --goal "Verify a local artifact" --criterion 'artifact=Result exists with expected bytes' >/dev/null
+python3 -c 'import pathlib,sys; assert pathlib.Path(sys.argv[1]).read_bytes() == b"verified\n"' "$RUN_ROOT/result.txt"
+python3 "$EVIDENCE_GATE" record --gate "$RUN_ROOT/gate.json" --criterion artifact \
+  --kind artifact --ref "$RUN_ROOT/result.txt" --result 'Expected bytes verified' >/dev/null
+python3 "$EVIDENCE_GATE" check --gate "$RUN_ROOT/gate.json" > "$RUN_ROOT/gate-check.json"
+verification="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["verification"])' "$RUN_ROOT/gate-check.json")"
+python3 "$SKILL_DIR/scripts/loop_run.py" "$run_dir" --stop complete \
+  --verification "$verification" --evidence "artifact: $RUN_ROOT/result.txt — verified bytes"
 ```
 
-Run one cycle:
+A failed check must leave the run incomplete. Each goal clause needs its own
+evidence; a model's assurance cannot replace the command's result.
 
+## 2. Intervention creates a successor
+
+<!-- executable: bound-successor -->
 ```bash
-# After executing the check and capturing output
-python3 <skill-dir>/scripts/loop_state.py advance \
-  --state /tmp/api-check.json \
-  --evidence "command: curl -s -o /dev/null -w '%{http_code}' — 200" \
-  --next-action "verify response body schema"
+set -eu
+run_dir="$RUN_ROOT/blocked"
+python3 "$SKILL_DIR/scripts/loop_run.py" "$run_dir" --goal "Read restored input" --repo "$REPO" --project "$PROJECT" \
+  --allowed-effect "write artifacts under $RUN_ROOT" --approval-boundary "writes outside fixture"
+python3 "$SKILL_DIR/scripts/loop_run.py" "$run_dir" --stop blocked \
+  --evidence 'artifact: input.txt — missing' --next-action 'Check restored input bytes'
+# After authorized intervention; still verify the claimed repair:
+printf 'restored\n' > "$RUN_ROOT/input.txt"
+successor_dir="$RUN_ROOT/successor"
+mkdir "$successor_dir"
+# Preserve the verified repo/project configuration for driver probes.
+cp "$run_dir/run.json" "$successor_dir/run.json"
+python3 "$SKILL_DIR/scripts/loop_state.py" resume --state "$run_dir/loop_state.json" \
+  --new-state "$successor_dir/loop_state.json" --evidence 'artifact: input.txt — supplied, pending verification' \
+  --next-action 'Check restored input bytes' >/dev/null
+python3 -c 'import pathlib,sys; assert pathlib.Path(sys.argv[1]).read_bytes() == b"restored\n"' "$RUN_ROOT/input.txt"
+python3 "$SKILL_DIR/scripts/loop_run.py" "$successor_dir" \
+  --evidence 'artifact: input.txt — restored bytes verified' --next-action 'Verify goal evidence gate'
 ```
 
-On success after verification:
+The predecessor stays blocked and immutable; the successor inherits goal/budget.
+A changed goal instead starts a separate linked run. A missing scheduler requires
+needs_human; only a verified wakeup supports continue_scheduled.
 
+## 3. Preserve a verdict exit
+
+<!-- executable: verdict-exit -->
 ```bash
-python3 <skill-dir>/scripts/loop_state.py finish \
-  --state /tmp/api-check.json \
-  --status complete \
-  --verification "curl exit 0 and HTTP 200 confirmed" \
-  --evidence "command: curl response — 200 OK with valid schema"
+set -eu
+# Stub the radar's documented collision verdict, including its exit status.
+probe() { printf '{"warn":1,"info":0}\n'; return 2; }
+if raw=$(probe); then probe_rc=0; else probe_rc=$?; fi
+printf '%s\n' "$raw" > "$RUN_ROOT/verdict.json"
+python3 - "$RUN_ROOT/verdict.json" "$probe_rc" <<'PY_VERDICT'
+import json, sys
+assert int(sys.argv[2]) == 2
+assert json.load(open(sys.argv[1]))["warn"] == 1
+PY_VERDICT
 ```
 
-This pattern scales to multi-hypothesis diagnosis (fixture 1), delegation
-(fixture 2), and orchestrator programs (fixture 4).
+This proves the capture pattern, not a real collision; radar/reap fixtures exercise
+the actual tools. Piping a verdict straight into a parser can misclassify the
+producer's nonzero result as a parsing error.
 
-## 1. Interactive diagnosis
-
-INPUT
-
-> Find and fix a flaky unit test. Stop after three unsuccessful hypotheses.
-
-OUTPUT
-
-```text
-goal: targeted test passes three consecutive runs
-progress_evidence: failure reproduced once; no source mutation yet
-budget: 0/3 hypotheses
-next_action: isolate timing-dependent assertions
-terminal_status: running
-```
-
-Run one discriminating check per hypothesis. Serialize edits and test after each
-one. Continue immediately between hypotheses while state is `running`; do not
-return an intermediate handoff. End `complete` only with three passing runs;
-otherwise end `budget_exhausted` with failures and the safest next action.
-When the terminal run itself consumes a declared unit, use `finish --consume 1`;
-never also `advance` for that same unit.
-
-For `blocked`, `needs_human`, `budget_exhausted`, or `continue_scheduled`, pass
-the exact replay or intervention check through `finish --next-action`. For
-`complete` or `cancelled`, omit that flag; the script clears the prior running
-action so the terminal state cannot advertise obsolete work.
-
-If a fresh check later contradicts evidence in a saved terminal run, append the
-correction and revalidate the state:
-
-```bash
-python3 <skill-dir>/scripts/loop_state.py fingerprint \
-  --state <state-file>
-# Pass the exact printed value from the expected snapshot.
-python3 <skill-dir>/scripts/loop_state.py annotate \
-  --state <state-file> \
-  --expect-sha256 <printed-sha256> \
-  --evidence "Correction: isolated rerun reproduced the timing failure"
-python3 <skill-dir>/scripts/loop_state.py validate --state <state-file>
-python3 <skill-dir>/scripts/loop_state.py show --state <state-file>
-```
-
-Confirm the terminal status and consumed budget remain unchanged. The earlier
-evidence remains in history. Start a new authorized state file for further work;
-do not reopen the terminal run.
-
-## 2. Worklog-backed delegation
-
-INPUT
-
-> Resume `auth-flake`, delegate context lookup, then decide the next fix.
-
-OUTPUT
-
-Invoke the installed `worklog` skill in `context` mode with
-`auth-flake --for=resume`, then immediately hydrate the host tracker from its
-tracker-ready snippet. Before delegation, invoke `context` mode with
-`auth-flake --for=compact` and give that returned pack directly to each
-independent read-only delegate. Follow worklog's dedupe rule so compact lookup
-does not recreate tracker items already hydrated by resume. Ask one delegate
-for failure-history evidence and another for current call-site evidence.
-Reconcile both returns before editing. Persist new task evidence through the
-worklog protocol, invoke `sync` mode for `auth-flake`, and rehydrate the tracker.
-
-Do not pass the full parent transcript or let delegates write concurrently.
-
-## 3. Scheduled monitor without a portable scheduler
-
-INPUT
-
-> Check CI every 15 minutes until it passes.
-
-OUTPUT
-
-Read `references/hosts.md`. If the active host exposes an authorized recurrence
-primitive, schedule bounded checks and end each run `continue_scheduled` until
-CI evidence satisfies the goal. If no such primitive is available, end
-`needs_human` and name the missing capability.
-
-At each verified wakeup, use `resume` to create a successor bound to the prior
-`continue_scheduled` state, replay the CI check, and keep cycling. If a
-credential or authority blocker requires intervention, checkpoint, ask for that
-specific intervention, then resume a successor and replay the blocked check.
-
-Do not claim that a timer or stop hook exists merely because another host
-supports one.
-
-## 4. Multi-task orchestrator program
-
-INPUT
-
-> Audit all skills for shellcheck regressions.
-
-OUTPUT (agent decomposes, creates project, cycles through tasks)
-
-```text
-[project: three declared tasks; user budget retained]
-[claim child → compact context → authorized delegate or in-band work]
-[worker return: evidence, uncertainty, next action]
-[parent: verify repo/revision and checks → checkpoint/archive shared Worklog]
-[advance once: "git: <worklog-sha> — <slug>: archived"]
-[repeat for remaining children; duplicate messages do not advance]
-[empty queue + goal evidence-gate + project verify + parent archive push → complete]
-```
-
-A blocked worker preserves its failure and replay action in the return. The parent
-records the corresponding resumable status rather than archiving unverified work.
-A changed reviewed revision requires rechecking affected evidence before acceptance.
-Use [crew.md](crew.md) for ownership and [orchestrator.md](orchestrator.md) for
-project completion commands.
-
-## 5. Discovery keyed on a join dimension
-
-INPUT
-
-> Watch for MRs in my team's repos that need review.
-
-OUTPUT (agent runs the inverse sweep, not just the forward one)
-
-```text
-[sweep A: MRs whose title/branch carries a ticket id -> 6 found]
-[sweep B: tickets on the team field -> resolve to MRs -> 5 found]
-[reconcile: A\B = 1 MR whose ticket is untagged; B\A = 1 MR in a repo not enumerated]
-[evidence: "command: two sweeps reconciled — 2 items visible to exactly one"]
-```
-
-If a loop discovers work through a join key, items lacking that key are
-invisible **by construction**, not by accident: a title-keyed sweep cannot see an
-untagged MR, and a ticket-keyed sweep cannot see a repo it does not enumerate.
-Run the inverse sweep and reconcile the two sets. Observed 2026-08-28: each
-direction missed something real on the same day.
-
-## 6. Reading a tool whose exit code is a verdict
-
-INPUT
-
-> Fingerprint crew-radar for a Monitor, and check it after the fix.
-
-OUTPUT (capture, then parse — never pipe a verdict into a parser)
-
-```bash
-RADAR=<skill-dir>/bin/crew-radar   # not on PATH; always resolve via <skill-dir>
-
-# WRONG — pipefail binds the pipeline to the radar's exit 2, and a real
-# collision is reported as unparseable output. (Subshell keeps the option
-# from leaking into the RIGHT form below.)
-(
-  set -o pipefail
-  cur=$("$RADAR" --json "$REPO" | jq -S -c '{warn,info}') || cur='{"error":"unparseable"}'
-)
-
-# RIGHT — capture first; only a jq failure reaches the sentinel.
-raw=$("$RADAR" --json "$REPO" 2>/dev/null) || true
-cur=$(printf '%s' "$raw" | jq -S -c '{warn,info,error}' 2>/dev/null) \
-  || cur='{"error":"unparseable"}'
-```
-
-A non-zero exit that *is* the answer — `crew-radar` 2 for a collision,
-`crew-reap` 3 for a removal, a linter's 1 for findings — inverts the usual
-reading. Under `set -o pipefail`, or `... | tail -1; echo $?`, the shell reports
-the pipeline rather than the command, so a correct tool reads as broken and a
-clean run reads as a failure.
-
-Six occurrences in one day across three agents, including one while verifying
-the fix for it and one in a test written by the person who had documented the
-trap that morning. **The knowledge does not fire at the moment you type the
-pipeline**, so a caution does not prevent it — the executable fixtures in
-`tests/test_crew_radar.sh` and `tests/test_crew_reap.sh` do, because they
-assert both that the correct form works and that the wrong form still fails.
-Copy those when adding a tool whose exit code carries meaning.
-
-## 7. Proving a fixture would have caught the bug
-
-INPUT
-
-> Added tests with the fix. Confirm they actually test it.
-
-OUTPUT (revert the FIX; never the fixtures)
-
-```bash
-cp path/to/impl.py "$SCRATCH/impl.fixed"     # keep the fix
-git checkout HEAD -- path/to/impl.py         # revert ONLY the implementation
-bash tests/the_new_suite.sh                  # MUST fail, and name which cases
-cp "$SCRATCH/impl.fixed" path/to/impl.py     # restore
-```
-
-```bash
-# WRONG — `git stash` takes the fixtures with the fix, so the new cases never
-# run. "5 passed, 0 failed" then means the suite you are validating was absent.
-git stash && bash tests/the_new_suite.sh && git stash pop
-```
-
-A fixture written alongside a fix is asserted against a codebase that already
-passes it. Nothing about writing it establishes that it would have failed
-before, and a green run is the same shape whether the case is guarding
-something or merely present. The check is cheap and almost never run.
-
-State the split in the report: on one change here, 3 of 4 new fixtures failed
-with the fix reverted and the 4th passed both ways *by design* — it pinned a
-pre-existing line the fix's correctness argument depended on, which had no
-guard. Both are worth having; conflating them is what hides a fixture that
-guards nothing.
-
-Same family as section 6: the instrument that is easy to reach could not have
-produced the other answer. There the pipeline reported its own exit instead of
-the tool's; here the revert removed the evidence along with the defect.
+For instruction review, also exercise: authorized work with routine unknowns;
+shared versus isolated workers; duplicate/stale returns; scoped project delivery;
+and Sol orchestrating available Astra/Fable workers. Record actual actions and
+capabilities. Review-only scenarios are not execution of another model.
