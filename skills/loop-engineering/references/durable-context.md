@@ -1,55 +1,53 @@
-## Preserve durable context
+# Durable context and handoffs
 
-**Uncommitted working-tree state is not durable state.** A checkpoint records
-that work exists; it does not make it exist. Commit and push before any
-checkpoint claiming an artifact, and confirm with `git ls-remote` — local
-`git log` only proves the commit reached this machine, and a forge API can serve
-a stale head SHA. Observed 2026-08-28: worktree fixes checkpointed, instance
-died, record survived, work did not.
+Use before resume, delegation, compaction, or a cross-session checkpoint.
+Distinguish local observations, commits, and pushed artifacts. A remote handoff
+needs remotely reachable evidence: push authorized changes and verify the remote
+ref before claiming delivery. A no-op review needs no artificial commit.
+Temporary files may disappear or be inaccessible on another host; persist the
+needed evidence through an authorized durable store before sending its pointer.
+Do not use `.git/info/exclude` to hide run files; worktrees can share that file.
 
-When the installed `worklog` protocol is available, hydrate resume context
-before initialization and checkpoint verified state at compaction, delegation,
-retry exhaustion, scheduled handoff, or termination. Resolve `$WORKLOG_BIN` to
-the worklog skill's `bin/` directory (`~/.claude/skills/worklog/bin`, `~/.agents/skills/worklog/bin`, or the repo's `skills/worklog/bin`). For an existing task, run
-`direnv exec <clone-dir> "$WORKLOG_BIN"/context.sh <slug> --for=resume`, where `<clone-dir>` is the target repo clone whose `.envrc` sets `WORKLOG_REPO`. `direnv exec` loads that env but does **not** change directory (measured), so with no `.envrc` it adds nothing and the slug resolves against your *current* repo — the wrong vault, silently. If `direnv` or the `.envrc` is missing, pass the target explicitly: `WORKLOG_REPO=<clone-dir> "$WORKLOG_BIN"/context.sh <slug> --for=resume`, and label the run `worklog-checkpoint: unavailable — local fallback`.
-Before cold delegation, pass the returned
-`context <slug> --for=compact` pack directly; do not pass the parent transcript
-or imply that `spawn` enriches the pack. If Worklog or its environment is not
-available, use the explicit state path plus one authorized artifact and label
-the run `worklog-checkpoint: unavailable — local fallback`.
+## Worklog
 
-Pack before compaction: pass only the objective, known evidence, constraints,
-budget, requested return, and recovery handles. Keep raw output in system temp
-or CCR; never rebuild a handoff by replaying the parent transcript.
+Use the installed Worklog owner for context, checkpoints and task lifecycle.
+`WORKLOG_REPO` names the data clone, `WORKLOG_BIN` the skill's `bin/`, and
+`WORKLOG_LDAP` the owning namespace. Verify the data remote and scope first.
+`direnv exec` loads environment but does not change directory; set cwd explicitly
+or use a subshell so a persistent shell cannot retarget the next code dispatch.
 
-For brittle state classification or handoff sequencing, read
-[references/examples.md](examples.md). Otherwise stay zero-shot.
+```bash
+# Set these paths to the verified data clone and helper directory first.
+(cd "$WORKLOG_REPO" && "$WORKLOG_BIN/context.sh" <slug> --for=resume)
+(cd "$WORKLOG_REPO" && "$WORKLOG_BIN/context.sh" <slug> --for=compact)
+```
 
-## Accept a handoff
+A valid explicit environment works without direnv. Only if Worklog itself is
+unavailable, use the host tracker and one authorized durable artifact; label
+`worklog-checkpoint: unavailable — <fallback reference>`. Hydrate the tracker
+according to the Worklog owner's dedupe rules. Shared writes belong to the parent.
 
-Use the existing compact pack; do not introduce another queue or schema:
+## Compact pack
 
-- `objective`: stable task identity and the accepted outcome.
-- `known evidence`: observed repository, revision, check commands/results, and
-  artifact references. A committed transfer names its exact SHA. A read-only
-  review can name HEAD plus a fingerprint of the scoped diff, including relevant
-  untracked files; it does not require making a commit.
-- `constraints`: assigned owner, allowed writes, shared surfaces, and acceptance
-  checks. Code isolation does not grant shared Worklog ownership.
-- `budget`: the remaining bounded work; a role change does not reset it.
-- `requested return`: the crew return contract and intended next owner.
+- `objective`: stable task identity and accepted outcome.
+- `known evidence`: repository, revision, checks/results and artifact references.
+  Uncommitted review names HEAD and a scoped diff fingerprint including relevant
+  untracked files. Do not label an uncommitted artifact as pushed.
+- `constraints`: ownership, allowed writes, shared surfaces, acceptance checks
+  and user corrections or exclusions.
+- `budget`: remaining declared work; role changes do not reset it.
+- `requested return`: evidence, uncertainty, next action, and intended owner.
 
-Recovery handles point to the existing task/state/artifact. Local observation,
-committed work, and remote delivery are different evidence claims.
+Recovery handles include state path, state fingerprint, terminal status, next
+action, typed evidence reference, and approval boundary. Send this pack instead
+of replaying the parent transcript. API conversation history is separate: leave
+history management to the host; a handoff summary does not authorize rewriting it.
 
-Before accepting a return, recheck task/repository identity and the reviewed
-revision or diff fingerprint. A changed head, base, or scoped diff invalidates
-its affected review evidence; replay those checks. Reconcile duplicate returns
-against the existing task/state history before advancing; never count the same
-accepted work twice. A no-op review still needs evidence of the accepted checks,
-but it needs no artificial commit or forced downstream handoff.
+## Accept a return or restart
 
-On restart, read the existing claim and state before accepting more work. Keep
-terminal predecessors immutable; use the protocol's bound successor when a
-resumable condition clears. A handoff or all-role broadcast never substitutes
-for the completion evidence gate.
+Recheck task/repository identity and revision or diff fingerprint. Changed head,
+base or scoped diff invalidates affected verification. Reconcile duplicates with
+the task history before advancing; count accepted work once. A retained worker
+name does not prove retained context: re-brief from the pack after a reset.
+Validate saved state and replay the recovery check before trusting intervention.
+Keep terminal predecessors immutable; follow [protocol.md](protocol.md) for resume.

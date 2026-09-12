@@ -1,103 +1,77 @@
-# Host capability routing
+# Host and operating-system capabilities
 
-Read only for installation, delegation primitives, recurrence, or host-specific
-tracking.
+Model identity does not establish tool availability, filesystem isolation,
+synchrony, cwd persistence or recurrence. Inspect the active tool schemas and
+verify the selected target. Use the same state/evidence contract on every host.
 
-## Shared contract
+## Session capability check
 
-- Keep `skills/loop-engineering/` as the single source.
-- Use only standard `name` and `description` frontmatter in `SKILL.md`.
-- Discover capabilities before invoking them.
-- Preserve the same run contract and terminal statuses on every host.
-- During an active invocation, keep cycling while state is `running`; progress
-  updates are not pause points.
-- Across invocations, continue only through a verified host recurrence
-  primitive. A prompt cannot manufacture background execution.
-- After intervention or a scheduled wakeup, the agent creates a successor state
-  bound to the terminal predecessor and replays the stopping check before
-  continuing. Treat supplied intervention as pending until that check passes.
-- For duplicate installations, run `scripts/install_audit.py --canonical <skill-dir>`. `--link-identical` replaces only byte-identical directories; any divergent root fails the whole preflight before writes. Pass the clone the roots actually load from as `--canonical <dir>`; verify with `scripts/install_audit.py --root <dir> --dry-run`, then repair with `--apply`; on divergence report the mismatch. Exit `0` clean, `2` usage error, `3` divergence (prints diff). Use `--root` for non-standard installs, otherwise resolve from `$HOME/.claude/skills`, `$HOME/.agents/skills`, and project-local `.agents/skills/`.
+| Capability | Establish | If unavailable |
+| --- | --- | --- |
+| Shell and Python | Interpreter path/version and actual cwd | Manual five-field state, labelled non-deterministic; no CLI verification claim |
+| Git and Bash | Repo root/remote; Bash required by crew tools | State-only loop; report unavailable radar |
+| Delegate dispatch | Current callable tool, permissions and sync/async behavior | Execute authorized work in-band |
+| Worker isolation | Separate code worktree/sandbox and correct repo per worker | Read-only parallel workers; parent is single writer |
+| Roster/messages/wait | Actual supported operations and worker identities | Parent tracks returns explicitly; do not invent mailbox tools |
+| Durable context | Verified Worklog environment or authorized store | Explicit local fallback and recovery limitation |
+| Recurrence | Authorized scheduler created and confirmed, with stop rule | `needs_human` when later execution is required |
 
-## Codex
+Use an event wait only when work depends on a pending result; otherwise continue
+independent work. A synchronous dispatch blocks its caller. A mailbox wait does
+not observe files. On any host, code isolation leaves shared Worklog serialized.
 
-- Discover shared skills from `~/.agents/skills/` or `~/.codex/skills/`.
-- Use the current task plan and available subagent tools for in-session tracking
-  and bounded delegation.
-- Keep issuing tool calls in the current task while state is `running`; do not
-  yield merely because one cycle ended.
-- Invoke the installed `worklog` skill for durable context and checkpoints.
-- For recurrence, use an available Codex automation; if none is callable, end
-  `needs_human`. Each heartbeat wakes the agent, which
-  resumes from the prior `continue_scheduled` state instead of reopening it.
+## Host discovery hints
 
-## Claude Code
+These are candidates to inspect, not guaranteed APIs:
 
-- Discover personal skills from `~/.claude/skills/`.
-- Use the available task tracker and Agent tool for in-session tracking and
-  bounded delegation.
-- Continue the current tool/agent sequence while state is `running`; do not end
-  the response between authorized cycles.
-- The driver is **pull-only**: it learns nothing until you call it, so a "loop"
-  left alone is a stopped loop. For recurrence use a real primitive —
-  `CronCreate` for scheduled runs, the `Monitor` tool or a `PostToolUse` hook to
-  arm `bin/crew-radar` (it runs no model and costs no tokens, so arming it is
-  free). Without one, finish `continue_scheduled` and say so; never imply a
-  cycle observed an interval it only sampled at both ends.
-- **A watch fingerprint must cover everything that changes independently.**
-  Leave one dimension out and you sleep through it. For a crew run that is at
-  least: delegate status, the conflict verdict, your own inbox, and delegate
-  *identity* (a reset delegate keeps its name). Narrowing one dimension is safe
-  only when another stays wide — drop a noisy worker from the status set and
-  you still wake on its blocked questions, but drop it from both and it has
-  gone dark. Normalise and dedupe the verdict so a recurring `info` row does
-  not re-wake you every tick.
-- **Sensors die quietly.** When the host or daemon behind a watch restarts, the
-  watch ends and nothing tells you; a run whose delegates came back and whose
-  orchestrator's watches did not looks healthy and is blind. After any such
-  restart, re-read state, rewrite the fingerprint, and re-arm before trusting a
-  quiet interval.
-- Delegate with the Agent tool's `isolation: "worktree"` when delegates write —- Delegate with the Agent tool's `isolation: "worktree"` when delegates write —
-  it is proven isolation on this host (see `references/crew.md`). Bare dispatch
-  shares the orchestrator's worktree and makes conflicts invisible to the radar.
-- Invoke `/worklog context <slug> --for=compact` before cold delegation and
-  pass the returned pack directly. Use `/worklog sync` for the protocol's
-  confirmation/checkpoint boundary.
-- Use Claude's real `/loop`, scheduled task, or hook capability only when exposed
-  and authorized. Each recurrence wakes the agent to resume a bound successor.
-  Otherwise end `needs_human`.
+| Host | Skill roots | Dispatch and tracking candidates |
+| --- | --- | --- |
+| Codex | `~/.agents/skills/`, `~/.codex/skills/` | `spawn_agent`, `list_agents`, `send_message`, `followup_task`, `wait_agent`, `interrupt_agent`; without an isolation option, delegates share files |
+| Claude Code | `~/.claude/skills/` | Agent and task tracker; if `isolation: "worktree"` is supported, request it and verify worker root/remote before writes |
+| Cursor | `~/.agents/skills/`, `~/.cursor/skills/`, project skill roots | Exposed todos/subagents; verify isolation |
+| OpenCode | Project-configured roots or repo `skills/` | `task` with exposed subagent types; inspect synchrony and resume support |
 
-## Cursor
+Resolve the loaded directory first; [resolvers.md](resolvers.md) carries tested
+fallback commands. Do not infer a dispatch directory from `loop_run.py --repo`.
+A worker checks `git rev-parse --show-toplevel`, expected source paths and
+`git remote get-url origin`; mismatch stops that worker before edits.
 
-- Discover user skills from `~/.agents/skills/` or Cursor's native
-  `~/.cursor/skills/`; project-local alternatives may use `.agents/skills/` or
-  `.cursor/skills/`.
-- Use Cursor todos and subagents when exposed.
-- Continue the active agent run while state is `running`; a todo update alone
-  is not a reason to pause.
-- Invoke the installed worklog skill or its documented helper commands for
-  durable context. If unavailable, use one durable project tracker and label the
-  fallback.
-- Use a configured Cursor automation or hook only after verifying it exists and
-  has a bounded stop rule. Each recurrence wakes the agent to resume a bound
-  successor. Otherwise end `needs_human`.
+## OS verification
 
-## OpenCode
+Python state/driver commands and Bash crew tools have different prerequisites.
+Run Bash examples with Bash rather than the login shell. Keep paths quoted and
+use `mktemp -d` or the host's temporary-directory API; do not assume GNU utilities.
 
-- Discover skills from the repo's `skills/` directory (see the Opencode resolver
-  in `SKILL.md`) or the project's configured skill root.
-- Delegate through the `task` tool (with a chosen `subagent_type`) and an
-  explicit child-slug description;
-  workers are read-only unless a private worktree is proven (see
-  `references/crew.md`).
-- Continue the active run while state is `running`; there is no mailbox wait —
-  begin the next cycle immediately.
-- Invoke the installed worklog skill via `$WORKLOG_BIN` host-agnostic paths for
-  durable context; label the fallback if unavailable.
-- No verified recurrence primitive is assumed; for scheduled continuation, end
-  `needs_human` unless one is discovered and verified.
+| Environment | Verification scope |
+| --- | --- |
+| macOS | Python CLI and `/bin/bash` fixtures, including Bash 3.2 behavior |
+| Linux | Same source and checks under the image's Python/Bash; record architecture |
+| Windows | Python commands may use `py -3`; Bash/Git crew checks require a verified WSL or compatible shell environment. Native PowerShell support is unverified until exercised |
 
-## Compatibility rule
+For a sibling sandbox, read its instructions, use the required non-root user,
+and test an identified source snapshot. Preserve shared containers and avoid
+forwarding credentials for offline fixtures. Record OS, architecture, interpreter,
+source identity, commands and exit status. Container tests prove that environment;
+they do not prove a model ran, a different architecture passed, or Windows works.
 
-Never encode a host-only hook, command substitution, tool name, or permission
-grant in the portable root skill. Keep host differences in this reference and
-degrade explicitly when a capability is absent.
+## Recurrence
+
+The driver is pull-only. Discover the current host's automation, scheduled task
+or hook only when later execution is requested. End `continue_scheduled` only
+after verifying an authorized wakeup. Without it, use `needs_human` with the
+missing capability and replay action. A prompt cannot manufacture a scheduler.
+After a wakeup, use a bound successor and replay the stopping check.
+
+An optional watch fingerprint must cover independent changes it claims to
+observe: worker identity/status, inbox and conflict verdict. Re-arm and verify
+the watcher after host restarts; a quiet or missing sensor is not health evidence.
+Keep monitoring bounded and report changes rather than repeating unchanged rows.
+
+## Installation
+
+Keep this skill as the canonical source. Inspect `scripts/install_audit.py --help`
+before consolidation. `--canonical <skill-dir> --link-identical` replaces only
+identical copies; any divergent root rejects all writes. Check `--root <dir>
+--dry-run` before an authorized `--apply`; nonstandard roots must be explicit.
+Exit 0 is clean, 2 usage error, 3 divergence. Installation permission is separate
+from permission to edit source. Never overwrite a divergent installed copy.

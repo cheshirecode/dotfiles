@@ -26,7 +26,7 @@ from pathlib import Path
 SKILL = Path(__file__).resolve().parent.parent / "SKILL.md"
 HEADING = "## Resolve the skill directory"
 # Every root the snippets search, relative to the hermetic $HOME or cwd.
-HOME_ROOTS = (".claude/skills", ".agents/skills", ".cursor/skills")
+HOME_ROOTS = (".claude/skills", ".agents/skills", ".codex/skills", ".cursor/skills")
 
 
 def snippets() -> list[tuple[str, str]]:
@@ -104,6 +104,17 @@ class SkillDirResolverTest(unittest.TestCase):
                     Path(got).is_dir(), "%s -> missing dir %s" % (label, got)
                 )
                 self.assertEqual(Path(got).name, "loop-engineering", got)
+
+    def test_codex_only_install_resolves_without_shared_agents_root(self) -> None:
+        home = self.root / "codex only home"
+        skill = home / ".codex/skills/loop-engineering"
+        (skill / "scripts").mkdir(parents=True)
+        (skill / "scripts/loop_state.py").touch()
+        repo = self.make_repo("codex-only-repo")
+        for label, command in snippets():
+            if label.lower().startswith(("codex", "fallback")):
+                with self.subTest(label=label):
+                    self.assertEqual(self.resolve(command, home, repo), str(skill))
 
     def test_snippets_return_empty_when_the_skill_is_absent(self) -> None:
         # The red case. Observed 2026-09-03: the opencode/worktree snippet
