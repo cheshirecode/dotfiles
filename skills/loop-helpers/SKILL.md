@@ -82,7 +82,10 @@ returns. `caveman tools config set` also accepts an unknown model id without
 complaint, so a typo there is caught by nothing — this gate's `skip` is the
 only place a wrong id is reported.
 
-For the historical CLI probe and version, read [references/pixel-verification.md](references/pixel-verification.md) when diagnosing model recognition.
+When diagnosing model recognition, inspect the installed CLI help and compare
+`caveman-engine pixel simulate --model <id>` with an unknown-id control. A command
+accepting an id does not prove recognition; record the current tool version and
+observed geometry before claiming support.
 
 The helper never claims a token saving is verified: the caller supplies
 measured evidence.

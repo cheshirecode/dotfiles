@@ -24,3 +24,32 @@ or CCR; never rebuild a handoff by replaying the parent transcript.
 
 For brittle state classification or handoff sequencing, read
 [references/examples.md](examples.md). Otherwise stay zero-shot.
+
+## Accept a handoff
+
+Use the existing compact pack; do not introduce another queue or schema:
+
+- `objective`: stable task identity and the accepted outcome.
+- `known evidence`: observed repository, revision, check commands/results, and
+  artifact references. A committed transfer names its exact SHA. A read-only
+  review can name HEAD plus a fingerprint of the scoped diff, including relevant
+  untracked files; it does not require making a commit.
+- `constraints`: assigned owner, allowed writes, shared surfaces, and acceptance
+  checks. Code isolation does not grant shared Worklog ownership.
+- `budget`: the remaining bounded work; a role change does not reset it.
+- `requested return`: the crew return contract and intended next owner.
+
+Recovery handles point to the existing task/state/artifact. Local observation,
+committed work, and remote delivery are different evidence claims.
+
+Before accepting a return, recheck task/repository identity and the reviewed
+revision or diff fingerprint. A changed head, base, or scoped diff invalidates
+its affected review evidence; replay those checks. Reconcile duplicate returns
+against the existing task/state history before advancing; never count the same
+accepted work twice. A no-op review still needs evidence of the accepted checks,
+but it needs no artificial commit or forced downstream handoff.
+
+On restart, read the existing claim and state before accepting more work. Keep
+terminal predecessors immutable; use the protocol's bound successor when a
+resumable condition clears. A handoff or all-role broadcast never substitutes
+for the completion evidence gate.

@@ -383,7 +383,7 @@ checks = {
         and "verify state ownership" in protocol
     ),
     # Exact-set, so a legitimately added reference must be declared here.
-    "host differences deferred": references == {"crew.md", "examples.md", "hosts.md", "interrogate.md", "orchestrator.md", "protocol.md", "transport.md", "resolvers.md", "durable-context.md"},
+    "host differences deferred": references == {"crew.md", "examples.md", "hosts.md", "interrogate.md", "orchestrator.md", "protocol.md", "transport.md", "resolvers.md", "durable-context.md", "quality.md"},
     # Plan interrogation is a gate, not a vibe: the root must route to it, the
     # reference must keep the one-question protocol, the skip line, the council
     # escalation, and a verdict that can refuse init.
