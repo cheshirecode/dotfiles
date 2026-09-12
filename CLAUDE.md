@@ -35,17 +35,14 @@ if work starts there, port or merge the exact changes back into the primary
 there. Do not let "detached HEAD" in a temporary worktree silently turn a
 direct-main request into a side branch.
 
-## Test discipline (lesson from the 2026-09-02 skills audit)
+## Test discipline
 
 **Prove a new test red before shipping it.** Run it against the unfixed code,
 confirm it fails, and confirm *which* assertions fail. A test that passes both
 ways is worse than no test: it certifies the bug.
 
-This is mechanical, not a principle to keep in mind. During the audit that
-produced this rule, three separate assertions were written that matched a
-summary line (`0 stale, 0 live, ...`) instead of a table row, so they passed
-against the very code they were meant to catch — each one written *after* the
-previous had been caught the same way.
+Match the intended record or behavior precisely. An assertion that matches a
+summary instead of the target row can pass while the defect remains.
 
 The recurring defect shape in this repo is **a pattern that matches something
 adjacent to what was meant**:
