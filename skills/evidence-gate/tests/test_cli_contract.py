@@ -1,28 +1,8 @@
 #!/usr/bin/env python3
-"""Pin the CLI surface other skills were told to rely on.
+"""Verify the evidence-gate CLI used by completion workflows.
 
-loop-engineering's SKILL.md gives its users three specific instructions about
-THIS script:
-
-  1. "The evidence_gate.py from the installed evidence-gate skill exposes
-     --quiet only on check and show"
-  2. "redirect successful init/record stdout to /dev/null when compact output
-     is needed"  -- which is only necessary because they have no --quiet
-  3. "run the final check WITHOUT --quiet -- its index line omits the
-     verification value step 6 requires"
-
-All three were true and asserted by nothing on either side. Adding --quiet to
-record, or folding the verification value into the quiet line, would leave a
-sibling skill giving instructions that are quietly wrong -- and the failure
-lands on the loop, which records an empty verification and calls the run
-complete.
-
-These live in evidence-gate's suite rather than loop-engineering's on purpose:
-the failure has to fire for whoever edits this parser, not for whoever later
-reads the other skill.
-
-Also covers validate_gate's own rules, which had no fixtures. A validator that
-has never rejected anything is not known to reject anything.
+Executable loop-engineering documentation covers its cross-skill consumer.
+These tests preserve parser flags, verification output and rejection behavior.
 """
 
 from __future__ import annotations
@@ -35,7 +15,6 @@ import tempfile
 import unittest
 
 SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "scripts" / "evidence_gate.py"
-LOOP_SKILL = SCRIPT.parents[2] / "loop-engineering" / "SKILL.md"
 
 
 class CliContractTest(unittest.TestCase):
@@ -99,16 +78,6 @@ class CliContractTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertNotIn("sha256=", proc.stdout)
         self.assertEqual(proc.stdout.strip(), "satisfied 1/1")
-
-    def test_the_sibling_skill_still_makes_these_claims(self) -> None:
-        # If loop-engineering stops depending on this contract, these tests
-        # are ceremony and should go. Assert the dependency exists rather than
-        # maintaining a pin for a reader who left.
-        if not LOOP_SKILL.is_file():
-            self.skipTest("loop-engineering is not a sibling of this checkout")
-        text = LOOP_SKILL.read_text()
-        self.assertIn("--quiet", text)
-        self.assertIn("exposes `--quiet` only on `check` and `show`", text)
 
     def test_unsatisfied_check_exits_1_as_a_verdict(self) -> None:
         # recording.md: "exit 1 is the verdict, not a failure."
