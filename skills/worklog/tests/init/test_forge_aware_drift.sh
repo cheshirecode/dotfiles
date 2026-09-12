@@ -98,9 +98,15 @@ for d in /usr/bin /bin; do
     [ -x "$f" ] && [ ! -d "$f" ] || continue
     base="${f##*/}"
     case "$base" in gh|glab) continue ;; esac
-    [ -e "$MIRROR/$base" ] || ln -sf "$f" "$MIRROR/$base"
+    ln -sf "$f" "$MIRROR/$base"
   done
 done
+# forge-prs.sh parses the stub payloads with jq. jq is not always in /usr/bin
+# (brew, uv, and the like install it elsewhere), and the mirror above would
+# strip it — the GitLab assertions would then fail with 'unknown'/0 rows for a
+# fixture reason that has nothing to do with the script under test. Carry the
+# host's jq into the mirror when it exists.
+if jq_path="$(command -v jq)"; then ln -sf "$jq_path" "$MIRROR/jq"; fi
 export PATH="$STUB:$MIRROR"
 
 # Self-check: if PATH pinning did not take, every assertion below would be
