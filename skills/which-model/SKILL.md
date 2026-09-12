@@ -13,22 +13,7 @@ Skip optional delegation routing when no delegate surface exists or in-band work
 
 Use this file's load directory as `$SKILL_ROOT` when it contains `bin/model-catalog`. Only if the load path is unknown or a flattening installer separated the payload, run this fallback:
 
-```bash
-SKILL_ROOT=""
-for d in "$PWD/skills/which-model" \
-         "$HOME/.agents/skills/which-model" \
-         "$HOME/.codex/skills/which-model" \
-         "$HOME/.claude/which-model" \
-         "$HOME/.claude/skills/which-model" \
-         "${SUPER_RULER:-$HOME/.super-ruler}/.ruler/skills/which-model" \
-         "/workspace/super-ruler/.ruler/skills/which-model" \
-         "$HOME/super-ruler/.ruler/skills/which-model" \
-         "$PWD/.claude/skills/which-model" \
-         "$PWD"; do
-  if [ -x "$d/bin/model-catalog" ]; then SKILL_ROOT="$d"; break; fi
-done
-echo "${SKILL_ROOT:-not found}"
-```
+Read [resolver.md](references/resolver.md) and execute its fallback.
 
 Resolve every `bin/…` and `references/…` path below under `$SKILL_ROOT`.
 If missing, print the guideline and availability gate, say the payload is
