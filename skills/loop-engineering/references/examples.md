@@ -143,37 +143,20 @@ INPUT
 OUTPUT (agent decomposes, creates project, cycles through tasks)
 
 ```text
-[sequential-thinking: 3 tasks identified — lint-all-skills, fix-sh-preamble, fix-py-errors]
-[budget: 999 (safety net; real limit is queue emptiness)]
-[project new: shellcheck-audit with 3 children]
-[cycle 1: claim lint-all-skills → context --for=compact → delegate → return archived lint-all-skills <sha> → advance]
-[         advance evidence: "lint-all-skills: archived"]
-[cycle 2: claim fix-sh-preamble → in-band → archive → advance]
-[         advance evidence: "fix-sh-preamble: archived"]
-[cycle 3: claim fix-py-errors → delegate → archive → advance]
-[         advance evidence: "fix-py-errors: archived"]
-[project next reports "all tasks ... are archived (nothing left)" + project verify exits 0 → finish complete]
+[project: three declared tasks; user budget retained]
+[claim child → compact context → authorized delegate or in-band work]
+[worker return: evidence, uncertainty, next action]
+[parent: verify repo/revision and checks → checkpoint/archive shared Worklog]
+[advance once: "git: <worklog-sha> — <slug>: archived"]
+[repeat for remaining children; duplicate messages do not advance]
+[empty queue + goal evidence-gate + project verify + parent archive push → complete]
 ```
 
-Same prompt in natural language:
-
-> Use loop-engineering. Goal: audit skills for shellcheck
-> regressions.
-
-Mid-run escalation is resumable, not terminal:
-
-```text
-[cycle 2: independent returns disagree → council foreground → verified verdict]
-[         replay check passes → archive fix-py-errors → advance once]
-```
-
-No manual JSON creation. No separate setup turn. Loop state is ~1KB even at
-100+ cycles because evidence is one line per task — all detail lives in
-worklog commits.
-
-Delegate return contract: `archived <slug> <sha>` is the success case;
-`blocked <slug> <reason>` preserves a non-success outcome without returning a
-full task narrative.
+A blocked worker preserves its failure and replay action in the return. The parent
+records the corresponding resumable status rather than archiving unverified work.
+A changed reviewed revision requires rechecking affected evidence before acceptance.
+Use [crew.md](crew.md) for ownership and [orchestrator.md](orchestrator.md) for
+project completion commands.
 
 ## 5. Discovery keyed on a join dimension
 
