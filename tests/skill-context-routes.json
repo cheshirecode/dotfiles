@@ -1,0 +1,122 @@
+{
+  "loop-observe": {
+    "before": [
+      "skills/loop-engineering/SKILL.md"
+    ],
+    "after": [
+      "skills/loop-engineering/SKILL.md"
+    ]
+  },
+  "loop-mutate": {
+    "before": [
+      "skills/loop-engineering/SKILL.md",
+      "skills/loop-engineering/references/protocol.md"
+    ],
+    "after": [
+      "skills/loop-engineering/SKILL.md",
+      "skills/loop-engineering/references/effects.md"
+    ]
+  },
+  "loop-compose": {
+    "before": [
+      "skills/loop-engineering/SKILL.md"
+    ],
+    "after": [
+      "skills/loop-engineering/SKILL.md",
+      "skills/loop-engineering/references/composition.md"
+    ]
+  },
+  "loop-compose-recover-mutate": {
+    "before": [
+      "skills/loop-engineering/SKILL.md",
+      "skills/loop-engineering/references/protocol.md"
+    ],
+    "after": [
+      "skills/loop-engineering/SKILL.md",
+      "skills/loop-engineering/references/composition.md",
+      "skills/loop-engineering/references/protocol.md",
+      "skills/loop-engineering/references/effects.md"
+    ]
+  },
+  "context-pack": {
+    "before": [
+      "skills/loop-helpers/SKILL.md"
+    ],
+    "after": [
+      "skills/loop-helpers/SKILL.md"
+    ]
+  },
+  "context-pack-missing-path": {
+    "before": [
+      "skills/loop-helpers/SKILL.md"
+    ],
+    "after": [
+      "skills/loop-helpers/SKILL.md",
+      "skills/loop-helpers/references/resolver.md"
+    ]
+  },
+  "context-pack-and-transport-missing-path": {
+    "before": [
+      "skills/loop-helpers/SKILL.md"
+    ],
+    "after": [
+      "skills/loop-helpers/SKILL.md",
+      "skills/loop-helpers/references/resolver.md",
+      "skills/loop-helpers/references/transport.md"
+    ]
+  },
+  "model-guideline-known-path": {
+    "before": [
+      "skills/which-model/SKILL.md"
+    ],
+    "after": [
+      "skills/which-model/SKILL.md"
+    ]
+  },
+  "model-guideline-missing-path": {
+    "before": [
+      "skills/which-model/SKILL.md"
+    ],
+    "after": [
+      "skills/which-model/SKILL.md",
+      "skills/which-model/references/resolver.md"
+    ]
+  },
+  "loop-complete": {
+    "before": [
+      "skills/loop-engineering/SKILL.md",
+      "skills/loop-engineering/references/protocol.md",
+      "skills/evidence-gate/SKILL.md",
+      "skills/evidence-gate/references/recording.md"
+    ],
+    "after": [
+      "skills/loop-engineering/SKILL.md",
+      "skills/loop-engineering/references/effects.md",
+      "skills/evidence-gate/SKILL.md",
+      "skills/evidence-gate/references/recording.md"
+    ]
+  },
+  "model-task-known-path": {
+    "before": [
+      "skills/which-model/SKILL.md",
+      "skills/which-model/references/routing.md"
+    ],
+    "after": [
+      "skills/which-model/SKILL.md",
+      "skills/which-model/references/routing.md"
+    ]
+  },
+  "model-catalog-missing-path": {
+    "before": [
+      "skills/which-model/SKILL.md",
+      "skills/which-model/references/routing.md",
+      "skills/which-model/references/catalog.md"
+    ],
+    "after": [
+      "skills/which-model/SKILL.md",
+      "skills/which-model/references/resolver.md",
+      "skills/which-model/references/routing.md",
+      "skills/which-model/references/catalog.md"
+    ]
+  }
+}

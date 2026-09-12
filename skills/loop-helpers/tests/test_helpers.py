@@ -190,7 +190,9 @@ class PixelModelContractTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        self.skill = (SKILL_DIR / "SKILL.md").read_text()
+        root = (SKILL_DIR / "SKILL.md").read_text()
+        self.assertIn("(references/transport.md)", root)
+        self.skill = (SKILL_DIR / "references/transport.md").read_text()
 
     def test_default_models_are_the_documented_ones(self) -> None:
         for model in default_models():
@@ -204,7 +206,7 @@ class PixelModelContractTest(unittest.TestCase):
         # A claim about another tool's model ids goes stale silently. Naming
         # the version it was measured against is what makes the next reader
         # able to tell whether it still holds.
-        self.assertIn("references/pixel-verification.md", self.skill)
+        self.assertIn("(pixel-verification.md)", self.skill)
         evidence = (SKILL_DIR / "references/pixel-verification.md").read_text()
         self.assertIn("bin-v1.1.4", evidence)
         self.assertIn("pixel simulate", evidence)

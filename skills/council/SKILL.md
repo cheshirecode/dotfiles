@@ -18,8 +18,6 @@ Resolve `<skill-dir>` as this `SKILL.md` file's directory.
 
 Skip if: the question has a clear single right answer, you already know the trade-offs, or the scope is one-shot (just ask one agent).
 
-If the user says not to use a worklog, do not create, update, or suggest a worklog artifact for this council unless they opt in later.
-
 ## Stages
 
 | # | Stage | What | Sub-agents | Sync/async |
@@ -85,12 +83,9 @@ Before tallying, validate every ballot:
 - QUALIFY condition resolved before conclusion -> count as 0.5 support and state the resolution.
 - QUALIFY condition not resolved -> count that ballot as non-support and mark the item `UNVERIFIED` if unresolved conditions determine the outcome. Do not silently count unresolved conditions.
 
-## Numeric guidance
-
-- Independent fanout stages below 2 sub-agents defeat independence. This applies to Stage 1 research and Stage 5 voting, not to the single-agent discussion/collation stages.
-- Voters: always >=3, odd, recommended 3 or 5. 2 voters can deadlock (1-1), which the Iron Laws reject.
-- Sub-agent prompts longer than about 800 words signal scope creep. Split the angle.
-- Quick reference: support threshold is `ceil(M_returned / 2 + 1)` for odd returned voter counts only: M=3 threshold 3, M=5 threshold 4, M=7 threshold 5. M=2 or M=4 is `UNVERIFIED` until a replacement voter restores an odd count.
+Prefer 3 or 5 voters. Threshold examples: M=3 threshold 3, M=5 threshold 4,
+M=7 threshold 5. M=2 or M=4 is `UNVERIFIED` until a replacement restores an
+odd count. Keep each agent prompt under about 800 words; split oversized angles.
 
 ## Model tiering per stage
 
@@ -110,17 +105,13 @@ a survival status never reaches the ballot.
 
 ## Execution
 
-Follow the stage order in the Stages table. Before spawning a stage agent, read
-`references/templates.md` and use the matching template. Collect Stage 1 IDs
-and evidence into Stage 2; carry the four candidate fields unchanged through
-Stage 4, with Stage 3 assigning survival status to every candidate, including
-its own `D-iN` items. Save returned ballots verbatim to system temporary files.
+Follow the Stages table and the matching prompt in `references/templates.md`.
+Collect Stage 1 IDs and evidence into Stage 2; preserve candidate fields through
+Stage 4, with Stage 3 assigning survival status. Save ballots verbatim in system temp.
 At Stage 6 apply the validator and tally rules above before reporting.
 
-Finish all six stages in one invocation. Stage 1 alone may run in the background;
-wait for quorum or its timeout, then continue foreground. Exhausted retries
-permit continuation only under the quorum rules; label incomplete evidence
-`UNVERIFIED` rather than returning a partial success.
+Finish all six stages in one invocation, subject to the quorum and retry rules.
+Label incomplete evidence `UNVERIFIED`.
 
 ## Output format
 
@@ -133,7 +124,9 @@ stage progress; the final answer is the decision, not the progress log.
 - **Token budget line before fanout.** Before spawning N sub-agents, emit a one-line estimate. Refuse >20k tokens of simultaneous research without explicit user OK.
 - **Verify absence claims before voters see them.** Any "verified fact" of absence fed to voters (zero callers, zero tests, unused) must be orchestrator-verified with a concrete search first — one angle's absence claim can be contradicted by another angle's findings, and a REJECT veto resting on an unverified absence claim is invalid. If a veto's factual basis turns out false at tally time, mark the item UNVERIFIED and state the correction rather than honoring the veto.
 - **Fresh-agent invocations per stage.** Siblings in the same stage share no parent context beyond their prompt. Across stages, pass only the explicit deliverable.
-- **Worklog default.** If the user says no worklog tracking, do not invoke `/worklog plan` or write task notes for that council.
+- **Worklog default.** If the user says no worklog tracking, do not create,
+  update, or suggest Worklog artifacts unless they opt in later. Otherwise the
+  kept list may feed `/worklog plan <task>`.
 
 ## Stage discipline
 
@@ -147,4 +140,3 @@ Verify time-sensitive factual claims before feeding them to voters.
 - Use the host’s available subagent primitive with independent stage prompts. Never assume another harness’s tool name or custom agent type.
 - `$karpathy-guidelines`: the council criteria above operationalize Think-Before, Simplicity-First, Surgical-Changes, and Goal-Driven.
 - For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.
-- `$worklog`: optionally feed the kept list into `/worklog plan <task>`, subject to the Worklog default above.

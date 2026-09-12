@@ -7,7 +7,8 @@ description: "Periodic multi-PR sweep — dashboard of open PRs across repos. Su
 
 `bin/leak-scan.sh` is a compatibility launcher requiring installed `pr-review`; the scanner and token list live there.
 
-**Delegates per-PR operations to `$pr-review`** (code review, self-check, closeout). This skill owns the **multi-PR dashboard sweep** only.
+This skill owns the multi-PR dashboard. `$pr-review` owns individual reviews
+and closeouts. Flag suspicious PRs here; let that skill inspect them.
 
 ## Resolve `$WORKLOG_BIN`
 
@@ -22,12 +23,8 @@ This skill invokes worklog scripts via `$WORKLOG_BIN`. `worklog/SKILL.md` owns h
 
 Skip if: only one PR open, body is short, no recent worklog activity. Overhead not earned.
 
-## Surfaces + verbs
-
-1. **Worklog task body** — `people/$LDAP/active/<slug>.md`. Verb: **compress**. Keep lessons, gotchas, decisions, re-runnable commands. Drop scaffolding once decided.
-2. **Open PR titles+bodies** — aggregate across repos. Delegates per-PR deep analysis (title audit, body coherence, leak-scan) to `$pr-review` in review mode for each flagged PR.
-3. **PR stack health** — CI red, unresolved comments, missing approvals. Verb: **surface, not auto-fix**. Triage systemic vs per-PR; distinguish reviewer comments from bot noise.
-4. **Post-merge cleanup readiness** — worktree, branch, preview deploy. Verb: **prepare a note, never execute pre-merge**. Persist teardown commands as a `[POST-MERGE-CLEANUP]` note in the worklog task.
+Surface CI failures, unresolved review, and missing approvals; do not auto-fix
+them. Prepare cleanup notes only; never tear down an open PR's resources.
 
 ## Recipe
 
@@ -39,9 +36,7 @@ Skip if: only one PR open, body is short, no recent worklog activity. Overhead n
 6. **Flag suspicious PRs, then hand each one to `$pr-review`.** Flag on the
    dashboard signals only: a body over 5KB, a title with no Conv-Commit prefix,
    red CI, or an unanswered reviewer comment. Then invoke `$pr-review review #N`
-   per flagged PR and let it run the deep checks — forge and ownership
-   detection, leak-scan, title audit, body coherence, commit-set-to-title
-   matching. Do not call pr-review's scripts by path: the two skills install
+   per flagged PR. Do not call pr-review's scripts by path: the two skills install
    into separate directories, so a relative path between them resolves only by
    accident.
 7. **CI triage:** group failed checks by name. If the same check fails on N>1 PRs, inspect logs for a shared cause before calling it systemic. Group a confirmed shared cause into one actionable line.
@@ -77,18 +72,14 @@ Skip if: only one PR open, body is short, no recent worklog activity. Overhead n
   Recorded as [POST-MERGE-CLEANUP] in <slug>.
 ```
 
-## Anti-patterns to reject
+## Boundaries
 
-- Blind-editing 20 PR titles for stylistic consistency — Conv-Commit minor variations are not slop.
-- Rewriting PR bodies wholesale — they're the contract the reviewer agreed to read.
-- Bundling unrelated worklog edits into the same checkpoint commit — breaks per-slug audit trail.
-- "Resolving" reviewer threads by silently editing the PR body without acknowledging in a reply.
-- Skipping the systemic-check triage step — fixing the same CI workflow bug per-PR wastes time.
-- Running worktree/branch/preview teardown while the PR is still open — it kills the reviewer's preview and orphans the branch. Prepare the note; execute only after merge.
-- Leaking internal artifacts into reviewer-facing text — worklog slugs, `[POST-MERGE-CLEANUP]`, skill names, "Iteration N", agent-process narration in a PR title/body or code comment. Strip them. Conversely, don't over-purge a pure-engineering PR into vague product-speak — keep it technically precise, just drop the internal-tooling chatter.
+Do not rewrite PR titles/bodies for stylistic consistency or treat a body edit
+as a reply to a reviewer. Keep reviewer-facing text technically precise and
+free of internal Worklog/skill/process details. Posting messages requires
+authorization already given in the conversation or obtained before posting.
 
 ## Pairings
 
-- `$pr-review` — delegates per-PR deep inspection (self-check, other-review, closeout). Ship-hygiene does NOT perform per-PR deslop itself anymore.
 - `karpathy-guidelines` — apply during the title/body flagging step. "Don't refactor what isn't broken" — most PRs need nothing.
 - For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 1-3 examples, skip if obvious.

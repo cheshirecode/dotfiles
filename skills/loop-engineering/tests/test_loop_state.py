@@ -138,18 +138,18 @@ class LoopStateTest(unittest.TestCase):
             "one action + one check",
             "repeated, resumable, or delegated work",
             "recurrence or installation drift",
-            "exact transition, effect, worklog, or handoff question",
+            "mutation or effect-boundary question",
+            "exact transition, worklog, or handoff question",
         ):
             self.assertIn(signal, route)
         self.assertIn("load only the needed rules", route)
-        for name in ("interrogate", "crew", "hosts", "protocol"):
+        for name in ("interrogate", "crew", "hosts", "effects", "protocol"):
             self.assertIn(f"(references/{name}.md)", route)
 
     def test_compositional_route_declares_owner_trigger_handoff_and_skip(self) -> None:
         skill_text = SKILL.read_text()
-        routing = section(
-            skill_text, "## Compose with installed skills", H_DRIVE
-        )
+        self.assertIn("(references/composition.md)", skill_text)
+        routing = (SKILL.parent / "references/composition.md").read_text()
         for owner in (
             "$serena-rg-search",
             "$worklog",
@@ -204,7 +204,10 @@ class LoopStateTest(unittest.TestCase):
 
     def test_protocol_requires_effect_preflight_before_mutation(self) -> None:
         protocol = (SKILL.parent / "references" / "protocol.md").read_text()
-        preflight = protocol.split("Before every mutation", 1)[1]
+        self.assertIn("(effects.md)", protocol)
+        self.assertIn("(references/effects.md)", SKILL.read_text())
+        effects = (SKILL.parent / "references/effects.md").read_text()
+        preflight = effects.split("Before every mutation", 1)[1]
         for question in (
             "What exact path, provider, or person",
             "Is that target listed in `allowed_effects`",
@@ -249,9 +252,9 @@ class LoopStateTest(unittest.TestCase):
 
     def test_model_routing_is_optional_and_availability_gated(self) -> None:
         skill_text = SKILL.read_text()
-        routing = skill_text.split("### Optional model routing", 1)[1].split(
-            "## Run one bounded cycle", 1
-        )[0]
+        pointer = section(skill_text, "### Optional model routing", "### Optional payload transport")
+        self.assertIn("(references/composition.md)", pointer)
+        routing = (SKILL.parent / "references/composition.md").read_text()
         self.assertIn("$which-model", routing)
         self.assertIn("current harness exposes it", routing)
         self.assertIn("availability gate", routing)

@@ -11,18 +11,10 @@ parent transcript, or rewrite a canonical skill.
 
 ## Resolve the skill directory
 
-Resolve `<skill-dir>` to the directory containing this `SKILL.md`. If uncertain,
-search for `context_pack.py` under the skill roots.
-`loop-engineering/references/resolvers.md` owns this resolver pattern, including the per-host variants and the fixture that executes them; the line below is the same pattern with this skill's own sentinel file.
-
-```bash
-# Roots checked in order; empty when absent — never a bogus "./..":
-SKILL_DIR="$(for r in ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills; do f=$(find -L "$r" -name context_pack.py -print -quit 2>/dev/null); [ -n "$f" ] && { dirname "$(dirname "$f")"; break; }; done)"
-```
-
-This skill is `optional: true`, so it is often absent. When `$SKILL_DIR`
-resolves empty, do not guess a path — record `transport-gate: skipped — not
-installed` (or `context-pack: skipped — not installed`) and continue.
+Use this file's load directory as `<skill-dir>`. Only if unavailable, read
+[resolver.md](references/resolver.md). If the optional payload is absent, record
+`context-pack: skipped — not installed` or `transport-gate: skipped — not installed`.
+Do not guess paths or install anything.
 
 ## Compact context pack
 
@@ -44,48 +36,9 @@ write it to a system temporary file; never append the parent transcript.
 
 ## Transport gate
 
-Ask the helper for a decision before invoking Caveman. The caller supplies the
-facts that cannot be inferred safely from a filename: authorization, measured
-win, recovery, producer-status preservation, density, and model legibility.
+Only for a shrink, convert, or pixel decision, read
+[transport.md](references/transport.md). It owns flags, allowlist requirements,
+and fail-open semantics. Do not read it for context-pack requests.
 
-```bash
-python3 <skill-dir>/scripts/transport_gate.py \
-  --mode pixel --authorized --measured-win --recoverable \
-  --dense --legible --model "<model>"
-```
-
-`decision=use` is permission to run the chosen documented command. Any
-`decision=skip` keeps the original bytes and records the reason. The helper
-**always exits 0** in both the use and the skip case: parse `decision=` from
-stdout, never gate on exit status.
-
-Each mode has one extra requirement and the flag that satisfies it:
-
-- `shrink` — producer status preserved: `--producer-status-preserved`
-- `convert` — an installed copy exists: `--installed-copy`
-- `pixel` — a dense, legible payload for a configured model: `--dense
-  --legible --model <id>`
-
-`CAVE_PIXEL_MODELS` is the comma-separated allowlist of model ids that read
-pixel payloads, and it is a real Caveman variable: the CLI applies it to
-`think.pixel.models`. It defaults here to `claude-fable-5,gpt-5.6`; both are
-current ids that Caveman's engine recognises, so the defaults are usable as
-they stand. Add the ids actually in use rather than replacing them:
-`CAVE_PIXEL_MODELS="<id>,<id>"`. An unlisted `--model` returns
-`decision=skip reason=model-not-configured hint=set-CAVE_PIXEL_MODELS`.
-
-**`decision=use` is not sufficient on its own.** Caveman ships pixel *off*:
-`think.pixel.models` is `[]` by default, and an empty list passes no allowlist
-to the proxy at all. This gate answers "should we attempt pixel", using its own
-list; Caveman must be configured separately or it will not pixel whatever this
-returns. `caveman tools config set` also accepts an unknown model id without
-complaint, so a typo there is caught by nothing — this gate's `skip` is the
-only place a wrong id is reported.
-
-For the historical CLI probe and version, read [references/pixel-verification.md](references/pixel-verification.md) when diagnosing model recognition.
-
-The helper never claims a token saving is verified: the caller supplies
-measured evidence.
-
-For readable visible updates, follow the "Compaction-friendly output" section
-of the `loop-engineering` skill. Do not duplicate its output boundary here.
+Return the helper result or its artifact path concisely. Formatting a result
+does not require loading another skill.

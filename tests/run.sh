@@ -247,7 +247,7 @@ checks = {
         and "Approval must be explicit enough to cite" not in root,
     "Kimi detail deferred": "`kimi-k3`" in routing and "`kimi-k3`" not in root,
     "catalog helper deferred": "bin/model-catalog --env auto" in catalog and "--refresh-if-stale" not in root,
-    "references one level deep": reference_names == {"routing.md", "catalog.md"},
+    "references one level deep": reference_names == {"routing.md", "catalog.md", "resolver.md"},
 }
 missing = [name for name, passed in checks.items() if not passed]
 if missing:
@@ -283,6 +283,7 @@ import pathlib
 skill = pathlib.Path("skills/loop-engineering")
 root = (skill / "SKILL.md").read_text()
 examples = (skill / "references/examples.md").read_text()
+composition = (skill / "references/composition.md").read_text()
 hosts = (skill / "references/hosts.md").read_text()
 protocol = (skill / "references/protocol.md").read_text()
 orchestrator = (skill / "references/orchestrator.md").read_text()
@@ -321,7 +322,8 @@ checks = {
     "worklog checkpoint route": "persist arbitrary evidence or task-body changes" in protocol,
     "terminal evidence rule": "model's prose claim is not evidence" in root,
     "typed evidence rule": "one typed line" in root and "index, not a log" in root,
-    "optional model route": "$which-model" in root and "model-routing: skipped" in root,
+    "optional model route": "(references/composition.md)" in root
+        and "$which-model" in composition and "model-routing: skipped" in root,
     # Orchestrator-only rules moved to references/orchestrator.md with the mode;
     # the contract follows the content rather than pinning it to the root.
     # d835104 shipped `project.sh add-child`; three docs kept describing the
@@ -383,7 +385,7 @@ checks = {
         and "verify state ownership" in protocol
     ),
     # Exact-set, so a legitimately added reference must be declared here.
-    "host differences deferred": references == {"crew.md", "examples.md", "hosts.md", "interrogate.md", "orchestrator.md", "protocol.md", "transport.md", "resolvers.md", "durable-context.md"},
+    "host differences deferred": references == {"crew.md", "examples.md", "hosts.md", "interrogate.md", "orchestrator.md", "protocol.md", "transport.md", "resolvers.md", "durable-context.md", "composition.md", "effects.md"},
     # Plan interrogation is a gate, not a vibe: the root must route to it, the
     # reference must keep the one-question protocol, the skip line, the council
     # escalation, and a verdict that can refuse init.
@@ -601,6 +603,12 @@ PY
 
 # Council items #1, #6: fixture-driven red-path tests for guardrails.
 test_fixtures() {
+  local context_out
+  if context_out=$(python3 -m unittest discover -s tests -p test_skill_context.py 2>&1); then
+    ok "skill context measurement fixtures"
+  else
+    fail_with_output "skill context measurement fixtures" "$context_out"
+  fi
   echo "=== fixtures (red-path guardrail tests) ==="
   local python_site_path
   python_site_path=$(python3 - <<'PY'
