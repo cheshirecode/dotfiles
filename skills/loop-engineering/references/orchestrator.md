@@ -4,34 +4,15 @@ Use when a high-level goal decomposes into 3+ independent tasks managed across
 sub-agents. The agent acts as project manager: decompose, dispatch, verify,
 track.
 
-**Token efficiency is critical.** This mode is designed for sessions that run
-days or weeks. Every token the orchestrator spends on per-task detail is a
-token it cannot spend on dispatch. Follow these rules:
+Keep detailed evidence in Worklog and record one typed index line per cycle:
+`git: <worklog-sha> — <slug>: archived`. The parent verifies worker evidence and
+serializes shared checkpoint/archive operations under [crew.md](crew.md).
+Do not turn a worker's completion claim into verified progress without checking it.
 
-- **Evidence in loop_state is one line per cycle.** Just
-  `<slug>: archived`. Per-task evidence lives in worklog task files
-  (committed by the sub-agent), not in the orchestrator's memory.
-- **Bulk generation offloading.** Never generate 3 or more repetitive structured files
-  or template expansions in-band on frontier orchestrator tokens. Prepare a compact
-  spec pack and delegate generation to a low-cost sub-agent (`mechanical` / utility model)
-  to cut generation token costs by >85%.
-- **Never re-read sub-agent output.** Check that the sub-agent completed
-  (`archive.sh` pushed successfully) and move on. The worklog commit is the
-  evidence, not the orchestrator's recollection. This governs the *completion
-  signal* only — see "Relaying a delegate's claim" below before any conclusion
-  of a delegate's travels further.
-- **Sub-agents own verification.** The sub-agent runs verification, writes
-  results to the task file, checkpoints, and returns. The orchestrator only
-  confirms the task is archived.
-- **Compaction-friendly.** The orchestrator's history is a repeating pattern:
-  `claim X → archive X → advance`. No diffs, no results, no analysis. This
-  compresses cleanly.
-- **Optional invocations are gated.** Invoke an optional skill only when its
-  trigger is met; do not preload or invoke it as ceremony.
-
-When tasks need concurrent delegates, read `references/crew.md` — same queue,
-budget, and evidence rules, plus capability-gated isolation, serialized writes,
-and the conflict radar.
+Use delegation when the authorized host capability and task justify it; in-band
+execution remains available. Read crew guidance before dispatching workers. Keep
+parent history compact (`claim → verify → archive → advance`) and invoke optional
+skills only when their triggers apply.
 
 ### Natural language invocation
 
@@ -108,7 +89,7 @@ exhaustion).
 ### 3. Each cycle
 
 Token rule: **one line of evidence per cycle.** The orchestrator's advance
-call is just `<slug>: archived`. No diff, no findings, no analysis — that
+call records `git: <worklog-sha> — <slug>: archived`. No diff, no findings, no analysis — that
 lives in the worklog task file.
 
 ```bash
@@ -122,73 +103,52 @@ lives in the worklog task file.
 "$WORKLOG_BIN/context.sh" <child-slug> --for=compact
 ```
 
-Before choosing a delegate, confirm that the current harness exposes the
-`task` surface and that the approval boundary permits the dispatch. If either
-check fails, do not fabricate a delegate result: execute the child in-band
-when it is safe, or finish `needs_human` with the missing capability and replay
-check. Record `model-routing: skipped — no delegate surface` when routing was
-not used.
+Use [crew.md](crew.md) to resolve the available dispatch capability and its
+ownership boundary. A tool need not be named `task`. If dispatch is unavailable,
+execute the child in-band when authorized, or stop with the missing capability
+and replay action. Record `model-routing: skipped — no delegate surface` when
+routing was not used.
 
-An orchestrator must verify effect boundaries before dispatching mutations. Every
-sub-agent that writes must run the protocol's effect preflight (§2,
-[references/protocol.md](references/protocol.md)) to confirm target, authority,
-and read-only proof before writing. If any answer is unknown, finish
-`needs_human` with the missing authority named. Record `model-routing: skipped
-— no delegate surface` when routing was unavailable.
+Before dispatching mutations, run the protocol's effect preflight to confirm
+target, authority, and read-only proof. Unknown authority stops the affected
+mutation with `needs_human`; name the missing authority.
 
-Then either:
-- **Delegate** to a sub-agent via `task` tool — pass the compact context pack
-  directly; do not pass the parent transcript. Instruct the sub-agent to
-  commit its evidence, uncertainty, and proposed next action to the worklog
-  task file and call `archive.sh`, then capture the SHA via `git -C "$WORKLOG_REPO" log -1 --format=%H` and emit exactly one status line:
-  `archived <child-slug> <sha>` (or `blocked|needs_human|failed
-  <child-slug> <reason>`). The orchestrator discards any prose beyond that
-  line. Never use `HEAD` from the code worktree or `gh pr view --json headRefOid`;
-  the SHA must come from `git -C "$WORKLOG_REPO" log -1 --format=%H`. Reject a
-  return whose `log -1 --format=%s` does not start with `<child-slug>:`.
-- **Execute in-band** — do the work yourself if it is small and well-scoped.
-  Write evidence to the task file, checkpoint, and archive.
+Pass the compact context pack directly. The worker returns the crew contract;
+the parent verifies it and serializes shared Worklog writes. Code-worktree
+isolation never implies separate Worklog ownership. For in-band work, the same
+verification and persistence steps apply.
 
-Fable 5.1 delegates in coding loops may issue one tool call per turn when the
-next independent calls are implied rather than requested; end each delegate
-prompt with the official batching nudge: "First privately list what you need
-next; then request every item that doesn't depend on another's result in this
-one response."
-
-Either way, the sub-agent or in-band execution must call `archive.sh` to
-release the claim and push evidence to the worklog. The orchestrator then
-only confirms the task is no longer in the active directory:
+After the child's acceptance checks pass, the parent checkpoints and calls
+`archive.sh` to release the claim and push evidence. Verify the archive commit
+and successful push: its SHA comes from
+`git -C "$WORKLOG_REPO" log -1 --format=%H`, and its subject must start with
+`<child-slug>:`. A missing active file alone is insufficient. Record the archive
+once; repeated worker messages do not consume another cycle.
 
 ```bash
-# Record cycle — one line, no details
-python3 <skill-dir>/scripts/loop_state.py advance \
-  --state <state-file> \
-  --evidence "<slug>: archived" \
+# Record cycle — one typed line, no detailed findings
+python3 <skill-dir>/scripts/loop_run.py <run-dir> \
+  --evidence "git: <worklog-sha> — <slug>: archived" \
   --next-action "Claim next project task"
 ```
 
 ### Relaying a delegate's claim makes it yours
 
-Adopted from Fleet Deck's orchestrator doctrine, which paid for it. A delegate's
-return carries two different kinds of thing, and the token rule above covers
-only the first:
+A delegate's return contains observations and conclusions. Verify both before
+relaying them:
 
 - **Facts about the run** — branch pushed, file moved, task archived. Cheap to
-  check against the board, the worklog commit, or `git`. Take them as given.
+  check against the board, the worklog commit, or `git`. Recheck the named evidence.
 - **Claims about the domain** — "X is the rollout gate", "that field is
   unused", "the migration is safe". These are conclusions, not evidence, and
   the delegate's context that produced them is gone.
 
 Verify a domain claim before it shapes another child's context pack, reaches a
 PR description, a ticket, or the human — or pass it on explicitly as that
-delegate's *unverified* claim. Measured cost of skipping this: a wrong "the
-`publish.py` weights are the rollout gate" travelled into an MR, a ticket and a
-human update before anyone read the code; the real gate was upstream, and the
-retraction cost more than the check would have.
+delegate's *unverified* claim.
 
-This does not reopen the no-re-read rule. Archiving a child still needs nothing
-but its one status line. The gate applies at the moment a conclusion leaves the
-child's own task file — which is exactly when the cheap path stops being cheap.
+A compact index is sufficient only after the parent verifies the evidence and
+archive delivery. Preserve detailed findings in the task for later review.
 
 Cycle decision record: Before any action that changes the hypothesis, write a
 compact three-part record (`hypothesis: <claim>`, `falsifier: <observable result
@@ -211,7 +171,8 @@ the per-cycle line is the budget.
 PR-watch / in-flight HEAD moves: if a host-native fingerprint watcher reports a
 move while a review delegate is still running, record one evidence line
 (`github: repo#N head <old>→<new> — <slug> in-flight`) and **do not interrupt**
-the worker unless the user asked. A stale-SHA archive is valid cycle evidence.
+the worker unless the user asked. A stale-SHA archive is historical cycle evidence only; it cannot satisfy
+current-head completion.
 Without that watcher (including Codex), recheck the head after the delegate
 returns (`wait_agent` on Codex) and before the serialized write/archive step;
 do not imply continuous observation.
