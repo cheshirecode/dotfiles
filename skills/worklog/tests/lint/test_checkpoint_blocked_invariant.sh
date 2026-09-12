@@ -20,6 +20,11 @@ G() { git -c user.email=t@t.t -c user.name=t "$@"; }
 G init -q --bare "$TMP/origin.git"
 G init -q --initial-branch=main "$TMP/wl"; cd "$TMP/wl" || exit 1
 G remote add origin "$TMP/origin.git"
+# checkpoint.sh runs as a child process, where the -c flags above do not
+# apply: give the fixture repo its own identity so verify_provenance sees a
+# configured user.email on hosts without a global one.
+git config user.email t@t.t
+git config user.name t
 mkdir -p people/tester/active
 
 task() {  # task <next_action>
