@@ -226,6 +226,44 @@ class LoopRunTest(unittest.TestCase):
         self.addCleanup(setattr, loop_run, "CREW_RADAR", real)
         return loop_run.radar_line(str(Path(self._tmp.name)))
 
+    def test_radar_rejects_malformed_payloads_at_the_process_boundary(self):
+        for payload in ("not json", "[]", "null"):
+            with self.subTest(payload=payload):
+                self.assertEqual(self._radar_cell(0, payload), "radar: error=unrunnable")
+
+    def test_radar_payload_validation_preserves_error_categories(self):
+        for changes, expected in (
+            ({"overlaps": "bad"}, "invalid-overlaps"),
+            ({"overlaps": [None]}, "invalid-overlaps"),
+            ({"overlaps": [{"severity": "warn", "path": 3}]}, "invalid-overlaps"),
+            ({"overlaps": [{"severity": "unknown", "path": "x"}]}, "invalid-overlaps"),
+            ({"warn": True}, "inconsistent-verdict"),
+            ({"info": True}, "inconsistent-verdict"),
+            ({"warn": 1}, "inconsistent-verdict"),
+        ):
+            with self.subTest(changes=changes):
+                payload = dict(warn=0, info=0, overlaps=[])
+                payload.update(changes)
+                self.assertEqual(
+                    self._radar_cell(0, json.dumps(payload)),
+                    "radar: error=" + expected,
+                )
+
+    def test_radar_interpretation_needs_no_process_or_artifact_access(self):
+        payload = {"warn": 1, "info": 1, "remote_fetch": "stale",
+                   "overlaps": [{"severity": "warn", "path": "a.py"},
+                                {"severity": "info", "path": "b.py"}]}
+        with mock.patch.object(loop_run, "run_probe", side_effect=AssertionError("IO")), \
+                mock.patch.object(loop_run, "write_json", side_effect=AssertionError("IO")):
+            self.assertEqual(
+                loop_run.radar_verdict(payload, 2, ref=" artifact=/tmp/result", remote=True),
+                "radar: warn=1 info=1 paths=a.py artifact=/tmp/result remote=stale",
+            )
+
+    def test_radar_unavailable_process_is_an_error(self):
+        with mock.patch.object(loop_run, "run_probe", side_effect=OSError("missing")):
+            self.assertEqual(loop_run.radar_line("repo"), "radar: error=unrunnable")
+
     def test_radar_usage_or_repo_error_is_not_a_conflict_verdict(self):
         # crew.md: exit 1 is a usage or repo error, exit 2 the collision
         # verdict. A radar that could not inspect the repo must never render

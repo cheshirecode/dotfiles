@@ -83,6 +83,40 @@ class LoopStateTest(unittest.TestCase):
         )
         return json.loads(result.stdout)
 
+    def test_invalid_snapshots_are_rejected_without_rewriting_bytes(self) -> None:
+        valid = self.initialize()
+        cases = [
+            ("schema", {"schema_version": -1}),
+            ("field type", {"goal": None}),
+            ("empty goal", {"goal": " "}),
+            ("status", {"terminal_status": "finished"}),
+            ("empty evidence", {"progress_evidence": []}),
+            ("blank evidence", {"progress_evidence": [" "]}),
+            ("budget object", {"budget": []}),
+            ("budget unit", {"budget": {"unit": "", "limit": 2, "used": 0}}),
+            ("budget limit", {"budget": {"unit": "turns", "limit": 0, "used": 0}}),
+            ("budget used", {"budget": {"unit": "turns", "limit": 2, "used": -1}}),
+            ("budget overflow", {"budget": {"unit": "turns", "limit": 2, "used": 3}}),
+            ("exhausted running", {"budget": {"unit": "turns", "limit": 2, "used": 2}}),
+            ("missing next", {"next_action": ""}),
+            ("complete next", {"terminal_status": "complete", "verification": "proof"}),
+            ("unverified complete", {"terminal_status": "complete", "next_action": ""}),
+            ("history", {"history": None}),
+        ]
+        snapshots = [(name, dict(valid, **changes)) for name, changes in cases]
+        snapshots.append(("non-object", []))
+        for name, snapshot in snapshots:
+            with self.subTest(name=name):
+                original = json.dumps(snapshot, indent=3).encode() + b"\n"
+                self.state.write_bytes(original)
+                result = self.run_cli(
+                    "advance", "--state", str(self.state),
+                    "--evidence", "command: true — passed", "--next-action", "next",
+                    expected_returncode=3,
+                )
+                self.assertIn("loop-state:", result.stderr)
+                self.assertEqual(self.state.read_bytes(), original)
+
     def fingerprint(self) -> str:
         return self.run_cli(
             "fingerprint",
@@ -363,26 +397,6 @@ class LoopStateTest(unittest.TestCase):
         # fallback, not the mention.
         self.assertIn("does **not** change directory", durable)
         self.assertIn('WORKLOG_REPO=<clone-dir>', durable)
-
-    def test_orchestrator_gates_optional_decomposition_and_delegate_output(self) -> None:
-        skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
-        orchestrator = section(skill_text, H_ORCHESTRATOR)
-        self.assertIn("regular loop", orchestrator)
-        self.assertIn("one or two tasks", orchestrator)
-        self.assertIn("only when the task graph is not already explicit", orchestrator)
-        self.assertIn("archived <child-slug> <sha>", orchestrator)
-        self.assertIn('git -C "$WORKLOG_REPO"', orchestrator)
-        self.assertIn("use `HEAD` from the code worktree", orchestrator)
-        self.assertIn("discards any", orchestrator)
-        self.assertIn("prose", orchestrator)
-
-    def test_orchestrator_checks_delegate_capability_before_dispatch(self) -> None:
-        skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()
-        orchestrator = section(skill_text, H_ORCHESTRATOR)
-        self.assertIn("current harness exposes the", orchestrator)
-        self.assertIn("do not fabricate a delegate result", orchestrator)
-        self.assertIn("finish `needs_human`", orchestrator)
-        self.assertIn("model-routing: skipped — no delegate surface", orchestrator)
 
     def test_orchestrator_can_escalate_council_mid_run_without_archiving(self) -> None:
         skill_text = SKILL.read_text() + ORCHESTRATOR.read_text()

@@ -252,21 +252,15 @@ A home- or temp-directory path gets the same durability and touches no repo.
 
 ## Delegation
 
-- Delegate a bounded lookup, research, or verification question.
-- Delegate bulk file creation (>=3 files or repetitive templates) to a
-  low-cost mechanical delegate rather than generating in-band on frontier
-  orchestrator tokens.
-- Include the objective, evidence, constraints, budget, and requested return.
-- Require evidence, uncertainty, and one proposed next action.
-- Each delegate must call `archive.sh` after writing its result, then emit exactly one status line: `archived <child-slug> <sha>` (where `<sha>` comes from `git -C "$WORKLOG_REPO" log -1 --format=%H`) or `blocked|needs_human|failed <child-slug> <reason>`.
-- Reconcile returns into the parent state before any write.
+Delegate only within the user's scope and when a bounded lookup, implementation,
+or verification benefits from it. Follow [crew.md](crew.md) for capability checks,
+role ownership, return format, and serialized persistence. In-band execution is
+valid when dispatch is unavailable or adds no value.
 
-Pass the following headings on the first line of your response: objective, known evidence, constraints, budget. The rest goes after a blank line.
-For a cold delegate, pass a compact pack with exactly these headings:
-`objective`, `known evidence`, `constraints`, `budget`, and `requested return`.
-Do not pass the parent transcript. Require the delegate to return exactly
-`evidence`, `uncertainty`, and `next action`; discard prose outside that shape
-after checking the evidence against the parent goal.
+For the `objective`, `known evidence`, `constraints`, `budget`, and
+`requested return` pack, follow [durable-context.md](durable-context.md).
+Do not pass the parent transcript. Reconcile the worker's `evidence`, `uncertainty`, and `next action`
+against the parent goal before any write or cycle advance.
 
 ## Dynamic council escalation
 
