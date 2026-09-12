@@ -26,6 +26,17 @@ Code-worktree isolation does not isolate Worklog. No-op reviews need evidence,
 not artificial commits. Duplicate returns cannot cause duplicate cycle advances.
 The operational contracts live in the skill references, not this decision record.
 
+Separate model guidance from host capabilities. Astra and Fable use the same
+portable workflow; Sol can own orchestration with either available worker model.
+Keep common rules in one reference each and disclose model advice only when needed.
+Other models retain the same evidence guarantees with narrower work or compact
+examples when demonstrated failures justify them. Runtime fixtures, document
+forward reviews and actual model runs are distinct verification claims.
+
+Validate copied documentation commands and reference reachability instead of
+pinning paragraphs by exact wording. Preserve CLI behavior tests independently
+of editorial changes.
+
 Keep process execution and artifact writes separate from radar interpretation.
 Measure change risk using coverage and complexity, then improve missing behavior
 and mixed responsibilities. Preserve coherent validation even when its complexity
