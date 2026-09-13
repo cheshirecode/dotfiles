@@ -64,11 +64,11 @@ class InstallAuditTest(unittest.TestCase):
         shutil.copytree(self.canonical, destination)
         return destination
 
-    def assert_timeout_refuses_repairs(self, roots, should_timeout):
+    def assert_probe_failure_refuses_repairs(self, roots, should_fail, fault=None, expected="timed out"):
         original_run = subprocess.run
         def run_with_timeout(command, **kwargs):
-            if should_timeout(command):
-                raise subprocess.TimeoutExpired(command, 15)
+            if should_fail(command):
+                raise fault if fault is not None else subprocess.TimeoutExpired(command, 15)
             return original_run(command, **kwargs)
         argv = [str(SCRIPT), "--canonical", str(self.canonical), "--json", "--link-identical"]
         for root in roots:
@@ -81,28 +81,37 @@ class InstallAuditTest(unittest.TestCase):
         self.assertEqual(rc, 1)
         result = json.loads(out.getvalue())
         self.assertEqual(result[0]["status"], "unverified")
-        self.assertIn("timed out", result[0]["error"])
-        self.assertIn("timed out", err.getvalue())
+        self.assertIn(expected, result[0]["error"])
+        self.assertIn(expected, err.getvalue())
         self.assertNotIn("no-git", out.getvalue())
         for root in roots:
             self.assertTrue(root.is_dir())
             self.assertFalse(root.is_symlink())
         self.assertFalse(list(self.root.rglob("*.backup-*")))
 
+    def test_unlaunchable_git_is_unverified_and_refuses_all_repairs(self):
+        first, later = self.make_copy("first"), self.make_copy("later")
+        for fault in (FileNotFoundError("git missing"), PermissionError("git not executable")):
+            for failing_root in (self.canonical, later):
+                with self.subTest(fault=type(fault).__name__, root=failing_root):
+                    self.assert_probe_failure_refuses_repairs(
+                        [first, later], lambda cmd: pathlib.Path(cmd[2]) == failing_root.resolve(),
+                        fault=fault, expected="could not run")
+
     def test_canonical_timeout_refuses_all_repairs(self):
         copied = self.make_copy("copied")
-        self.assert_timeout_refuses_repairs([copied], lambda cmd: pathlib.Path(cmd[2]) == self.canonical.resolve())
+        self.assert_probe_failure_refuses_repairs([copied], lambda cmd: pathlib.Path(cmd[2]) == self.canonical.resolve())
 
     def test_later_root_timeout_refuses_earlier_identical_repair(self):
         first, later = self.make_copy("first"), self.make_copy("later")
-        self.assert_timeout_refuses_repairs([first, later], lambda cmd: pathlib.Path(cmd[2]) == later.resolve())
+        self.assert_probe_failure_refuses_repairs([first, later], lambda cmd: pathlib.Path(cmd[2]) == later.resolve())
 
     def test_drift_query_timeout_is_not_missing_remote_or_unknown(self):
         work, installed = self.make_clone_pair()
         self.canonical = work / "skills/loop-engineering"
         for operation in ("cat-file", "rev-list"):
             with self.subTest(operation=operation):
-                self.assert_timeout_refuses_repairs(
+                self.assert_probe_failure_refuses_repairs(
                     [installed / "skills/loop-engineering"], lambda cmd: cmd[3] == operation)
 
     def test_audit_classifies_source_link_copy_and_absence(self) -> None:
