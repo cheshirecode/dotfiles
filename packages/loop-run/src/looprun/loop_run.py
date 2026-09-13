@@ -46,8 +46,10 @@ except ImportError:  # package import
     from looprun.loop_state import RESUMABLE_STATUSES, TERMINAL_STATUSES, state_lock  # noqa: E402
 
 TERMINAL = TERMINAL_STATUSES
-# Local radar measured ~0.55s; allow headroom without an unbounded cycle.
-PROBE_TIMEOUT = 10
+# Radar scans every worktree; a live multi-worktree repo takes over 20s.
+# Keep its bounded allowance separate from the inexpensive project queue.
+RADAR_TIMEOUT = 60
+QUEUE_TIMEOUT = 10
 
 
 def write_json(path, value):
@@ -62,12 +64,12 @@ def write_json(path, value):
             os.unlink(name)
 
 
-def run_probe(cmd):
+def run_probe(cmd, timeout):
     # Kill the POSIX process group, including shell grandchildren, on timeout.
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, errors="replace", start_new_session=os.name != "nt")
     try:
-        stdout, stderr = proc.communicate(timeout=PROBE_TIMEOUT)
+        stdout, stderr = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
         if os.name != "nt":
             try:
@@ -108,7 +110,7 @@ def radar_line(repo, remote=False, artifact_dir=None):
     cmd.append(repo)
     ref = ""
     try:
-        proc = run_probe(cmd)
+        proc = run_probe(cmd, RADAR_TIMEOUT)
         if artifact_dir is not None:
             captured = {"returncode":proc.returncode, "stdout":proc.stdout, "stderr":proc.stderr}
             digest = hashlib.sha256(json.dumps(captured, sort_keys=True).encode()).hexdigest()[:20]
@@ -222,7 +224,7 @@ def queue_line(project):
     if project_sh is None:
         return "queue: error=%s" % cell(why), None
     try:
-        proc = run_probe([str(project_sh), "next", project, "--json"])
+        proc = run_probe([str(project_sh), "next", project, "--json"], QUEUE_TIMEOUT)
     except subprocess.TimeoutExpired:
         return "queue: error=timeout", None
     except OSError as exc:

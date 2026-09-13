@@ -75,6 +75,11 @@ a bounded summary ([examples.md](examples.md)). `--quiet` suppresses all radar
 output, unlike the state CLI's index line. A single owner cannot expose workers
 clobbering files in one shared checkout.
 
+The driver bounds each radar probe at 60 seconds and each Worklog queue probe at
+10 seconds. Radar scans all worktrees, so a large repository can legitimately
+exceed the queue allowance. A timeout remains `radar: error=timeout`, never a
+clean verdict; POSIX timeout cleanup kills the probe process group.
+
 Triage a warning before changing ownership: inspect each side's actual commits,
 its PR target, and a merge simulation when needed. A stale copy never edited by a
 child is different from a conflicting edit. Recheck target and review state after
