@@ -78,8 +78,10 @@ not verify external truth, execute actions, dispatch workers, or schedule wakeup
 
 Check the subject and the question: repository, identity, revision, query and
 runtime must match the claim. An empty result needs a known discovery/control
-path; an incorrectly scoped query is not negative evidence. Two values derived
-from the same source are not independent confirmation.
+path; an incorrectly scoped query is not negative evidence. A failed or
+unlaunchable probe is unavailable evidence, not proof of absence; do not use it
+to authorize repair. Two values derived from the same source are not independent
+confirmation.
 
 For an uncertain implementation, record the hypothesis, observable falsifier and
 replay check once in the task. Report decisions and concise rationale, not private
