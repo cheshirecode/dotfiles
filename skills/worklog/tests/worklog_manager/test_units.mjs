@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { executeDispatch } from "../../lib/worklog-manager/dispatch.mjs";
 import { parseArgs, loadConfig } from "../../lib/worklog-manager/config.mjs";
 import { extractGraph } from "../../lib/worklog-manager/extract.mjs";
 import { parseIssueUrl } from "../../lib/worklog-manager/github.mjs";
@@ -265,4 +266,31 @@ test("orderNextActions filters no-action tasks and sorts by status priority then
     "draft-actionable",
     "blocked-waiting",
   ], "in-progress(2, date-desc) > shipping > in-review > draft > blocked; no-action drafts excluded; archived/project excluded");
+});
+
+
+test("dispatch requires zero exit without a process error", () => {
+  for (const [script, expected] of [["process.exit(0)", "completed"], ["process.exit(7)", "failed"]]) {
+    const dispatch = {
+      plan: { argv: [process.execPath, "-e", script], timeoutSeconds: 2 },
+      history: [], instance: { statusCommentMarker: "fixture" }, issue: {}, intent: {},
+    };
+    const result = executeDispatch({}, dispatch);
+    assert.equal(result.state, expected);
+    assert.equal(result.execution.error, "");
+  }
+});
+
+test("dispatch rejects timeout even when termination handler exits zero", { skip: process.platform === "win32" }, () => {
+  const script = "process.on('SIGTERM', () => process.exit(0)); setInterval(() => {}, 1000);";
+  const dispatch = {
+    plan: { argv: [process.execPath, "-e", script], timeoutSeconds: 1 },
+    history: [], instance: { statusCommentMarker: "fixture" }, issue: {}, intent: {},
+  };
+  const result = executeDispatch({}, dispatch);
+  assert.equal(result.execution.status, 0);
+  assert.match(result.execution.error, /ETIMEDOUT/);
+  assert.equal(result.state, "failed");
+  assert.equal(result.history.at(-1).state, "failed");
+  assert.match(result.statusComment, /failed/);
 });
