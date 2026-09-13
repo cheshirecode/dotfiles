@@ -90,6 +90,8 @@ def git_output(directory: pathlib.Path, *arguments: str) -> str | None:
             timeout=15,
             check=False,
         )
+    except subprocess.TimeoutExpired:
+        raise
     except (OSError, subprocess.SubprocessError):
         return None
     return result.stdout.strip() if result.returncode == 0 else None
@@ -245,7 +247,7 @@ def render(entries: list[dict[str, str]], as_json: bool) -> None:
         print(json.dumps(entries, indent=2, sort_keys=True))
         return
     for entry in entries:
-        detail = entry.get("target") or entry.get("digest", "")
+        detail = entry.get("error") or entry.get("target") or entry.get("digest", "")
         suffix = f" ({detail})" if detail else ""
         if is_stale(entry):
             suffix += (
@@ -254,8 +256,7 @@ def render(entries: list[dict[str, str]], as_json: bool) -> None:
         print(f"{entry['status']}: {entry['path']}{suffix}")
 
 
-def main() -> int:
-    args = build_parser().parse_args()
+def audit(args: argparse.Namespace) -> int:
     try:
         canonical = args.canonical.expanduser().resolve(strict=True)
     except FileNotFoundError:
@@ -327,6 +328,20 @@ def main() -> int:
     if write_failures or stale:
         return 1
     return 0 if all(entry["status"] in CLEAN_STATUSES for entry in entries) else 1
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    try:
+        return audit(args)
+    except subprocess.TimeoutExpired as exc:
+        # A failed observation is neither an absent Git repository nor clean drift.
+        # Initial audits of every root finish before any optional repair starts.
+        directory = str(exc.cmd[2])
+        message = f"git probe timed out after {exc.timeout}s in {directory}"
+        render([{"path": directory, "status": "unverified", "error": message}], args.json)
+        print(f"install-audit: {message}; retry the audit before relying on it", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
