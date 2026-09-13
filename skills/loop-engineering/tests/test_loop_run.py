@@ -16,6 +16,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 from pathlib import Path
@@ -601,10 +602,37 @@ class LoopRunTest(unittest.TestCase):
 
     def test_probe_timeout_has_a_bounded_error(self):
         stub_bin = self._stub("#!/bin/sh\nsleep 60 &\nwait\n")
-        with mock.patch.dict(os.environ, {"WORKLOG_BIN":stub_bin}), mock.patch.object(loop_run, "PROBE_TIMEOUT", 0.05):
+        with mock.patch.dict(os.environ, {"WORKLOG_BIN":stub_bin}), mock.patch.object(loop_run, "QUEUE_TIMEOUT", 0.05), \
+                mock.patch.object(loop_run, "RADAR_TIMEOUT", 0.05):
             self.assertIn("error=timeout", loop_run.queue_line("prog-x")[0])
             with mock.patch.object(loop_run, "CREW_RADAR", Path(stub_bin)/"project.sh"):
                 self.assertIn("error=timeout", loop_run.radar_line("repo"))
+
+    def test_slow_radar_outlives_queue_budget_and_preserves_verdict(self):
+        payload = {"warn":1, "info":0, "overlaps":[{"severity":"warn", "path":"shared.py"}]}
+        stub_bin = self._stub("#!/bin/sh\nsleep 0.2\nprintf '%s' " + shlex.quote(json.dumps(payload)) + "\nexit 2\n")
+        with mock.patch.dict(os.environ, {"WORKLOG_BIN":stub_bin}), \
+                mock.patch.object(loop_run, "QUEUE_TIMEOUT", 0.05), \
+                mock.patch.object(loop_run, "RADAR_TIMEOUT", 2), \
+                mock.patch.object(loop_run, "CREW_RADAR", Path(stub_bin)/"project.sh"):
+            line = loop_run.radar_line("repo", artifact_dir=Path(self._tmp.name))
+            self.assertIn("radar: warn=1 info=0 paths=shared.py", line)
+            saved = json.loads(next(Path(self._tmp.name).glob("radar-*.json")).read_text())
+            self.assertEqual(saved["returncode"], 2)
+            self.assertEqual(json.loads(saved["stdout"]), payload)
+            self.assertEqual(loop_run.queue_line("prog-x")[0], "queue: error=timeout")
+
+    @unittest.skipIf(os.name == "nt", "POSIX process-group cleanup")
+    def test_timeout_kills_shell_grandchildren(self):
+        marker = Path(self._tmp.name)/"survived"
+        child = "import time; from pathlib import Path; time.sleep(0.4); Path(%r).touch()" % str(marker)
+        stub_bin = self._stub("#!/bin/sh\n" + shlex.quote(sys.executable) + " -c " + shlex.quote(child) + " &\nwait\n")
+        started = time.monotonic()
+        with self.assertRaises(subprocess.TimeoutExpired):
+            loop_run.run_probe([str(Path(stub_bin)/"project.sh")], 0.1)
+        self.assertLess(time.monotonic() - started, 2)
+        time.sleep(0.5)
+        self.assertFalse(marker.exists(), "grandchild survived timeout and wrote its marker")
 
     def test_radar_artifacts_are_immutable(self):
         with mock.patch.object(loop_run, "run_probe") as probe:
