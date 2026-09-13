@@ -243,8 +243,9 @@ export function executeDispatch(config, dispatch) {
     error: result.error ? result.error.message : "",
     runHeadless: parseRunHeadlessSummary(result.stdout),
   };
-  dispatch.state = result.status === 0 ? "completed" : "failed";
-  transition(dispatch.history, dispatch.state, result.status === 0 ? "runner exited 0" : "runner failed");
+  const succeeded = result.status === 0 && !result.error;
+  dispatch.state = succeeded ? "completed" : "failed";
+  transition(dispatch.history, dispatch.state, succeeded ? "runner exited 0" : "runner failed");
   dispatch.statusComment = publicStatus(dispatch);
   return dispatch;
 }

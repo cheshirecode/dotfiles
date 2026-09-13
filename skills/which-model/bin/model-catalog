@@ -998,9 +998,10 @@ def infer_task_fit(model_id: str, capabilities: list[str]) -> list[str]:
     return sorted(tags)
 
 
-def run_opencode_models() -> list[dict]:
+def run_opencode_models() -> tuple[list[dict], dict]:
+    source = {"kind": "opencode", "command": "opencode models"}
     if os.environ.get("WHICH_MODEL_SKIP_OPENCODE_CLI"):
-        return []
+        return [], {**source, "status": "skipped"}
     try:
         proc = subprocess.run(
             ["opencode", "models"],
@@ -1009,10 +1010,12 @@ def run_opencode_models() -> list[dict]:
             capture_output=True,
             timeout=15,
         )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return []
+    except subprocess.TimeoutExpired:
+        return [], {**source, "error": "discovery timed out after 15s"}
+    except FileNotFoundError:
+        return [], {**source, "error": "opencode CLI not found"}
     if proc.returncode != 0:
-        return []
+        return [], {**source, "error": f"discovery exited {proc.returncode}"}
     models = []
     for line in proc.stdout.splitlines():
         line = line.strip()
@@ -1037,7 +1040,7 @@ def run_opencode_models() -> list[dict]:
                 "confidence": "fresh",
             }
         )
-    return models
+    return models, source if models else {**source, "status": "empty"}
 
 
 def cursor_state_db_candidates() -> list[pathlib.Path]:
@@ -1309,9 +1312,11 @@ def build_catalog(env: str, provider: str) -> dict:
             if cursor_payload is not None:
                 models.extend(from_cursor(cursor_payload, env, confidence="fresh"))
     elif provider == "opencode":
-        models.extend(run_opencode_models())
-        if models:
-            sources.append({"kind": "opencode", "command": "opencode models"})
+        discovered, source = run_opencode_models()
+        models.extend(discovered)
+        sources.append(source)
+        if source.get("error"):
+            sys.stderr.write(f"model-catalog: {source['error']}; continuing with fallback sources\n")
         if not os.environ.get("WHICH_MODEL_OFFLINE"):
             try:
                 models.extend(from_models_dev(load_json_url("https://models.dev/catalog.json"), env))
