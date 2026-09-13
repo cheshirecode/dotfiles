@@ -70,8 +70,10 @@ Keep monitoring bounded and report changes rather than repeating unchanged rows.
 ## Installation
 
 Keep this skill as the canonical source. Inspect `scripts/install_audit.py --help`
-before consolidation. `--canonical <skill-dir> --link-identical` replaces only
-identical copies; any divergent root rejects all writes. Check `--root <dir>
---dry-run` before an authorized `--apply`; nonstandard roots must be explicit.
-Exit 0 is clean, 2 usage error, 3 divergence. Installation permission is separate
-from permission to edit source. Never overwrite a divergent installed copy.
+before consolidation. Run with `--canonical <skill-dir> --root <dir>` to audit
+without writes; nonstandard roots must be explicit. After authorization, add
+`--link-identical` to replace only identical copies. Any divergent root or
+unavailable Git probe rejects the initial repair batch. Exit 0 is clean, 1 means
+attention is needed (copy, divergence, stale or unverified evidence, or failed
+repair), and 2 is a usage/setup error. Installation permission is separate from
+permission to edit source. Never overwrite a divergent installed copy.
