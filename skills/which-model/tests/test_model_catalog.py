@@ -20,6 +20,11 @@ from __future__ import annotations
 import importlib.machinery
 import importlib.util
 import pathlib
+import contextlib
+import io
+import os
+import subprocess
+from unittest import mock
 import time
 import unittest
 from datetime import datetime, timezone
@@ -39,6 +44,44 @@ mc = load()
 
 PAST = "2020-01-01T00:00:00Z"
 FUTURE = "2099-01-01T00:00:00Z"
+
+
+class DiscoveryFailureTest(unittest.TestCase):
+    def catalog_with(self, **probe_kwargs):
+        stderr = io.StringIO()
+        with mock.patch.dict(os.environ, {"WHICH_MODEL_OFFLINE": "1"}, clear=True), \
+                mock.patch.object(mc.subprocess, "run", **probe_kwargs), \
+                contextlib.redirect_stderr(stderr):
+            result = mc.build_catalog("opencode", "opencode")
+        return result, stderr.getvalue()
+
+    def test_timeout_preserves_seed_fallback_and_diagnostic(self):
+        result, stderr = self.catalog_with(side_effect=subprocess.TimeoutExpired(["opencode", "models"], 15))
+        self.assertIn("timed out", result["sources"][0]["error"])
+        self.assertIn("timed out", stderr)
+        self.assertTrue(result["models"])
+        self.assertEqual(result["sources"][-1]["kind"], "seed")
+
+    def test_missing_cli_and_nonzero_exit_have_distinct_errors(self):
+        cases = [(dict(side_effect=FileNotFoundError()), "not found"),
+                 (dict(return_value=subprocess.CompletedProcess([], 7, "", "")), "exited 7")]
+        for kwargs, expected in cases:
+            with self.subTest(expected=expected):
+                result, stderr = self.catalog_with(**kwargs)
+                self.assertIn(expected, result["sources"][0]["error"])
+                self.assertIn(expected, stderr)
+
+    def test_empty_discovery_is_not_reported_as_failure(self):
+        result, stderr = self.catalog_with(return_value=subprocess.CompletedProcess([], 0, "", ""))
+        self.assertEqual(result["sources"][0]["status"], "empty")
+        self.assertNotIn("error", result["sources"][0])
+        self.assertEqual(stderr, "")
+
+    def test_successful_discovery_retains_models_without_seed(self):
+        result, stderr = self.catalog_with(return_value=subprocess.CompletedProcess([], 0, "fixture/model\n", ""))
+        self.assertEqual([m["id"] for m in result["models"]], ["fixture/model"])
+        self.assertEqual([s["kind"] for s in result["sources"]], ["opencode"])
+        self.assertEqual(stderr, "")
 
 
 class PriceTest(unittest.TestCase):

@@ -41,11 +41,16 @@ Announce `<mode> <estimated total>min > 10min threshold` (background) or
 
 ## Timeout and retry defaults
 
-- Stage 1 foreground research: wait up to 3 minutes per angle. If an angle times out or fails, retry once with the same angle and a shorter "return findings or explicit no-findings" instruction.
-- Stage 1 background research: monitor at 2-3 minute intervals. After 15 minutes without progress from an angle, retry once or mark that angle missing.
+- Before dispatch, record each worker's execution deadline within the remaining user budget. Stage 1 normally allows 15 minutes per angle; use a larger declared allowance when its estimate requires it. Foreground/background changes scheduling, not the research allowance. Stage 5 normally allows 3 minutes per voter; increase it before dispatch when the candidate workload requires more time.
+- A bounded tool wait expiring means pending, not failed. Recheck worker status and progress; continue bounded waits until its execution deadline. Honor a user ceiling even when it cannot accommodate the normal allowance.
+- Before retrying a failed or expired worker, consume any completed return or stop the original and confirm termination. If its status cannot be settled, mark it missing rather than launch an overlapping retry. Retry once with a shorter "return findings or explicit no-findings" instruction, within the remaining stage/user budget; never reset that budget.
 - Stage 1 quorum: proceed when at least 2 independent research angles return. If fewer than 2 return after retry, mark the council `UNVERIFIED` and stop before Stage 3.
-- Stage 5 voters: wait up to 3 minutes per voter. Retry a timed-out or malformed voter once. If returned voters are fewer than 3 or even after retry, spawn one replacement voter when possible; otherwise mark the council `UNVERIFIED`.
-- Close completed or failed sub-agents when their stage output is no longer needed. If background Stage 1 reaches quorum and proceeds, keep monitoring still-running angles until timeout; close them without changing Stage 2 findings if they return after Stage 3 has begun.
+- Stage 5 voters: retry a timed-out or malformed voter once under the same settlement rule. If returned voters are fewer than 3 or even after retry, spawn one replacement voter within the remaining budget when possible; otherwise mark the council `UNVERIFIED`.
+- Close completed or failed workers when their output is no longer needed. After research quorum, freeze the findings used by Stage 3 and monitor remaining angles until their deadlines; close them without changing Stage 2 findings if they return after Stage 3 begins.
+
+Example: forced foreground with a 5-minute research estimate gets the normal
+15-minute allowance. A 3-minute tool wait ending while the worker makes progress
+consumes no retry and does not start a duplicate worker.
 
 ## Iron Laws
 
