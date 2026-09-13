@@ -80,8 +80,14 @@ def classify(
     return result | {"status": status, "digest": digest}
 
 
+class GitProbeError(RuntimeError):
+    def __init__(self, directory: pathlib.Path, reason: str):
+        self.directory = str(directory)
+        super().__init__(f"git probe {reason} in {directory}")
+
+
 def git_output(directory: pathlib.Path, *arguments: str) -> str | None:
-    """Read-only git call; None when git is missing or the command fails."""
+    """Read Git output; None for completed misses, an error for unavailable probes."""
     try:
         result = subprocess.run(
             ["git", "-C", str(directory), *arguments],
@@ -90,10 +96,10 @@ def git_output(directory: pathlib.Path, *arguments: str) -> str | None:
             timeout=15,
             check=False,
         )
-    except subprocess.TimeoutExpired:
-        raise
-    except (OSError, subprocess.SubprocessError):
-        return None
+    except subprocess.TimeoutExpired as exc:
+        raise GitProbeError(directory, f"timed out after {exc.timeout}s") from exc
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise GitProbeError(directory, f"could not run: {exc}") from exc
     return result.stdout.strip() if result.returncode == 0 else None
 
 
@@ -334,12 +340,11 @@ def main() -> int:
     args = build_parser().parse_args()
     try:
         return audit(args)
-    except subprocess.TimeoutExpired as exc:
+    except GitProbeError as exc:
         # A failed observation is neither an absent Git repository nor clean drift.
         # Initial audits of every root finish before any optional repair starts.
-        directory = str(exc.cmd[2])
-        message = f"git probe timed out after {exc.timeout}s in {directory}"
-        render([{"path": directory, "status": "unverified", "error": message}], args.json)
+        message = str(exc)
+        render([{"path": exc.directory, "status": "unverified", "error": message}], args.json)
         print(f"install-audit: {message}; retry the audit before relying on it", file=sys.stderr)
         return 1
 
