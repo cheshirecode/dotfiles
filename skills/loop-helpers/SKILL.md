@@ -11,10 +11,18 @@ parent transcript, or rewrite a canonical skill.
 
 ## Resolve the skill directory
 
-Use this file's load directory as `<skill-dir>`. Only if unavailable, read
-[resolver.md](references/resolver.md). If the optional payload is absent, record
-`context-pack: skipped — not installed` or `transport-gate: skipped — not installed`.
-Do not guess paths or install anything.
+Resolve `<skill-dir>` to the directory containing this `SKILL.md`. If uncertain,
+search for `context_pack.py` under the skill roots.
+`loop-engineering/references/resolvers.md` owns this resolver pattern, including the per-host variants and the fixture that executes them; the line below is the same pattern with this skill's own sentinel file.
+
+```bash
+# Roots checked in order; empty when absent — never a bogus "./..":
+SKILL_DIR="$(for r in ~/.claude/skills ~/.agents/skills ~/.cursor/skills ./skills; do f=$(find -L "$r" -name context_pack.py -print -quit 2>/dev/null); [ -n "$f" ] && { dirname "$(dirname "$f")"; break; }; done)"
+```
+
+This skill is `optional: true`, so it is often absent. When `$SKILL_DIR`
+resolves empty, do not guess a path — record `transport-gate: skipped — not
+installed` (or `context-pack: skipped — not installed`) and continue.
 
 ## Compact context pack
 

@@ -9,8 +9,9 @@ Astra, Sol, Fable, crew and orchestrator routes remain directly discoverable.
 
 Each rule has one owner. Composition and mutation rules move verbatim from
 current loop-engineering into dedicated references. Context packing does not
-load transport guidance, and known-path model requests do not load resolver
-fallbacks. Independent installations keep their executable resolver fallbacks.
+load transport guidance. Resolver fallbacks stay inline: flattened installations
+can separate the root from its payload and references. A fallback needed to find
+the payload cannot depend on a reference inside that missing payload.
 Linear council voting stays together; its quorum, deadlines and voting rules
 remain in the root. Short prose edits preserve operational boundaries.
 
@@ -42,19 +43,20 @@ input; negative reduction means an increase.
 | loop-mutate | 2,623 | 1,249 | +52.38% |
 | loop-compose | 1,328 | 1,395 | -5.05% |
 | loop-compose-recover-mutate | 3,232 | 3,332 | -3.09% |
-| context-pack | 1,062 | 386 | +63.65% |
-| context-pack-missing-path | 1,062 | 496 | +53.30% |
-| context-pack-and-transport-missing-path | 1,062 | 1,058 | +0.38% |
-| model-guideline-known-path | 996 | 829 | +16.77% |
-| model-guideline-missing-path | 996 | 1,032 | -3.61% |
+| context-pack | 1,062 | 539 | +49.25% |
+| context-pack-missing-path | 1,062 | 539 | +49.25% |
+| context-pack-and-transport-missing-path | 1,062 | 1,101 | -3.67% |
+| model-guideline-known-path | 996 | 996 | +0.00% |
+| model-guideline-missing-path | 996 | 996 | +0.00% |
 | loop-complete | 2,693 | 2,426 | +9.91% |
-| model-task-known-path | 4,338 | 4,171 | +3.85% |
-| model-catalog-missing-path | 5,200 | 5,235 | -0.67% |
+| model-task-known-path | 4,338 | 4,338 | +0.00% |
+| model-catalog-missing-path | 5,200 | 5,200 | +0.00% |
 
 Common mutation and context-pack routes save the most. Composition adds a small
 routing cost when selected; the complete recovery route is about 3% larger.
-Missing-path model lookups also cost slightly more. These are explicit tradeoffs
-for smaller common routes, with the fallback behavior preserved.
+Loading both context-pack and transport guidance costs about 4% more.
+Model lookup routes are unchanged. These are explicit tradeoffs for smaller
+common routes, with fallback behavior preserved.
 
 Completion measures the ordinary already-selected evidence gate. It does not
 assume a full protocol or mutation-reference read on either side. Recovery routes
