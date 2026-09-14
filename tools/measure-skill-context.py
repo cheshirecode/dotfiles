@@ -26,8 +26,18 @@ def counts(text: str, encoder=None) -> dict:
 
 
 def compare(routes: dict, before: Path, after: Path, encoder=None) -> list[dict]:
+    if not isinstance(routes, dict) or not routes:
+        raise ValueError("routes must be a non-empty object")
     result = []
     for name, route in routes.items():
+        if not isinstance(name, str) or not name or not isinstance(route, dict):
+            raise ValueError("each named route must be an object")
+        for side in ("before", "after"):
+            files = route.get(side)
+            if not isinstance(files, list) or not files or not all(
+                isinstance(path, str) and path for path in files
+            ):
+                raise ValueError(f"{name}.{side} must be a non-empty list of paths")
         old = counts(payload(before, route["before"]), encoder)
         new = counts(payload(after, route["after"]), encoder)
         result.append({

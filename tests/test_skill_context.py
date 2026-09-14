@@ -1,8 +1,11 @@
 """Measurement must count the selected artifact once and fail on missing data."""
 
 import importlib.util
+import json
 from pathlib import Path
 import tempfile
+import subprocess
+import sys
 import unittest
 
 
@@ -13,6 +16,21 @@ SPEC.loader.exec_module(MEASURE)
 
 
 class ContextMeasurementTest(unittest.TestCase):
+    def test_invalid_routes_fail_as_usage_errors_without_measurements(self):
+        for value in ([], {}, {"route": {"before": "file", "after": []}},
+                      {"route": {"before": [None], "after": ["file"]}}):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                routes = root / "routes.json"
+                routes.write_text(json.dumps(value))
+                result = subprocess.run(
+                    [sys.executable, str(SCRIPT), "--before", str(root), "--routes", str(routes)],
+                    capture_output=True, text=True,
+                )
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stdout, "")
+                self.assertNotIn("Traceback", result.stderr)
+
     def test_deduplicates_resolved_paths_and_handles_spaces(self):
         with tempfile.TemporaryDirectory(prefix="skill context ") as directory:
             root = Path(directory)

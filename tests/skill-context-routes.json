@@ -29,13 +29,15 @@
   "loop-compose-recover-mutate": {
     "before": [
       "skills/loop-engineering/SKILL.md",
-      "skills/loop-engineering/references/protocol.md"
+      "skills/loop-engineering/references/protocol.md",
+      "skills/loop-engineering/references/durable-context.md"
     ],
     "after": [
       "skills/loop-engineering/SKILL.md",
       "skills/loop-engineering/references/composition.md",
       "skills/loop-engineering/references/protocol.md",
-      "skills/loop-engineering/references/effects.md"
+      "skills/loop-engineering/references/effects.md",
+      "skills/loop-engineering/references/durable-context.md"
     ]
   },
   "context-pack": {
@@ -85,13 +87,11 @@
   "loop-complete": {
     "before": [
       "skills/loop-engineering/SKILL.md",
-      "skills/loop-engineering/references/protocol.md",
       "skills/evidence-gate/SKILL.md",
       "skills/evidence-gate/references/recording.md"
     ],
     "after": [
       "skills/loop-engineering/SKILL.md",
-      "skills/loop-engineering/references/effects.md",
       "skills/evidence-gate/SKILL.md",
       "skills/evidence-gate/references/recording.md"
     ]
