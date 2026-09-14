@@ -247,7 +247,7 @@ checks = {
         and "Approval must be explicit enough to cite" not in root,
     "Kimi detail deferred": "`kimi-k3`" in routing and "`kimi-k3`" not in root,
     "catalog helper deferred": "bin/model-catalog --env auto" in catalog and "--refresh-if-stale" not in root,
-    "references one level deep": reference_names == {"routing.md", "catalog.md", "resolver.md"},
+    "references one level deep": reference_names == {"routing.md", "catalog.md"},
 }
 missing = [name for name, passed in checks.items() if not passed]
 if missing:

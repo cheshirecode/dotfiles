@@ -53,8 +53,7 @@
       "skills/loop-helpers/SKILL.md"
     ],
     "after": [
-      "skills/loop-helpers/SKILL.md",
-      "skills/loop-helpers/references/resolver.md"
+      "skills/loop-helpers/SKILL.md"
     ]
   },
   "context-pack-and-transport-missing-path": {
@@ -63,7 +62,6 @@
     ],
     "after": [
       "skills/loop-helpers/SKILL.md",
-      "skills/loop-helpers/references/resolver.md",
       "skills/loop-helpers/references/transport.md"
     ]
   },
@@ -80,8 +78,7 @@
       "skills/which-model/SKILL.md"
     ],
     "after": [
-      "skills/which-model/SKILL.md",
-      "skills/which-model/references/resolver.md"
+      "skills/which-model/SKILL.md"
     ]
   },
   "loop-complete": {
@@ -114,7 +111,6 @@
     ],
     "after": [
       "skills/which-model/SKILL.md",
-      "skills/which-model/references/resolver.md",
       "skills/which-model/references/routing.md",
       "skills/which-model/references/catalog.md"
     ]

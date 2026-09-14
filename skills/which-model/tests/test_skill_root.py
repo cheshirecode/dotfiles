@@ -15,8 +15,7 @@ SKILL = Path(__file__).resolve().parents[1] / "SKILL.md"
 
 class SkillRootTest(unittest.TestCase):
     def resolve(self, installed: tuple[str, ...], expected: str | None) -> None:
-        self.assertIn("(references/resolver.md)", SKILL.read_text())
-        recipe = (SKILL.parent / "references/resolver.md").read_text().split("```bash\n", 1)[1].split("```", 1)[0]
+        recipe = SKILL.read_text().split("```bash\n", 1)[1].split("```", 1)[0]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             home, cwd = root / "home", root / "repo"
