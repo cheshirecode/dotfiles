@@ -21,11 +21,11 @@ Skip re-invocation within the same session — preamble.sh is idempotent but the
 
 ### Tracker hydration (after preamble)
 
-After the preamble, if the user has selected or will act on a specific task, hydrate the in-session tracker for that task's unchecked `## Next` items. **Emit every `TaskCreate` call as parallel tool calls in a single tool-use turn** — one assistant message with N concurrent `TaskCreate` blocks, not N sequential turns. Dedupe first: call `TaskList`, lowercase + strip each existing subject, skip kernel items that already match. Cap at ~10 tracker entries total (most-recently-updated tasks first).
-
-If the roster gave you enough orientation, skip hydration. If you need the full kernel detail, Read `$WORKLOG_REPO/.cache/compact-kernels.md` (~95KB) on-demand — never automatically.
-
-For per-task detail, use `"$WORKLOG_BIN/context.sh" <slug>` (its output ends in a `Tracker-ready snippet` block formatted for parallel `TaskCreate`).
+If the roster is sufficient, skip hydration. For a selected task, follow
+`modes/context.md`: request `context.sh <slug> --for=resume --tracker=<active-host>`,
+verify open items, and deduplicate before updating that host's available tracker.
+Use `--tracker=none` when no tracker is available. Do not load the full kernel
+cache for one task or assume every context format includes tracker instructions.
 
 ### AGENTS.md / protocol reference / lessons.md
 

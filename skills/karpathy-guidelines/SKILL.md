@@ -15,10 +15,10 @@ For brittle outputs, invoke `$example-led-instructions`: 0/1/few-shot gate, max 
 ## 1. Think Before Coding
 
 Before implementing:
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
+- State meaningful assumptions and competing interpretations. Ask when missing
+  information changes the implementation; otherwise proceed with a stated,
+  reversible assumption.
+- Prefer the simpler approach and explain material tradeoffs.
 - If no user is reachable (sub-agent, background loop, scheduled run), do not
   stall: state the assumption explicitly in your output, choose the most
   reversible option, and flag it for the caller.
@@ -35,8 +35,6 @@ route there instead of restating it.
 - No "flexibility" or "configurability" that wasn't requested.
 - No error handling for impossible scenarios.
 - If you write 200 lines and it could be 50, rewrite it.
-
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 
 ## 3. Surgical Changes
 
@@ -79,6 +77,10 @@ If observed evidence contradicts a load-bearing assumption or a planned expected
 3. Revise the hypothesis and plan before continuing.
 4. Rerun the original reproduction plus affected regression checks.
 
-For an apparent blocker, replay it from a trusted vantage point — a context you control end to end, where the inputs, environment, and command are all visible to you rather than reported by another agent or a cached log — and use a cause-specific discriminating check before stopping. Do not generalize a shared blocker classifier — one reusable rule that labels future failures by cause — until three independent incidents (separate runs that do not share a root cause chain, not three symptoms of one run) exhibit the same machine-detectable cause (one a command's exit code, matched output string, or file state can identify without human judgment).
+Replay apparent blockers from a trusted vantage point with visible inputs,
+environment, and commands. Use a cause-specific check before stopping.
+Generalize a blocker classifier only after three independent incidents with
+separate root causes show the same machine-detectable signal (exit code,
+output, or file state).
 
 Do not require this three-field block for trivial, single-path tasks with no meaningful uncertainty.
