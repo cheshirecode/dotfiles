@@ -277,6 +277,11 @@ if missing:
     raise SystemExit(1)
 PY
   then ok "evidence-gate contract"; else fail "evidence-gate contract"; fi
+  if python3 -m unittest discover -s tests -p test_skill_context.py; then
+    ok "skill route context measurement"
+  else
+    fail "skill route context measurement"
+  fi
   if python3 -m unittest discover -s skills/loop-engineering/tests -p test_documentation.py; then
     ok "loop-engineering executable documentation and links"
   else

@@ -5,8 +5,6 @@ description: Pick the right tool for multi-faceted code search across symbols, t
 
 # serena-rg-search
 
-Use this skill to pick the fastest search approach for a coding task. Most real questions touch more than one facet — combine tools deliberately instead of reflexively reaching for `rg`.
-
 Skip when one literal or known-file lookup is sufficient.
 
 ## Route first
@@ -47,7 +45,7 @@ references matter.
 
 ## Tool Availability
 
-`zg`, `rg`, and `jq` aren't preinstalled everywhere. Check before use:
+Check each required binary separately:
 
 ```bash
 for t in zg rg jq; do command -v "$t" >/dev/null 2>&1 || echo "missing: $t"; done
@@ -55,13 +53,11 @@ for t in zg rg jq; do command -v "$t" >/dev/null 2>&1 || echo "missing: $t"; don
 
 `command -v zg rg jq` succeeds when any one exists; test each tool separately.
 
-If `zg` is missing: `npm install -g @zvec/zvec-grep` (Node 22+) — or skip it
-and use `rg`; never block a task on installing it. If `rg`/`jq` are missing:
-`brew install ripgrep jq` (macOS) · `apt-get install ripgrep jq` (Debian) ·
-`dnf install ripgrep jq` (Fedora) · `pacman -S ripgrep jq` (Arch). `git` is
-assumed present in any repo. `zg`'s semantic lane also needs a one-time
-`zg index`; its `.zvec-grep/` directory belongs in `.gitignore`.
+Use available fallbacks; do not install tools just to perform a search.
+For an explicit `zg` setup request, install `@zvec/zvec-grep` with Node 22+
+and run `zg index` for indexed lanes; ignore `.zvec-grep/` in Git.
 
-Serena is an MCP server, not a binary — `command -v` will never find it. Check the session's tool list for a tool whose name ends in `serena__find_symbol` (Claude Code exposes it as `mcp__serena__find_symbol`); if no such tool is listed, Serena is not activated for this project — use `rg` and do not attempt setup mid-task.
+Find Serena in the session's MCP tools (`serena__find_symbol`), not with
+`command -v`. If unavailable, use `rg` without attempting setup mid-task.
 
 **Serena MCP setup:** Only for a setup request, read `references/mcp-setup.md`.
