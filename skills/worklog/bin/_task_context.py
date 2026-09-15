@@ -105,6 +105,10 @@ def kernel_markdown(kernel):
   if kernel["omitted_items"]:
     lines.append(f"omitted: {kernel['omitted_items']}")
   lines.append(f"task: {kernel['task_path']}")
+  # Keep source identity before the clock-dependent suffix in both projections.
+  lines.append(f"content_sha256: {kernel['content_sha256']}")
+  lines.append(f"generated_at: {kernel['generated_at']}")
+  lines.append(f"expires_at: {kernel['expires_at']}")
   return "\n".join(lines)
 
 

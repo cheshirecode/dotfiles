@@ -1,6 +1,6 @@
 # Mode: `spawn`
 
-Emit a self-contained handoff prompt for a fresh Claude Code session. The spawned session assumes **no memory** of the current conversation — the prompt must stand alone.
+Emit a self-contained handoff prompt for the selected host. The receiving session assumes **no memory** of the current conversation — the prompt must stand alone. This mode generates text; it does not launch an agent.
 
 **Does not run the preamble.** No LDAP resolution, no `_worklog` pull, no repo writes. Pure prompt generator.
 
@@ -24,7 +24,7 @@ Relevant repos:
   - <$PROJECTS_DIR>/<repo-b>
 
 Worklog env (required before any $WORKLOG_BIN helper):
-  export WORKLOG_BIN="${WORKLOG_BIN:-$HOME/.claude/skills/worklog/bin}"
+  export WORKLOG_BIN="<verified-skill-bin-on-receiving-host>"
   export WORKLOG_REPO="${WORKLOG_REPO:-<$PROJECTS_DIR>/_worklog}"
   export WORKLOG_LDAP=<ldap-for-this-task>   # e.g. fredtran — omit --ldap on search sweeps to see all namespaces
   # Prefer: direnv exec "$WORKLOG_REPO" env WORKLOG_LDAP=<ldap> "$WORKLOG_BIN/<helper>.sh" …
@@ -38,15 +38,15 @@ Read these first (in order):
 Task:
   <verbatim task description from the user>
 
-Branch discipline (when task names a repo branch):
-  - If the task file § Branch names `POC-DO-NOT-MERGE/*` or an existing worktree branch: **do not** `git checkout -b` a new branch; commit in-place.
-  - If a worktree already exists for that branch (e.g. `../ui-mini-app-host`): use it; verify with `git branch --show-current`.
-  - `fredtran/*` feature branches are for normal ui PRs, not throwaway PoC host branches unless explicitly requested.
+Contract:
+  <task/attempt ID, accepting owner, repo remote and expected revision/diff>
+  <accepted shared decisions and constraints, source revision; unresolved questions>
+  <owned write scope, existing branch/worktree, acceptance checks, remaining budget/unit>
 
 Deliverables:
   <one-line expectation — PR, file, prompt, report, etc.>
-  End with a checkpoint: `cd <$PROJECTS_DIR>/_worklog && "$WORKLOG_BIN/checkpoint.sh" <slug>`
-  (or create a task file first via `/worklog sync` if none exists).
+  <agreed return format: task/source identity, status, evidence, uncertainty, next action>
+  <checkpoint owner: parent for shared delegates; receiving session for an authorized takeover>
 ```
 
 Tune the "Read these first" list to the task. Examples:
@@ -56,3 +56,9 @@ Tune the "Read these first" list to the task. Examples:
 - Task is pure research / survey → worklog `AGENTS.md` only.
 
 Keep the prompt under ~30 lines. If the task is genuinely large, point at a single design doc in the prompt rather than inlining its content.
+
+Resolve paths on the receiving host and verify source identity before acting;
+sender-local temporary paths are not durable evidence. A copied decision is a
+dated snapshot; its named source wins. Use [context.md](context.md#reuse-and-prompt-caching)
+for stable prefix layout and freshness. Loop delegates use the return contract in
+[durable-context.md](../../loop-engineering/references/durable-context.md).

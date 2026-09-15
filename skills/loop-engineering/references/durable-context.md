@@ -34,19 +34,44 @@ according to the Worklog owner's dedupe rules. Shared writes belong to the paren
   Uncommitted review names HEAD and a scoped diff fingerprint including relevant
   untracked files. Do not label an uncommitted artifact as pushed.
 - `constraints`: ownership, allowed writes, shared surfaces, acceptance checks
-  and user corrections or exclusions.
-- `budget`: remaining declared work; role changes do not reset it.
+  and user corrections or exclusions. Include accepted shared decisions and their
+  source revision; a narrow file slice must not erase cross-task agreements.
+- `budget`: remaining declared work and the unit; role changes do not reset it.
+  Separate host-enforced limits from requested bounds. Driver turns count recorded
+  advances, not model tokens, tool calls or elapsed time.
 - `requested return`: evidence, uncertainty, next action, and intended owner.
 
 Recovery handles include state path, state fingerprint, terminal status, next
 action, typed evidence reference, and approval boundary. Send this pack instead
 of replaying the parent transcript. API conversation history is separate: leave
 history management to the host; a handoff summary does not authorize rewriting it.
+For prefix layout, source freshness and cache measurements, use
+[Worklog's context rules](../../worklog/modes/context.md#reuse-and-prompt-caching).
+
+For delegated work, agree a versioned return envelope before dispatch. Use the
+host's structured output when supported, otherwise labeled fields with the same
+meaning. This is an agent contract; the loop driver does not validate its schema.
+
+```text
+contract: loop-return/v1
+task: <slug>; attempt: <unique dispatch ID>; owner: <accepting parent>
+source: <repo remote, HEAD/base and scoped diff fingerprint>
+status: complete | partial | blocked | failed
+evidence: <typed references, checks and results; empty if none>
+uncertainty: <unverified claims or missing context; none if established>
+next_action: <smallest recovery/check; none if complete>
+```
+
+Retain the same task identity across retries and allocate a new attempt ID. Store
+decision summaries and necessary evidence in Worklog; avoid full prompt/output
+logging by default. Never persist credentials or private reasoning as trace data.
 
 ## Accept a return or restart
 
-Recheck task/repository identity and revision or diff fingerprint. Changed head,
-base or scoped diff invalidates affected verification. Reconcile duplicates with
+Check the agreed contract, required fields, attempt and owner before interpreting
+the status. A complete label with missing or failing acceptance evidence is not
+completion. Recheck task/repository identity and revision or diff fingerprint.
+Changed head, base or scoped diff invalidates affected verification. Reconcile duplicates with
 the task history before advancing; count accepted work once. A retained worker
 name does not prove retained context: re-brief from the pack after a reset.
 Validate saved state and replay the recovery check before trusting intervention.
