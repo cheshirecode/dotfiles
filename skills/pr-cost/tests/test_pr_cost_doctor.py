@@ -15,7 +15,6 @@ which is where a real reader would break.
 from __future__ import annotations
 
 import importlib.util
-import json
 import pathlib
 import subprocess
 import sys
