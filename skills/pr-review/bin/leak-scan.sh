@@ -43,7 +43,7 @@ TOKENS=(
 # so adding a skill without extending this list is caught at the moment the
 # skill is added, not the next time a leak ships.
 SKILL_COMMANDS=(
-  brainstorm council evidence-gate example-led-instructions job-application
+  brainstorm browser-use-setup council evidence-gate example-led-instructions job-application
   karpathy-guidelines loop-engineering loop-helpers pr-cost pr-review serena-rg-search
   ship-hygiene tightening-a-pr which-model worklog
 )
