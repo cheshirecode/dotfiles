@@ -25,6 +25,7 @@ model guidance tunes its use, while host capabilities determine what can run.
 | Tool availability, installation, OS, or recurrence | [hosts.md](references/hosts.md) |
 | Resume, delegation, or compaction | [durable-context.md](references/durable-context.md) |
 | Code quality or architectural boundaries | [quality.md](references/quality.md) |
+| Repeated trials judged by one metric | [experiments.md](references/experiments.md) |
 | Brittle state/evidence sequencing | [examples.md](references/examples.md) |
 | Optional output compression | [transport.md](references/transport.md) |
 
