@@ -1993,9 +1993,17 @@ test_packages() {
   else
     fail "loop-run package drifted from skills/loop-engineering"
   fi
-  if (cd packages/loop-run && python3 -m unittest discover -s tests -t tests -p 'test_*.py' 2>&1 | tail -1 | grep -q '^OK'); then
+  # Captured, not piped into `tail -1 | grep -q '^OK'`: that form discards
+  # every failure line, so CI reported only "unittest failed" and the tail it
+  # tested could also be a collection error. Per the FIXTURE_LOG_LINES note
+  # above, the output is the only thing that says WHY on a CI-only failure.
+  local ut_out ut_status
+  ut_out="$(cd packages/loop-run && python3 -m unittest discover -s tests -t tests -p 'test_*.py' 2>&1)"
+  ut_status=$?
+  if [ "$ut_status" -eq 0 ]; then
     ok "loop-run package unittest OK"
   else
+    echo "$ut_out" | tail -"$FIXTURE_LOG_LINES" >&2
     fail "loop-run package unittest failed"
   fi
 

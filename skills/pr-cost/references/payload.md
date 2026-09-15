@@ -40,7 +40,7 @@ existed still validates, and `schema_version` stays `pr-cost/v1`:
   "tokens_in_uncached": 2956,
   "tokens_in_cache_read": 697885763,
   "tokens_in_cache_write": 22807403,
-  "usd_basis": "model-rates | default-rates | provider-reported",
+  "usd_basis": "model-rates | default-rates | provider-reported | null",
   "scope": "session-total | this-pr"
 }
 ```
@@ -63,6 +63,12 @@ Two rules the collector enforces:
 `usd_basis` says how the dollar figure was reached. `default-rates` means flat
 lane rates were used, *not* the rates of the model named in the payload — so
 the number can look right while being priced from the wrong table.
+
+`usd_basis` is null when no rate could be resolved for the model, and
+`usd_estimated` is null alongside it. The collector accepts both as null and
+prints `cost unavailable`. A null basis is the honest outcome for an unknown
+model: the token counts are still reported, and nothing is priced from a
+same-family rate that the model may not share.
 
 ## Harness guidance
 

@@ -28,6 +28,11 @@ When the user targets `oss/dotfiles` or `/Users/fredtran/Documents/oss/dotfiles`
 use that primary checkout on `main` as the delivery surface and commit directly
 to `main` unless the user explicitly asks for a branch or PR.
 
+Default to a branch worktree for the work itself rather than editing the
+primary checkout, and in a checkout another session may also be using, commit
+before starting a long verification — a peer's reset destroys uncommitted work
+mid-run.
+
 Temporary agent worktrees under `.codex/worktrees/.../dotfiles` may be detached
 or branch-prefixed by default. Treat them as scratch/integration surfaces only:
 if work starts there, port or merge the exact changes back into the primary
@@ -66,6 +71,61 @@ Two corollaries:
   the confident wrong value; the loud path proves much less.
 - **A check nothing runs is not coverage.** Glob test directories in the runner
   rather than listing files, so a new fixture is wired up by existing.
+- **Verify the red, not just its existence.** A broken fixture fails too, and
+  its failure looks like proof. Read the error: if a red run ends in
+  `ImportError`, `SyntaxError`, `TypeError` on a signature, or anything other
+  than the assertion you meant to trip, suspect the fixture before believing
+  the result. When restoring a baseline file to prove red, check what you
+  wrote — `wc -l` and `head` it — before running anything.
+
+  Measured 2026-09-15: `git show "$base:skills/worklog/bin/_task_context.py"`
+  under zsh lost part of the path to a `:s/…/…/` history modifier, so the
+  redirect truncated the target to zero bytes. The suite then failed with a
+  confident `ImportError` that read exactly like a genuine red proof. Put the
+  whole `rev:path` in one variable, or expand the path through a variable too.
+- **Prove red on a copy, not by editing tracked files.** Reverting an
+  implementation file in place races anything else reading the checkout, and a
+  restore step that fails leaves the tree wrong. Copy the tree somewhere
+  disposable, drop its `.git`, and mutate there — then a stray `git` command
+  cannot reach the real repository at all.
+- **One mutation, one assertion.** Revert or mutate a single file per run and
+  record which assertion fired. A crash, an earlier assert, or a coupled test
+  will otherwise hide the one you meant to prove — and a signature change
+  crashes every test in the file, proving nothing about the behavior you
+  changed. When the red arrives as a crash, follow it with a targeted mutation
+  that keeps the interface and breaks only the behavior.
+
+## Checks that fail silent
+
+Every entry here is a check that stayed green while the thing it guarded was
+broken. They share one shape with the defects above: the check measures
+something adjacent to what was meant.
+
+- **`pipefail` inverts a `linter | grep` gate.** `if linter | grep -q PATTERN`
+  under `set -o pipefail` passes exactly when the linter *finds* problems, and
+  fails when the code is clean. Capture the output and `test -n` on it instead
+  of branching on a pipeline's status.
+- **Quieting a check removes coverage. Classify, don't filter.** A carve-out
+  must name one literal case. The moment it is a file, a glob, or a pattern
+  class, it silently exempts everything later added to that class.
+- **A diagnostic must separate absent from ok.** Four states, not two: ok,
+  broken, absent, and unknown. Collapsing them lets a missing reader read as a
+  passing one — and a zero-cost estimate is not an estimate, it is a lost rate
+  table.
+- **Assert what was consumed, not the wall clock.** A timed pipeline measures
+  its slowest participant, so a wall-clock assertion passes or fails on the
+  harness and the machine rather than on the change. Assert tokens, bytes,
+  rows, or calls.
+- **Per-mode CI hides composition bugs.** Running each mode in isolation and
+  never the composed whole lets one section leak `set -e` and kill the combined
+  run while every isolated mode stays green. Run the composition too.
+- **Never print a secret to check it.** `${VAR:-placeholder}` expands to the
+  *value* when the variable is set, so the guard behaves as an echo. Use
+  `test -n`, or a hash prefix when comparing two values. Better, ask the tool
+  that holds the credential (`gh auth status`) rather than the file storing it.
+- **Re-measure before documenting a limitation.** "Cannot do X" ages into
+  wrong, and no agreement pin catches prose. Re-run the check that established
+  a limit before repeating it.
 
 ## Reading posture (apply before treating any section as a recipe)
 
