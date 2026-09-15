@@ -283,7 +283,7 @@ class RealLaneTest(unittest.TestCase):
         self.assertIn("estimated, not", report["usd_basis_note"])
         self.assertNotIn("measured", basis.values())
         self.assertEqual(basis["claude"], "default-rates")
-        self.assertEqual(basis["codex"], "default-rates")
+        self.assertEqual(basis["codex"], "model-rates")
         self.assertEqual(basis["opencode"], "provider-reported")
 
     def test_every_reader_lane_is_a_harness_the_collector_accepts(self) -> None:
