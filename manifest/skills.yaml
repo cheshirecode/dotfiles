@@ -40,6 +40,19 @@ skills:
       path: skills/job-application
     install_to: ~/.claude/skills/job-application
 
+  # Machine-setup tooling: installs the uv-managed browser-use CLI and its
+  # vendor skill. Optional — named browser-use-setup deliberately, because the
+  # vendor `browser-use skill install` owns the browser-use directory name in
+  # every harness root and must not collide with install.sh's symlinks.
+  - name: browser-use-setup
+    description: Install, wrap, and connect the browser-use CLI across macOS and Linux.
+    optional: true
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/browser-use-setup
+    install_to: ~/.claude/skills/browser-use-setup
+
   - name: worklog
     description: Cross-machine work journal — the /worklog command surface.
     source:

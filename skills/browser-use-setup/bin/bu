@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# bu — thin cross-platform wrapper for the browser-use CLI (uv tool install).
+#
+# Locates the binary across PATH layouts (standard PATH, ~/.local/bin, uv's
+# tool bin dir), optionally installs it first, then execs the real CLI so all
+# flags, env, and stdio pass through untouched.
+#
+# Usage: bu [--ensure] [browser-use args...]
+set -uo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: bu [--ensure] [browser-use args...]
+
+Thin wrapper around the browser-use CLI.
+
+  bu --version            passthrough
+  bu --ensure --version   install first if the CLI is missing, then run
+  bu --help               this help
+
+Location order: PATH, $UV_TOOL_BIN_DIR, ~/.local/bin. When the CLI is absent,
+refuses with exit 127 and points at install-browser-use.sh (same directory).
+With --ensure, runs that installer first.
+USAGE
+}
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+installer="$script_dir/install-browser-use.sh"
+
+case "${1-}" in
+  -h|--help) usage; exit 0 ;;
+esac
+
+ensure=0
+if [ "${1-}" = "--ensure" ]; then
+  ensure=1
+  shift
+fi
+
+bu_bin=""
+if command -v browser-use >/dev/null 2>&1; then
+  bu_bin="$(command -v browser-use)"
+else
+  for candidate in "${UV_TOOL_BIN_DIR:+$UV_TOOL_BIN_DIR/browser-use}" "$HOME/.local/bin/browser-use"; do
+    [ -x "$candidate" ] && bu_bin="$candidate" && break
+  done
+fi
+
+if [ -z "$bu_bin" ]; then
+  if [ "$ensure" -eq 1 ]; then
+    bash "$installer" || exit $?
+    command -v browser-use >/dev/null 2>&1 || bu_bin="$HOME/.local/bin/browser-use"
+    [ -x "$bu_bin" ] || { printf '%s\n' "ERROR: installer ran but browser-use is still not on PATH" >&2; exit 127; }
+  else
+    printf '%s\n' "ERROR: browser-use not found on PATH." >&2
+    printf '%s\n' "Fix: run $installer (or 'bu --ensure')." >&2
+    exit 127
+  fi
+fi
+
+exec "$bu_bin" "$@"
