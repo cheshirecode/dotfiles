@@ -27,6 +27,7 @@ model guidance tunes its use, while host capabilities determine what can run.
 | Code quality or architectural boundaries | [quality.md](references/quality.md) |
 | Repeated trials judged by one metric | [experiments.md](references/experiments.md) |
 | Brittle state/evidence sequencing | [examples.md](references/examples.md) |
+| Long session, context filling up | [context-budget.md](references/context-budget.md) |
 | Optional output compression | [transport.md](references/transport.md) |
 
 ## Drive one cycle
