@@ -624,15 +624,56 @@ class LoopRunTest(unittest.TestCase):
 
     @unittest.skipIf(os.name == "nt", "POSIX process-group cleanup")
     def test_timeout_kills_shell_grandchildren(self):
-        marker = Path(self._tmp.name)/"survived"
-        child = "import time; from pathlib import Path; time.sleep(0.4); Path(%r).touch()" % str(marker)
-        stub_bin = self._stub("#!/bin/sh\n" + shlex.quote(sys.executable) + " -c " + shlex.quote(child) + " &\nwait\n")
+        """A timed-out probe kills the shell's grandchildren, not just the shell.
+
+        A surviving grandchild writes its marker one interpreter startup plus
+        one sleep after it launches, which lands after any constant this test
+        could pick. Measured 2026-09-15 against a build with the process-group
+        kill removed outright: the previous `time.sleep(0.5)` form passed 7
+        runs in 8, certifying the bug it exists to catch.
+
+        The wait is therefore a positive control, not a constant. The same
+        stub runs to completion, and its marker proves enough time has passed
+        ON THIS MACHINE for the killed grandchild to have written too. A
+        slower box makes the control slower, which keeps the check strict
+        rather than loosening it.
+
+        Both stubs are written before either runs. `sh` reads a script
+        incrementally, so rewriting the first stub's path while its shell is
+        still executing corrupts that run and the killed grandchild silently
+        never starts — which looks exactly like the pass this test wants.
+        """
+        killed = Path(self._tmp.name) / "killed-survived"
+        control = Path(self._tmp.name) / "control-wrote"
+
+        def stub_in(dirname, marker):
+            bin_dir = Path(self._tmp.name) / dirname
+            bin_dir.mkdir()
+            child = ("import time; from pathlib import Path; "
+                     "time.sleep(0.4); Path(%r).touch()" % str(marker))
+            stub = bin_dir / "project.sh"
+            stub.write_text("#!/bin/sh\n" + shlex.quote(sys.executable) + " -c "
+                            + shlex.quote(child) + " &\nwait\n")
+            stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+            return str(stub)
+
+        killed_stub = stub_in("kbin", killed)
+        control_stub = stub_in("cbin", control)
+
         started = time.monotonic()
         with self.assertRaises(subprocess.TimeoutExpired):
-            loop_run.run_probe([str(Path(stub_bin)/"project.sh")], 0.1)
-        self.assertLess(time.monotonic() - started, 2)
-        time.sleep(0.5)
-        self.assertFalse(marker.exists(), "grandchild survived timeout and wrote its marker")
+            loop_run.run_probe([killed_stub], 0.1)
+        # Deliberately loose: this catches a probe that hangs instead of
+        # returning, and nothing finer. The grandchild check carries the test.
+        self.assertLess(time.monotonic() - started, 30)
+
+        loop_run.run_probe([control_stub], 30)
+        self.assertTrue(
+            control.exists(),
+            "control grandchild never wrote its marker; the stub is broken, "
+            "and the assertion below would pass for the wrong reason",
+        )
+        self.assertFalse(killed.exists(), "grandchild survived timeout and wrote its marker")
 
     def test_radar_artifacts_are_immutable(self):
         with mock.patch.object(loop_run, "run_probe") as probe:
