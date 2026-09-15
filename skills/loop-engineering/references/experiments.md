@@ -56,9 +56,12 @@ stream it into context; one flooded trial ends the run.
 Extract the metric with an anchored pattern (`grep "^val_bpb:" run.log`). An
 unanchored pattern can match a nested field and report a confident wrong value.
 
-An empty extraction means the trial failed. It is not a score of zero. Read the
-tail of the log and classify: a typo or missing import is worth one fix and one
-rerun; a broken idea is recorded as a crash and left. Bound the fix attempts.
+An empty extraction means the trial failed. It is not a score of zero, and a
+successful `grep` or `tail` says nothing about the trial that wrote the log —
+[protocol.md](protocol.md#verifying-a-claim) owns that rule; capture the trial's
+exit status alongside the metric. Then read the tail of the log and classify: a
+typo or missing import is worth one fix and one rerun; a broken idea is recorded
+as a crash and left. Bound the fix attempts.
 
 Set a kill ceiling before trial one, and set it on the trial's whole observed
 duration, not on the fixed inner budget. The two differ: autoresearch fixes five
