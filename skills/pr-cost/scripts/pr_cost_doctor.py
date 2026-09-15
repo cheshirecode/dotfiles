@@ -423,8 +423,14 @@ def render(report: dict[str, Any]) -> str:
         if report["failed"]
         else "OK: no lane is broken"
     )
+    # A lane with no usable rate stores a null basis, and str(None) renders
+    # as "None" — which reads like a basis named None rather than a lane that
+    # produced no basis at all. The empty case below already says
+    # "none measured"; say the per-lane equivalent instead of leaking the
+    # Python literal.
     basis = ", ".join(
-        f"{harness}={value}" for harness, value in sorted(report["usd_basis"].items())
+        f"{harness}={value or 'unavailable'}"
+        for harness, value in sorted(report["usd_basis"].items())
     )
     return "\n".join(
         ["pr-cost doctor", *rows, "", f"usd_basis: {basis or 'none measured'}", verdict]
