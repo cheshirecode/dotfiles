@@ -108,6 +108,37 @@ class ContextProjection(unittest.TestCase):
         self.file.write_text("---\nslug: task\nstatus: draft\nnext_action: Check spaces\n---\n## Next\n- [ ] printf '%s' 'a  b'\n")
         self.assertIn("printf '%s' 'a  b'",self.call('--for=compact').stdout)
 
+    def test_markdown_exposes_source_identity_and_freshness(self):
+        import hashlib
+        from datetime import datetime, timedelta
+        out = self.call('--for=compact').stdout
+        fields = dict(line.split(': ',1) for line in out.splitlines() if ': ' in line and not line.startswith(' '))
+        self.assertEqual(fields['content_sha256'],hashlib.sha256(self.file.read_bytes()).hexdigest())
+        generated = datetime.fromisoformat(fields['generated_at'])
+        expires = datetime.fromisoformat(fields['expires_at'])
+        self.assertIsNotNone(generated.tzinfo)
+        self.assertEqual(expires-generated,timedelta(hours=1))
+
+    def test_clock_changes_only_suffix_but_hidden_source_change_invalidates_identity(self):
+        import datetime, sys
+        sys.path.insert(0,os.environ['WORKLOG_BIN'])
+        from _task_context import make_kernel, parse_task_file, kernel_markdown, cache_freshness
+        now = datetime.datetime(2026,9,14,tzinfo=datetime.timezone.utc)
+        source = self.file.read_text()
+        def kernel(text,at):
+            fm,body = parse_task_file(text)
+            return make_kernel('task',fm,body,text,self.file,now=at)
+        first = kernel(source,now)
+        later = kernel(source,now+datetime.timedelta(minutes=5))
+        for render,marker in [(kernel_markdown,'generated_at:'),(json.dumps,'"generated_at":')]:
+            before,after = render(first),render(later)
+            self.assertEqual(before.split(marker)[0],after.split(marker)[0])
+            self.assertNotEqual(before,after)
+        changed = kernel(source.replace('## Context','## Context\nChanged shared decision.'),now)
+        self.assertEqual(first['open_items'],changed['open_items'])
+        self.assertNotEqual(first['content_sha256'],changed['content_sha256'])
+        self.assertEqual(cache_freshness([first],now+datetime.timedelta(hours=1)),'stale')
+
     def test_numeric_slug_does_not_cause_cache_drift(self):
         self.write(slug=123)
         subprocess.run([os.environ['WORKLOG_BIN']+'/compact-kernels.sh'],cwd=self.repo,env=self.env,check=True,capture_output=True)
