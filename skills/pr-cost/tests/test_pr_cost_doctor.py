@@ -261,8 +261,27 @@ class RealLaneTest(unittest.TestCase):
         gap without pretending to check English.
         """
         report = doctor.diagnose(self_check=True, live=False)
+        self.assertBasesDocumented(report)
+
+    def assertBasesDocumented(self, report: dict) -> None:
+        """Every non-null basis in the report must appear in the docstring.
+
+        A null basis carries no name to look for, so it is excluded rather
+        than compared. Excluding it is also what keeps this check readable:
+        `sorted()` over a set holding both None and strings raises TypeError,
+        which would report a stale docstring as a crash.
+        """
+        bases = report["usd_basis"]
+        unpriced = sorted(h for h, v in bases.items() if not v)
+        self.assertEqual(
+            unpriced,
+            [],
+            f"lanes {unpriced} reported no usd_basis on the synthetic "
+            f"self-check; every fixture must name a model the reader prices, "
+            f"or its arithmetic check proves nothing",
+        )
         docstring = doctor.__doc__ or ""
-        for basis in sorted(set(report["usd_basis"].values())):
+        for basis in sorted({v for v in bases.values() if v}):
             self.assertIn(
                 basis,
                 docstring,

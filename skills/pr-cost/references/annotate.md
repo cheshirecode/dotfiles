@@ -76,7 +76,9 @@ transcript path, so the `TRANSCRIPT` step above does not apply. The collector
 accepts `--harness opencode`, so the annotate command itself is unchanged.
 
 `--confidence estimated` is the honest level for the two lanes above: the
-figure comes from estimated list prices (model-specific or fallback rates), never from metered billing.
+figure comes from estimated list prices for the model the reader matched,
+never from metered billing. A model with no rate in the table reports no
+figure at all rather than falling back to a generic rate.
 
 `PR_COST_HOOK_LIVE=1` is scoped to that one command on purpose. Exporting it
 leaves every later `annotate` in the shell live.

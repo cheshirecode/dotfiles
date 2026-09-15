@@ -16,6 +16,8 @@ Resolve the skill directory from this file's load path and run commands there.
   read [references/payload.md](references/payload.md).
 - Diagnose a harness lane: read [references/diagnosis.md](references/diagnosis.md).
 - Add cost to an existing PR: read [references/annotate.md](references/annotate.md).
+- Check a rate or cache-pricing claim against billed cost: read
+  [references/billed-validation.md](references/billed-validation.md).
 
 Load only the reference needed by the request. Adapters live in
 `adapters/{cursor,claude,codex}/`; the collector is `scripts/pr_cost_collect.py`.
