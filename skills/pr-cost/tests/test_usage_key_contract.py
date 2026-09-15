@@ -278,35 +278,13 @@ class UsageKeyContractTest(unittest.TestCase):
             ),
         )
 
-    def test_codex_usd_estimated_uses_its_documented_default_rates(self) -> None:
-        tokens_in = 4_444_444
-        tokens_out = 555_555
-        cached = 222_222
-        data = self.codex_usage(
-            [{"input_tokens": tokens_in, "output_tokens": tokens_out, "cached_input_tokens": cached}]
-        )
-        # Cache-aware since the pr-cost-cache-tokens change: cached input is a
-        # subset of input_tokens and is priced at the cache-read rate (0.5
-        # default), not the 5.0 input rate.
-        expected = round(
-            (
-                (tokens_in - cached) * CODEX_INPUT_RATE
-                + cached * CODEX_CACHE_READ_RATE
-                + tokens_out * CODEX_OUTPUT_RATE
-            )
-            / 1_000_000,
-            4,
-        )
-        self.assertAlmostEqual(
-            data["usd_estimated"],
-            expected,
-            places=4,
-            msg=(
-                "codex usd_estimated drifted from its documented defaults "
-                f"({CODEX_INPUT_RATE}/{CODEX_OUTPUT_RATE}/{CODEX_CACHE_READ_RATE} per "
-                "Mtok). Note this lane's output rate is 30.0 where claude's is 25.0."
-            ),
-        )
+    def test_codex_unknown_model_retains_usage_without_inventing_cost(self) -> None:
+        data = self.codex_usage([
+            {"input_tokens": 4_444_444, "output_tokens": 555_555, "cached_input_tokens": 222_222}
+        ])
+        self.assertEqual(data["tokens_in"], 4_444_444)
+        self.assertIsNone(data["usd_estimated"])
+        self.assertIsNone(data["usd_basis"])
 
 
 class DocumentedCollectorValuesTest(unittest.TestCase):

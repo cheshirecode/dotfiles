@@ -110,6 +110,9 @@ class CacheAwareUsdTest(unittest.TestCase):
                 },
             ),
             CODEX_SCRIPT,
+            "--input-usd-per-mtok", "5",
+            "--output-usd-per-mtok", "30",
+            "--cache-read-usd-per-mtok", "0.5",
         )
         expected = round(
             (
@@ -243,7 +246,7 @@ class CacheAwareUsdTest(unittest.TestCase):
         )
         self.assertEqual(data["rate_source"], "model-table")
 
-    def test_codex_reports_defaults_for_an_unknown_model(self) -> None:
+    def test_codex_reports_unavailable_for_an_unknown_model(self) -> None:
         data = self.write_and_run(
             "codex-fallback.jsonl",
             codex_session(
@@ -252,7 +255,9 @@ class CacheAwareUsdTest(unittest.TestCase):
             ),
             CODEX_SCRIPT,
         )
-        self.assertEqual(data["rate_source"], "cli-default")
+        self.assertEqual(data["rate_source"], "unavailable")
+        self.assertIsNone(data["usd_estimated"])
+        self.assertIsNone(data["usd_basis"])
 
     # 3. Model families priced by their own row, and cache writes by TTL.
 
