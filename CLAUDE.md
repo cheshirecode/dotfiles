@@ -64,7 +64,7 @@ clean" stays green while the tool is wrong. Measured cost of one instance: a
 stale-ref checker reported 19 stale refs where the truth was 45, missing 58%
 with no error surfaced.
 
-Two corollaries:
+Corollaries:
 
 - **Prefer the silent failure when building a fixture.** If a wrong input can
   either 404 loudly or return a confident wrong value, build the fixture around
