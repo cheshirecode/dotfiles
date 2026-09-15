@@ -10,7 +10,7 @@ Pass-through flags: `--for=resume|review|compact` (default `resume`), `--format=
 
 For resume Markdown with at least three open items, verify linked work before hydrating the selected tracker. Drop completed items and deduplicate against the existing tracker. Claude uses the `TaskCreate` argument objects; Codex uses `update_plan` when available; Cursor uses its native tracker. Hydrate only verified surviving items. Compact, review, JSON and `--tracker=none` do not contain a tracker snippet and require no hydration step.
 
-Compact mode skips PR enrichment and emits one evidence commit, at most five current open items, omitted count and a recovery path. Both compact formats carry source content identity and generation/expiry timestamps; JSON is `worklog-context/v1`. Resume/review JSON retains its full body and work items. PR enrichment uses `pr_repos`, exact body URLs or one unambiguous task repository; cached task links are not authoritative linkage. Ambiguous/unavailable enrichment is reported explicitly.
+Compact mode skips PR enrichment and emits one evidence commit, at most five current open items, omitted count and a recovery path. Both compact formats carry source content identity and generation/expiry timestamps; JSON is `worklog-context/v1`. Resume Markdown caps the task body at 8000 characters and appends the omitted character count with the task path; read that path for the full text. Resume/review JSON retains its full body and work items. PR enrichment uses `pr_repos`, exact body URLs or one unambiguous task repository; cached task links are not authoritative linkage. Ambiguous/unavailable enrichment is reported explicitly.
 
 Render the script's main output verbatim.
 
