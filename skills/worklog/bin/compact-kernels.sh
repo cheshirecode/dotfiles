@@ -31,26 +31,6 @@ OUT_MD_TMP="$(mktemp "$OUT_DIR/compact-kernels.md.tmp.XXXXXX")"
 OUT_JSON_TMP="$(mktemp "$OUT_DIR/compact-kernels.json.tmp.XXXXXX")"
 trap 'rm -f "$OUT_MD_TMP" "$OUT_JSON_TMP"' EXIT
 
-# Empty-active short-circuit (matches existing behavior expected by tests).
-if ! ls "$ACTIVE_DIR"/*.md >/dev/null 2>&1; then
-  {
-    NOW_EPOCH="$(date -u +%s)"
-    STALE_EPOCH=$((NOW_EPOCH + 3600))
-    printf '# Compact kernels — generated %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    printf '# Stale after: %s (readers should skip if current time exceeds this)\n' \
-      "$(date -u -r "$STALE_EPOCH" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "@$STALE_EPOCH" +%Y-%m-%dT%H:%M:%SZ)"
-    printf '\nOne resume kernel per active task. Read this first after /compact\n'
-    printf 'or on a new session; only open the full task file if you need more.\n\n'
-    printf '_(no active tasks)_\n'
-  } > "$OUT_MD_TMP"
-  echo "[]" > "$OUT_JSON_TMP"
-  mv -f "$OUT_MD_TMP" "$OUT_MD"
-  mv -f "$OUT_JSON_TMP" "$OUT_JSON"
-  trap - EXIT
-  echo "compact-kernels: wrote $OUT_MD (no active tasks)"
-  exit 0
-fi
-
 python3 - "$ACTIVE_DIR" "$OUT_MD_TMP" "$OUT_JSON_TMP" "$SCRIPT_DIR" <<'PY'
 import json, pathlib, sys, subprocess, datetime
 sys.path.insert(0, sys.argv[4])
@@ -98,16 +78,19 @@ for f in files:
   last_sha, last_subject = last_sha_by_path.get(str(f.resolve()), ("", ""))
   kernel = make_kernel(f.stem, fm, body, text, f, last_sha, last_subject, now, "file")
   records.append(kernel)
-  md_sections.append(f"### {kernel['slug']}\n\n" + kernel_markdown(kernel))
+  md_sections.append(f"### {kernel['slug']}\n\n" + kernel_markdown(kernel, include_freshness=False))
 
-# Emit md.
+# Keep regeneration timestamps after all source content, including empty snapshots.
 with out_md.open("w") as fh:
-  fh.write(f"# Compact kernels — generated {now.strftime('%Y-%m-%dT%H:%M:%SZ')}\n")
-  fh.write(f"# Stale after: {stale.strftime('%Y-%m-%dT%H:%M:%SZ')} (readers should skip if current time exceeds this)\n\n")
-  fh.write("One resume kernel per active task. Read this first after /compact\n")
-  fh.write("or on a new session; only open the full task file if you need more.\n\n")
+  fh.write("# Compact kernels\n\n")
+  fh.write("One resume kernel per active task. Snapshot freshness below applies to all kernels.\n")
+  fh.write("Read accepted decisions and constraints in the task before acting.\n\n")
   for sec in md_sections:
     fh.write(sec + "\n\n")
+  if not md_sections:
+    fh.write("_(no active tasks)_\n\n")
+  fh.write(f"# Generated: {now.strftime('%Y-%m-%dT%H:%M:%SZ')}\n")
+  fh.write(f"# Stale after: {stale.strftime('%Y-%m-%dT%H:%M:%SZ')} (skip expired snapshots)\n")
 
 # Emit json.
 out_json.write_text(json.dumps(records, indent=2) + "\n")

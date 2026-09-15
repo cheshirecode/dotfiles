@@ -104,7 +104,7 @@ OUT=".cache/compact-kernels.md"
 echo "  ✓ $OUT exists ($(wc -l <"$OUT" | tr -d ' ') lines)"
 
 # Assertion 2: header lines.
-grep -q "^# Compact kernels — generated" "$OUT" \
+grep -q "^# Generated:" "$OUT" \
   || { echo "FAIL: missing 'generated' header"; exit 1; }
 grep -q "^# Stale after:" "$OUT" \
   || { echo "FAIL: missing 'Stale after' header"; exit 1; }
@@ -157,8 +157,24 @@ echo "  ✓ no kernel generation failures"
 
 echo ""
 echo "=== Run 2 — idempotent rewrite ==="
+cp "$OUT" "$SCRATCH_ROOT/first.md"
 sleep 1  # ensure timestamp changes if regenerated
 "$WORKLOG_BIN/compact-kernels.sh"
+python3 - "$SCRATCH_ROOT/first.md" "$OUT" "$JSON" <<'PY_PREFIX'
+import datetime, json, pathlib, sys
+first, second = (pathlib.Path(p).read_text() for p in sys.argv[1:3])
+assert first.startswith("# Compact kernels\n")
+assert first != second
+assert first.split("# Generated:")[0] == second.split("# Generated:")[0]
+assert "generated_at:" not in second and "expires_at:" not in second
+records = json.loads(pathlib.Path(sys.argv[3]).read_text())
+for record in records:
+    start = datetime.datetime.fromisoformat(record["generated_at"])
+    end = datetime.datetime.fromisoformat(record["expires_at"])
+    assert end - start == datetime.timedelta(hours=1)
+    assert record["content_sha256"] in second
+assert second.index("# Generated:") > second.rindex("content_sha256:")
+PY_PREFIX
 # Timestamp lines change every run, but section count must match.
 NEW_SECTION_COUNT=$(grep -c '^### ' "$OUT")
 [[ "$NEW_SECTION_COUNT" -eq 3 ]] \
@@ -173,6 +189,8 @@ grep -q "_(no active tasks)_" "$OUT" \
   || { echo "FAIL: empty-dir placeholder missing"; cat "$OUT"; exit 1; }
 [[ "$(grep -c '^### ' "$OUT")" -eq 0 ]] \
   || { echo "FAIL: sections present despite empty active dir"; exit 1; }
+grep -q '^# Generated:' "$OUT" || { echo "FAIL: empty snapshot lacks generation"; exit 1; }
+grep -q '^# Stale after:' "$OUT" || { echo "FAIL: empty snapshot lacks expiry"; exit 1; }
 echo "  ✓ empty active dir → '_(no active tasks)_' placeholder, no sections"
 
 echo ""
