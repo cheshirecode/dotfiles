@@ -286,6 +286,26 @@ class RealLaneTest(unittest.TestCase):
         self.assertEqual(basis["codex"], "model-rates")
         self.assertEqual(basis["opencode"], "provider-reported")
 
+    def test_a_lane_with_no_rate_renders_as_unavailable_not_none(self) -> None:
+        """A null basis must not reach the summary as the literal "None".
+
+        An unknown Codex model now yields usd_basis null by design, and the
+        doctor stores that null per lane. Interpolating it produced
+        `usd_basis: codex=None`, which reads as a basis *named* None rather
+        than a lane that priced nothing — the same absent-vs-ok confusion the
+        zero-cost guard above exists to prevent. The empty-report case
+        already said "none measured"; this pins the per-lane wording.
+        """
+        report = {
+            "lanes": [{"harness": "codex", "status": "ok"}],
+            "failed": [],
+            "usd_basis": {"codex": None},
+            "usd_basis_note": "",
+        }
+        summary = doctor.render(report)
+        self.assertIn("usd_basis: codex=unavailable", summary)
+        self.assertNotIn("None", summary)
+
     def test_every_reader_lane_is_a_harness_the_collector_accepts(self) -> None:
         """A lane you can diagnose but cannot record is only half a lane.
 
