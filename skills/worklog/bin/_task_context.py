@@ -92,7 +92,7 @@ def make_kernel(slug, fm, body, text, path, last_sha="", last_subject="", now=No
   }
 
 
-def kernel_markdown(kernel):
+def kernel_markdown(kernel, *, include_freshness=True):
   def one_line(value):
     return str(value).replace("\r", "\\r").replace("\n", "\\n") or "—"
   lines = [f"slug: {kernel['slug']}", f"status: {kernel['status'] or '—'}",
@@ -107,8 +107,9 @@ def kernel_markdown(kernel):
   lines.append(f"task: {kernel['task_path']}")
   # Keep source identity before the clock-dependent suffix in both projections.
   lines.append(f"content_sha256: {kernel['content_sha256']}")
-  lines.append(f"generated_at: {kernel['generated_at']}")
-  lines.append(f"expires_at: {kernel['expires_at']}")
+  if include_freshness:
+    lines.append(f"generated_at: {kernel['generated_at']}")
+    lines.append(f"expires_at: {kernel['expires_at']}")
   return "\n".join(lines)
 
 

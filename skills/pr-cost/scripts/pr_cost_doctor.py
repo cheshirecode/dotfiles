@@ -102,7 +102,7 @@ _JSONL_EVENTS = {
             "payload": {
                 "session_id": "doctor-codex",
                 "cwd": "/doctor",
-                "model": "doctor-model",
+                "model": "gpt-5-codex",
                 "timestamp": "2026-01-01T00:00:00Z",
             },
         },
