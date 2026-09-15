@@ -25,7 +25,15 @@ tracked in the same ownership roster and budget.
 | Architecture reviewer, when needed | Dependencies, policy/IO boundary, duplication | Concrete defects and smallest correction |
 
 Roles may be sequential passes. They neither require another agent nor change
-permissions. Workers return `evidence`, `uncertainty`, and `next action`, including
+permissions. Implementer and verifier run as a generate-then-critique cycle when
+quality is the goal. Bound it before starting: published evaluator-optimizer
+loops settle in two to four cycles, and a cycle that stops producing concrete,
+actionable findings is done. Skip the cycle when the first attempt already meets
+the acceptance checks, or when the criteria are too subjective for a finding to
+be replayable — an evaluator without a discriminating check adds tokens and
+opinions, not quality.
+
+Workers return `evidence`, `uncertainty`, and `next action`, including
 task/repo/revision identity under [durable-context.md](durable-context.md).
 The parent verifies returns, reconciles duplicates, writes shared checkpoints,
 and advances once. An isolated writer may commit assigned code; a read-only
@@ -38,8 +46,14 @@ a context reset. Do not infer context or liveness from a name or filesystem mtim
 ## Failed calls and retries
 
 Choose fan-out only for independent work whose value exceeds dispatch, repeated
-context and synthesis cost. Keep dependent decisions with one owner or pass their
-accepted context explicitly. More workers are not an acceptance criterion.
+context and synthesis cost. That cost has a measured size: Anthropic's
+architecture guidance puts multi-agent runs at roughly 10-15x the tokens of a
+single agent for the same question. Scale effort to the question, so a simple one
+never triggers an expensive wave. The exception is a broad sweep where you want
+only the conclusion; there the delegate's reads stay out of the parent's context
+([context-budget.md](context-budget.md#prefer-the-answer-to-the-material)).
+Keep dependent decisions with one owner or pass their accepted context
+explicitly. More workers are not an acceptance criterion.
 
 Set a retry ceiling inside the existing budget before dispatch; absent one, return
 the failure for the parent to reassess. Retry a transient transport/rate-limit
