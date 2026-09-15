@@ -66,4 +66,20 @@ RUN echo "=== Stage 3: real install ===" \
 RUN echo "=== Stage 4: doctor ===" \
  && bin/doctor.sh
 
+# --- Stage 5: browser-use-setup (Linux proof, sandboxed) -------------------
+# Runs the skill's installer against a bare HOME with uv bootstrapped from
+# nothing — the cross-platform contract the macOS suite cannot prove. No
+# Chrome/display here, so the doctor is EXPECTED to fail its connection
+# lanes: the installer must still exit 0 (warn, don't fail) and land the
+# binary + vendor skill inside the sandbox tree only.
+RUN echo "=== Stage 5: browser-use-setup sandbox install ===" \
+ && mkdir -p /tmp/bu-sandbox/home \
+ && HOME=/tmp/bu-sandbox/home \
+    UV_TOOL_DIR=/tmp/bu-sandbox/uv-tools \
+    UV_TOOL_BIN_DIR=/tmp/bu-sandbox/uv-bin \
+    bash /src/skills/browser-use-setup/bin/install-browser-use.sh --bootstrap-uv \
+ && /tmp/bu-sandbox/uv-bin/browser-use --version \
+ && test -f /tmp/bu-sandbox/home/.claude/skills/browser-use/SKILL.md \
+ && PATH=/tmp/bu-sandbox/uv-bin:$PATH bash /src/skills/browser-use-setup/bin/bu --version
+
 CMD ["bash"]
