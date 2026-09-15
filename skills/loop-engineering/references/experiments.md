@@ -37,10 +37,16 @@ A trial that bundles two changes cannot say which one moved the number.
 | Metric worse | Discard, whatever the code size |
 
 Run trials in a dedicated worktree on a dedicated branch, never in a checkout
-another session may use. Discard by resetting to the recorded baseline SHA in
-that worktree. Check the trial commit is unpushed first; a pushed trial is
-reverted, not reset. The [effect boundary](effects.md) governs the reset like
-any other mutation.
+another session may use. That worktree is disposable, which is what makes a
+discard cheap.
+
+Discarding means `git reset --hard <baseline-sha>`, and that command destroys
+uncommitted work. Run it only when all three hold: the worktree is the trial's
+own, the trial commit is unpushed, and the tree holds nothing but the trial. A
+pushed trial is reverted, not reset. If any condition is unclear, delete the
+worktree and cut a fresh one from the baseline instead — same result, nothing
+destroyed. The [effect boundary](effects.md) governs this like any other
+mutation, and a project rule that gates `--hard` still gates it here.
 
 ## Read the metric, not the log
 
