@@ -98,8 +98,35 @@ def fetch_prs(pr_field, fm, body):
   return prs, diagnostics
 
 
+# Ceiling for the task body in a resume markdown pack. A resume is the session
+# least able to afford an unbounded read: it has just lost its context and is
+# rebuilding it. Commits and open items were already capped; the body was not,
+# so a task whose body grew over months paid full price on every resume.
+# JSON keeps the full body — that contract is documented and machine-consumed.
+RESUME_BODY_CHARS = 8000
+
+
+def bounded_body(body: str, task_path) -> tuple:
+  """Return (text, notice). notice is None when the body fits under the cap."""
+  text = body.rstrip()
+  if len(text) <= RESUME_BODY_CHARS:
+    return text, None
+  head = text[:RESUME_BODY_CHARS]
+  # Prefer a line boundary, but not one so early that it throws away most of
+  # the allowance — a body whose first line is enormous would otherwise show
+  # almost nothing.
+  cut = head.rfind("\n")
+  if cut >= RESUME_BODY_CHARS // 2:
+    head = head[:cut]
+  omitted = len(text) - len(head)
+  notice = (f"_{omitted} characters omitted of {len(text)}. "
+            f"Full body: {task_path}_")
+  return head.rstrip(), notice
+
+
 def render_markdown(slug: str, for_mode: str, fm: dict, body: str,
-                    commits: list, prs: list, work_items: list, tracker="none", diagnostics=()) -> None:
+                    commits: list, prs: list, work_items: list, tracker="none", diagnostics=(),
+                    task_path="") -> None:
   print(f"# {slug} — context ({for_mode})")
   print()
   print("## Frontmatter")
@@ -158,7 +185,11 @@ def render_markdown(slug: str, for_mode: str, fm: dict, body: str,
         print("Mirror verified open items from the task body into Cursor's tracker.")
       print()
     print("## Body")
-    print(body.rstrip())
+    text, notice = bounded_body(body, task_path)
+    print(text)
+    if notice:
+      print()
+      print(notice)
   elif for_mode == "review":
     review_body = re.sub(r"## Invariants.*?(?=\n## |\Z)", "", body, flags=re.DOTALL)
     print("## Task body (review-relevant)")
@@ -187,7 +218,8 @@ def main() -> None:
     }, indent=2, default=str))
     return
 
-  render_markdown(slug, for_mode, fm, body, commits, prs, work_items, tracker, diagnostics)
+  render_markdown(slug, for_mode, fm, body, commits, prs, work_items, tracker, diagnostics,
+                  task_path=pathlib.Path(file_path).resolve())
 
 
 if __name__ == "__main__":

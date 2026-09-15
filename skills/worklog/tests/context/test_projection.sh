@@ -168,6 +168,25 @@ class ContextProjection(unittest.TestCase):
                 self.assertEqual(diagnostics[0]['status'],'unavailable')
                 self.assertLess(len(json.dumps(diagnostics)),200)
 
+    def test_resume_markdown_bounds_the_body_and_names_the_recovery_path(self):
+        # setUp writes a ~27000-character body. An unbounded resume pack pays
+        # that cost on every resume, which is the session least able to afford it.
+        out = self.call('--tracker=none').stdout
+        self.assertIn('## Body',out)
+        self.assertIn('## Context',out)          # the head of the body survives
+        self.assertLess(len(out.encode()),12000,'resume markdown body is unbounded')
+        notice = next((l for l in out.splitlines() if 'omitted' in l and 'Body' not in l),'')
+        self.assertIn('characters omitted',notice)
+        self.assertIn(str(self.file),notice,'omission notice must name the full-body path')
+
+    def test_short_body_is_not_truncated(self):
+        # Guards the cap against firing on every task: a body under the ceiling
+        # must arrive whole, with no omission notice.
+        self.file.write_text("---\nslug: task\nstatus: draft\nnext_action: Go\n---\n## Context\nshort body\n## Next\n- [ ] one\n")
+        out = self.call('--tracker=none').stdout
+        self.assertIn('short body',out)
+        self.assertNotIn('characters omitted',out)
+
     def test_invalid_options_fail_before_context(self):
         for args in [('--for=typo',),('--format=typo',),('--tracker=typo',),('--for',)]:
             self.assertEqual(self.call(*args,check=False).returncode,2)
