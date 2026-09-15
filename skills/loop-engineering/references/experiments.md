@@ -60,8 +60,12 @@ An empty extraction means the trial failed. It is not a score of zero. Read the
 tail of the log and classify: a typo or missing import is worth one fix and one
 rerun; a broken idea is recorded as a crash and left. Bound the fix attempts.
 
-Kill any trial that exceeds a stated multiple of its budget — autoresearch uses
-two times — and record it as a failure.
+Set a kill ceiling before trial one, and set it on the trial's whole observed
+duration, not on the fixed inner budget. The two differ: autoresearch fixes five
+minutes of training but kills at ten minutes of total runtime, because startup,
+compilation and evaluation sit outside the budget. A ceiling of twice the
+expected total is a reasonable default. A trial that hits it is a failure, not a
+score.
 
 ## Keep a ledger of every trial
 
