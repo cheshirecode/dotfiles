@@ -30,10 +30,11 @@ A trial that bundles two changes cannot say which one moved the number.
 
 | Result | Action |
 | --- | --- |
-| Metric improved | Keep. The branch advances to this commit |
-| Metric equal or worse | Discard. Return the branch to the start commit |
+| Metric improved, complexity flat or lower | Keep. The branch advances to this commit |
+| Metric improved a little, much more code | Discard. Weigh the added lines against the gain |
 | Metric equal, less code | Keep. Deleting code for the same result is a win |
-| Small gain, large complexity | Discard. Weigh the added lines against the gain |
+| Metric equal, same or more code | Discard |
+| Metric worse | Discard, whatever the code size |
 
 Run trials in a dedicated worktree on a dedicated branch, never in a checkout
 another session may use. Discard by resetting to the recorded baseline SHA in
