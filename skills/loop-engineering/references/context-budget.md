@@ -15,10 +15,11 @@ Three moves cover nearly every case:
 - **Cap it.** Redirect the whole output to an artifact in `<run-dir>`, then read
   the slice you need. The artifact keeps the evidence; context gets the answer.
 
-Anthropic's architecture guidance caps a single tool response near 25,000 tokens
-and asks for pagination, range selection, filtering and truncation with sensible
-defaults. The asymmetry is what matters: under that cap a session absorbs many
-calls, and a few calls over it end the session.
+Anthropic's architecture guidance recommends pagination, range selection,
+filtering and truncation with sensible defaults, and suggests "something like
+25,000 tokens" as a manageable ceiling for one response. Treat that as a
+reference point, not a measured limit: the asymmetry is what matters, because a
+session absorbs many small responses and dies to a few large ones.
 
 Redirect first, read second, whenever the output size is not predictable — log
 tails, full test suites, `git log` with no count, directory walks, network dumps.
@@ -40,10 +41,11 @@ context argument for fan-out, and it is separate from the cost argument in
 
 ## Track consumption, not only turns
 
-A turn budget does not measure context. Two loops at the same turn count can
-differ tenfold in context consumed, because turns count recorded advances, not
-bytes read. Where the host exposes usage, record it per cycle next to the turn
-count, so the trend is visible before the ceiling is.
+A turn budget does not measure context. Turns count recorded advances, not bytes
+read, so two loops at the same turn count can consume very different amounts —
+one cycle that reads a whole test log outweighs many that read a grep result.
+Where the host exposes usage, record it per cycle next to the turn count, so the
+trend is visible before the ceiling is.
 
 Hand off before forced compaction, not after. A checkpoint you write keeps the
 evidence you chose; a compaction the host runs keeps what the host chose. When
