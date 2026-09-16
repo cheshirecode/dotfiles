@@ -472,6 +472,18 @@ NONLATIN
 # Council items #1, #6: fixture-driven red-path tests for guardrails.
 test_fixtures() {
   echo "=== fixtures (red-path guardrail tests) ==="
+
+  # Repo-root scripts (install.sh and friends) keep their fixtures in
+  # tests/<area>/. Globbed, not listed: a new tests/<area>/test_*.sh runs by
+  # existing rather than by someone remembering to add a line here.
+  for t in tests/*/test_*.sh; do
+    [[ -e "$t" ]] || continue
+    if out=$(bash "$t" 2>&1); then
+      ok "root $(basename "$(dirname "$t")")/$(basename "$t" .sh)"
+    else
+      fail_with_output "root $(basename "$(dirname "$t")")/$(basename "$t" .sh)" "$out"
+    fi
+  done
   local python_site_path
   python_site_path=$(python3 - <<'PY'
 import pathlib

@@ -8,6 +8,19 @@ set -eu
 REPO_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 DEST="${CODER_SYMLINK_DIR:-$HOME}"
 
+# A real, non-empty directory in $DEST is user data, not a stale dotfile. On the
+# Coder template these are persistent-disk mountpoints and mv fails EBUSY, so
+# backup() only warned and the hazard stayed invisible; on a laptop $HOME is a
+# plain directory and the mv succeeds. Reported 2026-09-16: ~/.claude (settings,
+# transcripts, per-project memory) was moved to ~/.claude.bak and the repo's
+# gitignored .claude/ linked in its place. The skip list below names .claude,
+# but a name list only ever covers what someone remembered; this covers the next
+# directory added to the repo.
+holds_user_data() {
+  local target="$1"
+  [ -d "$target" ] && [ ! -L "$target" ] && [ -n "$(ls -A "$target" 2>/dev/null)" ]
+}
+
 backup() {
   local target="$1"
   if [ -e "$target" ] || [ -L "$target" ]; then
@@ -27,12 +40,17 @@ for src in "$REPO_DIR"/.*; do
   case "$name" in
     .|..|.git|.github|.gitignore) continue ;;
     .cursor) continue ;; # handled below
+    .claude) continue ;; # real Claude home in $DEST: settings, transcripts, memory. The repo's copy is gitignored scratch; linking it over ~/.claude destroys the user's.
     .config) continue ;; # handled below — repo lives under ~/.config, symlinking it wholesale creates a self-referential loop
     .gitconfig.cheshireCode) continue ;; # referenced by absolute path from .gitconfig
     .envrc.github) continue ;; # gitignored secret holder, sourced explicitly
   esac
   target="$DEST/$name"
   if [ -L "$target" ] && [ "$(readlink "$target")" = "$src" ]; then
+    continue
+  fi
+  if holds_user_data "$target"; then
+    echo "warning: $target is a non-empty real directory; refusing to replace it with a symlink." >&2
     continue
   fi
   backup "$target"
@@ -79,9 +97,28 @@ fi
 # .cursor: copy contents instead of symlinking. ~/.cursor is a mountpoint;
 # replacing it with a symlink fails with "file exists".
 if [ -d "$REPO_DIR/.cursor" ]; then
-  mkdir -p "$DEST/.cursor"
-  echo "Copying $REPO_DIR/.cursor/ into $DEST/.cursor/..."
-  cp -R "$REPO_DIR/.cursor/." "$DEST/.cursor/"
+  # Guarded like the super-ruler block below: cp cannot write through a dangling
+  # symlink, and unguarded under `set -eu` that aborted the whole installer.
+  # Reported 2026-09-16: ~/.cursor/rules and ~/.cursor/mcp.json pointed into a
+  # deleted checkout, cp failed "Not a directory" / "Permission denied", and the
+  # skills links, the ~/.gitconfig.local and ~/.shell_common.local bootstraps
+  # and the terminfo entry never ran.
+  (
+    set +e
+    mkdir -p "$DEST/.cursor"
+    # Clear destination links whose target is gone; they are leftovers from an
+    # older checkout and cp would fail writing through them.
+    for stale in "$DEST/.cursor"/* "$DEST/.cursor"/.*; do
+      case "$(basename "$stale")" in .|..) continue ;; esac
+      if [ -L "$stale" ] && [ ! -e "$stale" ]; then
+        echo "Removing dangling $stale (target gone)..."
+        rm -f "$stale"
+      fi
+    done
+    echo "Copying $REPO_DIR/.cursor/ into $DEST/.cursor/..."
+    cp -R "$REPO_DIR/.cursor/." "$DEST/.cursor/" ||
+      echo "warning: could not copy .cursor into $DEST; continuing." >&2
+  ) || true
 fi
 
 # Symlink every skill shipped in this repo into the shared Agent Skills root,
