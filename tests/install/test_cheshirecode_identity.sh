@@ -55,7 +55,7 @@ identity_for() { # identity_for <url>
 
 want="1631630+cheshirecode@users.noreply.github.com"
 for url in \
-  'git@<ssh-alias>:cheshirecode/dotfiles.git' \
+  'git@gh-cheshirecode:cheshirecode/dotfiles.git' \
   'git@github.com:cheshirecode/dotfiles.git' \
   'https://github.com/cheshirecode/dotfiles.git'
 do
@@ -63,14 +63,15 @@ do
   [ "$got" = "$want" ] || note "cheshireCode identity did not apply for $url (got '${got:-none}')"
 done
 
-# 4. It must NOT leak onto a repository owned by anyone else. The SSH host alias
-# <ssh-alias> contains the owner name, so a looser glob would match
-# an work-org repo cloned through that alias and sign a work commit with the
-# personal identity.
+# 4. It must NOT leak onto a repository owned by anyone else. An SSH host alias
+# can itself carry the owner name (the git@host-<owner>: form), so a looser glob
+# would match a third party's repo cloned through that alias and sign their
+# commit with this identity. The foreign owners below are placeholders on
+# purpose: no real account name other than cheshirecode belongs in this repo.
 for url in \
-  'git@<ssh-alias>:<work-user>/dotfiles.git' \
-  'git@github.com:<work-user>/dotfiles.git' \
-  'https://github.com/<work-org>/curation.git'
+  'git@gh-cheshirecode:other-owner/dotfiles.git' \
+  'git@github.com:other-owner/dotfiles.git' \
+  'https://github.com/another-org/project.git'
 do
   got="$(identity_for "$url")"
   [ -z "$got" ] || note "cheshireCode identity leaked onto $url (got '$got')"
