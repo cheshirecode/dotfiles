@@ -179,6 +179,15 @@ class ContextProjection(unittest.TestCase):
         self.assertIn('characters omitted',notice)
         self.assertIn(str(self.file),notice,'omission notice must name the full-body path')
 
+    def test_review_markdown_bounds_the_body_too(self):
+        # The resume cap landed one branch above this one and left it unbounded.
+        # Review reads the same oversized body, so it needs the same ceiling.
+        out = self.call('--for=review').stdout
+        self.assertIn('## Task body (review-relevant)',out)
+        self.assertLess(len(out.encode()),12000,'review markdown body is unbounded')
+        notice = next((l for l in out.splitlines() if 'characters omitted' in l),'')
+        self.assertIn(str(self.file),notice,'omission notice must name the full-body path')
+
     def test_short_body_is_not_truncated(self):
         # Guards the cap against firing on every task: a body under the ceiling
         # must arrive whole, with no omission notice.

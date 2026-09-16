@@ -98,25 +98,27 @@ def fetch_prs(pr_field, fm, body):
   return prs, diagnostics
 
 
-# Ceiling for the task body in a resume markdown pack. A resume is the session
+# Ceiling for the task body in any markdown pack that prints it: resume and
+# review both do. Capping only resume left the adjacent branch unbounded.
+# A resume is the session
 # least able to afford an unbounded read: it has just lost its context and is
 # rebuilding it. Commits and open items were already capped; the body was not,
-# so a task whose body grew over months paid full price on every resume.
+# so a task whose body grew over months paid full price on every pack.
 # JSON keeps the full body — that contract is documented and machine-consumed.
-RESUME_BODY_CHARS = 8000
+PACK_BODY_CHARS = 8000
 
 
 def bounded_body(body: str, task_path) -> tuple:
   """Return (text, notice). notice is None when the body fits under the cap."""
   text = body.rstrip()
-  if len(text) <= RESUME_BODY_CHARS:
+  if len(text) <= PACK_BODY_CHARS:
     return text, None
-  head = text[:RESUME_BODY_CHARS]
+  head = text[:PACK_BODY_CHARS]
   # Prefer a line boundary, but not one so early that it throws away most of
   # the allowance — a body whose first line is enormous would otherwise show
   # almost nothing.
   cut = head.rfind("\n")
-  if cut >= RESUME_BODY_CHARS // 2:
+  if cut >= PACK_BODY_CHARS // 2:
     head = head[:cut]
   omitted = len(text) - len(head)
   notice = (f"_{omitted} characters omitted of {len(text)}. "
@@ -193,7 +195,11 @@ def render_markdown(slug: str, for_mode: str, fm: dict, body: str,
   elif for_mode == "review":
     review_body = re.sub(r"## Invariants.*?(?=\n## |\Z)", "", body, flags=re.DOTALL)
     print("## Task body (review-relevant)")
-    print(review_body.rstrip())
+    text, notice = bounded_body(review_body, task_path)
+    print(text)
+    if notice:
+      print()
+      print(notice)
 
 
 def main() -> None:
