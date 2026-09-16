@@ -3,7 +3,7 @@
 > Complete guide for setting up these dotfiles with Claude Code
 
 **Version**: 1.0.0
-**Last Updated**: 2026-01-21
+
 **Audience**: Developers migrating to or setting up Claude Code
 
 ---
@@ -1400,7 +1400,7 @@ docker ps
 
 ---
 
-**Last Updated**: 2026-01-21
+
 **Version**: 1.0.0
 **Maintained By**: Development Team
 **License**: MIT
