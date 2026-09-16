@@ -428,9 +428,25 @@ PY
 import pathlib
 import unicodedata
 
+# Extension globs alone missed nine shebang scripts with no extension,
+# including this skill set's own bin/crew-radar. Collect those by reading the
+# first two bytes rather than by listing them, so a new one is covered by
+# existing.
+def targets():
+    for pattern in ("skills/**/*.md", "skills/**/*.py", "skills/**/*.sh", "*.md"):
+        yield from pathlib.Path(".").glob(pattern)
+    for path in pathlib.Path("skills").rglob("*"):
+        if path.suffix or not path.is_file():
+            continue
+        try:
+            with path.open("rb") as handle:
+                if handle.read(2) == b"#!":
+                    yield path
+        except OSError:
+            continue
+
 offenders = []
-for pattern in ("skills/**/*.md", "skills/**/*.py", "skills/**/*.sh", "*.md"):
-    for path in sorted(pathlib.Path(".").glob(pattern)):
+for path in sorted(set(targets())):
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
