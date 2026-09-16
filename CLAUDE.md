@@ -57,6 +57,18 @@ amend it.
 `git reset --soft HEAD~1` undoes the last commit and keeps the changes. This is
 the safe default for "undo my commit".
 
+Never a bare `git commit` in a checkout another session may use: it writes
+whatever a peer has staged. Use `git commit -- <path>`. If a partial commit
+fails there (observed in a shared vault: `fatal: unable to read <sha>` for an
+object that reads fine), build the commit on a temporary `GIT_INDEX_FILE` with
+`read-tree`/`update-index`/`write-tree`/`commit-tree`/`update-ref`, which cannot
+touch the working index at all.
+
+Unstaging depends on which side the anomaly is on. A staged ADD of a path absent
+from HEAD has nothing to restore, so `git rm --cached <path>` is the only correct
+move; a staged DELETE of a path present in HEAD wants `git reset -- <path>`.
+Check which case it is before reaching for either.
+
 `git reset --hard HEAD~1` DISCARDS changes and is DANGEROUS. All three
 preconditions must hold:
 
@@ -166,9 +178,50 @@ something adjacent to what was meant.
   25,000 tokens" where the source suggests "something like" that as
   manageable, and carried an invented "tenfold" with nothing behind it. Quote
   the hedge or attribute the example.
+- **Verify from where a value is READ, not where it is SET.** An export placed
+  in a parent scope, checked from that parent, passes while the consumer one
+  directory down still sees nothing. Measured 2026-09-16: four org identifiers
+  sat in `~/Documents/projects/.envrc` and verified there, but the clone that
+  reads them had its own `.envrc` with no `source_up`, so the scrub stayed
+  disabled where it mattered. Run the check from the consumer's cwd.
+- **Do not infer behaviour from a filename.** A leftover `.loop_state.json.lock`
+  read as "a stale lock blocks the next run". `state_lock` uses
+  `fcntl.flock` on a descriptor, so the lock dies with the process and the file
+  is inert; a non-blocking acquire succeeded immediately. Open the code that
+  implements the name, even in your own repo.
+- **Concurrent test runs agree for the wrong reason.** Two `tests/run.sh all`
+  processes in one checkout share fixture temp paths, so a collision hits both
+  identically and they report the same number. Agreement between overlapping
+  runs is weaker evidence than one serial run, not stronger. Commit, then run
+  once.
 - **Re-measure before documenting a limitation.** "Cannot do X" ages into
   wrong, and no agreement pin catches prose. Re-run the check that established
   a limit before repeating it.
+
+## Repo identity (public repo; enforced by a check)
+
+These repos are public, so `cheshirecode` is the only account or org name that
+may appear in tracked files. No employer org, no work account, no personal SSH
+host alias — the `git@host-<owner>:` form names an owner too. Describe a hazard
+by its shape rather than by a real name, and use placeholder owners in fixtures.
+
+Real values live outside the repo: the per-clone `.envrc` supplies
+`WORKLOG_ORG`, `WORKLOG_ORG_DOMAIN`, `WORKLOG_ORG_REPOS` and
+`WORKLOG_FORGE_NAMESPACE`. Unset is REPORTED, never silently skipped.
+
+Two traps, both hit on 2026-09-16:
+
+- **Some occurrences are load-bearing.** The org literal in a deny pattern, a
+  sanitizer, or that sanitizer's corpus IS the thing being matched; deleting it
+  disables the guard. Parameterise instead, and check `git check-ignore`,
+  defaults and tests before touching any literal.
+- **A history rewrite does not scrub authors.** `--replace-text` leaves author
+  and committer metadata untouched. Enumerate
+  `git log --all --format='%an <%ae>'` and fix with `--mailmap`. On GitHub,
+  `refs/pull/*` is read-only and survives a rewrite; only delete-and-recreate
+  clears it.
+
+`tests/run.sh static` enforces the account-name half of this.
 
 ## Reading posture (apply before treating any section as a recipe)
 
