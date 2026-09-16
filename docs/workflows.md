@@ -3,7 +3,6 @@
 > Practical, step-by-step workflows for common development tasks with Claude Code
 
 **Version**: 1.0.0
-**Last Updated**: 2026-01-21
 
 ---
 
@@ -3532,7 +3531,7 @@ This workflows document provides practical, step-by-step patterns for common dev
 
 ---
 
-**Last Updated:** 2026-01-21
+
 **See Also:**
 - [CLAUDE.md](../CLAUDE.md) - Repo-specific rules for agents
 - [MCP Servers Guide](mcp-servers.md) - MCP server setup and usage

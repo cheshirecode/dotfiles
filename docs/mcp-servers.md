@@ -3,7 +3,7 @@
 > Comprehensive guide to Model Context Protocol (MCP) servers for Claude Code
 
 **Version**: 1.0.0
-**Last Updated**: 2026-01-21
+
 **Configuration File**: `claude-mcp.example.json`
 
 ---
@@ -2165,6 +2165,6 @@ This documentation should evolve as MCP servers are added, updated, or deprecate
 ---
 
 **Maintained By**: Development Team
-**Last Updated**: 2026-01-21
+
 **Version**: 1.0.0
 **License**: MIT (adapt freely for your projects)
