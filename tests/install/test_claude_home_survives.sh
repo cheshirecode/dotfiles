@@ -34,18 +34,18 @@ fails=0
 note() { echo "FAIL: $1"; fails=$((fails + 1)); }
 
 if [ -L "$DEST/.claude" ]; then
-  note "~/.claude was replaced by a symlink to $(readlink "$DEST/.claude")"
+  note "DEST/.claude was replaced by a symlink to $(readlink "$DEST/.claude")"
 fi
 if [ ! -f "$DEST/.claude/settings.json" ]; then
-  note "~/.claude/settings.json is gone"
+  note "DEST/.claude/settings.json is gone"
 elif ! grep -q 'user-settings' "$DEST/.claude/settings.json"; then
-  note "~/.claude/settings.json no longer holds the user's content"
+  note "DEST/.claude/settings.json no longer holds the user's content"
 fi
 if [ ! -f "$DEST/.claude/projects/session.jsonl" ]; then
-  note "~/.claude/projects/session.jsonl is gone"
+  note "DEST/.claude/projects/session.jsonl is gone"
 fi
 if [ -e "$DEST/.claude.bak" ] || [ -L "$DEST/.claude.bak" ]; then
-  note "installer moved the real ~/.claude aside to .claude.bak"
+  note "installer moved the real DEST/.claude aside to .claude.bak"
 fi
 if ! printf '%s\n' "$out" | grep -q 'Dotfiles installation complete.'; then
   note "installer never reached its last line (exit $status); a dangling ~/.cursor link aborted it"
