@@ -415,6 +415,42 @@ if offenders:
     raise SystemExit(1)
 PY
   then ok "fixtures pin WORKLOG_BIN to the tree under test"; else fail "fixtures pin WORKLOG_BIN to the tree under test"; fi
+
+  # A stray CJK word once reached a drafted reference and was caught by eye, not
+  # by a check. Ban the CLASS, not that literal: a LETTER outside the Latin
+  # script has no place in this repo's English prose, identifiers, or commands.
+  # Symbols are deliberately untouched - the repo uses box drawing, arrows, math
+  # and emoji on purpose, and a check that fought those would be quieted into
+  # uselessness. Accented Latin letters (Jose, Muller) also pass, so a real name
+  # never forces a carve-out. Measured 2026-09-16: zero non-Latin letters
+  # repo-wide, so this starts green with no allowlist.
+  if python3 - <<'NONLATIN'
+import pathlib
+import unicodedata
+
+offenders = []
+for pattern in ("skills/**/*.md", "skills/**/*.py", "skills/**/*.sh", "*.md"):
+    for path in sorted(pathlib.Path(".").glob(pattern)):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for lineno, line in enumerate(text.splitlines(), 1):
+            for ch in line:
+                if ord(ch) < 128 or not unicodedata.category(ch).startswith("L"):
+                    continue
+                if unicodedata.name(ch, "").startswith("LATIN"):
+                    continue
+                offenders.append(
+                    f"{path}:{lineno}: U+{ord(ch):04X} "
+                    f"{unicodedata.name(ch, 'unnamed')} in: {line.strip()[:70]}"
+                )
+if offenders:
+    print("non-Latin letters found; English prose and code should not carry them:")
+    print("\n".join(offenders))
+    raise SystemExit(1)
+NONLATIN
+  then ok "prose and scripts carry no non-Latin letters"; else fail "prose and scripts carry no non-Latin letters"; fi
 }
 
 # Council items #1, #6: fixture-driven red-path tests for guardrails.
