@@ -21,7 +21,7 @@ Helpers and no-preamble modes (`plan` / `spawn` / `lint` / `export` / `import`) 
 
 ---
 
-Cross-machine, cross-agent work journal for the work org engineers. Git is the sync fabric so laptops, desktops, and LLM sessions (Claude Code, Codex, Cursor) share the same task state.
+Cross-machine, cross-agent work journal for a work engineering org. Git is the sync fabric so laptops, desktops, and LLM sessions (Claude Code, Codex, Cursor) share the same task state.
 
 - **Protocol:** see [`AGENTS.md`](./AGENTS.md). Auto-loaded by Codex; read by Cursor; loaded by Claude Code via the kickoff prompt below.
 - **Layout:** `people/<ldap>/active/<slug>.md` per in-flight task; `people/<ldap>/archive/<slug>.md` once terminal.

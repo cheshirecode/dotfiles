@@ -34,7 +34,7 @@ external_refs:
     url: https://console.cloud.google.com/logs/query;query=...
     note: error signature for the ENG-1514 rollout
   - platform: amplitude
-    url: https://app.amplitude.com/analytics/work-org/chart/xyz
+    url: https://app.amplitude.com/analytics/<work-org>/chart/xyz
 ```
 
 Required per entry: `platform` (lowercase kebab), `url`. Optional: `note` (one line). No other keys — push extra context into the body.
