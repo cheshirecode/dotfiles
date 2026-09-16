@@ -57,7 +57,7 @@ parse_git_branch() {
 setopt PROMPT_SUBST
 
 # Nicer prompt - adapted for zsh
-PS1=$'\n%{\e[30;1m%}(%{\e[34;1m%}%n@%m:%~%{\e[30;1m%}) (%{\e[32;1m%}$(/bin/ls -1 | /usr/bin/wc -l | /bin/sed "s: ::g") files, $(/bin/ls -lah | /bin/grep -m 1 total | /bin/sed "s/total //")b%{\e[30;1m%}) (%{\e[36m%}$(parse_git_branch)%{\e[0m%}%{\e[30;1m%})\n--> %{\e[0m%}'
+PS1=$'\n%{\e[30;1m%}(%{\e[34;1m%}%n@%m:%~%{\e[30;1m%}) (%{\e[32;1m%}$(command ls -1 | command wc -l | command sed "s: ::g") files, $(command ls -lah | command grep -m 1 total | command sed "s/total //")b%{\e[30;1m%}) (%{\e[36m%}$(parse_git_branch)%{\e[0m%}%{\e[30;1m%})\n--> %{\e[0m%}'
 
 # Enable color support of ls and also add handy aliases
 if [ -x /usr/bin/dircolors ]; then
