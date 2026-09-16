@@ -35,7 +35,7 @@ printf '%s\n' '{"local":"tui"}' > "$DEST/.config/opencode/tui.jsonc"
 printf '%s\n' 'local plugin' > "$DEST/.config/opencode/plugins/mine.js"
 
 out="$(cd "$REPO" && env HOME="$DEST" CODER_SYMLINK_DIR="$DEST" \
-  SKIP_SUPER_RULER=1 bash install.sh 2>&1)"
+  bash install.sh 2>&1)"
 status=$?
 
 fails=0

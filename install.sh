@@ -59,7 +59,7 @@ for src in "$REPO_DIR"/.*; do
   # (`cat >> $HOME/.bashrc`) in PARALLEL with `coder dotfiles`; on 2026-09-04 it
   # recreated ~/.bashrc ~1ms after the mv, plain `ln -s` failed EEXIST, and
   # `set -e` aborted the whole installer on its second file -- so .shell_common,
-  # .profile, .zshrc, the skills links, super-ruler and terminfo never ran, and
+  # .profile, .zshrc, the skills links and terminfo never ran, and
   # the shell silently came up with none of these dotfiles loaded.
   # -n so a symlinked-directory target is replaced rather than written through.
   ln -sfn "$src" "$target" || echo "warning: could not link $target; skipping." >&2
@@ -104,7 +104,7 @@ if [ -d "$REPO_DIR/.config" ]; then
     # template (e.g. opencode). They cannot be moved aside or replaced by a
     # symlink — mv fails with EBUSY — so copy into them like .cursor below.
     # Without this the whole installer aborted here under `set -eu`, and every
-    # step after this loop (skills, super-ruler, .gitconfig.local) never ran.
+    # step after this loop (skills, .gitconfig.local) never ran.
     if mountpoint -q "$etarget" 2>/dev/null; then
       echo "Copying $entry/ into mountpoint $etarget/..."
       cp -R "$entry/." "$etarget/"
@@ -128,7 +128,7 @@ fi
 # .cursor: copy contents instead of symlinking. ~/.cursor is a mountpoint;
 # replacing it with a symlink fails with "file exists".
 if [ -d "$REPO_DIR/.cursor" ]; then
-  # Guarded like the super-ruler block below: cp cannot write through a dangling
+  # Guarded: cp cannot write through a dangling
   # symlink, and unguarded under `set -eu` that aborted the whole installer.
   # Reported 2026-09-16: ~/.cursor/rules and ~/.cursor/mcp.json pointed into a
   # deleted checkout, cp failed "Not a directory" / "Permission denied", and the
@@ -169,53 +169,6 @@ if [ -d "$REPO_DIR/skills" ]; then
       ln -sfn "${skill%/}" "$starget" || echo "warning: could not link $starget; skipping." >&2
     done
   done
-fi
-
-# super-ruler: clone (or fast-forward) the shared skills repo, then run its own
-# installer, which copies .ruler/skills/*/SKILL.md into ~/.claude/commands/ as
-# /skill-name for every repo. This is the install path super-ruler's README
-# prescribes for dotfiles; without it the workspace keeps whatever stale copy
-# ~/.claude/commands happened to hold and silently drifts behind master.
-#
-# Non-fatal by design: a network failure or a broken upstream installer must not
-# abort the rest of dotfiles installation, so the whole block is guarded.
-SUPER_RULER_DIR="${SUPER_RULER_DIR:-/workspace/super-ruler}"
-if [ "${SKIP_SUPER_RULER:-0}" != "1" ]; then
-  (
-    set +e
-    if [ -d "$SUPER_RULER_DIR/.git" ]; then
-      echo "Updating super-ruler in $SUPER_RULER_DIR..."
-      git -C "$SUPER_RULER_DIR" fetch --quiet origin master &&
-        git -C "$SUPER_RULER_DIR" merge --ff-only --quiet origin/master ||
-        echo "super-ruler: fast-forward skipped (local commits or fetch failed); using current checkout." >&2
-    else
-      echo "Cloning super-ruler into $SUPER_RULER_DIR..."
-      mkdir -p "$(dirname "$SUPER_RULER_DIR")"
-      git clone --quiet <external-skills-repo> "$SUPER_RULER_DIR" ||
-        echo "super-ruler: clone failed; skills not installed." >&2
-    fi
-
-    # Prune commands whose upstream skill no longer exists (renames and splits
-    # leave the old name behind, and a stale duplicate still shows up as a
-    # slash command). Only touch names super-ruler itself once owned.
-    if [ -d "$SUPER_RULER_DIR/.ruler/skills" ] && [ -d "$DEST/.claude/commands" ]; then
-      for cmd in "$DEST"/.claude/commands/*.md; do
-        [ -e "$cmd" ] || continue
-        cname="$(basename "$cmd" .md)"
-        [ -d "$SUPER_RULER_DIR/.ruler/skills/$cname" ] && continue
-        if git -C "$SUPER_RULER_DIR" log --diff-filter=D --format=%H -1 \
-             -- ".ruler/skills/$cname/SKILL.md" 2>/dev/null | grep -q .; then
-          echo "Removing stale super-ruler command $cname (deleted upstream)..."
-          rm -f "$cmd"
-        fi
-      done
-    fi
-
-    # super-ruler's installer writes to $HOME/.claude/commands unconditionally.
-    # Point HOME at $DEST so it agrees with the prune loop above, which a test
-    # harness or a template installing outside $HOME would otherwise split.
-    [ -x "$SUPER_RULER_DIR/install.sh" ] && HOME="$DEST" "$SUPER_RULER_DIR/install.sh"
-  ) || echo "super-ruler: setup skipped (non-fatal)." >&2
 fi
 
 # Bootstrap ~/.gitconfig.local (machine-local identity, untracked). The

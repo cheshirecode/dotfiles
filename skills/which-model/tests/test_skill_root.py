@@ -29,7 +29,6 @@ class SkillRootTest(unittest.TestCase):
                 "HOME": str(home),
                 "PWD": str(cwd),
                 "PATH": os.defpath,
-                "SUPER_RULER": str(root / "absent-super-ruler"),
             }
             result = subprocess.run(
                 ["/bin/bash", "--noprofile", "--norc", "-c", recipe],

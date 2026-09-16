@@ -20,7 +20,7 @@ ln -s "$TMP/old/projects/dotfiles/.gitignore" "$DEST/.gitignore"
 ln -s "$TMP/elsewhere/.someone-elses-rc" "$DEST/.someone-elses-rc"
 
 out="$(cd "$REPO" && env HOME="$DEST" CODER_SYMLINK_DIR="$DEST" \
-  SKIP_SUPER_RULER=1 bash install.sh 2>&1)"
+  bash install.sh 2>&1)"
 
 fails=0
 note() { echo "FAIL: $1"; fails=$((fails + 1)); }
