@@ -26,9 +26,10 @@ tracked in the same ownership roster and budget.
 
 Roles may be sequential passes. They neither require another agent nor change
 permissions. Implementer and verifier run as a generate-then-critique cycle when
-quality is the goal. Bound it before starting: published evaluator-optimizer
-loops settle in two to four cycles, and a cycle that stops producing concrete,
-actionable findings is done. Skip the cycle when the first attempt already meets
+quality is the goal. Bound it before starting: Anthropic's worked
+evaluator-optimizer example settles in two to four cycles, which is a reasonable
+starting bound, and a cycle that stops producing concrete, actionable findings
+is done. Skip the cycle when the first attempt already meets
 the acceptance checks, or when the criteria are too subjective for a finding to
 be replayable — an evaluator without a discriminating check adds tokens and
 opinions, not quality.
