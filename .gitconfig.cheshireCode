@@ -1,6 +1,7 @@
 # Git identity overrides for repos owned by cheshireCode.
-# Activated via `includeIf` in ~/.gitconfig (see install.sh) so it only
-# applies when git's working directory is inside ~/.config/coderv2/dotfiles/.
+# Activated via `includeIf` in ~/.gitconfig, which matches the remote URL owner
+# rather than a directory, so it applies from any checkout on any machine.
+# install.sh links this file to ~/.gitconfig.cheshireCode.
 
 [user]
 	name = cheshireCode

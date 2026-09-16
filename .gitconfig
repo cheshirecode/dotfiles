@@ -1,13 +1,40 @@
-# Identity is sourced from ~/.gitconfig.local (per-machine, untracked) and,
-# when working inside ~/.config/coderv2/dotfiles/, from .gitconfig.cheshireCode.
+# Identity is injected, never hardcoded here. This file is shared by every
+# machine, so it names only $HOME-relative paths:
+#   ~/.gitconfig.local         per-machine identity and paths (untracked;
+#                              install.sh bootstraps it)
+#   ~/.gitconfig.cheshireCode  linked into $HOME by install.sh from whichever
+#                              checkout ran it
+#
+# Measured 2026-09-16: this block pointed at
+# `~/.config/coderv2/dotfiles/.gitconfig.cheshireCode`, a checkout path
+# committed from a Coder workspace. On a machine whose checkout is elsewhere
+# that file does not exist, and git ignores a missing include with NO error, so
+# the identity silently never applied.
+#
+# Ownership is matched on the remote URL, not on a directory, so it holds from
+# any checkout. Both patterns below are required and neither is redundant:
+# git's glob is case-sensitive, and the scp-style SSH form puts the owner after
+# a colon (`git@host:owner/repo`) while https puts it after a slash. Measured
+# the same day against git 2.50.1: `**cheshirecode/**` matches the SSH form
+# only, `**/cheshirecode/**` the https form only, and the previous
+# `**/cheshireCode/**` matched neither, because the owner is lowercase in every
+# real URL.
+#
+# Do not loosen these. The SSH host alias `<ssh-alias>` carries the
+# owner name, so a pattern that allows anything between the owner and the next
+# slash matches an work-org-owned repo cloned through that alias and signs a
+# work commit with the personal identity. Measured 2026-09-16 against
+# `git@<ssh-alias>:<work-user>/dotfiles.git`:
+# `**cheshirecode*/**` leaks; `**cheshirecode/**`, `**/cheshirecode/**`,
+# `**cheshirecode**` and `*cheshirecode*` do not. The last two are safe but
+# useless here, matching none of the real URLs either.
+# tests/install/test_cheshirecode_identity.sh asserts both directions.
 [include]
 	path = ~/.gitconfig.local
-[includeIf "gitdir:~/.config/coderv2/dotfiles/"]
-	path = ~/.config/coderv2/dotfiles/.gitconfig.cheshireCode
-[includeIf "gitdir:~/src/personal/"]
-	path = ~/.config/coderv2/dotfiles/.gitconfig.cheshireCode
-[includeIf "hasconfig:remote.*.url:**/cheshireCode/**"]
-	path = ~/.config/coderv2/dotfiles/.gitconfig.cheshireCode
+[includeIf "hasconfig:remote.*.url:**cheshirecode/**"]
+	path = ~/.gitconfig.cheshireCode
+[includeIf "hasconfig:remote.*.url:**/cheshirecode/**"]
+	path = ~/.gitconfig.cheshireCode
 [rebase]
 	# autosquash = true
 [core]

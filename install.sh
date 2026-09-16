@@ -42,7 +42,6 @@ for src in "$REPO_DIR"/.*; do
     .cursor) continue ;; # handled below
     .claude) continue ;; # real Claude home in $DEST: settings, transcripts, memory. The repo's copy is gitignored scratch; linking it over ~/.claude destroys the user's.
     .config) continue ;; # handled below — repo lives under ~/.config, symlinking it wholesale creates a self-referential loop
-    .gitconfig.cheshireCode) continue ;; # referenced by absolute path from .gitconfig
     .envrc.github) continue ;; # gitignored secret holder, sourced explicitly
   esac
   target="$DEST/$name"
