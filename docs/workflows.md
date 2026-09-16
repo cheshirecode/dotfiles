@@ -3534,7 +3534,7 @@ This workflows document provides practical, step-by-step patterns for common dev
 
 **Last Updated:** 2026-01-21
 **See Also:**
-- [CLAUDE.md](/home/fred/projects/dotfiles/CLAUDE.md) - Comprehensive development guidelines
-- [MCP Servers Guide](/home/fred/projects/dotfiles/docs/mcp-servers.md) - MCP server setup and usage
+- [CLAUDE.md](../CLAUDE.md) - Repo-specific rules for agents
+- [MCP Servers Guide](mcp-servers.md) - MCP server setup and usage
 
 **Contributing:** Found a better workflow? Update this document and share with the team!
