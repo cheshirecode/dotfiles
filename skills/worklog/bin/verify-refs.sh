@@ -133,7 +133,22 @@ for f in "${files[@]}"; do
   # proj skips the lookup and reports unchecked, which is a gap you can see.
   # (0 of 156 active tasks lack the field today, so this changes no current
   # result — it removes the way a future one could be silently wrong.)
-  case "$proj" in "") ;; */*) ;; *) proj="<external-namespace>/$proj" ;; esac
+  # A bare project name needs a forge namespace to become a lookup path. That
+  # namespace is per-installation, supplied by WORKLOG_FORGE_NAMESPACE from the
+  # per-clone .envrc: this repo is public, so no external namespace is committed
+  # here. Unset leaves proj bare, which skips the lookup and reports unchecked
+  # rather than guessing a namespace and returning a confident verdict about
+  # somebody else's project.
+  case "$proj" in
+    "") ;;
+    */*) ;;
+    *) if [ -n "${WORKLOG_FORGE_NAMESPACE:-}" ]; then
+         proj="$WORKLOG_FORGE_NAMESPACE/$proj"
+       else
+         echo "note: WORKLOG_FORGE_NAMESPACE unset; '$proj' has no namespace, skipping its lookup" >&2
+         proj=""
+       fi ;;
+  esac
   # only unchecked items under ## Next
   items=$(awk '/^## Next/{n=1;next} /^## /{n=0} n' "$f" | grep -E '^\s*-\s*\[ \]' || true)
   [ -n "$items" ] || continue

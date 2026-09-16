@@ -297,7 +297,7 @@ def _prose_only(body: str) -> str:
   --fix-related then wrote into frontmatter.
 
   URLs and frontmatter need no handling: BODY_SLUG_RE's lookbehind already
-  rejects a preceding `/`, so `<external-namespace>/decision-engine` never matches, and
+  rejects a preceding `/`, so `<namespace>/decision-engine` never matches, and
   frontmatter is not part of `body`. Both were reported as failing and neither
   reproduced -- do not add exclusions for them.
 

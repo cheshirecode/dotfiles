@@ -48,7 +48,7 @@ mk_clone() { # mk_clone <dir> <origin-url>
   git -C "$1" init -q
   git -C "$1" remote add origin "$2"
 }
-mk_clone "$TMP/clones/midas" "git@gitlab.com:<external-namespace>/midas.git"
+mk_clone "$TMP/clones/midas" "git@gitlab.com:examplens/midas.git"
 mk_clone "$TMP/clones/dotfiles" "https://github.com/cheshirecode/dotfiles.git"
 
 # ------------------------------------------------- stub CLIs (glab yes, gh no)
@@ -63,10 +63,10 @@ if [[ "$1" == api && "$2" == user ]]; then
   echo '{"username":"fred.tran","state":"active"}'; exit 0
 fi
 if [[ "$1" == mr && "$2" == list ]]; then
-  # Only the MR list for <external-namespace>/midas is populated.
-  for a in "$@"; do [[ "$a" == "<external-namespace>/midas" ]] && found=1; done
+  # Only the MR list for examplens/midas is populated.
+  for a in "$@"; do [[ "$a" == "examplens/midas" ]] && found=1; done
   if [[ -n "${found:-}" ]]; then
-    echo '[{"iid":1770,"title":"splus-19029 payout guard","web_url":"https://<external-project>/-/merge_requests/1770"}]'
+    echo '[{"iid":1770,"title":"splus-19029 payout guard","web_url":"https://gitlab.com/examplens/midas/-/merge_requests/1770"}]'
   else
     echo '[]'
   fi
@@ -122,7 +122,7 @@ if [[ -n "$out" ]]; then rc=0; else rc=1; fi
 check "drift output is never silently empty" "$rc"
 
 # The load-bearing assertion: the GitLab clone must actually report its MR.
-printf '%s' "$out" | grep -Eq $'^open\tgitlab\t<external-namespace>/midas\t1770\t'
+printf '%s' "$out" | grep -Eq $'^open\tgitlab\texamplens/midas\t1770\t'
 check "GitLab clone reports MR !1770 as drift candidate" $?
 
 # The unreachable GitHub clone must be named, not silently dropped.
@@ -141,21 +141,21 @@ export PATH="$MIRROR"
 out2="$("$FORGE" list --author fred.tran "$TMP/clones/midas" "$TMP/clones/dotfiles" 2>/dev/null)"
 if [[ -n "$out2" ]]; then rc=0; else rc=1; fi
 check "no-CLI case still produces output instead of an empty drift block" "$rc"
-printf '%s' "$out2" | grep -q $'^gap\tgitlab\t<external-namespace>/midas\tglab-not-installed$'
+printf '%s' "$out2" | grep -q $'^gap\tgitlab\texamplens/midas\tglab-not-installed$'
 check "no-CLI case names the GitLab repo it could not check" $?
 printf '%s' "$out2" | grep -q $'^gap\tgithub\tcheshirecode/dotfiles\tgh-not-installed$'
 check "no-CLI case names the GitHub repo it could not check" $?
 
 # ------------------------------------- two clones of one project = one report
 # /workspace/midas and /workspace/midas-wt-mockfix are both clones of
-# <external-namespace>/midas, so a per-clone loop queries the project twice and every MR is
+# examplens/midas, so a per-clone loop queries the project twice and every MR is
 # reported twice. A reader cross-referencing 10 rows against 5 tracked MRs sees
 # drift that is not there.
 export PATH="$TMP/stub:$MIRROR"
 git init -q "$TMP/clones/midas-wt" 2>/dev/null
-git -C "$TMP/clones/midas-wt" remote add origin "<external-project>"
+git -C "$TMP/clones/midas-wt" remote add origin "https://gitlab.com/examplens/midas.git"
 dup="$("$FORGE" list --author fred.tran "$TMP/clones/midas" "$TMP/clones/midas-wt" 2>/dev/null \
-       | grep -c $'^open\tgitlab\t<external-namespace>/midas\t1770\t' || true)"
+       | grep -c $'^open\tgitlab\texamplens/midas\t1770\t' || true)"
 [[ "$dup" == 1 ]]
 check "one project cloned twice reports each MR once (got $dup rows)" $?
 

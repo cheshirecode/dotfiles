@@ -85,7 +85,7 @@ No Next section at all.
 EOF
 
 run() {  # run <args...> -> sets OUT / RC, capturing before parsing (examples.md §6)
-  OUT=$(cd "$TMP/wl" && WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP=tester \
+  OUT=$(cd "$TMP/wl" && WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP=tester WORKLOG_FORGE_NAMESPACE=examplens \
         GITLAB_HOST=127.0.0.1:1 JIRA_HOST=127.0.0.1:1 \
         GITLAB_PAT=fake MCP_JIRA_EMAIL=t@t.t MCP_JIRA_API_TOKEN=fake \
         "$BIN/verify-refs.sh" "$@" 2>&1)
@@ -116,7 +116,7 @@ else FAIL=$((FAIL+1)); printf '  FAIL  json unparseable: %s\n' "$OUT"; fi
 # stdout only: die() writes a human line to stderr AND the JSON object to
 # stdout, so merging the two makes valid JSON unparseable. Merging streams is
 # the same class of mistake as piping a verdict into a parser.
-OUT=$(cd "$TMP/wl" && WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP=tester \
+OUT=$(cd "$TMP/wl" && WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP=tester WORKLOG_FORGE_NAMESPACE=examplens \
       "$BIN/verify-refs.sh" --json /nope/nope 2>/dev/null)
 if printf '%s' "$OUT" | jq -e '.error' >/dev/null 2>&1; then
   PASS=$((PASS+1)); printf '  PASS  json on the error path\n'
@@ -153,7 +153,7 @@ exit 22
 STUB
 chmod +x "$TMP/stub/curl"
 
-OUT=$(cd "$TMP/wl" && PATH="$TMP/stub:$PATH" WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP=tester \
+OUT=$(cd "$TMP/wl" && PATH="$TMP/stub:$PATH" WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP=tester WORKLOG_FORGE_NAMESPACE=examplens \
       GITLAB_HOST=gitlab.example JIRA_HOST=jira.example \
       GITLAB_PAT=fake MCP_JIRA_EMAIL=t@t.t MCP_JIRA_API_TOKEN=fake \
       "$BIN/verify-refs.sh" with-refs 2>&1)
@@ -162,7 +162,7 @@ no "merged MR is not counted live"         '1 live'
 ck "nested author state does not win"      '!1234'
 
 # repos: block form. Only the inline shape was parsed, so every block-form
-# task silently resolved to <external-namespace>/midas whatever its repos: actually said —
+# task silently resolved to examplens/midas whatever its repos: actually said —
 # measured 62 block-form tasks in one namespace, 15 naming another repo first.
 # The stub answers only for monorepo, so a midas lookup falls through to
 # unchecked and the assertion below fails, which is exactly the old behaviour.
@@ -175,8 +175,8 @@ cat > "$TMP/stub/curl" <<'STUB'
 #!/usr/bin/env bash
 for a in "$@"; do
   case "$a" in
-    *<external-namespace>%2Fmonorepo*merge_requests*) printf '%s' '{"iid":4321,"state":"merged","author":{"state":"active"}}'; exit 0 ;;
-    *<external-namespace>%2Fmidas*merge_requests*)    printf '%s' '{"iid":4321,"state":"opened","author":{"state":"active"}}'; exit 0 ;;
+    *examplens%2Fmonorepo*merge_requests*) printf '%s' '{"iid":4321,"state":"merged","author":{"state":"active"}}'; exit 0 ;;
+    *examplens%2Fmidas*merge_requests*)    printf '%s' '{"iid":4321,"state":"opened","author":{"state":"active"}}'; exit 0 ;;
     *merge_requests*) exit 22 ;;
   esac
 done
@@ -184,7 +184,7 @@ exit 22
 STUB
 chmod +x "$TMP/stub/curl"
 
-OUT=$(cd "$TMP/wl" && PATH="$TMP/stub:$PATH" WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP=tester \
+OUT=$(cd "$TMP/wl" && PATH="$TMP/stub:$PATH" WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP=tester WORKLOG_FORGE_NAMESPACE=examplens \
       GITLAB_HOST=gitlab.example JIRA_HOST=127.0.0.1:1 \
       GITLAB_PAT=fake \
       "$BIN/verify-refs.sh" block-repos 2>&1)
@@ -195,7 +195,7 @@ no "wrong project cannot yield a confident live verdict" '1 live'
 # A missing repos: must not be guessed. The stub answers for BOTH projects, so
 # a default-to-midas would resolve and print a confident verdict; only refusing
 # to guess yields unchecked.
-OUT=$(cd "$TMP/wl" && PATH="$TMP/stub:$PATH" WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP=tester \
+OUT=$(cd "$TMP/wl" && PATH="$TMP/stub:$PATH" WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP=tester WORKLOG_FORGE_NAMESPACE=examplens \
       GITLAB_HOST=gitlab.example JIRA_HOST=127.0.0.1:1 GITLAB_PAT=fake \
       "$BIN/verify-refs.sh" no-repos 2>&1)
 ck "absent repos: reports unchecked, not a guess" 'unchecked.*!4321'
