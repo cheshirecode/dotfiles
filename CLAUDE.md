@@ -58,6 +58,11 @@ adjacent to what was meant**:
 - a sort key whose `deprecated` term sat after `fit`, so retired models still
   outranked current ones — the test asserted only the top two and passed
 - an unanchored `![0-9]{4}` matching the first four digits of five-digit refs
+- a body cap applied to the `resume` branch while the adjacent `review` branch
+  kept printing the same body whole — one caller of two, and the constant's
+  `RESUME_` prefix made the omission read as deliberate
+- an extension glob (`*.md`, `*.py`, `*.sh`) that skipped nine extensionless
+  shebang scripts, so a new check could not see a defect in `bin/crew-radar`
 
 All of them fail silent rather than loud, and a suite that only asserts "runs
 clean" stays green while the tool is wrong. Measured cost of one instance: a
@@ -123,6 +128,13 @@ something adjacent to what was meant.
   *value* when the variable is set, so the guard behaves as an echo. Use
   `test -n`, or a hash prefix when comparing two values. Better, ask the tool
   that holds the credential (`gh auth status`) rather than the file storing it.
+- **State a cited claim at its source's strength.** A recommendation restated
+  as a limit, or one worked example restated as a general finding, reads as
+  authoritative once the hedge is gone and no check can catch it. Measured
+  2026-09-16: a drafted reference claimed guidance "caps a single response at
+  25,000 tokens" where the source suggests "something like" that as
+  manageable, and carried an invented "tenfold" with nothing behind it. Quote
+  the hedge or attribute the example.
 - **Re-measure before documenting a limitation.** "Cannot do X" ages into
   wrong, and no agreement pin catches prose. Re-run the check that established
   a limit before repeating it.
