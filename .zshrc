@@ -116,4 +116,4 @@ alias reload='source ~/.zshrc'
 alias top-commands='history 1 | awk "{print \$2}" | awk "{print \$1}" | sort | uniq -c | sort -rn | head -10'
 
 # opencode
-export PATH=/home/fred/.opencode/bin:$PATH
+export PATH="$HOME/.opencode/bin:$PATH"

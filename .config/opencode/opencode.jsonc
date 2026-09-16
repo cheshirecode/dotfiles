@@ -13,8 +13,8 @@
   },
   "skills": {
     "paths": [
-      "/home/fred/.claude/skills",
-      "/home/fred/.agents/skills"
+      "{env:HOME}/.claude/skills",
+      "{env:HOME}/.agents/skills"
     ]
   },
   "mcp": {
@@ -25,7 +25,7 @@
       "environment": {
         "CLIENT_ID": "613313731108-qvpjs130js8lpoupm68knifbebvcec40.apps.googleusercontent.com",
         "CLIENT_SECRET": "{env:GDRIVE_CLIENT_SECRET}",
-        "GDRIVE_CREDS_DIR": "/home/fred/.config/gdrive-mcp"
+        "GDRIVE_CREDS_DIR": "{env:HOME}/.config/gdrive-mcp"
       }
     }
   },
