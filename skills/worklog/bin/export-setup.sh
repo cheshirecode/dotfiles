@@ -23,6 +23,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(resolve_worklog_repo)" || exit 1
 
 LDAP="$(resolve_ldap)"
+
+# Org identifiers to generalise, supplied by the environment (the per-clone
+# .envrc, which lives outside this public repo). Unset is a REPORTED state, not
+# a silent pass: an unconfigured org scrub leaves work identifiers in the draft,
+# and a check that cannot tell "nothing to do" from "not configured" is the
+# failure this repo keeps hitting.
+#   WORKLOG_ORG        org slug, e.g. acme-inc
+#   WORKLOG_ORG_DOMAIN email domain, e.g. acme.com
+#   WORKLOG_ORG_REPOS  alternation of private repo names, e.g. 'website|ui'
+ORG_SLUG="${WORKLOG_ORG:-}"
+ORG_DOMAIN="${WORKLOG_ORG_DOMAIN:-}"
+ORG_REPOS="${WORKLOG_ORG_REPOS:-}"
+if [[ -z "$ORG_SLUG" && -z "$ORG_DOMAIN" && -z "$ORG_REPOS" ]]; then
+  echo "NOTE: org scrub not configured (WORKLOG_ORG, WORKLOG_ORG_DOMAIN, WORKLOG_ORG_REPOS all unset);" >&2
+  echo "      secret and LDAP scrubbing still apply. Set them to generalise org identifiers." >&2
+fi
 DRY_RUN=0
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
 
@@ -47,7 +63,8 @@ MEM_DIR="$HOME/.claude/projects/-Users-${LDAP}-Documents-projects--worklog/memor
 # add a new secret pattern here, mirror it into tests/export/test_scrubber.sh
 # and verify the clean corpus still survives untouched. See audit-prompt § 3.
 scrub() {
-  LDAP="$LDAP" perl -pe '
+  LDAP="$LDAP" ORG_SLUG="$ORG_SLUG" ORG_DOMAIN="$ORG_DOMAIN" \
+  ORG_REPOS="$ORG_REPOS" perl -pe '
     s{sk-[A-Za-z0-9_-]{20,}}{<REDACTED:SECRET>}g;
     s{ghp_[A-Za-z0-9]{20,}}{<REDACTED:SECRET>}g;
     s{github_pat_[A-Za-z0-9_]{20,}}{<REDACTED:SECRET>}g;
@@ -70,11 +87,15 @@ scrub() {
     # permalinks are the dominant clean-content collision. Modern secrets
     # (ghp_, github_pat_, sk-, AKIA, AIza, xox*) are all prefixed and caught
     # above. See tests/export/clean_corpus.txt for the regression fixture.
-    s{[Ii]deogram(?:-[A-Za-z0-9._-]+)?(?=[^A-Za-z0-9]|$)}{<your-org>}g;
-    s{\@work-org\.ai}{\@<your-domain>}g;
+    # Org, domain and repo names come from the environment, never from this
+    # repo: it is public, so a work identifier committed here is the leak the
+    # scrubber exists to prevent. \Q…\E quotes the value, so a dot or dash in
+    # an org slug cannot act as a metacharacter.
+    s{\b\Q$ENV{ORG_SLUG}\E(?:-[A-Za-z0-9._-]+)?\b}{<your-org>}gi if $ENV{ORG_SLUG} ne "";
+    s{\@\Q$ENV{ORG_DOMAIN}\E}{\@<your-domain>}gi if $ENV{ORG_DOMAIN} ne "";
+    s{\b(?:$ENV{ORG_REPOS})\b}{<your-repo>}g if $ENV{ORG_REPOS} ne "";
     s{\b\Q$ENV{LDAP}\E\b}{<ldap>}g;
     s{/Users/[a-zA-Z0-9._-]+/}{~/}g;
-    s{\b(?:Landing-Page|devops-permissions|website|ui)\b}{<your-repo>}g;
   '
 }
 
@@ -241,7 +262,11 @@ check_residue() {
     echo "WARN: $hits $label residue hit(s) in draft" >&2
   fi
 }
-check_residue "$DRAFT" "[Ii]deogram|@work-org\\.ai"                                     "org-identifier"
+if [[ -n "$ORG_SLUG$ORG_DOMAIN" ]]; then
+  check_residue "$DRAFT" "${ORG_SLUG:-\\x00}|@${ORG_DOMAIN:-\\x00}"                          "org-identifier"
+else
+  echo "SKIP: org-identifier residue check (org scrub not configured)" >&2
+fi
 check_residue "$DRAFT" "(^|[^A-Za-z0-9_])${LDAP}([^A-Za-z0-9_]|$)"                       "ldap"
 check_residue "$DRAFT" "sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|AIza[A-Za-z0-9_-]{35}|AKIA[0-9A-Z]{16}|github_pat_[A-Za-z0-9_]{20,}|xox[abpros]-[A-Za-z0-9-]{10,}|glpat-[A-Za-z0-9_-]{20,}|AT[AC]TT3[A-Za-z0-9_-]{10,}|ddpat_[A-Za-z0-9]{20,}|npm_[A-Za-z0-9]{30,}|eyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}|-----BEGIN [A-Z ]*PRIVATE KEY-----" "secret"
 

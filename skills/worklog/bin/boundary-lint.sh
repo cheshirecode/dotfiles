@@ -17,7 +17,7 @@ worklog repo) using .worklog-boundary.json:
   {
     "schema": "worklog.boundary.v1",
     "label": "oss tracker",
-    "deny": [{"pattern": "<work-org>|sales-eng", "note": "work tracker only"}]
+    "deny": [{"pattern": "<work-org>|<work-team>", "note": "work tracker only"}]
   }
 
 The profile may also set include/exclude glob lists, allow exceptions of

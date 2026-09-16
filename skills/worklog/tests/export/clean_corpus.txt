@@ -18,11 +18,11 @@ ddpat-metrics-naming-doc
 atlassian-jira-sync-notes
 
 ## Realistic content tokens we emit in commit bodies / PR refs
-PR <work-org>/ui#1234 lands the carve-out.
+PR example-org/ui#1234 lands the carve-out.
 Commit f3a9 dropped LCP to 2139ms.
 See SHA reference 0e0a117 in custom-models-critical-path-perf.
 Cherry-pick 289bb65 onto release/2026-04.
-Full-SHA permalink: https://github.com/<work-org>/_worklog/commit/0e0a117ff3c4d5e6f7890abcdef1234567890abc
+Full-SHA permalink: https://github.com/example-org/_worklog/commit/0e0a117ff3c4d5e6f7890abcdef1234567890abc
 Tree object 0e0a117ff3c4d5e6f7890abcdef1234567890abc at HEAD~3.
 
 ## Encoded IDs (base64-shaped, never literal secrets)
@@ -30,8 +30,8 @@ user_id ABCDEFGHIJKLMNOPQRSTUVWXYZab== was the test account
 request_id Pq0Lj9mZTU8aB2KsR1fXq== shows up in logs
 
 ## URLs and refs
-https://github.com/<work-org>/_worklog/pull/42
-https://linear.app/work-org/issue/ENG-1532
+https://github.com/example-org/_worklog/pull/42
+https://linear.app/example-org/issue/ENG-1532
 
 ## Code-shaped tokens
 const SK_PREFIX = "sk-test-only";   // reference, not a secret value
