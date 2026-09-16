@@ -22,7 +22,7 @@ DEST="$TMP/home"
 mkdir -p "$DEST"
 
 out="$(cd "$REPO" && env HOME="$DEST" CODER_SYMLINK_DIR="$DEST" \
-  SKIP_SUPER_RULER=1 HOOK_BIN_DIR="$TMP/hookbin" bash install.sh 2>&1)"
+  HOOK_BIN_DIR="$TMP/hookbin" bash install.sh 2>&1)"
 
 fails=0
 note() { echo "FAIL: $1"; fails=$((fails + 1)); }
