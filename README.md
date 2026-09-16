@@ -64,9 +64,9 @@ See **[SETUP-CLAUDE.md](SETUP-CLAUDE.md)** for complete setup instructions.
 remain local and are not managed by this repository.
 
 **Quick links**:
-- 📖 **[CLAUDE.md](CLAUDE.md)** - Comprehensive development guidelines
+- **[CLAUDE.md](CLAUDE.md)** - Repo-specific rules for agents
 - ⚙️ **[claude-mcp.example.json](claude-mcp.example.json)** - MCP server configuration
-- 🚀 **[SETUP-CLAUDE.md](SETUP-CLAUDE.md)** - Installation and setup guide
+- **[SETUP-CLAUDE.md](SETUP-CLAUDE.md)** - Installation and setup guide
 
 ## Claude Code Integration
 
@@ -75,14 +75,16 @@ This repository includes comprehensive documentation and configurations for usin
 ### What's Included
 
 #### Core Documentation
-- **[CLAUDE.md](CLAUDE.md)** - Complete development guidelines covering:
-  - Development philosophy and best practices
-  - Code quality standards
-  - Git workflow and commit conventions
-  - Testing strategies
-  - Deployment patterns
-  - Quality checklists
-  - **WSL-specific considerations**
+- **[CLAUDE.md](CLAUDE.md)** - Rules specific to this repo, for agents working
+  in the checkout:
+  - Commit hygiene: one concern per commit
+  - Checkout, branch and git-safety preconditions
+  - Test discipline: prove a new test red before shipping it
+  - Checks that have failed silently here, and why
+  - Search tooling and prompt-alignment notes
+
+  It deliberately carries no general guide to Claude Code or to software
+  engineering. The harness ships that, and a local copy only drifts from it.
 
 #### MCP Server Configuration
 - **[claude-mcp.example.json](claude-mcp.example.json)** - Example MCP server configuration
@@ -115,9 +117,9 @@ This repository includes comprehensive documentation and configurations for usin
 ### Platform Support
 
 These configurations work on:
-- ✅ **Linux** (native)
-- ✅ **macOS**
-- ✅ **WSL** (Windows Subsystem for Linux) - **Extensively documented**
+- **Linux** (native)
+- **macOS**
+- **WSL** (Windows Subsystem for Linux)
 
 **WSL users**: Special attention has been given to WSL-specific considerations including Docker Desktop integration, path handling, performance optimization, and troubleshooting.
 
@@ -267,7 +269,3 @@ MIT License - See [LICENSE](LICENSE) file for details
 - [Model Context Protocol](https://modelcontextprotocol.io/)
 - [WSL Documentation](https://docs.microsoft.com/windows/wsl/)
 - [Docker Desktop WSL Integration](https://docs.docker.com/desktop/wsl/)
-
----
-
-**Last Updated**: 2026-01-21
