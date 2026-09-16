@@ -10,7 +10,7 @@ fi
 
 #   Change Prompt
 #   ------------------------------------------------------------
-export PS1="\n\[\e[30;1m\](\[\e[34;1m\]\u@\h:\w\[\e[30;1m\]) (\[\e[32;1m\]\$(/bin/ls -1 | /usr/bin/wc -l | sed 's: ::g') files, \$(/bin/ls -lah | grep -m 1 total | sed 's/total //')b\[\e[30;1m\])\n--> \[\e[0m\]"
+export PS1="\n\[\e[30;1m\](\[\e[34;1m\]\u@\h:\w\[\e[30;1m\]) (\[\e[32;1m\]\$(command ls -1 | command wc -l | command sed 's: ::g') files, \$(command ls -lah | command grep -m 1 total | command sed 's/total //')b\[\e[30;1m\])\n--> \[\e[0m\]"
 
 #   Set Paths
 #   ------------------------------------------------------------
