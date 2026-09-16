@@ -110,6 +110,15 @@ if [ -d "$REPO_DIR/.config" ]; then
       cp -R "$entry/." "$etarget/"
       continue
     fi
+    # Second call site for the guard above. This loop was unwired: it called
+    # backup() and ln -sfn directly, so a real ~/.config/opencode was moved
+    # aside and the repo directory linked over it, taking 11 local items out
+    # of the live path (reported 2026-09-16). The mountpoint branch above
+    # covers the Coder case; this covers a plain directory.
+    if holds_user_data "$etarget"; then
+      echo "warning: $etarget is a non-empty real directory; refusing to replace it with a symlink." >&2
+      continue
+    fi
     backup "$etarget"
     echo "Symlinking $entry to $etarget..."
     ln -sfn "$entry" "$etarget" || echo "warning: could not link $etarget; skipping." >&2

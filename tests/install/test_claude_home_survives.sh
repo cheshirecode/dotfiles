@@ -26,6 +26,14 @@ mkdir -p "$DEST/.cursor"
 ln -s "$TMP/gone/rules" "$DEST/.cursor/rules"
 ln -s "$TMP/gone/mcp.json" "$DEST/.cursor/mcp.json"
 
+# The .config children loop is a SECOND call site for the same guard, and it
+# was unwired: it called backup() and ln -sfn directly, so a real
+# ~/.config/opencode was moved aside and the repo directory linked over it.
+# Reported 2026-09-16 after 11 local items vanished from the live path.
+mkdir -p "$DEST/.config/opencode/plugins"
+printf '%s\n' '{"local":"tui"}' > "$DEST/.config/opencode/tui.jsonc"
+printf '%s\n' 'local plugin' > "$DEST/.config/opencode/plugins/mine.js"
+
 out="$(cd "$REPO" && env HOME="$DEST" CODER_SYMLINK_DIR="$DEST" \
   SKIP_SUPER_RULER=1 bash install.sh 2>&1)"
 status=$?
@@ -46,6 +54,18 @@ if [ ! -f "$DEST/.claude/projects/session.jsonl" ]; then
 fi
 if [ -e "$DEST/.claude.bak" ] || [ -L "$DEST/.claude.bak" ]; then
   note "installer moved the real DEST/.claude aside to .claude.bak"
+fi
+if [ -L "$DEST/.config/opencode" ]; then
+  note "DEST/.config/opencode was replaced by a symlink to $(readlink "$DEST/.config/opencode")"
+fi
+if [ ! -f "$DEST/.config/opencode/tui.jsonc" ]; then
+  note "DEST/.config/opencode/tui.jsonc is gone"
+fi
+if [ ! -f "$DEST/.config/opencode/plugins/mine.js" ]; then
+  note "DEST/.config/opencode/plugins/mine.js is gone"
+fi
+if [ -e "$DEST/.config/opencode.bak" ] || [ -L "$DEST/.config/opencode.bak" ]; then
+  note "installer moved the real DEST/.config/opencode aside to opencode.bak"
 fi
 if ! printf '%s\n' "$out" | grep -q 'Dotfiles installation complete.'; then
   note "installer never reached its last line (exit $status); a dangling ~/.cursor link aborted it"
