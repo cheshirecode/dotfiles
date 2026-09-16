@@ -20,11 +20,11 @@
 # `**/cheshireCode/**` matched neither, because the owner is lowercase in every
 # real URL.
 #
-# Do not loosen these. The SSH host alias `<ssh-alias>` carries the
-# owner name, so a pattern that allows anything between the owner and the next
-# slash matches an work-org-owned repo cloned through that alias and signs a
-# work commit with the personal identity. Measured 2026-09-16 against
-# `git@<ssh-alias>:<work-user>/dotfiles.git`:
+# Do not loosen these. An SSH host alias may itself carry the owner name (the
+# `git@host-<owner>:` form), so a pattern that allows anything between the
+# owner and the next slash also matches a repo owned by somebody else cloned
+# through that alias, and would sign their commit with this identity. Measured
+# 2026-09-16 against such an alias with a third-party owner:
 # `**cheshirecode*/**` leaks; `**cheshirecode/**`, `**/cheshirecode/**`,
 # `**cheshirecode**` and `*cheshirecode*` do not. The last two are safe but
 # useless here, matching none of the real URLs either.
