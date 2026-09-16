@@ -40,6 +40,37 @@ if work starts there, port or merge the exact changes back into the primary
 there. Do not let "detached HEAD" in a temporary worktree silently turn a
 direct-main request into a side branch.
 
+## Git safety (preconditions, not suggestions)
+
+Never force-push to `main`, rewrite published history, or commit secrets or
+large binaries. Review the diff before committing.
+
+Conventional commit types used here: `feat`, `fix`, `refactor`, `test`, `docs`,
+`style`, `perf`, `chore`, `ci`, `build`, `a11y`. Imperative subject, no trailing
+period. One concern per commit; see commit hygiene above.
+
+`git commit --amend` is for unpushed commits only. If
+`git config --get branch.$(git branch --show-current).remote` returns a remote
+AND `git rev-list @{push}..HEAD` is empty, the commit is already pushed. Do not
+amend it.
+
+`git reset --soft HEAD~1` undoes the last commit and keeps the changes. This is
+the safe default for "undo my commit".
+
+`git reset --hard HEAD~1` DISCARDS changes and is DANGEROUS. All three
+preconditions must hold:
+
+- The branch is unpushed (local commits would push). If pushed, use
+  `git revert` instead.
+- The user explicitly typed `--hard`. Do not infer it from "undo my commit";
+  the soft form above is the default.
+- The working tree is clean, OR the user explicitly accepts losing uncommitted
+  work.
+
+An agent reading this file as a checklist MUST refuse this command absent all
+three. The same applies to `rm -rf` and force-push: establish the target and
+the authority first.
+
 ## Test discipline
 
 **Prove a new test red before shipping it.** Run it against the unfixed code,
