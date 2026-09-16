@@ -468,50 +468,14 @@ if offenders:
 NONLATIN
   then ok "prose and scripts carry no non-Latin letters"; else fail "prose and scripts carry no non-Latin letters"; fi
 
-  # This repo is public, so cheshirecode is the only account or org name that
-  # belongs in it. An employer org, a work account, or an SSH host alias of the
-  # git@host-<owner>: form all name an owner. Real values live in the per-clone
-  # .envrc; see CLAUDE.md "Repo identity".
-  #
-  # Classified, not filtered: the patterns below name owner-shaped strings, and
-  # placeholders (<work-org>, other-owner, example-org) are the intended form so
-  # they must NOT match. Measured 2026-09-16: zero hits repo-wide after the
-  # scrub, so this starts green with no allowlist.
-  if python3 - <<'ACCOUNTS'
-import pathlib
-import re
-
-# Each pattern is one owner-shaped literal, not a class. A new employer or
-# account belongs on this list explicitly rather than behind a broad regex that
-# would also match placeholders and prose.
-BANNED = [
-    r"ideogram",  # pragma: allowlist owner            # employer org and its account/domain forms
-    r"textemma",  # pragma: allowlist owner            # external forge namespace
-    r"coderv2",  # pragma: allowlist owner             # employer workspace path
-    r"github\.com-[A-Za-z0-9_.-]+",   # SSH host alias: names an owner
-]
-SKIP_DIRS = {".git", "node_modules", "__pycache__", ".ruff_cache", ".zvec-grep"}
-offenders = []
-for path in sorted(pathlib.Path(".").rglob("*")):
-    if not path.is_file() or any(part in SKIP_DIRS for part in path.parts):
-        continue
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        continue
-    for lineno, line in enumerate(text.splitlines(), 1):
-        for pattern in BANNED:
-            if "pragma: allowlist owner" in line:
-                continue
-            m = re.search(pattern, line, re.I)
-            if m:
-                offenders.append(f"{path}:{lineno}: {m.group(0)!r} in: {line.strip()[:70]}")
-if offenders:
-    print("account or org names other than cheshirecode found in a public repo:")
-    print("\n".join(offenders[:20]))
-    raise SystemExit(1)
-ACCOUNTS
-  then ok "no third-party account names in tracked files"; else fail "no third-party account names in tracked files"; fi
+  # One owner for the banned-literal list: bin/leak-guard.sh. The pre-commit
+  # hook runs it with --staged, this runs it with --tree, so the suite and the
+  # hook cannot drift. Inlining the patterns here again would be a second copy.
+  if out=$(bin/leak-guard.sh --tree 2>&1); then
+    ok "no work identifiers or hardcoded home paths in tracked files"
+  else
+    fail_with_output "no work identifiers or hardcoded home paths in tracked files" "$out"
+  fi
 }
 
 # Council items #1, #6: fixture-driven red-path tests for guardrails.

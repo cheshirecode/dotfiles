@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Dotfiles pre-commit hook: refuse work identifiers and hardcoded home paths
+# before they enter a commit in this PUBLIC repo.
+#
+# Wired by bin/install-hooks.sh --write (core.hooksPath, or chained into
+# .git/hooks/ when an outer hooksPath is already taken).
+# Bypass once: DOTFILES_NO_HOOK=1 git commit ...
+#
+# Scans only staged ADDED lines, so existing content is grandfathered and the
+# hook is adoptable today. tests/run.sh static holds the whole tree to the same
+# bar via `bin/leak-guard.sh --tree`, so nothing is permanently exempt.
+set -uo pipefail
+
+[ "${DOTFILES_NO_HOOK:-0}" = "1" ] && exit 0
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+GUARD="$ROOT/bin/leak-guard.sh"
+[ -x "$GUARD" ] || exit 0   # absent guard must not block a commit
+
+if ! "$GUARD" --staged; then
+  echo "pre-commit: refusing this commit. Fix the lines above, or run with" >&2
+  echo "            DOTFILES_NO_HOOK=1 if the exception is deliberate." >&2
+  exit 1
+fi
