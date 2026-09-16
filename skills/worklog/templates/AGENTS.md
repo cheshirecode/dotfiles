@@ -415,7 +415,7 @@ the PR, globs for the task file, writes a `Worklog-PR:` trailer. Order:
 
 The candidate is then looked up via `people/*/active/<slug>.md`. LDAP is
 derived from the matched path — the bot does not trust GitHub login
-(`work-org-<ldap>`) or the branch prefix. If the glob doesn't match
+(`<work-org>-<ldap>`) or the branch prefix. If the glob doesn't match
 **exactly one** file, the bot silently no-ops. Non-worklog users and PRs
 never see worklog machinery on their PRs.
 

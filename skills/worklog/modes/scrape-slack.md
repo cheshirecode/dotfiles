@@ -3,7 +3,7 @@
 Preview Slack-derived task enrichments, then apply only after an explicit
 human/agent review. This mode is intentionally workspace-agnostic: it scrapes
 whichever Slack workspace(s) the target clone's resolved LDAP/SSO identity can
-access. It must not assume an the work org Slack tenant.
+access. It must not assume any particular Slack tenant.
 
 ## Preamble
 
