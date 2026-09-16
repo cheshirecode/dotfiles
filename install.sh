@@ -66,6 +66,29 @@ for src in "$REPO_DIR"/.*; do
   ln -sfn "$src" "$target" || echo "warning: could not link $target; skipping." >&2
 done
 
+# Prune links left by an older checkout. The loop above only creates links for
+# entries the repo still has, so a link whose target moved or was deleted stays
+# dangling forever and the shell silently loads nothing. Reported 2026-09-16:
+# after the checkout moved, all 11 top-level links pointed into a deleted
+# directory, and ~/.zshenv and ~/.gitignore stayed dangling even after a repair
+# run because this repo ships neither file.
+#
+# Deliberately narrow: only a dangling link whose target path lies under a
+# dotfiles checkout. A dangling link to anything else belongs to the user or to
+# another tool, and removing it is not this installer's business.
+for link in "$DEST"/.*; do
+  name="$(basename "$link")"
+  case "$name" in .|..) continue ;; esac
+  [ -L "$link" ] || continue
+  [ -e "$link" ] && continue
+  case "$(readlink "$link")" in
+    */dotfiles/*|*/dotfiles)
+      echo "Removing dangling $name (target gone from a dotfiles checkout)..."
+      rm -f "$link"
+      ;;
+  esac
+done
+
 # .config: link children individually. Coder clones this repo into
 # ~/.config/coderv2/dotfiles, so symlinking ~/.config at the top level would
 # point the directory into itself ("Too many levels of symbolic links").
