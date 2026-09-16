@@ -3,7 +3,7 @@
 # apply to a repository owned by someone else.
 #
 # Reported 2026-09-16: .gitconfig carried
-# `path = ~/.config/coderv2/dotfiles/.gitconfig.cheshireCode`, a checkout path
+# an absolute path to a workspace-specific checkout of this repo
 # committed from a Coder workspace. On a machine whose checkout lives elsewhere
 # that path does not exist, and git ignores a missing include with no error, so
 # the identity silently never applied. The include pattern was broken too:

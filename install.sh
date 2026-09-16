@@ -89,7 +89,7 @@ for link in "$DEST"/.*; do
 done
 
 # .config: link children individually. Coder clones this repo into
-# ~/.config/coderv2/dotfiles, so symlinking ~/.config at the top level would
+# a directory under ~/.config, so symlinking ~/.config at the top level would
 # point the directory into itself ("Too many levels of symbolic links").
 if [ -d "$REPO_DIR/.config" ]; then
   mkdir -p "$DEST/.config"

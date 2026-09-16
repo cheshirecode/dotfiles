@@ -6,7 +6,7 @@
 #                              checkout ran it
 #
 # Measured 2026-09-16: this block pointed at
-# `~/.config/coderv2/dotfiles/.gitconfig.cheshireCode`, a checkout path
+# an absolute path into a workspace-specific checkout of this repo,
 # committed from a Coder workspace. On a machine whose checkout is elsewhere
 # that file does not exist, and git ignores a missing include with NO error, so
 # the identity silently never applied.
