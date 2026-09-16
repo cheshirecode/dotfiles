@@ -3343,10 +3343,10 @@ Ctrl+.                                  # Quick fix
 **Path handling:**
 ```bash
 # WSL uses Linux-style paths
-/home/fred/projects/myproject
+/home/user/projects/myproject
 
 # Windows paths accessible via /mnt/
-/mnt/c/Users/Fred/Projects/myproject
+/mnt/c/Users/user/Projects/myproject
 
 # Best practice: Keep projects in WSL filesystem for performance
 ```
@@ -3378,11 +3378,11 @@ cat ~/.ssh/id_ed25519.pub
 **Performance:**
 ```bash
 # Much faster: Project in WSL filesystem
-/home/fred/projects/myproject
+/home/user/projects/myproject
 git status  # Fast
 
 # Slower: Project in Windows filesystem
-/mnt/c/Users/Fred/Projects/myproject
+/mnt/c/Users/user/Projects/myproject
 git status  # Slower due to cross-filesystem access
 ```
 
@@ -3483,10 +3483,10 @@ wsl --shutdown
 
 # Convert path Windows → WSL
 wslpath 'C:\Users\Fred\project'
-# Output: /mnt/c/Users/Fred/project
+# Output: /mnt/c/Users/user/project
 
 # Convert path WSL → Windows
-wslpath -w /home/fred/project
+wslpath -w /home/user/project
 # Output: \\wsl$\Ubuntu\home\fred\project
 ```
 

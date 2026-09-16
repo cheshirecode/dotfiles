@@ -29,19 +29,19 @@ Claude Code is Anthropic's official CLI for Claude, optimized for terminal-based
 
 #### Cursor (list_dir)
 ```
-list_dir(path="/home/fred/projects/myapp")
+list_dir(path="/home/user/projects/myapp")
 ```
 
 #### Claude Code - Option A: Glob (Pattern-based)
 ```
-Glob(pattern="*", path="/home/fred/projects/myapp")
-Glob(pattern="**/*.js", path="/home/fred/projects/myapp")
+Glob(pattern="*", path="/home/user/projects/myapp")
+Glob(pattern="**/*.js", path="/home/user/projects/myapp")
 ```
 
 #### Claude Code - Option B: Bash ls (Detailed listing)
 ```
-Bash(command="ls -la /home/fred/projects/myapp")
-Bash(command="ls -R /home/fred/projects/myapp")
+Bash(command="ls -la /home/user/projects/myapp")
+Bash(command="ls -R /home/user/projects/myapp")
 ```
 
 **When to use which:**
@@ -58,10 +58,10 @@ Glob(pattern="**/*.ts")
 Glob(pattern="*.config.{js,ts,json}")
 
 # Detailed listing with sizes and permissions
-Bash(command="ls -lh /home/fred/projects/myapp")
+Bash(command="ls -lh /home/user/projects/myapp")
 
 # Tree-like directory structure
-Bash(command="tree -L 2 /home/fred/projects/myapp")
+Bash(command="tree -L 2 /home/user/projects/myapp")
 ```
 
 ---
@@ -70,7 +70,7 @@ Bash(command="tree -L 2 /home/fred/projects/myapp")
 
 #### Cursor (file_search)
 ```
-file_search(query="config", path="/home/fred/projects")
+file_search(query="config", path="/home/user/projects")
 ```
 
 #### Claude Code (Glob)
@@ -110,7 +110,7 @@ Glob(pattern="**/README.md")
 
 #### Cursor (grep_search / codebase_search)
 ```
-grep_search(pattern="function calculateTotal", path="/home/fred/projects")
+grep_search(pattern="function calculateTotal", path="/home/user/projects")
 codebase_search(query="TODO:", file_pattern="*.js")
 ```
 
@@ -118,7 +118,7 @@ codebase_search(query="TODO:", file_pattern="*.js")
 ```
 Grep(
   pattern="function calculateTotal",
-  path="/home/fred/projects",
+  path="/home/user/projects",
   output_mode="content"
 )
 
@@ -197,12 +197,12 @@ Grep(
 
 #### Cursor (read_file)
 ```
-read_file(path="/home/fred/projects/myapp/src/index.js")
+read_file(path="/home/user/projects/myapp/src/index.js")
 ```
 
 #### Claude Code (Read)
 ```
-Read(file_path="/home/fred/projects/myapp/src/index.js")
+Read(file_path="/home/user/projects/myapp/src/index.js")
 ```
 
 **Enhanced Capabilities in Claude Code:**
@@ -215,31 +215,31 @@ Read(file_path="/home/fred/projects/myapp/src/index.js")
 
 ```bash
 # Read entire file
-Read(file_path="/home/fred/projects/myapp/src/index.js")
+Read(file_path="/home/user/projects/myapp/src/index.js")
 
 # Read specific section of large file (lines 100-200)
 Read(
-  file_path="/home/fred/projects/myapp/src/index.js",
+  file_path="/home/user/projects/myapp/src/index.js",
   offset=100,
   limit=100
 )
 
 # Read image file (shows visual content)
-Read(file_path="/home/fred/screenshots/ui-mockup.png")
+Read(file_path="/home/user/screenshots/ui-mockup.png")
 
 # Read PDF
-Read(file_path="/home/fred/docs/specification.pdf")
+Read(file_path="/home/user/docs/specification.pdf")
 
 # Read Jupyter notebook
-Read(file_path="/home/fred/analysis/data-exploration.ipynb")
+Read(file_path="/home/user/analysis/data-exploration.ipynb")
 ```
 
 **Parallel Reading:**
 ```bash
 # Read multiple related files in parallel
-Read(file_path="/home/fred/myapp/package.json")
-Read(file_path="/home/fred/myapp/tsconfig.json")
-Read(file_path="/home/fred/myapp/README.md")
+Read(file_path="/home/user/myapp/package.json")
+Read(file_path="/home/user/myapp/tsconfig.json")
+Read(file_path="/home/user/myapp/README.md")
 ```
 
 ---
@@ -249,7 +249,7 @@ Read(file_path="/home/fred/myapp/README.md")
 #### Cursor (write_to_file)
 ```
 write_to_file(
-  path="/home/fred/projects/myapp/config.json",
+  path="/home/user/projects/myapp/config.json",
   content='{"key": "value"}'
 )
 ```
@@ -257,7 +257,7 @@ write_to_file(
 #### Claude Code (Write)
 ```
 Write(
-  file_path="/home/fred/projects/myapp/config.json",
+  file_path="/home/user/projects/myapp/config.json",
   content='{"key": "value"}'
 )
 ```
@@ -272,16 +272,16 @@ Write(
 
 ```bash
 # CORRECT: Read before writing to existing file
-Read(file_path="/home/fred/myapp/config.json")
+Read(file_path="/home/user/myapp/config.json")
 # ... then after analyzing ...
 Write(
-  file_path="/home/fred/myapp/config.json",
+  file_path="/home/user/myapp/config.json",
   content='{"key": "updated value"}'
 )
 
 # CORRECT: Writing new file (no Read needed)
 Write(
-  file_path="/home/fred/myapp/new-feature.js",
+  file_path="/home/user/myapp/new-feature.js",
   content='export function newFeature() { ... }'
 )
 ```
@@ -289,7 +289,7 @@ Write(
 **Anti-pattern:**
 ```bash
 # WRONG: Writing to existing file without reading first
-Write(file_path="/home/fred/myapp/existing-file.js", content="...")
+Write(file_path="/home/user/myapp/existing-file.js", content="...")
 # This will fail!
 ```
 
@@ -300,7 +300,7 @@ Write(file_path="/home/fred/myapp/existing-file.js", content="...")
 #### Cursor (edit_file)
 ```
 edit_file(
-  path="/home/fred/myapp/index.js",
+  path="/home/user/myapp/index.js",
   old_text="const port = 3000",
   new_text="const port = 8080"
 )
@@ -309,7 +309,7 @@ edit_file(
 #### Claude Code (Edit)
 ```
 Edit(
-  file_path="/home/fred/myapp/index.js",
+  file_path="/home/user/myapp/index.js",
   old_string="const port = 3000",
   new_string="const port = 8080"
 )
@@ -326,14 +326,14 @@ Edit(
 ```bash
 # Single replacement (old_string must be unique)
 Edit(
-  file_path="/home/fred/myapp/index.js",
+  file_path="/home/user/myapp/index.js",
   old_string="const port = 3000;",
   new_string="const port = process.env.PORT || 8080;"
 )
 
 # Replace all occurrences (renaming variable)
 Edit(
-  file_path="/home/fred/myapp/index.js",
+  file_path="/home/user/myapp/index.js",
   old_string="getUserData",
   new_string="fetchUserData",
   replace_all=true
@@ -341,7 +341,7 @@ Edit(
 
 # Multi-line replacement (preserve indentation)
 Edit(
-  file_path="/home/fred/myapp/server.js",
+  file_path="/home/user/myapp/server.js",
   old_string="app.get('/users', (req, res) => {
   res.json(users);
 });",
@@ -357,14 +357,14 @@ Edit(
 ```bash
 # WRONG: Not enough context (multiple matches)
 Edit(
-  file_path="/home/fred/myapp/index.js",
+  file_path="/home/user/myapp/index.js",
   old_string="const port",  # Too vague!
   new_string="const PORT"
 )
 
 # CORRECT: Include enough context for uniqueness
 Edit(
-  file_path="/home/fred/myapp/index.js",
+  file_path="/home/user/myapp/index.js",
   old_string="const port = 3000;\nconst host = 'localhost';",
   new_string="const PORT = 8080;\nconst host = 'localhost';"
 )
@@ -417,7 +417,7 @@ Bash(
 
 # Command with quoted paths
 Bash(
-  command='cd "/home/fred/My Projects" && ls -la',
+  command='cd "/home/user/My Projects" && ls -la',
   description="List contents of directory with spaces"
 )
 
@@ -445,10 +445,10 @@ Bash(command="df -h", description="Check disk space")
 
 ```bash
 # GOOD: Using absolute paths
-Bash(command="pytest /home/fred/myapp/tests")
+Bash(command="pytest /home/user/myapp/tests")
 
 # AVOID: Using cd
-Bash(command="cd /home/fred/myapp && pytest tests")
+Bash(command="cd /home/user/myapp && pytest tests")
 ```
 
 **Git Operations:**
@@ -475,21 +475,21 @@ Bash(
 Always read a file before modifying it:
 ```bash
 # CORRECT
-Read(file_path="/home/fred/myapp/config.js")
+Read(file_path="/home/user/myapp/config.js")
 # ... analyze ...
-Edit(file_path="/home/fred/myapp/config.js", ...)
+Edit(file_path="/home/user/myapp/config.js", ...)
 
 # WRONG
-Edit(file_path="/home/fred/myapp/config.js", ...)  # Will fail!
+Edit(file_path="/home/user/myapp/config.js", ...)  # Will fail!
 ```
 
 ### 2. Parallel Tool Calls
 When operations are independent, run them in parallel:
 ```bash
 # Good: Read multiple files at once
-Read(file_path="/home/fred/myapp/package.json")
-Read(file_path="/home/fred/myapp/tsconfig.json")
-Read(file_path="/home/fred/myapp/.eslintrc.js")
+Read(file_path="/home/user/myapp/package.json")
+Read(file_path="/home/user/myapp/tsconfig.json")
+Read(file_path="/home/user/myapp/.eslintrc.js")
 
 # Good: Multiple independent searches
 Grep(pattern="TODO", type="js", output_mode="files_with_matches")
@@ -502,12 +502,12 @@ Grep(pattern="HACK", type="js", output_mode="files_with_matches")
 # WRONG: Using Bash for tasks with dedicated tools
 Bash(command="find . -name '*.js'")  # Use Glob instead
 Bash(command="grep -r 'pattern' .")  # Use Grep instead
-Bash(command="cat /home/fred/file.js")  # Use Read instead
+Bash(command="cat /home/user/file.js")  # Use Read instead
 
 # CORRECT: Use dedicated tools
 Glob(pattern="**/*.js")
 Grep(pattern="pattern", output_mode="content")
-Read(file_path="/home/fred/file.js")
+Read(file_path="/home/user/file.js")
 ```
 
 ### 4. Precise Glob Patterns
@@ -556,18 +556,18 @@ Grep(
 )
 
 # Step 2: Read each file
-Read(file_path="/home/fred/myapp/src/file1.js")
-Read(file_path="/home/fred/myapp/src/file2.js")
+Read(file_path="/home/user/myapp/src/file1.js")
+Read(file_path="/home/user/myapp/src/file2.js")
 
 # Step 3: Edit each file
 Edit(
-  file_path="/home/fred/myapp/src/file1.js",
+  file_path="/home/user/myapp/src/file1.js",
   old_string="oldFunctionName",
   new_string="newFunctionName",
   replace_all=true
 )
 Edit(
-  file_path="/home/fred/myapp/src/file2.js",
+  file_path="/home/user/myapp/src/file2.js",
   old_string="oldFunctionName",
   new_string="newFunctionName",
   replace_all=true
@@ -578,21 +578,21 @@ Edit(
 
 **Cursor approach:**
 ```
-1. list_dir(path="/home/fred/myapp")
-2. list_dir(path="/home/fred/myapp/src")
+1. list_dir(path="/home/user/myapp")
+2. list_dir(path="/home/user/myapp/src")
 3. file_search(query="*.js")
 ```
 
 **Claude Code approach:**
 ```bash
 # Parallel exploration
-Glob(pattern="*", path="/home/fred/myapp")
-Glob(pattern="src/**/*", path="/home/fred/myapp")
-Glob(pattern="**/*.js", path="/home/fred/myapp")
+Glob(pattern="*", path="/home/user/myapp")
+Glob(pattern="src/**/*", path="/home/user/myapp")
+Glob(pattern="**/*.js", path="/home/user/myapp")
 
 # Or use tree for overview
 Bash(
-  command="tree -L 3 /home/fred/myapp",
+  command="tree -L 3 /home/user/myapp",
   description="Show directory structure"
 )
 ```
@@ -619,8 +619,8 @@ Grep(
 )
 
 # Read specific test files in parallel
-Read(file_path="/home/fred/myapp/src/__tests__/user.test.js")
-Read(file_path="/home/fred/myapp/src/__tests__/auth.test.js")
+Read(file_path="/home/user/myapp/src/__tests__/user.test.js")
+Read(file_path="/home/user/myapp/src/__tests__/auth.test.js")
 ```
 
 ### Pattern 4: Configuration Audit
@@ -654,39 +654,39 @@ Grep(
 ### Anti-Pattern 1: Using Bash for File Operations
 ```bash
 # WRONG
-Bash(command="cat /home/fred/myapp/index.js")
-Bash(command="grep -r 'TODO' /home/fred/myapp")
-Bash(command="find /home/fred/myapp -name '*.js'")
+Bash(command="cat /home/user/myapp/index.js")
+Bash(command="grep -r 'TODO' /home/user/myapp")
+Bash(command="find /home/user/myapp -name '*.js'")
 
 # CORRECT
-Read(file_path="/home/fred/myapp/index.js")
-Grep(pattern="TODO", path="/home/fred/myapp", output_mode="content")
-Glob(pattern="**/*.js", path="/home/fred/myapp")
+Read(file_path="/home/user/myapp/index.js")
+Grep(pattern="TODO", path="/home/user/myapp", output_mode="content")
+Glob(pattern="**/*.js", path="/home/user/myapp")
 ```
 
 ### Anti-Pattern 2: Not Reading Before Editing
 ```bash
 # WRONG
-Edit(file_path="/home/fred/myapp/index.js", ...)
+Edit(file_path="/home/user/myapp/index.js", ...)
 
 # CORRECT
-Read(file_path="/home/fred/myapp/index.js")
-Edit(file_path="/home/fred/myapp/index.js", ...)
+Read(file_path="/home/user/myapp/index.js")
+Edit(file_path="/home/user/myapp/index.js", ...)
 ```
 
 ### Anti-Pattern 3: Sequential Instead of Parallel
 ```bash
 # WRONG: Sequential when operations are independent
-Read(file_path="/home/fred/myapp/file1.js")
+Read(file_path="/home/user/myapp/file1.js")
 # wait...
-Read(file_path="/home/fred/myapp/file2.js")
+Read(file_path="/home/user/myapp/file2.js")
 # wait...
-Read(file_path="/home/fred/myapp/file3.js")
+Read(file_path="/home/user/myapp/file3.js")
 
 # CORRECT: Parallel
-Read(file_path="/home/fred/myapp/file1.js")
-Read(file_path="/home/fred/myapp/file2.js")
-Read(file_path="/home/fred/myapp/file3.js")
+Read(file_path="/home/user/myapp/file1.js")
+Read(file_path="/home/user/myapp/file2.js")
+Read(file_path="/home/user/myapp/file3.js")
 ```
 
 ### Anti-Pattern 4: Vague Search Patterns
@@ -703,7 +703,7 @@ Glob(pattern="**/*.component.tsx")
 ### Anti-Pattern 5: Creating Unnecessary Files
 ```bash
 # WRONG: Creating documentation unprompted
-Write(file_path="/home/fred/myapp/README.md", content="...")
+Write(file_path="/home/user/myapp/README.md", content="...")
 
 # CORRECT: Only create when explicitly requested or necessary
 # Prefer editing existing files over creating new ones
@@ -719,10 +719,10 @@ When working in WSL (Windows Subsystem for Linux), understanding path convention
 
 ```bash
 # Linux path (WSL native)
-/home/fred/projects/myapp
+/home/user/projects/myapp
 
 # Windows path mounted in WSL
-/mnt/c/Users/Fred/Projects/myapp
+/mnt/c/Users/user/Projects/myapp
 
 # Windows path (native - DON'T use in Claude Code)
 C:\Users\Fred\Projects\myapp
@@ -733,8 +733,8 @@ C:\Users\Fred\Projects\myapp
 1. **Always use absolute Linux-style paths:**
    ```bash
    # CORRECT
-   Read(file_path="/home/fred/projects/myapp/index.js")
-   Read(file_path="/mnt/c/Users/Fred/Documents/notes.txt")
+   Read(file_path="/home/user/projects/myapp/index.js")
+   Read(file_path="/mnt/c/Users/user/Documents/notes.txt")
 
    # WRONG
    Read(file_path="C:\\Users\\Fred\\Documents\\notes.txt")
@@ -753,16 +753,16 @@ C:\Users\Fred\Projects\myapp
    ```bash
    # Use quotes
    Bash(command='ls "/mnt/c/Program Files"')
-   Read(file_path="/mnt/c/Users/Fred/My Documents/file.txt")
+   Read(file_path="/mnt/c/Users/user/My Documents/file.txt")
    ```
 
 4. **File system performance:**
    ```bash
    # FASTER: Operations on WSL filesystem
-   /home/fred/projects/myapp
+   /home/user/projects/myapp
 
    # SLOWER: Operations on mounted Windows filesystem
-   /mnt/c/Users/Fred/Projects/myapp
+   /mnt/c/Users/user/Projects/myapp
 
    # Tip: Keep frequently accessed projects in WSL for better performance
    ```
@@ -770,7 +770,7 @@ C:\Users\Fred\Projects\myapp
 5. **Mixed path scenarios:**
    ```bash
    # Search both WSL and Windows locations
-   Grep(pattern="TODO", path="/home/fred/projects", output_mode="count")
+   Grep(pattern="TODO", path="/home/user/projects", output_mode="count")
    Grep(pattern="TODO", path="/mnt/c/Projects", output_mode="count")
    ```
 
@@ -784,13 +784,13 @@ C:\Users\Fred\Projects\myapp
 /mnt/c/Users/Fred
 
 # Common project locations
-/home/fred/projects
-/mnt/c/Users/Fred/Projects
+/home/user/projects
+/mnt/c/Users/user/Projects
 /mnt/c/dev
 
 # Dotfiles (usually in WSL home)
-/home/fred/.bashrc
-/home/fred/.config
+/home/user/.bashrc
+/home/user/.config
 ```
 
 ---
@@ -808,7 +808,7 @@ Grep(pattern="export", type="js")
 Grep(pattern="export", glob="src/**/*.js")
 
 # Limiting scope
-Grep(pattern="export", path="/home/fred/myapp/src")
+Grep(pattern="export", path="/home/user/myapp/src")
 ```
 
 **Slow:**
@@ -825,9 +825,9 @@ Grep(pattern="export", path="/home/fred")
 **Efficient:**
 ```bash
 # Parallel reads (execute simultaneously)
-Read(file_path="/home/fred/myapp/file1.js")
-Read(file_path="/home/fred/myapp/file2.js")
-Read(file_path="/home/fred/myapp/file3.js")
+Read(file_path="/home/user/myapp/file1.js")
+Read(file_path="/home/user/myapp/file2.js")
+Read(file_path="/home/user/myapp/file3.js")
 
 # Parallel searches
 Grep(pattern="TODO", type="js", output_mode="files_with_matches")
@@ -837,9 +837,9 @@ Grep(pattern="FIXME", type="js", output_mode="files_with_matches")
 **Inefficient:**
 ```bash
 # Sequential when could be parallel
-Read(file_path="/home/fred/myapp/file1.js")
+Read(file_path="/home/user/myapp/file1.js")
 # ... wait for response ...
-Read(file_path="/home/fred/myapp/file2.js")
+Read(file_path="/home/user/myapp/file2.js")
 # ... wait for response ...
 ```
 
@@ -860,33 +860,33 @@ Grep(pattern="import React", output_mode="count")
 
 ```bash
 # Read entire file (small to medium files)
-Read(file_path="/home/fred/myapp/index.js")
+Read(file_path="/home/user/myapp/index.js")
 
 # Read in chunks (large files)
-Read(file_path="/home/fred/myapp/large.log", offset=0, limit=100)
-Read(file_path="/home/fred/myapp/large.log", offset=100, limit=100)
+Read(file_path="/home/user/myapp/large.log", offset=0, limit=100)
+Read(file_path="/home/user/myapp/large.log", offset=100, limit=100)
 
 # Use Bash for very large files
-Bash(command="head -n 100 /home/fred/myapp/large.log")
-Bash(command="tail -n 100 /home/fred/myapp/large.log")
+Bash(command="head -n 100 /home/user/myapp/large.log")
+Bash(command="tail -n 100 /home/user/myapp/large.log")
 ```
 
 ### 5. Working Directory Persistence
 
 ```bash
 # GOOD: Absolute paths (no cd needed)
-Bash(command="npm test", description="Run tests from /home/fred/myapp")
+Bash(command="npm test", description="Run tests from /home/user/myapp")
 
 # ACCEPTABLE: cd for complex commands
 Bash(
-  command="cd /home/fred/myapp && npm run build && npm test",
+  command="cd /home/user/myapp && npm run build && npm test",
   description="Build and test from project directory"
 )
 
 # Note: Working directory persists between Bash calls
-Bash(command="cd /home/fred/myapp", description="Change to project directory")
+Bash(command="cd /home/user/myapp", description="Change to project directory")
 Bash(command="pwd", description="Verify current directory")
-# Now in /home/fred/myapp
+# Now in /home/user/myapp
 ```
 
 ---
@@ -903,25 +903,25 @@ Glob(pattern="**/auth/**/*.{js,ts}")
 Grep(pattern="class.*Auth|function.*auth", type="js", output_mode="content")
 
 # Step 2: Read existing auth files (parallel)
-Read(file_path="/home/fred/myapp/src/auth/AuthService.js")
-Read(file_path="/home/fred/myapp/src/auth/middleware.js")
+Read(file_path="/home/user/myapp/src/auth/AuthService.js")
+Read(file_path="/home/user/myapp/src/auth/middleware.js")
 
 # Step 3: Create new feature file
 Write(
-  file_path="/home/fred/myapp/src/auth/TwoFactorAuth.js",
+  file_path="/home/user/myapp/src/auth/TwoFactorAuth.js",
   content="export class TwoFactorAuth { ... }"
 )
 
 # Step 4: Update main auth service
 Edit(
-  file_path="/home/fred/myapp/src/auth/AuthService.js",
+  file_path="/home/user/myapp/src/auth/AuthService.js",
   old_string="import { validatePassword } from './utils';",
   new_string="import { validatePassword } from './utils';\nimport { TwoFactorAuth } from './TwoFactorAuth';"
 )
 
 # Step 5: Create test file
 Write(
-  file_path="/home/fred/myapp/src/auth/__tests__/TwoFactorAuth.test.js",
+  file_path="/home/user/myapp/src/auth/__tests__/TwoFactorAuth.test.js",
   content="describe('TwoFactorAuth', () => { ... })"
 )
 
@@ -959,25 +959,25 @@ Grep(
 )
 
 # Step 3: Read all affected files (parallel)
-Read(file_path="/home/fred/myapp/src/services/UserService.js")
-Read(file_path="/home/fred/myapp/src/components/UserProfile.js")
-Read(file_path="/home/fred/myapp/src/api/users.js")
+Read(file_path="/home/user/myapp/src/services/UserService.js")
+Read(file_path="/home/user/myapp/src/components/UserProfile.js")
+Read(file_path="/home/user/myapp/src/api/users.js")
 
 # Step 4: Rename in each file
 Edit(
-  file_path="/home/fred/myapp/src/services/UserService.js",
+  file_path="/home/user/myapp/src/services/UserService.js",
   old_string="getUserData",
   new_string="fetchUserData",
   replace_all=true
 )
 Edit(
-  file_path="/home/fred/myapp/src/components/UserProfile.js",
+  file_path="/home/user/myapp/src/components/UserProfile.js",
   old_string="getUserData",
   new_string="fetchUserData",
   replace_all=true
 )
 Edit(
-  file_path="/home/fred/myapp/src/api/users.js",
+  file_path="/home/user/myapp/src/api/users.js",
   old_string="getUserData",
   new_string="fetchUserData",
   replace_all=true
@@ -1020,8 +1020,8 @@ Grep(
 )
 
 # Step 3: Read relevant error handling code
-Read(file_path="/home/fred/myapp/src/api/errorHandler.js")
-Read(file_path="/home/fred/myapp/src/services/PaymentService.js")
+Read(file_path="/home/user/myapp/src/api/errorHandler.js")
+Read(file_path="/home/user/myapp/src/services/PaymentService.js")
 
 # Step 4: Check recent changes
 Bash(
@@ -1037,7 +1037,7 @@ Bash(
 
 # Step 6: Add enhanced error logging
 Edit(
-  file_path="/home/fred/myapp/src/services/PaymentService.js",
+  file_path="/home/user/myapp/src/services/PaymentService.js",
   old_string="} catch (error) {\n  throw error;\n}",
   new_string="} catch (error) {\n  logger.error('Payment processing failed', { error, context: this.context });\n  throw error;\n}"
 )
@@ -1056,7 +1056,7 @@ Bash(
 
 ```bash
 # Step 1: Check current version
-Read(file_path="/home/fred/myapp/package.json")
+Read(file_path="/home/user/myapp/package.json")
 
 # Step 2: Find React usage patterns
 Grep(
@@ -1074,12 +1074,12 @@ Grep(
 
 # Step 4: Update package.json
 Edit(
-  file_path="/home/fred/myapp/package.json",
+  file_path="/home/user/myapp/package.json",
   old_string='"react": "^17.0.2"',
   new_string='"react": "^18.2.0"'
 )
 Edit(
-  file_path="/home/fred/myapp/package.json",
+  file_path="/home/user/myapp/package.json",
   old_string='"react-dom": "^17.0.2"',
   new_string='"react-dom": "^18.2.0"'
 )
@@ -1092,9 +1092,9 @@ Bash(
 )
 
 # Step 6: Update deprecated patterns (if found)
-Read(file_path="/home/fred/myapp/src/components/LegacyComponent.js")
+Read(file_path="/home/user/myapp/src/components/LegacyComponent.js")
 Edit(
-  file_path="/home/fred/myapp/src/components/LegacyComponent.js",
+  file_path="/home/user/myapp/src/components/LegacyComponent.js",
   old_string="componentWillMount() {",
   new_string="componentDidMount() {"
 )
@@ -1148,7 +1148,7 @@ Grep(
 
 # Step 5: Check .env files
 Glob(pattern="**/.env*")
-Read(file_path="/home/fred/myapp/.env.example")
+Read(file_path="/home/user/myapp/.env.example")
 
 # Step 6: Audit dependencies
 Bash(
@@ -1163,9 +1163,9 @@ Bash(
 )
 
 # Step 8: Review .gitignore
-Read(file_path="/home/fred/myapp/.gitignore")
+Read(file_path="/home/user/myapp/.gitignore")
 Edit(
-  file_path="/home/fred/myapp/.gitignore",
+  file_path="/home/user/myapp/.gitignore",
   old_string=".env",
   new_string=".env\n.env.local\n.env.*.local"
 )
@@ -1217,7 +1217,7 @@ grep -r "pattern"    # Search content (prefer Grep)
 1. **Use specialized tools**: Glob for files, Grep for content, Read for reading, Edit for modifications
 2. **Always read before write/edit**: Required for existing files
 3. **Parallel when possible**: Run independent operations simultaneously
-4. **Absolute paths in WSL**: Use Linux-style paths (`/home/fred/...` or `/mnt/c/...`)
+4. **Absolute paths in WSL**: Use Linux-style paths (`/home/user/...` or `/mnt/c/...`)
 5. **Performance matters**: Use `type` parameter, limit scope, choose appropriate output modes
 6. **Bash for commands only**: Don't use Bash for file operations when specialized tools exist
 

@@ -679,7 +679,7 @@ wslpath -w ~/dotfiles
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-filesystem"],
     "env": {
-      "PROJECT_ROOT": "/home/fred/projects"
+      "PROJECT_ROOT": "/home/user/projects"
     }
   }
 }
@@ -722,10 +722,10 @@ If you need to convert between Windows and WSL paths:
 ```bash
 # Windows path to WSL path
 wslpath 'C:\Users\Fred\Documents'
-# Output: /mnt/c/Users/Fred/Documents
+# Output: /mnt/c/Users/user/Documents
 
 # WSL path to Windows path
-wslpath -w /home/fred/projects
+wslpath -w /home/user/projects
 # Output: \\wsl$\Ubuntu\home\fred\projects
 ```
 
@@ -738,7 +738,7 @@ cd ~/projects
 git clone https://github.com/...
 
 # Bad: Slow
-cd /mnt/c/Users/Fred/projects
+cd /mnt/c/Users/user/projects
 git clone https://github.com/...
 ```
 
@@ -1370,7 +1370,7 @@ wsl --shutdown
 
 # Convert paths
 wslpath 'C:\Users\Fred\Documents'
-wslpath -w /home/fred/projects
+wslpath -w /home/user/projects
 
 # Access WSL from Windows
 \\wsl$\Ubuntu\home\yourusername

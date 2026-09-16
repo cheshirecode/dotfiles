@@ -49,7 +49,7 @@ next_action: Remove canvas
 repos: [sample]
 external_refs:
   - platform: cursor-canvas
-    url: /Users/x/.cursor/projects/foo/canvases/bar.canvas.tsx
+    url: /Users/x/.cursor/projects/foo/canvases/bar.canvas.tsx  # pragma: allowlist owner
     note: canvas
 ---
 

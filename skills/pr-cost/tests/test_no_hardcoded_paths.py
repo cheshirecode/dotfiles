@@ -3,7 +3,7 @@
 
 The skill is required to work across claude, codex, cursor and opencode, on any
 machine. It did not. Ten occurrences across six files hardcoded either
-`/opt/homebrew/bin/python3` or `/Users/fredtran/...` (pr-cost-allow-abs-path), and
+`/opt/homebrew/bin/python3` or a home path (pr-cost-allow-abs-path), and
 three of those files were the executable adapters, so every adapter was dead on
 Linux, on an Intel mac, in CI, and for any other user. That is not a style
 inconsistency; it is the skill not working.

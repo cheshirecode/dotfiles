@@ -24,7 +24,7 @@ correction lives forward in this rule.
 
 ## Checkout and branch discipline (lesson from detached Codex worktrees)
 
-When the user targets `oss/dotfiles` or `/Users/fredtran/Documents/oss/dotfiles`,
+When the user targets `oss/dotfiles` (this checkout, wherever it lives),
 use that primary checkout on `main` as the delivery surface and commit directly
 to `main` unless the user explicitly asks for a branch or PR.
 

@@ -29,7 +29,7 @@ editing this repo's own remote and restoring it. A checkout is shared: a
 | # | Test | Expected | How to verify |
 |---|------|----------|---------------|
 | 1a | detect: non-git directory | Exit 2, "not a git repository" message | `detect-forge.sh --repo /tmp/not-a-repo-test`; assert exit code |
-| 1b | detect: dotfiles repo (GitHub) | Exit 0, stdout contains `github`, CLI = `gh` | Run on `/Users/fredtran/Documents/oss/dotfiles` |
+| 1b | detect: dotfiles repo (GitHub) | Exit 0, stdout contains `github`, CLI = `gh` | Run on `the oss/dotfiles checkout` |
 | 1c | detect: missing origin remote | Exit 2, clear error | Create bare clone with no origin configured |
 | 1d | owner-check.sh: non-existent PR | Exit 2, error naming the PR number on stderr, empty stdout | Automated fake `gh` 404s any number but the known one |
 | 1e | owner-check.sh: current user's own PR | Exit 0, stdout = "self" | Automated fake `gh` returns a PR whose author is the current user |

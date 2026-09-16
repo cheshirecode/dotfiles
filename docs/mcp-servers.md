@@ -142,7 +142,7 @@
 
 ```bash
 # Linux/WSL
-cp /home/fred/projects/dotfiles/claude-mcp.example.json ~/.config/claude/mcp.json
+cp /home/user/projects/dotfiles/claude-mcp.example.json ~/.config/claude/mcp.json
 
 # macOS
 cp claude-mcp.example.json ~/Library/Application\ Support/Claude/mcp.json
@@ -1245,10 +1245,10 @@ docker ps
 ```bash
 # Windows to WSL
 wslpath 'C:\Users\Fred\Documents'
-# Output: /mnt/c/Users/Fred/Documents
+# Output: /mnt/c/Users/user/Documents
 
 # WSL to Windows
-wslpath -w /home/fred/projects
+wslpath -w /home/user/projects
 # Output: \\wsl$\Ubuntu\home\fred\projects
 ```
 
@@ -1265,7 +1265,7 @@ wslpath -w /home/fred/projects
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-filesystem"],
     "env": {
-      "PROJECT_ROOT": "/home/fred/projects"
+      "PROJECT_ROOT": "/home/user/projects"
     }
   }
 }
@@ -1278,11 +1278,11 @@ wslpath -w /home/fred/projects
 1. **Use Native Filesystem**
    ```bash
    # Good: Native WSL
-   cd /home/fred/projects
+   cd /home/user/projects
    git clone https://github.com/...
 
    # Avoid: Windows mount
-   cd /mnt/c/Users/Fred/projects
+   cd /mnt/c/Users/user/projects
    ```
 
 2. **Configure Windows Defender Exclusions**
