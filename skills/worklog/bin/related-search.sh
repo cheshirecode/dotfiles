@@ -11,16 +11,22 @@
 # decisions later (see worklog-prior-art-check, AGENTS.md § sync mode).
 set -euo pipefail
 
+# Usage first, before any vault resolution. Asking what a script does must
+# not require a data repo: outside a clone this printed
+# "resolve_worklog_repo: cannot locate a worklog data repo" and exited 1, so
+# --help was unreadable exactly where a newcomer would try it. It also made
+# the MCP contract check read the resolver error instead of the usage text
+# and report drift that did not exist.
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  sed -n '2,11p' "$0"
+  exit 0
+fi
+
 here="$(SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_lib.sh
 . "$SCRIPT_DIR/_lib.sh"
 REPO_ROOT="$(resolve_worklog_repo)" || exit 1
 cd "$REPO_ROOT" && pwd)/people"
-
-if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-  sed -n '2,11p' "$0"
-  exit 0
-fi
 
 # Collect the task directories that actually exist. A bare
 # "$here"/*/active/*.md glob is passed through literally when it matches

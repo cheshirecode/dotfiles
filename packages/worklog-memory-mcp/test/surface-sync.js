@@ -130,13 +130,30 @@ if (contracts.length === 0) {
   process.exit(fail ? 1 : 2);
 } else {
   const { execFileSync } = await import("node:child_process");
+  // A minimal vault shape: resolve_worklog_repo only needs somewhere with
+  // people/ under it, and no script writes during --help.
+  const probeVault = path.join(scratch, "probe-vault");
+  fs.mkdirSync(path.join(probeVault, "people", "probe", "active"), { recursive: true });
+  fs.mkdirSync(path.join(probeVault, "people", "probe", "archive"), { recursive: true });
   const problems = [];
   for (const [tool, c] of contracts) {
     const script = path.join(BIN, c.script);
     if (!fs.existsSync(script)) { problems.push(`${tool}: ${c.script} is gone`); continue; }
     let help = "";
     try {
-      help = execFileSync("bash", [script, "--help"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+      // Hermetic: hand the probe its own throwaway vault instead of reading
+      // whatever the ambient shell happens to export. Several of these
+      // scripts resolve a vault before printing usage, so with WORKLOG_REPO
+      // unset --help returned a resolver error and this check reported drift
+      // that did not exist. It passed locally, where direnv had set the
+      // variable, and failed in CI and in any tool shell, where direnv never
+      // runs — the "verify from where a value is READ" trap, in the test
+      // rather than in the code.
+      help = execFileSync("bash", [script, "--help"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env, WORKLOG_REPO: probeVault, WORKLOG_LDAP: "probe" },
+      });
     } catch (err) {
       // A script that cannot print help is broken, not compliant.
       help = `${err.stdout || ""}${err.stderr || ""}`;
