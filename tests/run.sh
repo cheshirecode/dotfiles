@@ -2016,8 +2016,13 @@ test_worklog_skill() {
   # It builds its own scratch repo with a local bare origin and now clears the
   # caller's whole worklog scope, so it touches no real vault and needs no
   # network. ~13s. Asserted on its exit code, not on a step count.
+  # Under WL_HERMETIC like every other worklog fixture: a developer BASH_ENV is
+  # sourced by each `bash` the steps spawn, re-exporting WORKLOG_REPO AFTER
+  # e2e has set its own. checkpoint.sh then resolved the real vault and failed
+  # with "people/<real-ldap>/active/seed-impl.md not found" while the scratch
+  # tree it had just seeded was correct.
   if [[ -x "$sb/e2e.sh" ]]; then
-    if out=$(bash "$sb/e2e.sh" 2>&1); then
+    if out=$("${WL_HERMETIC[@]}" bash "$sb/e2e.sh" 2>&1); then
       ok "worklog e2e suite (scratch repo, end to end)"
     else
       fail_with_output "worklog e2e suite" "$(printf '%s' "$out" | tail -25)"
