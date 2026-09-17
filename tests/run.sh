@@ -2201,9 +2201,18 @@ test_packages() {
     echo "# mini vault" > "$mini/README.md"
     git -C "$mini" -c user.name=t -c user.email=t@t add -A
     git -C "$mini" -c user.name=t -c user.email=t@t commit -qm init
-    if (cd packages/worklog-memory-mcp && WORKLOG_SOURCE="$mini" node test/e2e.js | grep -q 'e2e: 5 pass, 0 fail'); then
-      ok "worklog-memory-mcp e2e 5/5"
+    local e2e_out
+    # e2e.js prints "e2e: N pass, 0 fail"; N grows as lifecycle coverage lands.
+    # Match any all-green tally rather than pinning N (stale N is how a green
+    # suite read as FAIL after the tool count grew past 5).
+    e2e_out="$(cd packages/worklog-memory-mcp && WORKLOG_SOURCE="$mini" node test/e2e.js 2>&1)" || true
+    if printf '%s
+' "$e2e_out" | grep -qE 'e2e: [0-9]+ pass, 0 fail'; then
+      ok "worklog-memory-mcp e2e ($(printf '%s
+' "$e2e_out" | grep -Eo 'e2e: [0-9]+ pass, 0 fail' | tail -1))"
     else
+      printf '%s
+' "$e2e_out" | tail -20 >&2
       fail "worklog-memory-mcp e2e failed"
     fi
     rm -rf "$(dirname "$mini")"
