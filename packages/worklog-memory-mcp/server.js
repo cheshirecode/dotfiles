@@ -172,6 +172,16 @@ function serialized(fn) {
 
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
+// A task lives under active/ until it is archived, then under archive/.
+// Anything that reads or edits an existing task must look in both.
+function taskFile(slug) {
+  for (const state of ["active", "archive"]) {
+    const file = path.join(REPO, "people", LDAP, state, `${slug}.md`);
+    if (fs.existsSync(file)) return file;
+  }
+  return null;
+}
+
 const server = new McpServer({ name: "worklog-memory", version: "0.1.0" });
 
 server.tool(
@@ -240,9 +250,12 @@ server.tool(
   },
   ({ slug, evidence, status, next_action }) =>
     serialized(async () => {
-      const file = path.join(REPO, "people", LDAP, "active", `${slug}.md`);
-      if (!fs.existsSync(file)) {
+      const file = taskFile(slug);
+      if (!file) {
         return text({ ok: false, out: `task ${slug} not found — use memory_task_create` });
+      }
+      if (file.includes(`${path.sep}archive${path.sep}`)) {
+        return text({ ok: false, out: `task ${slug} is archived; archived tasks are a closed record` });
       }
       const today = new Date().toISOString().slice(0, 10);
       const note = `- ${today}: ${evidence}`;
@@ -259,6 +272,97 @@ server.tool(
       if (next_action) args.push(`--next=${next_action}`);
       return text(await run("checkpoint.sh", args));
     })
+);
+
+// --- Lifecycle, discovery and self-check -----------------------------------
+//
+// memory_task_create and memory_checkpoint can start and advance a task but
+// never finish one: `archived` is the FSM's terminal state and archive.sh is
+// the only thing that reaches it, because it also moves the file from active/
+// to archive/. Setting the frontmatter alone would leave the task in the wrong
+// directory. The three read tools below close the other half of the loop —
+// without them a caller must already know a slug before it can do anything.
+
+server.tool(
+  "memory_archive",
+  "Close a task: set status=archived, write a summary, and move it from active/ to archive/. This is the FSM's terminal transition and the only way to finish a task.",
+  {
+    slug: z.string().regex(SLUG),
+    reason: z.enum(["shipped", "declined", "abandoned", "superseded", "merged", "obsolete"]).default("shipped"),
+    summary: z.string().min(1).describe("2-3 lines, written into frontmatter so the archive stays browsable"),
+    superseded_by: z.string().regex(SLUG).optional().describe("required shape for reason=superseded"),
+    pr: z.string().optional(),
+  },
+  ({ slug, reason, summary, superseded_by, pr }) =>
+    serialized(async () => {
+      const file = taskFile(slug);
+      if (!file) return text({ ok: false, out: `task ${slug} not found` });
+      if (file.includes(`${path.sep}archive${path.sep}`)) {
+        return text({ ok: false, out: `task ${slug} is already archived` });
+      }
+      // archive.sh only warns when a summary is missing, and the vault has
+      // five archived tasks with none. An agent has no excuse, so require it.
+      const why = reason === "superseded" && superseded_by ? `superseded by ${superseded_by}` : reason;
+      const args = [slug, `--reason=${why}`, `--summary=${summary}`];
+      if (pr) args.push(`--pr=${pr}`);
+      return text(await run("archive.sh", args));
+    })
+);
+
+server.tool(
+  "memory_status",
+  "What is in flight: recent task activity for this vault, without needing a slug first. Start here when resuming cold.",
+  {
+    since: z.string().optional().describe("git date, e.g. yesterday, 1.week.ago, 2026-04-15; default midnight today"),
+    slug: z.string().regex(SLUG).optional(),
+    project: z.string().optional(),
+    format: z.enum(["markdown", "grouped", "json"]).default("markdown"),
+    include_meta: z.boolean().default(false),
+  },
+  async ({ since, slug, project, format, include_meta }) => {
+    const args = [`--format=${format}`];
+    if (since) args.push(`--since=${since}`);
+    if (slug) args.push(`--slug=${slug}`);
+    if (project) args.push(`--project=${project}`);
+    if (include_meta) args.push("--include-meta");
+    return text(await run("status.sh", args));
+  }
+);
+
+server.tool(
+  "memory_related",
+  "Prior-art probe across active and archive task bodies, or the list of project slugs already in use. Run BEFORE memory_task_create so a decision is not re-made under a new slug.",
+  {
+    keywords: z.array(z.string().min(1)).min(1).optional(),
+    projects: z.boolean().default(false).describe("list project: slugs in use instead of searching"),
+  },
+  async ({ keywords, projects }) => {
+    if (projects) return text(await run("related-search.sh", ["--projects"]));
+    if (!keywords?.length) {
+      return text({ ok: false, out: "pass keywords, or projects=true to enumerate project slugs" });
+    }
+    return text(await run("related-search.sh", keywords));
+  }
+);
+
+server.tool(
+  "memory_lint",
+  "Check task files against the vault's own rules. memory_checkpoint already lints what it commits; use this to inspect a task without writing, or to sweep the vault.",
+  {
+    slug: z.string().regex(SLUG).optional().describe("omit to lint every task file"),
+    cross_task: z.boolean().default(false).describe("include active-task drift checks"),
+    format: z.enum(["markdown", "json"]).default("markdown"),
+  },
+  async ({ slug, cross_task, format }) => {
+    const args = [`--format=${format}`];
+    if (slug) {
+      const file = taskFile(slug);
+      if (!file) return text({ ok: false, out: `task ${slug} not found` });
+      args.push(`--file=${path.relative(REPO, file)}`);
+    }
+    if (cross_task) args.push("--cross-task");
+    return text(await run("lint.sh", args));
+  }
 );
 
 await resolveVaultEnv();
