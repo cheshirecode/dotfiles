@@ -44,6 +44,44 @@ if (!fs.existsSync(REPO)) {
   console.error(`worklog-memory-mcp: WORKLOG_REPO does not exist: ${RAW_REPO}`);
   process.exit(78);
 }
+// --- The task file's vocabulary ----------------------------------------------
+//
+// kinds and statuses used to be hardcoded here while bin/_lint.py kept its own
+// copies. _lint.py accepted 19 kinds and this file offered 8, so 11 kinds valid
+// in the vault could not be written through the MCP at all. Both sides now read
+// one schema.
+//
+// Resolution order: an explicit override, then the skill next to WORKLOG_BIN,
+// then the sibling skill in this checkout. The last one is what lets a test
+// point WORKLOG_BIN at a probe directory without losing the real vocabulary.
+const SCHEMA_CANDIDATES = [
+  process.env.WORKLOG_TASK_SCHEMA,
+  BIN && path.join(BIN, "..", "task-schema.json"),
+  path.join(import.meta.dirname, "..", "..", "skills", "worklog", "task-schema.json"),
+].filter(Boolean);
+const SCHEMA_PATH = SCHEMA_CANDIDATES.find((p) => fs.existsSync(p));
+if (!SCHEMA_PATH) {
+  // Absent is not ok. Falling back to a private copy is how the drift started.
+  console.error(`worklog-memory-mcp: no task schema found. Looked in:\n  ${SCHEMA_CANDIDATES.join("\n  ")}\nSet WORKLOG_TASK_SCHEMA.`);
+  process.exit(78);
+}
+let SCHEMA;
+try {
+  SCHEMA = JSON.parse(fs.readFileSync(SCHEMA_PATH, "utf8"));
+} catch (err) {
+  console.error(`worklog-memory-mcp: task schema at ${SCHEMA_PATH} is unreadable: ${err.message}`);
+  process.exit(78);
+}
+const KINDS = SCHEMA.kinds;
+// What a tool may SET, which is not what may EXIST. `archived` is valid in a
+// committed file but is withheld here: reaching it also moves the file from
+// active/ to archive/, so writing the frontmatter alone is not the transition.
+const AGENT_STATUSES = SCHEMA.statuses.agent_writable;
+if (!Array.isArray(KINDS) || KINDS.length === 0 || !Array.isArray(AGENT_STATUSES) || AGENT_STATUSES.length === 0) {
+  console.error(`worklog-memory-mcp: task schema at ${SCHEMA_PATH} has no kinds or no agent_writable statuses`);
+  process.exit(78);
+}
+
 // --- Vault-scoped child environment -----------------------------------------
 //
 // The launching shell is usually a DIFFERENT vault's direnv scope. A session
@@ -208,7 +246,7 @@ server.tool(
   "Create a new task file (draft) in the vault and commit it. Body is markdown after the frontmatter.",
   {
     slug: z.string().regex(SLUG),
-    kind: z.enum(["plan", "impl", "investigation", "design", "spike", "proposal", "bug", "tooling"]).default("plan"),
+    kind: z.enum([...KINDS]).default("plan"),
     context: z.string().min(1),
     next_action: z.string().min(1),
   },
@@ -250,7 +288,7 @@ server.tool(
   {
     slug: z.string().regex(SLUG),
     evidence: z.string().min(1).describe("one typed line: command|artifact|git|github|url: <ref> — <result>"),
-    status: z.enum(["draft", "in-progress", "in-review", "blocked", "shipping"]).optional(),
+    status: z.enum([...AGENT_STATUSES]).optional(),
     next_action: z.string().optional(),
   },
   ({ slug, evidence, status, next_action }) =>

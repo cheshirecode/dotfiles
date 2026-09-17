@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -50,23 +51,40 @@ import yaml
 # Directories under people/<ldap>/ that hold content rather than tasks.
 NON_TASK_DIRS = {"transcripts", "artifacts"}
 
-KINDS = {
-  "design", "review", "spike", "impl", "ops", "debug",
-  "program", "postmortem", "runbook", "proposal",
-  # Extended ad-hoc kinds (protocol.md § Kinds permits extension):
-  "bugfix", "investigation", "plan", "infra", "cleanup", "project",
-  # Legacy values still in active corpus — kept additive per AGENTS.md
-  # § "Kinds are additive (Liskov)". Prefer the canonical form going
-  # forward (bug → debug/bugfix; perf → impl/infra; tooling → infra)
-  # but do not force-rewrite shipped files.
-  "bug", "perf", "tooling",
-}
+# The vocabulary lives in ../task-schema.json, not here. This file validates
+# what is committed; the MCP server at packages/worklog-memory-mcp builds new
+# task files. While each kept its own copy they drifted: this list held 19
+# kinds and the server offered 8, so 11 kinds valid here could not be written
+# through the MCP at all. Read one file from both sides instead.
+#
+# Kinds stay additive per AGENTS.md § "Kinds are additive (Liskov)": legacy
+# values remain valid and shipped files are not force-rewritten.
+#
 # "ready" sits between draft and in-progress: scope is settled and the task is
 # claimable, where draft means scope is still shifting. Added 2026-09-16 after
 # 21 committed task files already used it and lint errored on all 21 - the
-# practice was ahead of this list, not wrong.
-STATUSES = {"draft", "ready", "in-progress", "in-review", "blocked", "shipping",
-            "archived"}
+# practice was ahead of the list, not wrong.
+_SCHEMA_PATH = pathlib.Path(
+  os.environ.get("WORKLOG_TASK_SCHEMA")
+  or pathlib.Path(__file__).resolve().parent.parent / "task-schema.json"
+)
+try:
+  _SCHEMA = json.loads(_SCHEMA_PATH.read_text())
+  KINDS = set(_SCHEMA["kinds"])
+  STATUSES = set(_SCHEMA["statuses"]["valid"])
+except (OSError, ValueError, KeyError) as _err:
+  # Absent is not ok. A lint that silently accepted everything, or nothing,
+  # would be worse than one that refuses to run: this file gates every commit
+  # through the pre-commit hook.
+  print(
+    f"_lint.py: cannot read the task schema at {_SCHEMA_PATH}: {_err}\n"
+    "  Set WORKLOG_TASK_SCHEMA, or restore skills/worklog/task-schema.json.",
+    file=sys.stderr,
+  )
+  raise SystemExit(2)
+if not KINDS or not STATUSES:
+  print(f"_lint.py: task schema at {_SCHEMA_PATH} has no kinds or no valid statuses", file=sys.stderr)
+  raise SystemExit(2)
 # Common wrong statuses → the intended FSM state. active/ is a directory,
 # not a status, so a fresh task shouldn't have to guess its way past the hook.
 STATUS_HINTS = {
