@@ -153,6 +153,65 @@ class LoopHelpersTest(unittest.TestCase):
         self.addCleanup(self.tmpdir.cleanup)
 
 
+
+class TransportGatePayloadTest(unittest.TestCase):
+    """A measured payload replaces the caller's --dense assertion."""
+
+    def setUp(self) -> None:
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.fake = pathlib.Path(self.tmpdir.name) / "caveman"
+        self.fake.write_text("#!/bin/sh\n")
+        self.fake.chmod(self.fake.stat().st_mode | stat.S_IXUSR)
+
+    def gate(self, payload: str, *extra: str) -> str:
+        path = pathlib.Path(self.tmpdir.name) / "payload.txt"
+        path.write_text(payload)
+        result = subprocess.run(
+            [sys.executable, str(TRANSPORT_GATE), "--mode", "pixel",
+             "--caveman-command", str(self.fake), "--authorized", "--measured-win",
+             "--recoverable", "--legible", "--model", "claude-fable-5",
+             "--payload", str(path), *extra],
+            capture_output=True, text=True, check=False,
+        )
+        return result.stdout
+
+    def test_uniform_prose_payload_passes_on_measured_fill(self) -> None:
+        dense = "\n".join("word " * 17 for _ in range(20))
+        self.assertIn("decision=use mode=pixel", self.gate(dense))
+
+    def test_ragged_payload_is_skipped_with_its_measured_fill(self) -> None:
+        ragged = "x" * 160 + "\n" + "\n".join(["- short", "", "- also short"] * 12)
+        out = self.gate(ragged)
+        self.assertIn("decision=skip mode=pixel reason=payload-not-dense", out)
+        self.assertIn("fill=", out)
+
+    def test_machine_parsed_payload_is_skipped_even_when_it_reads_as_prose(self) -> None:
+        # Dense, low identifier share -- it is mostly English inside the fields --
+        # but it is re-parsed, so it must survive byte-exactly and cannot.
+        blob = json.dumps(
+            [{"note": "the refusals stopped on their own with no code change to explain it",
+              "done": False} for _ in range(12)],
+            separators=(",", ":"),
+        )
+        wrapped = "\n".join(blob[i:i + 120] for i in range(0, len(blob), 120))
+        out = self.gate(wrapped)
+        self.assertIn("decision=skip mode=pixel reason=payload-machine-parsed", out)
+
+    def test_structured_fragment_is_skipped_rather_than_passed(self) -> None:
+        # A truncated or streamed fragment of machine data does not parse, so a
+        # parse-only check waves it through. Skipping costs nothing: the payload
+        # is simply sent as text.
+        blob = json.dumps([{"note": "prose inside a field"} for _ in range(30)],
+                          separators=(",", ":"))[:900]
+        wrapped = "\n".join(blob[i:i + 120] for i in range(0, len(blob), 120))
+        self.assertIn("reason=payload-structured-unparseable", self.gate(wrapped))
+
+    def test_identifier_dense_payload_is_skipped_despite_perfect_fill(self) -> None:
+        blob = "\n".join("a1b2c3d4e5f60718" * 6 for _ in range(20))
+        self.assertIn("decision=skip mode=pixel reason=payload-identifier-dense", self.gate(blob))
+
+
 if __name__ == "__main__":
     unittest.main()
 
