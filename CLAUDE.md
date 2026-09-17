@@ -207,3 +207,17 @@ above: the check measures something adjacent to what was meant.
   Commit, then run once.
 - **Re-measure before documenting a limitation.** "Cannot do X" ages into
   wrong, and no agreement pin catches prose.
+- **Never key a check to a value that drifts on its own.** A literal count, a
+  hardcoded total, a `file:line` coordinate: each is a second copy of a fact,
+  and the copy goes stale silently while the check keeps reporting. Key on
+  something the subject itself carries — compute the count, match a marker in
+  the source, assert the exit code. Then add the inert-lane guard: fail when
+  *fewer* cases ran than expected, because a lane that stops running its cases
+  otherwise reports a pass. Three measured instances in one day, 2026-09-17:
+  a packages lane grepped for the literal `"e2e: 5 pass, 0 fail"` and turned
+  red when the suite grew to 11 checks (`3f2a92e`); a sandbox test labelled
+  itself `"8 cases"` while running 9; and commit-pathspec exemptions keyed by
+  `file:line` broke on the first unrelated edit, reporting two healthy sites
+  as violations while the two real exemptions silently lost their cover — that
+  one was caught pre-ship by the guard's own anti-rot assertion firing, not by
+  review, which is the outcome the rule is asking you to design for.
