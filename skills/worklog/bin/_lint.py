@@ -578,6 +578,23 @@ def _lint_file(
   if state == "active" and status == "archived":
     errors.append("status 'archived' but file is under active/")
 
+  # An archived task with no summary is the archive's own silent decay: it is
+  # the field that makes the record browsable later, and nothing reported its
+  # absence, so 60 of 244 archived tasks across this vault accumulated without
+  # one. archive.sh now refuses up front, which stops the count growing; this
+  # reports the ones already there so the backlog is visible and countable
+  # rather than discovered a task at a time.
+  #
+  # A warning, not an error. The existing files are a real gap but not a
+  # defect anyone introduced today, and making it an error would turn every
+  # lint run red on history until a 60-file backfill lands — which is how a
+  # check gets suppressed instead of satisfied.
+  if state == "archive" and status == "archived" and not fm.get("summary"):
+    warnings.append(
+      "archived task has no summary: — the archive is the long-term record "
+      "and a summary cannot be reconstructed later as cheaply as written now"
+    )
+
   project = fm.get("project")
   if project is None or project == "":
     # Archive/ tasks are frozen history — don't pester about missing project there.
