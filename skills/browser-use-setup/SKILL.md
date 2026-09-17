@@ -24,7 +24,10 @@ so a test install never touches the real one.
 ## Wrapper
 
 `bin/bu [--ensure] <args…>` locates the CLI across PATH layouts and execs it.
-`--ensure` runs the installer first when the binary is missing.
+`--ensure` runs the installer first when the binary is missing. On WSL with a
+Windows-side browser, `bu` probes the gateway portproxy and localhost CDP
+endpoints and exports `BU_CDP_URL` itself; caller-set `BU_CDP_URL`,
+`BU_CDP_WS`, or `BU_NAME` always win.
 
 ## Platform notes
 
