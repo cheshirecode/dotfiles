@@ -27,6 +27,12 @@ Slicing a file is cheap and repeatable. An unbounded read cannot be undone.
 Preserve the producer's exit status when slicing or piping;
 [protocol.md](protocol.md#verifying-a-claim) owns that rule.
 
+Return the producer's exit status, result counts, relevant failures and the
+artifact path. State what was omitted; retrieve more when diagnosis or an
+acceptance check needs it. A host's tool-history cap can bound retained output,
+but cannot recover bytes that were never saved. Choose caps as workload trials,
+not model-specific constants, and keep full evidence outside the prompt.
+
 ## Prefer the answer to the material
 
 Let the tool compute what you need. Count with `wc -l` or a `--count` flag rather
@@ -60,6 +66,22 @@ State is an index, not a log — the root skill already says so, and the context
 budget is why. One typed evidence line per cycle points at an artifact that holds
 the volume. Evidence lines that carry pasted output turn the state file itself
 into a second context problem on resume.
+
+When installed, `loop-helpers/scripts/context_pack.py` enforces a serialized
+byte budget and rejects oversized packs without dropping fields. Replace raw
+evidence with recovery references before retrying. Preserve decisions, user
+corrections and authorization boundaries; a small JSON encoding alone does not
+make a handoff bounded.
+
+## Verify a saving
+
+Separate emitted payload size, provider input/cache/output usage and billed cost.
+Historical sink estimates can overlap; a new scan after a setting change does
+not establish causality. Compare matched tasks at the same model and effort,
+including summary generation, recovery reads, retries and acceptance results.
+Smaller output is useful only if required evidence remains recoverable and the
+task still passes its checks. Label byte measurements as bytes, and leave token
+or cost savings unverified when provider measurements are unavailable.
 
 This applies the context-management guidance in Anthropic's
 [Building Effective AI Agents: Architecture Patterns and Implementation Frameworks](https://resources.anthropic.com/hubfs/Building%20Effective%20AI%20Agents-%20Architecture%20Patterns%20and%20Implementation%20Frameworks.pdf)
