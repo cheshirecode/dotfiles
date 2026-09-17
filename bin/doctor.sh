@@ -12,12 +12,27 @@
 
 set -uo pipefail  # no -e: we collect all failures, exit non-zero at the end
 
+# Four states, not three. OK / FAIL / WARN collapsed two different answers
+# into WARN: "this is not installed" and "I could not tell". A missing reader
+# then read the same as a passing one, which is the defect class CLAUDE.md
+# records under "A diagnostic must separate absent from ok".
+#
+#   OK       checked, healthy
+#   FAIL     checked, broken — gates the exit code
+#   ABSENT   the thing genuinely is not here; actionable, and not a failure
+#            on its own because some of it is optional
+#   UNKNOWN  the probe itself could not answer. Never counts as healthy.
+#   WARN     present and working, but worth saying
 FAIL=0
 WARN=0
-say()  { printf "  %-7s %s\n" "$1" "$2"; }
-ok()   { say "OK"   "$1"; }
-fail() { say "FAIL" "$1"; FAIL=$((FAIL+1)); }
-warn() { say "WARN" "$1"; WARN=$((WARN+1)); }
+ABSENT=0
+UNKNOWN=0
+say()     { printf "  %-7s %s\n" "$1" "$2"; }
+ok()      { say "OK"      "$1"; }
+fail()    { say "FAIL"    "$1"; FAIL=$((FAIL+1)); }
+warn()    { say "WARN"    "$1"; WARN=$((WARN+1)); }
+absent()  { say "ABSENT"  "$1"; ABSENT=$((ABSENT+1)); }
+unknown() { say "UNKNOWN" "$1"; UNKNOWN=$((UNKNOWN+1)); }
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MANIFEST="$REPO_ROOT/manifest/skills.yaml"
@@ -106,17 +121,83 @@ else
 fi
 
 echo "doctor: gh auth"
-if gh auth status >/dev/null 2>&1; then
-  ok "gh authenticated"
+# Wrapped in `direnv exec`, deliberately. A tool shell loads no .envrc, so a
+# bare `gh auth status` reports the machine-wide token whatever directory it
+# names — see CLAUDE.md, "A tool shell has no direnv". Unwrapped, this check
+# could report a healthy login while the tree it is standing in resolves a
+# different account entirely.
+if ! command -v gh >/dev/null; then
+  absent "gh not installed (needed for private repos)"
+elif ! command -v direnv >/dev/null; then
+  unknown "gh auth unverifiable: direnv missing, so a bare check would report the machine-wide token rather than this tree's"
 else
-  warn "gh not authenticated (gh auth login — needed for private repos)"
+  gh_out="$(direnv exec "$REPO_ROOT" gh auth status 2>&1)"
+  gh_rc=$?
+  if [[ $gh_rc -eq 0 ]]; then
+    ok "gh authenticated as $(printf '%s' "$gh_out" | sed -n 's/.*account \([^ ]*\).*/\1/p' | head -1) in $REPO_ROOT"
+  elif printf '%s' "$gh_out" | grep -q 'is blocked'; then
+    # direnv refused to load the .envrc, so the token this tree would use was
+    # never resolved. That is an unanswered probe, not a rejected credential —
+    # reporting it as FAIL is the same absent-vs-broken collapse this check
+    # exists to remove. Seen first on a fresh git worktree, whose .envrc has
+    # never been approved.
+    unknown "gh auth unverifiable: .envrc not approved for $REPO_ROOT (run: direnv allow $REPO_ROOT)"
+  elif printf '%s' "$gh_out" | grep -qi 'not logged\|no accounts'; then
+    absent "gh not authenticated (gh auth login — needed for private repos)"
+  else
+    fail "gh auth rejected in $REPO_ROOT: $(printf '%s' "$gh_out" | grep -i 'failed\|error' | head -1)"
+  fi
 fi
 
+# The identity gate, per vault. A hook that is not installed protects nothing,
+# and WORKLOG_IDENTITY_DOMAIN unset makes pre-commit-identity report and skip.
+# Both halves must hold, and each can fail in a different way — which is why
+# this is read as four states rather than a boolean.
+echo "doctor: vault identity gate"
+# Overridable so the states below can be exercised against scratch vaults;
+# a check whose failure paths cannot be reached is not a check.
+IFS=':' read -r -a VAULTS <<< "${WORKLOG_VAULTS:-$HOME/Documents/oss/_worklog:$PROJECTS_DIR/_worklog}"
+for vault in "${VAULTS[@]}"; do
+  short="${vault/#$HOME/~}"
+  if [[ ! -d "$vault/.git" ]]; then
+    absent "$short not cloned here"
+    continue
+  fi
+  hooks="$(git -C "$vault" config core.hooksPath 2>/dev/null)"
+  case "$hooks" in
+    "")  hooks="$vault/.git/hooks" ;;
+    /*)  ;;
+    *)   hooks="$vault/$hooks" ;;
+  esac
+  if [[ ! -e "$hooks/pre-commit-identity" ]]; then
+    fail "$short identity hook not installed (bin/install-hooks.sh --write)"
+    continue
+  fi
+  if ! command -v direnv >/dev/null; then
+    unknown "$short gate unverifiable: direnv missing, so WORKLOG_IDENTITY_DOMAIN cannot be read the way a commit reads it"
+    continue
+  fi
+  # Read it from the vault, not from here: an export in a parent scope proves
+  # nothing about what the consumer sees.
+  domain="$(cd "$vault" && direnv exec . sh -c 'printf %s "${WORKLOG_IDENTITY_DOMAIN:-}"' 2>/dev/null)"
+  if [[ -n "$domain" ]]; then
+    ok "$short identity gate armed"
+  else
+    fail "$short identity gate DISARMED: hook installed but WORKLOG_IDENTITY_DOMAIN unset, so it reports and skips"
+  fi
+done
+
 echo
-if [[ $FAIL -eq 0 ]]; then
-  echo "doctor: $WARN warning(s), all critical checks passed"
+summary="$FAIL failure(s), $WARN warning(s), $ABSENT absent, $UNKNOWN unknown"
+if [[ $FAIL -eq 0 && $UNKNOWN -eq 0 ]]; then
+  echo "doctor: $summary — all critical checks passed"
   exit 0
+elif [[ $FAIL -eq 0 ]]; then
+  # An unanswered probe is not a pass. Exit 2 keeps it distinct from a real
+  # failure so a caller can tell "broken" from "could not tell".
+  echo "doctor: $summary — nothing failed, but some checks could not answer"
+  exit 2
 else
-  echo "doctor: $FAIL failure(s), $WARN warning(s) — fix failures and re-run"
+  echo "doctor: $summary — fix failures and re-run"
   exit 1
 fi
