@@ -155,9 +155,11 @@ EOF
   BODY="$(echo "$META" | python3 -c 'import json,sys;print(json.load(sys.stdin)["body"])')"
   TRAILERS="$(echo "$META" | python3 -c 'import json,sys;print(json.load(sys.stdin)["trailers"])')"
 
+  local COMMIT_PATHS=()
   while IFS= read -r path; do
     [[ -z "$path" ]] && continue
     git add "$path"
+    COMMIT_PATHS+=("$path")
   done < <(echo "$META" | python3 -c 'import json,sys
 for p in json.load(sys.stdin)["paths"]: print(p)')
 
@@ -165,7 +167,7 @@ for p in json.load(sys.stdin)["paths"]: print(p)')
     echo "project new: no changes staged"; return 0
   fi
 
-  git commit -q -m "$SUBJECT" -m "$BODY" -m "$TRAILERS"
+  git commit --only -q -m "$SUBJECT" -m "$BODY" -m "$TRAILERS" -- "${COMMIT_PATHS[@]}"
   push_with_retry || return 1
   record_session_touch "$SLUG" "project-new"
   local NCHILD
@@ -257,9 +259,11 @@ EOF
   verify_provenance || return 1
   git pull --no-rebase --autostash -q || true
 
+  local COMMIT_PATHS=()
   while IFS= read -r path; do
     [[ -z "$path" ]] && continue
     git add "$path"
+    COMMIT_PATHS+=("$path")
   done < <(echo "$PLAN" | python3 -c 'import json,sys
 for p in json.load(sys.stdin)["paths"]: print(p)')
 
@@ -272,7 +276,7 @@ for p in json.load(sys.stdin)["paths"]: print(p)')
   SUBJECT="$(echo "$PLAN" | python3 -c 'import json,sys;print(json.load(sys.stdin)["subject"])')"
   BODY="$(echo "$PLAN" | python3 -c 'import json,sys;print(json.load(sys.stdin)["body"])')"
   TRAILERS="$(echo "$PLAN" | python3 -c 'import json,sys;print(json.load(sys.stdin)["trailers"])')"
-  git commit -q -m "$SUBJECT" -m "$BODY" -m "$TRAILERS"
+  git commit --only -q -m "$SUBJECT" -m "$BODY" -m "$TRAILERS" -- "${COMMIT_PATHS[@]}"
   push_with_retry || return 1
   record_session_touch "$CHILD" "project-add-child"
   if [[ "$MODE" == "adopt" ]]; then
@@ -385,10 +389,11 @@ _do_claim() {
   fi
   local SHORT_SID="${SESSION#*:}"
   SHORT_SID="${SHORT_SID:0:8}"
-  git commit -q -m "$CHILD: claim (${SESSION%%:*}/${SHORT_SID})" \
+  git commit --only -q -m "$CHILD: claim (${SESSION%%:*}/${SHORT_SID})" \
     -m "session: $SESSION" \
     -m "Worklog-Slug: $CHILD
-Worklog-Claim: $SESSION"
+Worklog-Claim: $SESSION" \
+    -- "$CHILD_PATH"
   push_with_retry || return 1
   record_session_touch "$CHILD" "claim"
   echo "claim: $CHILD held by $SESSION"
@@ -461,10 +466,11 @@ cmd_release() {
     echo "release: $CHILD not held by $SESSION (no-op)"
     return 0
   fi
-  git commit -q -m "$CHILD: release" \
+  git commit --only -q -m "$CHILD: release" \
     -m "session: $SESSION" \
     -m "Worklog-Slug: $CHILD
-Worklog-Release: $SESSION"
+Worklog-Release: $SESSION" \
+    -- "$CHILD_PATH"
   push_with_retry || return 1
   record_session_touch "$CHILD" "release"
   echo "release: $CHILD cleared"
@@ -525,11 +531,15 @@ cmd_reap() {
 
   verify_provenance || return 1
   git pull --no-rebase --autostash -q || true
+  local COMMIT_PATHS=()
   for entry in "${CLEARED[@]}"; do
     local slug="${entry%%:*}"
     local sf
     sf="$(find_task "$slug" || true)"
-    [[ -n "$sf" ]] && git add "$sf"
+    if [[ -n "$sf" ]]; then
+      git add "$sf"
+      COMMIT_PATHS+=("$sf")
+    fi
   done
   if git diff --cached --quiet; then
     echo "reap: cleared in-memory but nothing to commit (already at HEAD?)"
@@ -542,7 +552,7 @@ cmd_reap() {
     slug="${entry%%:*}"; sid="${entry#*:}"
     printf 'Worklog-Slug: %s\nWorklog-Reap: %s\n' "$slug" "$sid"
   done)"
-  git commit -q -m "$SUBJECT" -m "$BODY" -m "$TRAILERS"
+  git commit --only -q -m "$SUBJECT" -m "$BODY" -m "$TRAILERS" -- "${COMMIT_PATHS[@]}"
   push_with_retry || return 1
   echo "reap: cleared ${#CLEARED[@]} claim(s)"
 }

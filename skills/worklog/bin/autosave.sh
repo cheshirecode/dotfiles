@@ -51,8 +51,10 @@ COMMIT_ARGS=(-q -m "autosave: snapshot $TS" -m "Worklog-Trigger: $TRIGGER")
 [[ -n "$PATHS_TRAILER" ]] && COMMIT_ARGS+=(-m "Worklog-Paths: $PATHS_TRAILER")
 
 if autosave_can_amend_head; then
+  # commit-pathspec-exempt: --amend rewrites the previous autosave commit; scoping needs that commit's own path set. Tracked by wlp-pathspec-commits-resistant
   git commit --amend "${COMMIT_ARGS[@]}" 2>/dev/null || exit 0
 else
+  # commit-pathspec-exempt: pairs with the --amend branch above and must change together with it. Tracked by wlp-pathspec-commits-resistant
   git commit "${COMMIT_ARGS[@]}" 2>/dev/null || exit 0
 fi
 

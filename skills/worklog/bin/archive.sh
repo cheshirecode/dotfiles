@@ -205,9 +205,15 @@ git pull --no-rebase --autostash -q
 mkdir -p "$(dirname "$DST")"
 git mv "$SRC" "$DST"
 git add "$DST"
+# Both halves of the move. A pathspec naming only $DST commits the add and
+# leaves the delete of $SRC staged for whoever commits next. The vault
+# checkout is shared, so the commit below names its paths rather than
+# taking whatever the index holds.
+COMMIT_PATHS=("$SRC" "$DST")
 # Stage the transcript file alongside the archive so one ship == one commit.
 if [[ -f "$TRANSCRIPT_FILE" ]]; then
   git add "$TRANSCRIPT_FILE"
+  COMMIT_PATHS+=("$TRANSCRIPT_FILE")
 fi
 
 # Read back frontmatter for trailers.
@@ -235,7 +241,7 @@ PR_EMIT="${PR:-$FM_PRS}"
 [[ -n "$PR_EMIT" ]] && TRAILERS+="
 Worklog-PR: $PR_EMIT"
 
-git commit -q -m "$SLUG: archive ($REASON)" -m "next: —" -m "$TRAILERS"
+git commit --only -q -m "$SLUG: archive ($REASON)" -m "next: —" -m "$TRAILERS" -- "${COMMIT_PATHS[@]}"
 push_with_retry || exit 1
 if [[ -x "$SCRIPT_DIR/autosave-flush.sh" ]]; then
   "$SCRIPT_DIR/autosave-flush.sh" >/dev/null 2>&1 || true
