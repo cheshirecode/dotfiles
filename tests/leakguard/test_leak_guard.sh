@@ -11,6 +11,19 @@ trap 'rm -rf "$TMP"' EXIT
 cd "$TMP" || exit 1
 
 git init -q . && git config user.email t@t.invalid && git config user.name t
+# Repo-local user.email is NOT enough to decide the author: GIT_AUTHOR_EMAIL
+# and friends override it, and this repo's own .envrc exports them. A shell
+# with them set built a scratch history authored by the real identity, which
+# is CLEAN, and the --authors assertions below then failed the guard for not
+# flagging a dirty author that was never created. The guard was correct and
+# the fixture was lying about what it had built.
+#
+# Unset them for the whole fixture so the author comes from the config above
+# in every shell. Unsetting is right rather than exporting t@t.invalid: the
+# sections that need a specific identity already pass it with `git -c`, and
+# a test that silently depends on the developer's environment is the defect
+# being removed here.
+unset GIT_AUTHOR_EMAIL GIT_COMMITTER_EMAIL GIT_AUTHOR_NAME GIT_COMMITTER_NAME
 mkdir -p bin/git-hooks
 cp "$REPO/bin/leak-guard.sh" bin/
 cp "$REPO/bin/git-hooks/pre-commit" bin/git-hooks/

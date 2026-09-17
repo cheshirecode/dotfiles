@@ -136,7 +136,7 @@ git commit -q -m "ac-orphan: hand-written child stub" --no-verify
 rc="$(verify_rc ac-proj)"
 [[ "$rc" -eq 2 ]] || { echo "FAIL: expected orphan rejection (exit 2), got $rc"; exit 1; }
 # The orphan must still be adopted before the queue can hand it out.
-"$WORKLOG_BIN/archive.sh" ac-a --reason=shipped >/dev/null 2>&1
+"$WORKLOG_BIN/archive.sh" ac-a --reason=shipped --summary="Fixture: archived so the parent rollup has a completed child." >/dev/null 2>&1
 if nxt="$("$WORKLOG_BIN/project.sh" next ac-proj 2>/dev/null)"; then
   [[ "$nxt" != "ac-orphan" ]] || { echo "FAIL: fixture broken — orphan was already reachable"; exit 1; }
   echo "FAIL: expected no eligible task, got '$nxt'"; exit 1
