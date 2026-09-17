@@ -154,10 +154,33 @@ test_static() {
   if ./tools/check-manifest.sh >/dev/null 2>&1; then ok "check-manifest.sh"; else fail "check-manifest.sh"; fi
   if python3 ./tools/check-skill-opt-ins.py >/dev/null 2>&1; then ok "check-skill-opt-ins.py"; else fail "check-skill-opt-ins.py"; fi
   if python3 - <<'PY'
+import json
+import os
 import pathlib
 import re
 
 import yaml
+
+# The harness truncates each description in the model's skill listing at
+# skillListingMaxDescChars. Resolve it rather than hardcoding: explicit env
+# override, then the active settings file, then a named fallback. Absent is
+# reported, never silently treated as ok.
+_desc_cap_env = os.environ.get("SKILL_DESC_CAP")
+_settings = pathlib.Path(
+    os.environ.get("CLAUDE_CONFIG_DIR", os.path.expanduser("~/.claude"))
+) / "settings.json"
+if _desc_cap_env:
+    _desc_cap, _desc_cap_source = int(_desc_cap_env), "SKILL_DESC_CAP"
+else:
+    _from_settings = None
+    try:
+        _from_settings = json.loads(_settings.read_text()).get("skillListingMaxDescChars")
+    except (OSError, ValueError):
+        pass
+    if isinstance(_from_settings, int):
+        _desc_cap, _desc_cap_source = _from_settings, f"from {_settings}"
+    else:
+        _desc_cap, _desc_cap_source = 350, "fallback default; no cap configured"
 
 problems = []
 for skill_md in sorted(pathlib.Path("skills").glob("*/SKILL.md")):
@@ -175,6 +198,14 @@ for skill_md in sorted(pathlib.Path("skills").glob("*/SKILL.md")):
         problems.append(f"{skill_md}: description must be a non-empty string")
     elif "<" in description or ">" in description:
         problems.append(f"{skill_md}: description cannot contain angle brackets")
+    elif len(description) > _desc_cap:
+        problems.append(
+            f"{skill_md}: description is {len(description)} chars, over the "
+            f"{_desc_cap}-char listing cap ({_desc_cap_source}) — the tail is "
+            f"silently truncated in the model's skill listing, so any trigger "
+            f"or exclusion text at the end is dropped with no warning. "
+            f"Cut {len(description) - _desc_cap} chars."
+        )
 if problems:
     print("\n".join(problems))
     raise SystemExit(1)
