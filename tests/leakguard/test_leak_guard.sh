@@ -135,7 +135,18 @@ committed repo-case && note "committed a work repo name"
 # 11. --authors must flag a history that is not the project's noreply identity.
 #     This scratch repo commits as t@t.invalid, so its whole history qualifies.
 out="$(bash bin/leak-guard.sh --authors 2>&1)"; rc=$?
-[ "$rc" -eq 1 ] || note "--authors accepted a history authored by t@t.invalid (rc=$rc)"
+# Branch on rc explicitly. `[ "$rc" -eq 1 ] || note "accepted ..."` read every
+# non-1 status as the guard having approved a dirty history — 127 for
+# command-not-found, 2 for a usage error, a crash. A guard that could not run
+# at all then reported as a guard that ran and passed, in the one mode whose
+# job is catching a dirty identity. Seen for real: a harness that broke $0 so
+# leak-guard.sh was not found produced "accepted a history ... (rc=127)" and
+# sent someone hunting a defect that did not exist.
+case "$rc" in
+  1) ;;  # correct: refused
+  0) note "--authors accepted a history authored by t@t.invalid" ;;
+  *) note "--authors could not run (rc=$rc) — this is not a verdict, the guard did not execute: $(printf '%s' "$out" | head -1)" ;;
+esac
 printf '%s' "$out" | grep -q 't@t.invalid' || note "--authors did not name the offending address"
 
 # 12. And it must PASS a history carrying only the project identity. A guard
