@@ -51,13 +51,14 @@ A turn budget does not measure context. Turns count recorded advances, not bytes
 read, so two loops at the same turn count can consume very different amounts —
 one cycle that reads a whole test log outweighs many that read a grep result.
 
-Pass `--context-pct <n>` on each cycle. The driver records it and prints
-`context: n%`, adding `OVER — checkpoint and hand off` at 50 or above. Half the
-window is where answers degrade and the cached prefix stops being reused: a
-local scan of 77461 turns found 21472 past that line, the largest single penalty
-in that report, against ~1 point for the whole always-loaded prefix. The driver
-cannot read the harness's usage, so the figure comes from the agent; omitting it
-changes nothing.
+Pass `--context-pct <n>` on each cycle. The driver prints `context: n%` and
+adds `OVER — checkpoint and hand off` at 50 or above, where answers degrade and
+the cached prefix stops being reused. The figure comes from the agent, since the
+driver cannot read the harness's usage; omitting it changes nothing.
+
+Measured on this machine: turns past that line outweighed the entire
+always-loaded prefix by fourteen to one as a penalty. Bounding reads is worth
+more than trimming what loads every turn.
 
 Hand off before forced compaction, not after. A checkpoint you write keeps the
 evidence you chose; a compaction the host runs keeps what the host chose. When
