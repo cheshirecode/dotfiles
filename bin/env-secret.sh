@@ -42,7 +42,7 @@ fi
 # and a reader that quietly used it would turn a permissions mistake into a
 # silent one. Warn and still return the value: refusing would break a caller
 # mid-task, and the operator needs to see the cause, not a missing token.
-mode="$(stat -f '%Lp' "$file" 2>/dev/null || stat -c '%a' "$file" 2>/dev/null || echo unknown)"
+mode="$(stat -c '%a' "$file" 2>/dev/null || stat -f '%Lp' "$file" 2>/dev/null || echo unknown)"
 case "$mode" in
   600|400) ;;
   unknown) echo "env-secret.sh: cannot read mode of $file" >&2 ;;
