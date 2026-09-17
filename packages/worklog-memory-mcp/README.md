@@ -13,12 +13,76 @@ holds, and this server exposes it over MCP.
 
 ## Tools
 
-| Tool | Does |
+Eight tools, covering one task's whole life. Read the table top to bottom: that
+is the order a cold session uses them.
+
+| Tool | Use it when | Wraps | What it costs to maintain |
+|---|---|---|---|
+| `memory_status` | resuming with no slug in hand — "what was I doing?" | `status.sh` | Widest flag surface (`--since --slug --project --format --include-meta`); most exposed to flag drift |
+| `memory_related` | before creating a task, to find prior art and the project slugs in use | `related-search.sh` | Two flags. Output is a grep report, so its shape is loose by design |
+| `memory_search` | you know a phrase but not the slug | `search.sh` | No flags passed. The safest wrapper |
+| `memory_context` | you know the slug and want the resume pack | `context.sh` | One flag. `--tracker` is not exposed — the caller is the tracker |
+| `memory_task_create` | no task file exists yet | writes the file, then `checkpoint.sh` | **Highest.** The frontmatter template lives in this server, so a vault schema change breaks it silently. `memory_lint` is the guard |
+| `memory_checkpoint` | record one typed evidence line; optionally flip status | `checkpoint.sh` | Two flags. Refuses an archived task |
+| `memory_archive` | the task is done — the FSM's terminal transition | `archive.sh` | Three flags. Requires a summary, which the script only warns about |
+| `memory_lint` | check a task, or sweep the vault, without writing | `lint.sh` | Three flags. Read-only |
+
+Every write goes through the worklog skill's own scripts, so vault lint and
+commit hooks apply — the server invents no second rule surface. Writes are
+serialized in-process (the vault lock is a single coarse lock by design; run
+one server per vault).
+
+Two rules worth knowing before you call anything:
+
+- **`archived` is reachable only through `memory_archive`.** Setting the status
+  in frontmatter is not the transition: the file has to move from `active/` to
+  `archive/`. That is why `memory_checkpoint`'s status list stops at `shipping`.
+- **An archived task is a closed record.** `memory_checkpoint` refuses one
+  rather than appending to it.
+
+## What still needs the worklog skill
+
+These tools cover the task lifecycle. They are not the whole skill, and are not
+meant to be. Nine of the skill's thirteen public modes stay out, each for a
+stated reason in `coverage.json`:
+
+| Mode | Why it is not a tool |
 |---|---|
-| `memory_search` | slug-grouped search across task bodies + frontmatter |
-| `memory_context` | resume pack for a slug: frontmatter, recent commits, next action |
-| `memory_task_create` | new draft task file, committed through the vault's own hooks |
-| `memory_checkpoint` | append one **typed evidence line** (`command\|artifact\|git\|github\|url: ref — result`), optionally flip status, commit |
+| `plan`, `spawn`, `review` | Reasoning and text generation. The model does this work; there is no vault operation to wrap |
+| `init`, `export`, `import` | Machine and session setup, not task memory. `memory_status` covers the part a cold agent actually needs |
+| `scrape-slack` | An external integration behind a mandatory human review gate |
+| `help` | The MCP client lists tools itself |
+| `project` | **Deferred, not rejected.** Multi-task projects need a `depends_on` graph and a per-task advisory mutex arbitrated by session id. This server serializes every write through one in-process queue, so `claim`/`release` needs its own design before it is safe to expose |
+
+## Keeping the two in step
+
+The skill is upstream and moves on its own schedule. Nothing here can stop
+that, so `test/surface-sync.js` makes drift loud instead. It reads the skill's
+own `modes/registry.md` — the same marked block `codex-surface-check.sh`
+consumes — and checks four directions plus the flags:
+
+| Drift | Caught by |
+|---|---|
+| the skill adds a mode | it is unclassified in `coverage.json` |
+| the skill drops a mode | `coverage.json` still classifies it |
+| a tool named here does not exist | checked against the live `tools/list` |
+| the server grows a tool nothing explains | same check, other direction |
+| a script renames a flag this server passes | each flag must still appear in that script's `--help` |
+
+Flag drift is the one that matters most in practice. A name check cannot see
+it: the tool keeps building its argv right up to the moment the script rejects
+it, and the failure lands in someone's session instead of in CI.
+
+Each exemption names **one literal mode** and carries its reason. A glob or a
+prefix would quietly exempt whatever the skill adds next, which is the failure
+this file exists to prevent.
+
+When the check fails, the fix is a decision, not a silence: wrap the new mode
+in a tool, or exempt it by name and write down why.
+
+If the skill's `bin/` or `modes/registry.md` cannot be found, the suite reports
+`NOT RUN` / `NOT CHECKED` and exits 2. It never reports a pass for something it
+did not assert.
 
 Every write goes through the worklog skill's own scripts, so vault lint and
 commit hooks apply — the server invents no second rule surface. Writes are
