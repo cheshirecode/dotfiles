@@ -119,5 +119,30 @@ printf 'repos: [%s, monorepo]\n' "$WREPO" > repo.md; git add repo.md
 git commit -q -m "repo-case" 2>/dev/null
 committed repo-case && note "committed a work repo name"
 
+# 11. --authors must flag a history that is not the project's noreply identity.
+#     This scratch repo commits as t@t.invalid, so its whole history qualifies.
+out="$(bash bin/leak-guard.sh --authors 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || note "--authors accepted a history authored by t@t.invalid (rc=$rc)"
+printf '%s' "$out" | grep -q 't@t.invalid' || note "--authors did not name the offending address"
+
+# 12. And it must PASS a history carrying only the project identity. A guard
+#     that only ever fails certifies nothing, same as one that only ever passes.
+CLEAN="$TMP/clean-authors"
+git init -q "$CLEAN"
+git -C "$CLEAN" -c user.email=1631630+cheshirecode@users.noreply.github.com \
+    -c user.name=cheshireCode -c core.hooksPath=/dev/null \
+    commit -q --allow-empty -m clean-authors
+( cd "$CLEAN" && bash "$TMP/bin/leak-guard.sh" --authors >/dev/null 2>&1 ) ||
+  note "--authors rejected a history authored only by the project noreply identity"
+
+# 13. A clean author with a dirty COMMITTER must still fail. A rewrite that
+#     fixes %ae and forgets %ce is the exact shape this mode exists to catch.
+git -C "$CLEAN" -c user.email=1631630+cheshirecode@users.noreply.github.com \
+    -c user.name=cheshireCode -c committer.email=hidden@work-example.invalid \
+    -c committer.name=hidden -c core.hooksPath=/dev/null \
+    commit -q --allow-empty -m committer-only
+( cd "$CLEAN" && bash "$TMP/bin/leak-guard.sh" --authors >/dev/null 2>&1 ) &&
+  note "--authors missed a dirty committer header while the author was clean"
+
 [ "$fails" -eq 0 ] || exit 1
 echo "ok: leak guard blocks identifiers, real home paths and org-shaped ambiguous names, allows placeholders and English/keyword uses, honours the bypass"

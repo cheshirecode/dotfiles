@@ -532,6 +532,16 @@ ORDER
   else
     fail_with_output "no work identifiers or hardcoded home paths in tracked files" "$out"
   fi
+
+  # The identity half of the same rule, and the half nothing could see. --tree
+  # reads file CONTENT; a --replace-text rewrite scrubs content and leaves the
+  # author and committer headers untouched, so the content gate passes while
+  # the identities remain. Enforced here rather than as prose in CLAUDE.md.
+  if out=$(bin/leak-guard.sh --authors 2>&1); then
+    ok "no work identities in commit author or committer headers"
+  else
+    fail_with_output "no work identities in commit author or committer headers" "$out"
+  fi
 }
 
 # Council items #1, #6: fixture-driven red-path tests for guardrails.
