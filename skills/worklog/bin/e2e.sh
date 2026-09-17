@@ -32,7 +32,29 @@ export WORKLOG_BIN="${WORKLOG_BIN:-$SCRIPT_DIR}"
 # validating is how a test damages the thing it was run to protect.
 #
 # E2E_KEEP=1 leaves the scratch tree for inspection.
-if [[ -z "${WORKLOG_REPO:-}" ]]; then
+#
+# The scratch is the DEFAULT, not the fallback. This used to build one only
+# when WORKLOG_REPO was unset — but every shell that works in a vault has it
+# set, via .envrc, so the safe path was the one almost nobody took and the
+# ordinary invocation wrote into the caller's real vault.
+#
+# Measured 2026-09-17: running this suite from a normal worklog shell
+# committed people/<ldap>/active/seed-{blocked,design,impl}.md into the live
+# oss vault as "e2e: seed 3 tasks", and it reached origin before anyone
+# noticed. Reverted as 4a23778. That is the second time this suite has seeded
+# a real repo; the header above records the first, in 2026-09-03.
+#
+# WORKLOG_E2E_IN_PLACE=1 opts back in for the Docker harness, which supplies
+# a disposable clone on purpose. Opting in to mutation must be explicit,
+# because the cost of the default being wrong is a commit in someone's vault.
+if [[ "${WORKLOG_E2E_IN_PLACE:-0}" == "1" ]]; then
+  if [[ -z "${WORKLOG_REPO:-}" ]]; then
+    echo "e2e: WORKLOG_E2E_IN_PLACE=1 needs WORKLOG_REPO to name the disposable clone." >&2
+    exit 2
+  fi
+  echo "e2e: running IN PLACE against $WORKLOG_REPO — it will be written to and committed into." >&2
+else
+  unset WORKLOG_REPO
   E2E_SCRATCH="$(mktemp -d -t worklog-e2e-XXXXXX)"
   export WORKLOG_REPO="$E2E_SCRATCH/repo"
   mkdir -p "$WORKLOG_REPO" "$E2E_SCRATCH/nohooks"
