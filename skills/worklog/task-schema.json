@@ -1,0 +1,43 @@
+{
+  "_comment": [
+    "The one place a task file's vocabulary is defined. Two consumers read it:",
+    "bin/_lint.py, which validates what is already committed, and the MCP",
+    "server at packages/worklog-memory-mcp/server.js, which builds new task",
+    "files and constrains what an agent may write.",
+    "",
+    "Before this file, each side kept its own copy. _lint.py accepted 19 kinds",
+    "and server.js hardcoded 8, so 11 kinds valid in the vault were unreachable",
+    "through the MCP. Measured 2026-09-17: writing a plan into the vault, two of",
+    "ten memory_task_create calls were rejected for kinds ('test' was never",
+    "valid, 'chore' should map to cleanup) while the drift hid which of the two",
+    "problems it was.",
+    "",
+    "Statuses are TWO sets on purpose, and a single merged list would be a test",
+    "that certifies nothing. 'valid' is what may exist in a committed file.",
+    "'agent_writable' is what a tool may set directly. They differ by exactly",
+    "one member, and that exclusion carries a reason below."
+  ],
+
+  "kinds": [
+    "bug", "bugfix", "cleanup", "debug", "design", "impl", "infra",
+    "investigation", "ops", "perf", "plan", "postmortem", "program",
+    "project", "proposal", "review", "runbook", "spike", "tooling"
+  ],
+  "kinds_note": "Additive per AGENTS.md (Liskov): legacy values stay valid and shipped files are not force-rewritten. Prefer bug -> debug/bugfix, perf -> impl/infra, tooling -> infra for new tasks.",
+
+  "statuses": {
+    "valid": [
+      "draft", "ready", "in-progress", "in-review", "blocked", "shipping",
+      "archived"
+    ],
+    "agent_writable": [
+      "draft", "ready", "in-progress", "in-review", "blocked", "shipping"
+    ],
+    "excluded_from_agent_writable": {
+      "archived": "Terminal state. Reaching it also moves the file from active/ to archive/, so setting the frontmatter alone leaves the task in the wrong directory. Use the archive path (bin/archive.sh, or the memory_archive tool) which does both."
+    }
+  },
+  "statuses_note": "'ready' sits between draft and in-progress: scope is settled and the task is claimable, where draft means scope is still shifting. Added 2026-09-16 after 21 committed task files already used it and lint errored on all 21 — the practice was ahead of the list, not wrong.",
+
+  "required_frontmatter": ["slug", "kind", "status", "last_updated", "next_action"]
+}
