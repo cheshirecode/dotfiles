@@ -75,6 +75,31 @@ them as preconditions, not as advice to skip past.
 difference from `rg` breaks `||` fallbacks, and the ranked lanes cannot express
 "not here".
 
+## Machine-local secrets
+
+One file per machine: `~/.env.secrets`, dotenv format, mode 0600, generated
+empty by `install.sh` from `templates/env.secrets.example`. Read one key with
+`bin/env-secret.sh KEY`, or hand one key to one command with
+`bin/with-secrets.sh KEY -- cmd`. Read
+[docs/machine-local-secrets.md](docs/machine-local-secrets.md) before adding a
+credential anywhere else.
+
+Never source the file globally. `.envrc` gives each directory tree its own
+identity, so a credential exported in a login shell reaches every tree,
+including work checkouts.
+
+`.shell_common.*` is ignored as a class and must never be tracked; every
+suffixed variant is machine-local by definition. `.shell_common` itself stays
+tracked.
+
+**A tool shell has no direnv, so `gh` uses the machine-wide token whatever
+directory it names.** `direnv` only exports through its shell hook. A
+non-interactive `bash -c` from a hook, an agent tool call or an MCP server
+loads no `.envrc`, so the per-tree `GH_TOKEN` is absent and the inherited
+`GITHUB_TOKEN` wins — the work account, inside a personal checkout. Wrap it:
+`direnv exec . gh <args>`. `gh auth status` reporting the right account in an
+interactive terminal proves nothing about the shell a tool runs in.
+
 ## Fable 5.1 prompt alignment
 
 The harness already ships the autonomy, delivering-work, progress-update,
