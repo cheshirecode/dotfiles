@@ -6,10 +6,51 @@
 #   1. `gh auth token` (already authenticated via `gh auth login`)
 #   2. `pass show github.com/<user>` (passwordstore.org)
 #   3. macOS keychain (`security find-generic-password`)
+#   4. ~/.env.secrets, key GH_TOKEN_<OWNER> (see templates/env.secrets.example)
 # If none resolve, leaves GH_TOKEN unset so `gh` prompts you to log in.
+#
+# Never write a token into this file. Step 4 exists so that a machine with no
+# keychain and no `pass` still has one documented place to put it, outside any
+# checkout.
 
 # Unset the work identity so it can't leak into pushes from this tree.
 unset GITHUB_TOKEN
+
+# Read ONE key from the machine-local credential file (~/.env.secrets, dotenv
+# format; see templates/env.secrets.example). direnv ships `dotenv_if_exists`,
+# which loads the WHOLE file, and that is the wrong tool here: this .envrc is
+# symlinked to ~/.envrc and so runs for every directory under $HOME, work
+# checkouts included. Loading every key there would undo the per-tree split
+# that ~/Documents/*/.envrc exists to enforce.
+#
+# Duplicated from bin/env-secret.sh on purpose: ~/.envrc is a symlink and
+# cannot resolve this repo's path. tests/shell/test_env_secret_reader.sh
+# asserts the two agree; change both or neither.
+secret_get() {
+  local key="$1" candidate file="" value mode
+  # /mnt/c/... is deliberately absent: DrvFs reports 0777 whatever you chmod,
+  # so a credential there cannot be hidden from other accounts. Under WSL the
+  # file belongs on the Linux filesystem.
+  for candidate in "${ENV_SECRETS_FILE:-}" "$HOME/.env.secrets" "${USERPROFILE:-}/.env.secrets"; do
+    [[ -n "$candidate" && -r "$candidate" ]] || continue
+    file="$candidate"; break
+  done
+  [[ -n "$file" ]] || return 1
+  mode=$(stat -f '%Lp' "$file" 2>/dev/null || stat -c '%a' "$file" 2>/dev/null || echo unknown)
+  case "$mode" in
+    600|400) ;;
+    *) echo "direnv: $file is mode $mode, want 600 - run: chmod 600 $file" >&2 ;;
+  esac
+  # Anchored at line start, first match only: unanchored would also match
+  # GH_TOKEN_CHESHIRECODE when asked for GH_TOKEN, and greedy would take the
+  # last assignment rather than the first.
+  value=$(sed -n "s/^[[:space:]]*${key}=//p" "$file" | head -1)
+  value="${value%\"}"; value="${value#\"}"
+  value="${value%\'}"; value="${value#\'}"
+  value="${value%$'\r'}"   # a file edited on Windows carries a trailing CR
+  [[ -n "$value" ]] || return 1
+  printf '%s\n' "$value"
+}
 
 resolve_gh_token() {
   if command -v gh >/dev/null 2>&1; then
@@ -27,6 +68,14 @@ resolve_gh_token() {
       -s "github.com" -a "${GITHUB_USER:-cheshirecode}" -w 2>/dev/null || true)
     [[ -n "$token" ]] && { echo "$token"; return; }
   fi
+
+  # Last: the machine-local credential file. Deliberately below the keychain,
+  # so a Mac keeps its secret out of cleartext while Linux and Coder
+  # workspaces -- which have no keychain -- still resolve a token.
+  local owner
+  owner=$(printf '%s' "${GITHUB_USER:-cheshirecode}" | tr '[:lower:]' '[:upper:]')
+  token=$(secret_get "GH_TOKEN_${owner}" || true)
+  [[ -n "$token" ]] && { echo "$token"; return; }
 }
 
 if token=$(resolve_gh_token) && [[ -n "$token" ]]; then
