@@ -16,8 +16,11 @@ sandbox runs and the Dockerfile.test-matrix stage, not by unit fixtures.
 
 from __future__ import annotations
 
+import contextlib
 import pathlib
 import subprocess
+import tempfile
+import unittest
 import unittest
 
 SKILL_DIR = pathlib.Path(__file__).resolve().parents[1]
@@ -119,6 +122,118 @@ class WrapperContract(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("uv", result.stderr)
+
+
+class CdpAutoWiring(unittest.TestCase):
+    """On WSL, the browser lives on the Windows side and its CDP endpoint is
+    only reachable through a portproxy at the WSL gateway IP. Wiring that up
+    by hand (export BU_CDP_URL=http://<gw>:9223) is the step every new
+    session forgets. The wrapper must do it: probe the known endpoints, set
+    BU_CDP_URL, and exec -- while explicit env from the caller always wins."""
+
+    @staticmethod
+    def _fixture_env(tmp: pathlib.Path, *, reachable: str, fake_wsl: bool) -> dict[str, str]:
+        bin_dir = tmp / "bin"
+        bin_dir.mkdir(exist_ok=True)
+        ip_stub = bin_dir / "ip"
+        ip_stub.write_text("#!/usr/bin/env bash\necho 'default via 172.22.160.1 dev eth0'\n")
+        ip_stub.chmod(0o755)
+        curl_stub = bin_dir / "curl"
+        if reachable == "portproxy":
+            # Only the gateway:9223 endpoint answers (the portproxy lane).
+            curl_stub.write_text(
+                "#!/usr/bin/env bash\n"
+                'case "$4" in\n'
+                "  http://172.22.160.1:9223/*) printf '%s' '{\"Browser\":\"Chrome/153.0.8010.48\"}' ;;\n"
+                "  *) exit 7 ;;\n"
+                "esac\n"
+            )
+        elif reachable == "direct":
+            # No portproxy: mirrored networking makes localhost:9222 answer.
+            curl_stub.write_text(
+                "#!/usr/bin/env bash\n"
+                'case "$4" in\n'
+                "  http://localhost:9222/*) printf '%s' '{\"Browser\":\"Chrome/153.0.8010.48\"}' ;;\n"
+                "  *) exit 7 ;;\n"
+                "esac\n"
+            )
+        else:
+            curl_stub.write_text("#!/usr/bin/env bash\nexit 7\n")
+        curl_stub.chmod(0o755)
+        # Stand-in for the real CLI: print the BU_CDP_URL it received, or an
+        # explicit marker when unset, so the assertion reads what the wrapper
+        # actually passed through.
+        child = bin_dir / "browser-use"
+        child.write_text(
+            '#!/usr/bin/env bash\n'
+            'if [ -n "${BU_CDP_URL:-}" ]; then echo "CDP=$BU_CDP_URL"; else echo "CDP=<unset>"; fi\n'
+        )
+        child.chmod(0o755)
+        env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": "/tmp"}
+        if fake_wsl:
+            env["BU_SETUP_FAKE_WSL"] = "1"
+        return env
+
+    def _run(self, tmp: pathlib.Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+        return run([str(WRAPPER), "--version"], env=env, timeout=30)
+
+    def test_wsl_portproxy_endpoint_is_wired(self) -> None:
+        tmp = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))
+        env = self._fixture_env(tmp, reachable="portproxy", fake_wsl=True)
+        result = self._run(tmp, env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("CDP=http://172.22.160.1:9223", result.stdout, result.stderr)
+        self.assertIn("wired", result.stderr, "the one-line notice must say what it did")
+
+    def test_wsl_mirrored_localhost_endpoint_is_wired(self) -> None:
+        tmp = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))
+        env = self._fixture_env(tmp, reachable="direct", fake_wsl=True)
+        result = self._run(tmp, env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("CDP=http://localhost:9222", result.stdout)
+
+    def test_no_endpoint_leaves_env_unset(self) -> None:
+        # Nothing answers: the wrapper must not invent a URL. The real CLI's
+        # own local-chrome flow applies instead.
+        tmp = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))
+        env = self._fixture_env(tmp, reachable="none", fake_wsl=True)
+        result = self._run(tmp, env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("CDP=<unset>", result.stdout, result.stderr)
+        self.assertNotIn("wired", result.stderr)
+
+    def test_non_wsl_never_probes(self) -> None:
+        # BU_SETUP_FAKE_WSL=0 forces the non-WSL branch (a plain Linux host
+        # cannot be faked by unsetting the var on a WSL machine): with the
+        # same portproxy fixture, the child must see no BU_CDP_URL. Guards
+        # against wiring a gateway URL on a box with no Windows side.
+        tmp = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))
+        env = self._fixture_env(tmp, reachable="portproxy", fake_wsl=False)
+        env["BU_SETUP_FAKE_WSL"] = "0"
+        result = self._run(tmp, env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("CDP=<unset>", result.stdout)
+
+    def test_explicit_env_wins_over_probe(self) -> None:
+        tmp = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))
+        env = self._fixture_env(tmp, reachable="portproxy", fake_wsl=True)
+        env["BU_CDP_URL"] = "http://caller-set.example:9999"
+        result = self._run(tmp, env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("CDP=http://caller-set.example:9999", result.stdout)
+        self.assertNotIn("wired", result.stderr)
+
+    def test_wsl_detected_from_proc_version_without_fake_flag(self) -> None:
+        # The real detection path on this host: /proc/version says Microsoft.
+        # Probe must run (and wire) without BU_SETUP_FAKE_WSL.
+        proc_version = pathlib.Path("/proc/version").read_text()
+        if "microsoft" not in proc_version.lower():
+            self.skipTest("not a WSL host")
+        tmp = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))
+        env = self._fixture_env(tmp, reachable="portproxy", fake_wsl=False)
+        result = self._run(tmp, env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("CDP=http://172.22.160.1:9223", result.stdout)
 
 
 class ScriptSyntax(unittest.TestCase):

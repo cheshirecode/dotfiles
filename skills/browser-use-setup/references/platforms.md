@@ -56,6 +56,23 @@ under `$SANDBOX`. Delete the directory to uninstall the test completely.
 Unsupported natively. Run inside WSL2; the installer refuses with exit 1 and
 names WSL.
 
+WSL2 with the browser on the Windows side: Chromium binds CDP to `127.0.0.1`
+only (`--remote-debugging-address` is ignored in headful mode), so WSL
+reaches it through the gateway. One-time elevated-PowerShell setup on
+Windows:
+
+```powershell
+netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=9223 connectaddress=127.0.0.1 connectport=9222
+netsh advfirewall firewall add rule name="WSL Brave CDP" dir=in action=allow protocol=TCP localport=9223
+```
+
+Then relaunch the browser with `--remote-debugging-port=9222` and use `bu`
+normally: the wrapper probes `<gateway>:9223` (portproxy lane), then
+`localhost:9222` (mirrored networking), exports `BU_CDP_URL`, and prints one
+`wired` line. The gateway IP changes across WSL restarts; the wrapper
+re-resolves it per invocation. Remove the proxy with
+`netsh interface portproxy delete v4tov4 listenport=9223` when done.
+
 ## Still broken
 
 `browser-use --doctor` classifies: `chrome running` FAIL → open Chrome or use

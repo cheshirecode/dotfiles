@@ -6,6 +6,12 @@
 # flags, env, and stdio pass through untouched.
 #
 # Usage: bu [--ensure] [browser-use args...]
+#
+# WSL auto-wiring: on WSL the browser runs on the Windows side and is only
+# reachable over CDP through the WSL gateway (a Windows portproxy lane, or
+# localhost under mirrored networking). When no connection env is set, the
+# wrapper probes the known endpoints and exports BU_CDP_URL itself. Explicit
+# env from the caller always wins.
 set -uo pipefail
 
 usage() {
@@ -21,6 +27,10 @@ Thin wrapper around the browser-use CLI.
 Location order: PATH, $UV_TOOL_BIN_DIR, ~/.local/bin. When the CLI is absent,
 refuses with exit 127 and points at install-browser-use.sh (same directory).
 With --ensure, runs that installer first.
+
+WSL: when the browser is on the Windows side, bu probes the gateway portproxy
+and localhost CDP endpoints and exports BU_CDP_URL automatically. Caller-set
+BU_CDP_URL / BU_CDP_WS / BU_NAME always win.
 USAGE
 }
 
@@ -55,6 +65,43 @@ if [ -z "$bu_bin" ]; then
     printf '%s\n' "ERROR: browser-use not found on PATH." >&2
     printf '%s\n' "Fix: run $installer (or 'bu --ensure')." >&2
     exit 127
+  fi
+fi
+
+# --- WSL CDP auto-wiring ----------------------------------------------------
+# The browser is on Windows; its DevTools server binds 127.0.0.1 there
+# (Chromium refuses non-localhost debug addresses in headful mode), so WSL
+# reaches it only via the gateway: a netsh portproxy lane (listenport 9223 is
+# the documented setup), or direct localhost when WSL runs mirrored
+# networking. Probe in that order and stop at the first endpoint that
+# answers /json/version.
+wsl_probe_cdp() {
+  command -v curl >/dev/null 2>&1 || return 1
+  command -v ip >/dev/null 2>&1 || return 1
+  local gw candidates url body
+  gw="$(ip route show default 2>/dev/null | awk '{print $3; exit}')"
+  candidates="${gw:+$gw:9223}"
+  candidates="$candidates localhost:9222"
+  for url in $candidates; do
+    body="$(curl -s --max-time 2 "http://$url/json/version" 2>/dev/null)" || continue
+    case "$body" in *'"Browser"'*) printf '%s\n' "http://$url"; return 0 ;; esac
+  done
+  return 1
+}
+
+wsl_detected() {
+  # Test seam: 1 forces WSL, 0 forces non-WSL, unset uses real detection.
+  case "${BU_SETUP_FAKE_WSL:-}" in
+    1) return 0 ;;
+    0) return 1 ;;
+  esac
+  grep -qi microsoft /proc/version 2>/dev/null
+}
+
+if [ -z "${BU_CDP_URL:-}" ] && [ -z "${BU_CDP_WS:-}" ] && [ -z "${BU_NAME:-}" ] && wsl_detected; then
+  if cdp_url="$(wsl_probe_cdp)"; then
+    export BU_CDP_URL="$cdp_url"
+    printf '%s\n' "bu: wired BU_CDP_URL=$cdp_url (Windows browser via CDP)" >&2
   fi
 fi
 
