@@ -26,7 +26,11 @@ import { z } from "zod";
 
 const exec = promisify(execFile);
 
-const REPO = process.env.WORKLOG_REPO;
+// direnv keys its allow store by the CANONICAL path, so a vault reached
+// through a symlink (on macOS /var/... for /private/var/...) reads as blocked
+// even after `direnv allow`. Resolve once, up front, and use that everywhere.
+const RAW_REPO = process.env.WORKLOG_REPO;
+const REPO = RAW_REPO && fs.existsSync(RAW_REPO) ? fs.realpathSync(RAW_REPO) : RAW_REPO;
 // This package lives inside the dotfiles repo, next to the worklog skill:
 // default WORKLOG_BIN to the sibling skill so a dotfiles checkout is
 // self-contained; the env var still overrides for installed-skill layouts.
@@ -36,13 +40,115 @@ if (!REPO || !BIN) {
   console.error("worklog-memory-mcp: WORKLOG_REPO is required (WORKLOG_BIN defaults to the sibling worklog skill)");
   process.exit(78);
 }
-const LDAP = process.env.WORKLOG_LDAP || "oss";
+if (!fs.existsSync(REPO)) {
+  console.error(`worklog-memory-mcp: WORKLOG_REPO does not exist: ${RAW_REPO}`);
+  process.exit(78);
+}
+// --- Vault-scoped child environment -----------------------------------------
+//
+// The launching shell is usually a DIFFERENT vault's direnv scope. A session
+// started in the dotfiles checkout exports the oss identity: GIT_AUTHOR_NAME,
+// GH_TOKEN, NPM_TOKEN, WORKLOG_LDAP=oss. Forwarding process.env to a work
+// vault write commits under the wrong author with the wrong token, and the
+// work vault's own `unset GH_TOKEN` / `unset WORKLOG_LDAP` never run, because
+// the scripts are invoked directly instead of through direnv.
+//
+// So: drop every family that carries identity, namespace or credentials, then
+// let the VAULT's own .envrc chain repopulate them. DIRENV_ is dropped too, so
+// resolution does not depend on the caller's direnv state; an app launched
+// from Finder has none, and then direnv would unload nothing.
+const SCRUB = /^(WORKLOG_|GIT_AUTHOR_|GIT_COMMITTER_|GIT_USER_|GIT_CONFIG|GH_|GITHUB_|NPM_|NODE_AUTH_|DIRENV_)/;
+
+function scrubbedBase() {
+  const base = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (!SCRUB.test(k)) base[k] = v;
+  }
+  base.DIRENV_LOG_FORMAT = ""; // keep direnv progress lines out of tool results
+  return base;
+}
+
+// Four states, never collapsed to two. A vault whose .envrc exists but cannot
+// be loaded is BLOCKED, not "fine without it": that is exactly the case where
+// the identity config is present and we would otherwise ignore it in silence.
+let ENV_MODE = "unknown";
+let CHILD_ENV = scrubbedBase();
+
+async function resolveVaultEnv() {
+  const hasEnvrc = fs.existsSync(path.join(REPO, ".envrc"));
+  let direnv = true;
+  try {
+    await exec("direnv", ["version"], { env: CHILD_ENV });
+  } catch {
+    direnv = false;
+  }
+  if (!direnv) {
+    ENV_MODE = hasEnvrc ? "blocked:no-direnv" : "scrubbed:no-direnv";
+  } else if (!hasEnvrc) {
+    ENV_MODE = "scrubbed:no-envrc";
+  } else {
+    try {
+      const { stdout } = await exec("direnv", ["exec", REPO, "env", "-0"], {
+        cwd: REPO,
+        env: CHILD_ENV,
+        maxBuffer: 4 * 1024 * 1024,
+      });
+      const resolved = {};
+      for (const entry of stdout.split("\0")) {
+        const i = entry.indexOf("=");
+        if (i > 0) resolved[entry.slice(0, i)] = entry.slice(i + 1);
+      }
+      CHILD_ENV = resolved;
+      ENV_MODE = "direnv";
+    } catch (err) {
+      ENV_MODE = "blocked:direnv-failed";
+      console.error(`worklog-memory-mcp: direnv could not load ${REPO}/.envrc — run 'direnv allow' in that directory.\n${err.stderr || err.message}`);
+    }
+  }
+  if (ENV_MODE.startsWith("blocked")) {
+    console.error(`worklog-memory-mcp: refusing to serve ${REPO} (${ENV_MODE}); its .envrc carries the vault identity and could not be applied.`);
+    process.exit(78);
+  }
+  // This server's contract is "serve REPO", so REPO wins over any .envrc
+  // value; every other variable comes from the vault.
+  CHILD_ENV.WORKLOG_REPO = REPO;
+  CHILD_ENV.DIRENV_LOG_FORMAT = "";
+  // WORKLOG_LDAP used to default to "oss". That overrode the work vault's
+  // deliberate `unset WORKLOG_LDAP` and — worse — switched off
+  // verify_provenance in _lib.sh, whose namespace/email mismatch check runs
+  // only when no explicit namespace is set.
+  //
+  // An MCP client merges its configured `env:` block into this process's
+  // environment, so an ambient WORKLOG_LDAP leaked by the launching shell is
+  // indistinguishable from one an operator configured. When the vault has its
+  // own .envrc, that file is therefore the authority and the ambient value is
+  // dropped. Only a vault with no .envrc of its own takes the process value,
+  // because there is nothing else to read it from.
+  if (ENV_MODE.startsWith("scrubbed") && process.env.WORKLOG_LDAP) {
+    CHILD_ENV.WORKLOG_LDAP = process.env.WORKLOG_LDAP;
+  }
+}
+
+// Ask the vault's own resolver, so the path this server writes to and the path
+// its scripts commit always agree.
+async function resolveLdap() {
+  const { stdout } = await exec(
+    "bash",
+    ["-c", 'set -e; cd "$1"; . "$2/_lib.sh"; resolve_ldap', "_", REPO, BIN],
+    { cwd: REPO, env: CHILD_ENV }
+  );
+  const ldap = stdout.trim();
+  if (!ldap) throw new Error("resolve_ldap returned an empty namespace");
+  return ldap;
+}
+
+let LDAP = "";
 
 async function run(script, args, opts = {}) {
   try {
     const { stdout, stderr } = await exec("bash", [path.join(BIN, script), ...args], {
       cwd: REPO,
-      env: { ...process.env, WORKLOG_REPO: REPO, WORKLOG_LDAP: LDAP },
+      env: CHILD_ENV,
       maxBuffer: 4 * 1024 * 1024,
       ...opts,
     });
@@ -155,6 +261,9 @@ server.tool(
     })
 );
 
+await resolveVaultEnv();
+LDAP = await resolveLdap();
+
 const transport = new StdioServerTransport();
 await server.connect(transport);
-console.error(`worklog-memory-mcp: serving vault ${REPO} as ${LDAP}`);
+console.error(`worklog-memory-mcp: serving vault ${REPO} as ${LDAP} (env: ${ENV_MODE})`);
