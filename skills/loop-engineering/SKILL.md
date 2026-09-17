@@ -1,6 +1,6 @@
 ---
 name: loop-engineering
-description: "Run bounded, evidence-driven loops for repeated, resumable, delegated, or scheduled work. Use for iteration toward a verifiable condition, context recovery, subagent coordination, or loop/worklog/scheduler selection. Skip one-shot tasks."
+description: "Run bounded, evidence-driven loops for repeated, resumable, delegated, or scheduled work. Use for iteration toward a verifiable condition, software engineering factories, context recovery, subagent coordination, or loop/worklog/scheduler selection. Skip one-shot tasks."
 ---
 
 # loop-engineering
@@ -19,6 +19,7 @@ model guidance tunes its use, while host capabilities determine what can run.
 | One action and one check | Work directly; no loop state |
 | Material uncertainty about goal, scope, effects, or task split | [interrogate.md](references/interrogate.md) before initialization |
 | Repeated or resumable work | Driver below; [protocol.md](references/protocol.md) for exact state/effect rules |
+| Software engineering factory: intake through delivery and improvement | [factory.md](references/factory.md) |
 | Concurrent delegates | [crew.md](references/crew.md) |
 | Three or more Worklog tasks | [orchestrator.md](references/orchestrator.md) |
 | Astra/Fable prompting, Sol orchestration, or another model | [models.md](references/models.md) |
