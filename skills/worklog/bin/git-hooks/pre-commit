@@ -16,6 +16,15 @@
 
 set -euo pipefail
 
+# Identity gate first: a commit under the wrong vault's identity is not fixable
+# by a later lint pass, and the two vaults have 1042 such commits between them
+# (measured 2026-09-16). Runs before the slower lint/test gates so the cheapest
+# refusal happens first.
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -x "$HOOK_DIR/pre-commit-identity" ]; then
+  "$HOOK_DIR/pre-commit-identity" || exit 1
+fi
+
 [[ -n "${WORKLOG_NO_HOOK:-}" ]] && exit 0
 
 cd "$(git rev-parse --show-toplevel)"
