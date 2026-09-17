@@ -74,6 +74,56 @@ class LoopHelpersTest(unittest.TestCase):
             expected_returncode=2,
         )
 
+    def test_context_pack_rejects_oversized_handoff_without_partial_output(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(CONTEXT_PACK),
+             "--objective", "sensitive payload " * 1000,
+             "--known-evidence", "command: tests passed",
+             "--constraints", "preserve approval boundary",
+             "--budget", "2 cycles", "--requested-return", "evidence"],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("8192-byte limit", result.stderr)
+        self.assertIn("artifact references", result.stderr)
+        self.assertNotIn("sensitive payload", result.stderr)
+
+    def test_context_pack_limit_counts_complete_serialized_output(self) -> None:
+        arguments = [
+            "--objective", "preserve café and 漢字",
+            "--known-evidence", "command: first check",
+            "--known-evidence", "artifact: second check",
+            "--constraints", "keep every field", "--budget", "1 cycle",
+            "--requested-return", "evidence", "--recovery-handle", "exact handle",
+        ]
+        original = self.run_script(CONTEXT_PACK, *arguments).stdout
+        size = len(original.encode("utf-8"))
+        exact = self.run_script(CONTEXT_PACK, *arguments, "--max-bytes", str(size))
+        self.assertEqual(exact.stdout, original)
+        rejected = self.run_script(
+            CONTEXT_PACK, *arguments, "--max-bytes", str(size - 1), expected_returncode=2,
+        )
+        self.assertEqual(rejected.stdout, "")
+        self.assertIn(f"context pack is {size} bytes", rejected.stderr)
+        self.assertEqual(json.loads(exact.stdout)["objective"], "preserve café and 漢字")
+
+    def test_context_pack_can_raise_limit_but_cannot_disable_it(self) -> None:
+        arguments = [
+            "--objective", "x" * 9000, "--known-evidence", "command: check",
+            "--constraints", "read only", "--budget", "1 cycle",
+            "--requested-return", "evidence",
+        ]
+        result = self.run_script(CONTEXT_PACK, *arguments, "--max-bytes", "10000")
+        self.assertEqual(json.loads(result.stdout)["objective"], "x" * 9000)
+        for limit in ("0", "-1"):
+            with self.subTest(limit=limit):
+                result = self.run_script(
+                    CONTEXT_PACK, *arguments, "--max-bytes", limit, expected_returncode=2,
+                )
+                self.assertEqual(result.stdout, "")
+                self.assertIn("--max-bytes must be positive", result.stderr)
+
     def test_transport_gate_fails_open_when_capability_is_missing(self) -> None:
         environment = os.environ.copy()
         environment["PATH"] = str(pathlib.Path(self.tmpdir.name) / "empty-bin")
