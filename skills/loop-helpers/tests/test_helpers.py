@@ -91,7 +91,7 @@ class LoopHelpersTest(unittest.TestCase):
 
     def test_context_pack_limit_counts_complete_serialized_output(self) -> None:
         arguments = [
-            "--objective", "preserve café and 漢字",
+            "--objective", "preserve caf\u00e9 and \u6f22\u5b57",
             "--known-evidence", "command: first check",
             "--known-evidence", "artifact: second check",
             "--constraints", "keep every field", "--budget", "1 cycle",
@@ -106,7 +106,7 @@ class LoopHelpersTest(unittest.TestCase):
         )
         self.assertEqual(rejected.stdout, "")
         self.assertIn(f"context pack is {size} bytes", rejected.stderr)
-        self.assertEqual(json.loads(exact.stdout)["objective"], "preserve café and 漢字")
+        self.assertEqual(json.loads(exact.stdout)["objective"], "preserve caf\u00e9 and \u6f22\u5b57")
 
     def test_context_pack_can_raise_limit_but_cannot_disable_it(self) -> None:
         arguments = [
