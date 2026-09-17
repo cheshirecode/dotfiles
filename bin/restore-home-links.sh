@@ -21,7 +21,7 @@
 #                          loading -- including in non-interactive shells.
 #   ~/.git-credentials     Coder rewrites it with only the gitlab OAuth line,
 #                          dropping the github.com line and the glpat- PAT.
-#   ~/.vault-token         vanishes, so the next `super` command tries an
+#   ~/.vault-token         vanishes, so the next vault client call tries an
 #                          interactive OIDC login that cannot complete inside
 #                          a tool call.
 #
@@ -70,7 +70,7 @@ set +a
 fi
 
 # Vault: ~/.vault-token is on the overlay, so a restart destroys it and the next
-# `super` command falls back to interactive OIDC (which cannot complete without
+# vault client falls back to interactive OIDC (which cannot complete without
 # a human pasting a callback URL). The tokens in .env.secrets are on the
 # persistent volume, so seed the file from them instead of logging in again.
 #
@@ -84,8 +84,13 @@ fi
 VAULT_STAMP="${VAULT_STAMP:-/workspace/.vault-renew-stamp}"
 VAULT_RENEW_BELOW_DAYS="${VAULT_RENEW_BELOW_DAYS:-7}"
 VAULT_CEILING_WARN_DAYS="${VAULT_CEILING_WARN_DAYS:-14}"
-VAULT_PROD_ADDR="https://vault-production.internal.example.invalid"
-VAULT_STAGING_ADDR="https://vault-staging.internal.example.invalid"
+# Vault addresses are MACHINE-LOCAL. They name internal infrastructure and
+# this repo is public, so no default belongs here. Set them in
+# ~/.shell_common.local; see docs/machine-local-secrets.md. Unset is reported
+# at the call site, never silently skipped -- a blank address would make curl
+# fail and read as "token rejected", which is a different diagnosis.
+VAULT_PROD_ADDR="${VAULT_PROD_ADDR:-}"
+VAULT_STAGING_ADDR="${VAULT_STAGING_ADDR:-}"
 
 vault_ttl() {  # vault_ttl <addr> <token> -> ttl seconds on stdout, empty on failure
   curl -sS --max-time 8 -H "X-Vault-Token: $2" "$1/v1/auth/token/lookup-self" 2>/dev/null \
@@ -128,7 +133,8 @@ except Exception: pass' 2>/dev/null)
 }
 
 if [ -n "${VAULT_TOKEN_PROD:-}${VAULT_TOKEN_STAGING:-}${VAULT_TOKEN_PROD_BACKUP:-}" ]; then
-  # Seed the file example-org/hvac reads. hvac checks $VAULT_TOKEN then this path and
+  # Seed the file the vault client's hvac layer reads. hvac checks $VAULT_TOKEN
+  # then this path and
   # nothing else, so VAULT_TOKEN_PROD is not picked up by name.
   vt="$HOME/.vault-token"
   if [ ! -s "$vt" ]; then
@@ -156,8 +162,18 @@ if [ -n "${VAULT_TOKEN_PROD:-}${VAULT_TOKEN_STAGING:-}${VAULT_TOKEN_PROD_BACKUP:
 
   # Once per day: the daily lease is 24h, so more often is wasted network.
   if [ "$(cat "$VAULT_STAMP" 2>/dev/null)" != "$(date -u +%F)" ]; then
-    [ -n "${VAULT_TOKEN_PROD:-}" ]    && vault_renew "$VAULT_PROD_ADDR"    "$VAULT_TOKEN_PROD"    prod
-    [ -n "${VAULT_TOKEN_STAGING:-}" ] && vault_renew "$VAULT_STAGING_ADDR" "$VAULT_TOKEN_STAGING" staging
+    # Four states, not two: a token with no address is a configuration gap,
+    # and saying so beats a renewal that silently never happened.
+    vault_renew_if_configured() {  # <addr> <token> <label> <addr-var-name>
+      if [ -z "$2" ]; then return 0; fi
+      if [ -z "$1" ]; then
+        note "vault $3: token present but \$$4 is unset -- set it in ~/.shell_common.local"
+        return 0
+      fi
+      vault_renew "$1" "$2" "$3"
+    }
+    vault_renew_if_configured "$VAULT_PROD_ADDR"    "${VAULT_TOKEN_PROD:-}"    prod    VAULT_PROD_ADDR
+    vault_renew_if_configured "$VAULT_STAGING_ADDR" "${VAULT_TOKEN_STAGING:-}" staging VAULT_STAGING_ADDR
     date -u +%F > "$VAULT_STAMP" 2>/dev/null || true
   fi
   unset vt

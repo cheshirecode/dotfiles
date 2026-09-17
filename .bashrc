@@ -149,51 +149,13 @@ alias reload='source ~/.bashrc'
 
 # Show most popular commands (bash-specific syntax)
 top-commands() { history | awk "{print \$2}" | awk "{print \$1}" | sort | uniq -c | sort -rn | head -10; }
-. ~/.example-org-autocomplete.bash
-# --- datadog-vscode-autoinstall (super) ---
-DATADOG_ID="datadog.datadog-vscode"
-
-# pick an editor CLI we can talk to
-if command -v code >/dev/null 2>&1; then
-  EDITOR_CLI=code
-elif command -v cursor >/dev/null 2>&1; then
-  EDITOR_CLI=cursor
-fi
-
-# only proceed if editor CLI exists and extension not installed
-if [ -n "$EDITOR_CLI" ] && ! "$EDITOR_CLI" --list-extensions 2>/dev/null | grep -qx "$DATADOG_ID"; then
-  # install via our own CLI
-  if command -v example-org >/dev/null 2>&1; then
-    example-org extensions enable datadog >/dev/null 2>&1 || true
-  fi
-  # verify again; if still not installed, log message
-  if ! "$EDITOR_CLI" --list-extensions 2>/dev/null | grep -qx "$DATADOG_ID"; then
-    echo "[datadog] CLI ran but extension not present yet; will retry on next shell" >&2
-  fi
-fi
-# --- end datadog-vscode-autoinstall (super) ---
-# --- claude-code-autoinstall (super) ---
-CLAUDE_CODE_ID="anthropic.claude-code"
-
-# pick an editor CLI we can talk to
-if command -v code >/dev/null 2>&1; then
-  EDITOR_CLI=code
-elif command -v cursor >/dev/null 2>&1; then
-  EDITOR_CLI=cursor
-fi
-
-# only proceed if editor CLI exists and extension not installed
-if [ -n "$EDITOR_CLI" ] && ! "$EDITOR_CLI" --list-extensions 2>/dev/null | grep -qx "$CLAUDE_CODE_ID"; then
-  # install via our own CLI
-  if command -v example-org >/dev/null 2>&1; then
-    example-org extensions enable claude-code >/dev/null 2>&1 || true
-  fi
-  # verify again; if still not installed, log message
-  if ! "$EDITOR_CLI" --list-extensions 2>/dev/null | grep -qx "$CLAUDE_CODE_ID"; then
-    echo "[claude-code] CLI ran but extension not present yet; will retry on next shell" >&2
-  fi
-fi
-# --- end claude-code-autoinstall (super) ---
+# An employer editor-extension autoinstall and its shell autocomplete used to
+# live here. Both named a work CLI by name and sourced a work-provided
+# autocomplete file, and this repo is public -- see the repo-identity rule in
+# CLAUDE.md. They are machine-local concerns, so they belong in
+# ~/.shell_common.local, which .bashrc already sources above the interactive
+# guard. The autocomplete line was also an unguarded `.` of a path that does
+# not exist on any other machine, so it errored on every shell there.
 
 # --- ghostty terminfo guard -------------------------------------------------
 # Ghostty sends TERM=xterm-ghostty. If this workspace was rebuilt and no longer
