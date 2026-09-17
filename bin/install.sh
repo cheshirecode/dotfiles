@@ -157,7 +157,20 @@ echo "=== 6/6 doctor ==="
 if [[ $DRY_RUN -eq 1 ]]; then
   echo "  [dry-run] would run: bin/doctor.sh"
 else
-  run_step bin/doctor.sh
+  # doctor exits 2 when nothing failed but some probe could not answer — a
+  # fresh machine whose .envrc is not approved yet is the ordinary case. That
+  # is not a failed install, and under `set -e` a bare call would abort here
+  # and fire the ERR trap, telling the user the install died when it did not.
+  # 1 still aborts, because 1 means something is actually broken.
+  doctor_rc=0
+  run_step bin/doctor.sh || doctor_rc=$?
+  if [[ $doctor_rc -eq 2 ]]; then
+    echo
+    echo "install: some diagnostics could not answer (see UNKNOWN above)."
+    echo "         The install itself completed. Re-run bin/doctor.sh once they can."
+  elif [[ $doctor_rc -ne 0 ]]; then
+    exit "$doctor_rc"
+  fi
 fi
 
 echo
