@@ -2193,31 +2193,39 @@ test_packages() {
     say SKIP "loop-run wheel build ($wheel_python -m pip unavailable)"
   fi
 
-  # worklog-memory-mcp: two-session round trip against a synthetic vault.
+  # worklog-memory-mcp: the package's whole suite, not one file of it —
+  # surface drift against the worklog skill, child-env isolation, and the
+  # two-session round trip.
+  #
+  # This lane named test/e2e.js alone and grepped for the literal
+  # "e2e: 5 pass, 0 fail". Two of the three suites were therefore never run
+  # here, and when e2e grew to 11 checks the grep stopped matching, so a
+  # green package turned the lane red for a reason unrelated to the code.
+  # Assert the runner's exit code instead: a count inside a pattern is a
+  # second place to update, and it was not updated.
   if command -v node >/dev/null && [ -d packages/worklog-memory-mcp/node_modules ]; then
-    local mini
+    local mini mcp_out
     mini="$(mktemp -d)/mini"
     git init -q "$mini" && mkdir -p "$mini/people/oss/active" "$mini/people/oss/archive"
     echo "# mini vault" > "$mini/README.md"
     git -C "$mini" -c user.name=t -c user.email=t@t add -A
     git -C "$mini" -c user.name=t -c user.email=t@t commit -qm init
-    local e2e_out
-    # e2e.js prints "e2e: N pass, 0 fail"; N grows as lifecycle coverage lands.
-    # Match any all-green tally rather than pinning N (stale N is how a green
-    # suite read as FAIL after the tool count grew past 5).
-    e2e_out="$(cd packages/worklog-memory-mcp && WORKLOG_SOURCE="$mini" node test/e2e.js 2>&1)" || true
-    if printf '%s
-' "$e2e_out" | grep -qE 'e2e: [0-9]+ pass, 0 fail'; then
-      ok "worklog-memory-mcp e2e ($(printf '%s
-' "$e2e_out" | grep -Eo 'e2e: [0-9]+ pass, 0 fail' | tail -1))"
+    # Two fixes met here and this keeps both. Unpinning the count (da15cd9)
+    # stops a grown suite reading as FAIL; running the package's own test
+    # script instead of one file stops four suites running in no lane at all.
+    # Turning on the exit code subsumes the count question entirely: there is
+    # no number in a pattern left to go stale.
+    if mcp_out="$(cd packages/worklog-memory-mcp && WORKLOG_SOURCE="$mini" npm test 2>&1)"; then
+      ok "worklog-memory-mcp suite ($(printf '%s' "$mcp_out" | grep -cE '^  PASS ') checks)"
     else
-      printf '%s
-' "$e2e_out" | tail -20 >&2
-      fail "worklog-memory-mcp e2e failed"
+      # These suites exit 2 for "not run"; that must not read as a pass.
+      fail "worklog-memory-mcp suite failed"
+      printf '%s\n' "$mcp_out" | grep -E 'FAIL|NOT RUN|NOT CHECKED' | sed 's/^/        /'
+      printf '%s\n' "$mcp_out" | tail -20 >&2
     fi
     rm -rf "$(dirname "$mini")"
   else
-    say SKIP "worklog-memory-mcp e2e (node or node_modules missing — run npm install in packages/worklog-memory-mcp)"
+    say SKIP "worklog-memory-mcp suite (node or node_modules missing — run npm install in packages/worklog-memory-mcp)"
   fi
 
   # Release coupling: package.json version, server.json version, and
