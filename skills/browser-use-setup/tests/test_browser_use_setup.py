@@ -16,11 +16,9 @@ sandbox runs and the Dockerfile.test-matrix stage, not by unit fixtures.
 
 from __future__ import annotations
 
-import contextlib
 import pathlib
 import subprocess
 import tempfile
-import unittest
 import unittest
 
 SKILL_DIR = pathlib.Path(__file__).resolve().parents[1]
@@ -30,8 +28,21 @@ WRAPPER = SKILL_DIR / "bin" / "bu"
 PLATFORMS_MD = SKILL_DIR / "references" / "platforms.md"
 
 
+
 def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, capture_output=True, text=True, check=False, **kwargs)
+
+
+def _temp_dir(case: unittest.TestCase) -> pathlib.Path:
+    """Python 3.9-safe TemporaryDirectory bound to the test lifecycle.
+
+    TestCase.enterContext arrived in 3.11; the harness runs these fixtures with
+    /usr/bin/python3 (3.9 on macOS), so enterContext AttributeErrors there even
+    though uv/pytest on 3.13 stays green.
+    """
+    tmp = tempfile.TemporaryDirectory()
+    case.addCleanup(tmp.cleanup)
+    return pathlib.Path(tmp.name)
 
 
 class SkillDocContract(unittest.TestCase):
@@ -178,7 +189,7 @@ class CdpAutoWiring(unittest.TestCase):
         return run([str(WRAPPER), "--version"], env=env, timeout=30)
 
     def test_wsl_portproxy_endpoint_is_wired(self) -> None:
-        tmp = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))
+        tmp = _temp_dir(self)
         env = self._fixture_env(tmp, reachable="portproxy", fake_wsl=True)
         result = self._run(tmp, env)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -186,7 +197,7 @@ class CdpAutoWiring(unittest.TestCase):
         self.assertIn("wired", result.stderr, "the one-line notice must say what it did")
 
     def test_wsl_mirrored_localhost_endpoint_is_wired(self) -> None:
-        tmp = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))
+        tmp = _temp_dir(self)
         env = self._fixture_env(tmp, reachable="direct", fake_wsl=True)
         result = self._run(tmp, env)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -195,7 +206,7 @@ class CdpAutoWiring(unittest.TestCase):
     def test_no_endpoint_leaves_env_unset(self) -> None:
         # Nothing answers: the wrapper must not invent a URL. The real CLI's
         # own local-chrome flow applies instead.
-        tmp = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))
+        tmp = _temp_dir(self)
         env = self._fixture_env(tmp, reachable="none", fake_wsl=True)
         result = self._run(tmp, env)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -207,7 +218,7 @@ class CdpAutoWiring(unittest.TestCase):
         # cannot be faked by unsetting the var on a WSL machine): with the
         # same portproxy fixture, the child must see no BU_CDP_URL. Guards
         # against wiring a gateway URL on a box with no Windows side.
-        tmp = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))
+        tmp = _temp_dir(self)
         env = self._fixture_env(tmp, reachable="portproxy", fake_wsl=False)
         env["BU_SETUP_FAKE_WSL"] = "0"
         result = self._run(tmp, env)
@@ -215,7 +226,7 @@ class CdpAutoWiring(unittest.TestCase):
         self.assertIn("CDP=<unset>", result.stdout)
 
     def test_explicit_env_wins_over_probe(self) -> None:
-        tmp = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))
+        tmp = _temp_dir(self)
         env = self._fixture_env(tmp, reachable="portproxy", fake_wsl=True)
         env["BU_CDP_URL"] = "http://caller-set.example:9999"
         result = self._run(tmp, env)
@@ -232,7 +243,7 @@ class CdpAutoWiring(unittest.TestCase):
         proc_version = proc.read_text()
         if "microsoft" not in proc_version.lower():
             self.skipTest("not a WSL host")
-        tmp = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))
+        tmp = _temp_dir(self)
         env = self._fixture_env(tmp, reachable="portproxy", fake_wsl=False)
         result = self._run(tmp, env)
         self.assertEqual(result.returncode, 0, result.stderr)
