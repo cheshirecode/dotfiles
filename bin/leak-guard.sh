@@ -3,6 +3,7 @@
 #
 #   --tree     scan tracked files (suite gate)
 #   --staged   scan staged added lines (commit gate)
+#   --authors  scan author/committer headers on every ref (suite gate)
 #
 # Exit 0 clean, 1 findings, 2 usage.
 #
@@ -14,8 +15,8 @@ set -uo pipefail
 
 MODE="${1:---tree}"
 case "$MODE" in
-  --tree|--staged) ;;
-  *) echo "usage: leak-guard.sh [--tree|--staged]" >&2; exit 2 ;;
+  --tree|--staged|--authors) ;;
+  *) echo "usage: leak-guard.sh [--tree|--staged|--authors]" >&2; exit 2 ;;
 esac
 cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" || exit 2
 
@@ -68,6 +69,13 @@ PLACEHOLDERS = {"user", "username", "yourusername", "youruser", "yourname",
                 "name", "me", "you", "someone", "fredtran-example"}
 HOME_RE = re.compile(r"/(?:Users|home)/([A-Za-z0-9_.-]+)/")
 OWNER_RE = re.compile("|".join(OWNERS), re.I)
+
+# Commit identities allowed in this history. An ALLOWLIST, deliberately, where
+# the content rules above are denylists: any address that is not this project's
+# noreply is a leak, so a new employer is caught without being added to a list.
+ALLOWED_IDENTITY_RE = re.compile(
+    r"^(?:[0-9]+\+)?cheshirecode@users\.noreply\.github\.com$"
+    r"|^noreply@github\.com$", re.I)
 SKIP_SUFFIX = (".png", ".jpg", ".jpeg", ".gif", ".pdf", ".ico", ".zip", ".woff",
                ".woff2", ".ttf", ".pyc", ".lock")
 
@@ -91,7 +99,8 @@ def offenders_in(where, line):
     return out
 
 found = []
-if os.environ["MODE"] == "--tree":
+MODE = os.environ["MODE"]
+if MODE == "--tree":
     files = subprocess.run(["git", "ls-files", "-z"], capture_output=True,
                            text=True, check=True).stdout.split("\0")
     for path in filter(None, files):
@@ -103,6 +112,26 @@ if os.environ["MODE"] == "--tree":
                     found += offenders_in(f"{path}:{n}", line.rstrip("\n"))
         except (OSError, UnicodeDecodeError):
             continue
+elif MODE == "--authors":
+    # Author and committer headers, across every ref. A --replace-text rewrite
+    # scrubs file CONTENT and leaves these untouched, so a scrub verified by
+    # grepping files reads clean while the identities ride along in the commit
+    # metadata -- and no content gate can see them. Measured 2026-09-17: after
+    # exactly such a rewrite, five local refs still carried a prior employer's
+    # domain, a personal address and the work address.
+    rows = subprocess.run(["git", "log", "--all", "--format=%h%x00%ae%x00%ce"],
+                          capture_output=True, text=True).stdout.splitlines()
+    first = {}
+    for row in rows:
+        parts = row.split("\0")
+        if len(parts) != 3:
+            continue
+        sha, author, committer = parts
+        for addr in (author, committer):
+            if addr and not ALLOWED_IDENTITY_RE.match(addr) and addr not in first:
+                first[addr] = sha
+    for addr, sha in sorted(first.items()):
+        found.append(f"{sha}: commit identity {addr!r}")
 else:
     # Only ADDED lines. Existing content is grandfathered on purpose: this gate
     # stops NEW leakage instead of demanding a tree-wide cleanup before anyone
@@ -118,11 +147,18 @@ else:
             found += offenders_in(path, line[1:])
 
 if found:
-    sys.stderr.write("leak-guard: content that must not reach a public repo:\n")
+    subject = "commit identities" if MODE == "--authors" else "content"
+    sys.stderr.write(f"leak-guard: {subject} that must not reach a public repo:\n")
     for row in found[:20]:
         sys.stderr.write(f"  {row[:140]}\n")
     if len(found) > 20:
         sys.stderr.write(f"  ... and {len(found) - 20} more\n")
+    if MODE == "--authors":
+        sys.stderr.write(
+            "\n  These are commit headers, not file content: a --replace-text\n"
+            "  rewrite leaves them untouched. Fix them in a --mailmap pass.\n"
+            '  See CLAUDE.md "Repo identity".\n')
+        raise SystemExit(1)
     sys.stderr.write(
         "\n  Real values belong in the per-clone .envrc, never in the repo.\n"
         "  Describe a hazard by its shape; use placeholder owners in fixtures.\n"
