@@ -133,17 +133,17 @@ out="$("$WORKLOG_BIN/project.sh" next phase1-proj)"
 [[ "$out" == "phase1-a" ]] || { echo "FAIL: expected phase1-a, got '$out'"; exit 1; }
 echo "  ✓ first next = phase1-a"
 
-"$WORKLOG_BIN/archive.sh" phase1-a --reason=shipped >/dev/null
+"$WORKLOG_BIN/archive.sh" phase1-a --reason=shipped --summary="Fixture: archived to advance the dependency walk." >/dev/null
 out="$("$WORKLOG_BIN/project.sh" next phase1-proj)"
 [[ "$out" == "phase1-b" ]] || { echo "FAIL: expected phase1-b, got '$out'"; exit 1; }
 echo "  ✓ after archive A, next = phase1-b"
 
-"$WORKLOG_BIN/archive.sh" phase1-b --reason=shipped >/dev/null
+"$WORKLOG_BIN/archive.sh" phase1-b --reason=shipped --summary="Fixture: archived to advance the dependency walk." >/dev/null
 out="$("$WORKLOG_BIN/project.sh" next phase1-proj)"
 [[ "$out" == "phase1-c" ]] || { echo "FAIL: expected phase1-c, got '$out'"; exit 1; }
 echo "  ✓ after archive B, next = phase1-c"
 
-"$WORKLOG_BIN/archive.sh" phase1-c --reason=shipped >/dev/null
+"$WORKLOG_BIN/archive.sh" phase1-c --reason=shipped --summary="Fixture: archived to advance the dependency walk." >/dev/null
 if "$WORKLOG_BIN/project.sh" next phase1-proj 2>/dev/null; then
   echo "FAIL: expected exit-nonzero when all tasks archived"; exit 1
 fi
