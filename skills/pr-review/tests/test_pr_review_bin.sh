@@ -81,7 +81,7 @@ echo "=== 4. every script is executable ==="
 # its header documents, so a caller reading the contract cannot classify it.
 for script in owner-check.sh detect-forge.sh pr-query.sh; do
   [[ -x "$BIN/$script" ]] && pass "$script has the execute bit" \
-                          || fail "$script is not executable (mode $(stat -f '%Lp' "$BIN/$script" 2>/dev/null))"
+                          || fail "$script is not executable (mode $(stat -c '%a' "$BIN/$script" 2>/dev/null || stat -f '%Lp' "$BIN/$script" 2>/dev/null))"
 done
 
 echo "=== 5. pr-query accepts the positional PR number ==="

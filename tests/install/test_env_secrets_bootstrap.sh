@@ -21,7 +21,7 @@ f="$DEST/.env.secrets"
 if [ ! -f "$f" ]; then
   note "install.sh did not create $HOME/.env.secrets"
 else
-  mode="$(stat -f '%Lp' "$f" 2>/dev/null || stat -c '%a' "$f" 2>/dev/null)"
+  mode="$(stat -c '%a' "$f" 2>/dev/null || stat -f '%Lp' "$f" 2>/dev/null)"
   [ "$mode" = "600" ] || note "$HOME/.env.secrets mode is $mode, want 600"
 
   grep -q '^GH_TOKEN_CHESHIRECODE=' "$f" ||
