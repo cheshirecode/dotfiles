@@ -57,5 +57,57 @@ printf 'PATH=/home/fred/bin\n' > tracked.md   # pragma: allowlist owner
 git add tracked.md && DOTFILES_NO_HOOK=1 git commit -q -m "tracked" 2>/dev/null
 bin/leak-guard.sh --tree >/dev/null 2>&1 && note "tree mode missed a committed leak"
 
+# 7. An ambiguous owner name must block in ORG SHAPE only. The bare literal
+#    hits 95 lines of superseded/supersedes/super() in this repo, and a guard
+#    that noisy gets ignored -- so each shape is classified, and the English
+#    word and the language keyword stay legal.
+#
+#    The fixtures are COMPOSED from $ORG rather than written out. A test
+#    corpus containing the literal IS a match, so a spelled-out fixture makes
+#    this file fail the very guard it tests. One pragma'd assignment, per the
+#    "parameterise" rule in CLAUDE.md, keeps exactly one literal in the file.
+ORG=super   # pragma: allowlist owner
+# ${ORG^} is bash 4+; macOS ships bash 3.2, where it is a "bad substitution"
+# that empties the array and reports "shapes[@]: unbound variable" instead.
+ORG_CAP="$(printf '%s' "$ORG" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')"
+
+shapes=(
+  ". ~/.$ORG-autocomplete.bash"
+  "$ORG extensions enable datadog"
+  "if command -v $ORG >/dev/null; then"
+  "# seed the file $ORG/hvac reads"
+  "ADDR=https://vault.$ORG.net/v1"
+  "# the same for everyone at $ORG_CAP"
+)
+for shape in "${shapes[@]}"; do
+  git reset -q
+  printf '%s\n' "$shape" > shape.md; git add shape.md
+  git commit -q -m "shape-case" 2>/dev/null
+  if committed shape-case; then
+    note "committed an org-shaped owner reference: $shape"
+    git reset -q --hard HEAD~1 2>/dev/null
+  fi
+done
+
+# 8. ...and the benign forms must NOT block, in the same run. A guard that
+#    blocks everything is as useless as one that blocks nothing.
+git reset -q
+cat > benign.md <<'BENIGN'
+This decision supersedes the previous one, which was superseded in turn.
+class E(Exception):
+    def __init__(self): super().__init__("x")
+A superficial change to a superset of the rows.
+BENIGN
+git add benign.md
+git commit -q -m "benign-case" 2>/dev/null
+committed benign-case || note "blocked superseded/super()/superset, which are not owner references"
+
+# 9. An unambiguous owner literal added to OWNERS must block.
+git reset -q
+echo "vault-staging.private.staging.superinc.net" > host.md   # pragma: allowlist owner
+git add host.md
+git commit -q -m "host-case" 2>/dev/null
+committed host-case && note "committed an internal hostname carrying an owner name"
+
 [ "$fails" -eq 0 ] || exit 1
-echo "ok: leak guard blocks identifiers and real home paths, allows placeholders, honours the bypass"
+echo "ok: leak guard blocks identifiers, real home paths and org-shaped ambiguous names, allows placeholders and English/keyword uses, honours the bypass"
