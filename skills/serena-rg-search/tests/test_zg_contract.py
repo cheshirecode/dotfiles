@@ -115,37 +115,39 @@ class ZgContractTest(unittest.TestCase):
         self.assertRegex(self.text, r"zvec-grep 0\.\d+\.\d+")
 
     # --- the second copy -------------------------------------------------
-    # The zg guidance lives twice: here, and in the repo-root CLAUDE.md that
-    # every agent loads automatically. Fixing only this file left the
-    # higher-traffic copy still telling agents to "use [zg query --rg]
-    # wherever you would type rg" and describing --fts with no index
-    # requirement -- both measurably wrong. Two copies, one fixed.
+    # CLAUDE.md routes to docs/search-tooling.md to avoid loading the full
+    # guidance on every turn. Pin both the route and its destination so moving
+    # the details out of the prefix does not remove their regression coverage.
 
     @property
     def root_claude_md(self) -> pathlib.Path:
         return SKILL.parents[2] / "CLAUDE.md"
 
-    def test_root_claude_md_exists_and_covers_zg(self) -> None:
-        # Guard against this pair going vacuous: if CLAUDE.md stops mentioning
-        # zg, the assertions below would pass over an empty subject.
+    @property
+    def repo_search_doc(self) -> pathlib.Path:
+        return SKILL.parents[2] / "docs/search-tooling.md"
+
+    def test_root_claude_md_routes_to_existing_search_guidance(self) -> None:
         self.assertTrue(self.root_claude_md.is_file(), self.root_claude_md)
-        self.assertIn("zg query", self.root_claude_md.read_text())
+        self.assertIn("[docs/search-tooling.md](docs/search-tooling.md)", self.root_claude_md.read_text())
+        self.assertTrue(self.repo_search_doc.is_file(), self.repo_search_doc)
+        self.assertIn("zg query", self.repo_search_doc.read_text())
 
     def test_root_claude_md_does_not_repeat_the_same_flags_claim(self) -> None:
-        text = self.root_claude_md.read_text()
+        text = self.root_claude_md.read_text() + "\n" + self.repo_search_doc.read_text()
         self.assertNotIn("wherever you would type", text)
         self.assertNotIn("same flags", text)
 
-    def test_root_claude_md_states_the_exit_divergence(self) -> None:
-        text = self.root_claude_md.read_text()
+    def test_repo_search_doc_states_the_exit_divergence(self) -> None:
+        text = self.repo_search_doc.read_text()
         self.assertIn("exits 0 when it finds nothing", text)
         self.assertIn("`rg` exits 1", text)
 
-    def test_root_claude_md_marks_fts_as_needing_the_index(self) -> None:
-        self.assertIn("WORKSPACE_INDEX_NOT_FOUND", self.root_claude_md.read_text())
+    def test_repo_search_doc_marks_fts_as_needing_the_index(self) -> None:
+        self.assertIn("WORKSPACE_INDEX_NOT_FOUND", self.repo_search_doc.read_text())
 
-    def test_root_claude_md_warns_the_ranked_lanes_cannot_prove_absence(self) -> None:
-        text = self.root_claude_md.read_text()
+    def test_repo_search_doc_warns_the_ranked_lanes_cannot_prove_absence(self) -> None:
+        text = self.repo_search_doc.read_text()
         self.assertIn("cannot say", text)
         self.assertIn("confirm an absence with", text.lower())
 
@@ -153,16 +155,16 @@ class ZgContractTest(unittest.TestCase):
         # A claim about another tool's behaviour goes stale silently. Both
         # copies name what they were measured against, or neither can be
         # re-checked.
-        for path in (SKILL, self.root_claude_md):
+        for path in (SKILL, self.repo_search_doc):
             with self.subTest(path.name):
                 self.assertRegex(path.read_text(), r"zvec-grep 0\.\d+\.\d+")
 
-    def test_root_claude_md_scopes_the_gitignore_claim(self) -> None:
+    def test_repo_search_doc_scopes_the_gitignore_claim(self) -> None:
         # It said ".zvec-grep/, gitignored" unqualified. True in this repo,
         # false in /workspace/midas and /workspace/worklog -- the repos an
         # agent actually indexes. Following the guidance there leaves a ~15M
         # untracked directory one `git add -A` from a commit.
-        text = self.root_claude_md.read_text()
+        text = self.repo_search_doc.read_text()
         self.assertIn("THIS repo only", text)
         self.assertIn("git check-ignore .zvec-grep", text)
 
