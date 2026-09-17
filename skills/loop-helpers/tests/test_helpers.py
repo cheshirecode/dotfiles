@@ -190,7 +190,7 @@ class PixelModelContractTest(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        self.skill = (SKILL_DIR / "references/transport.md").read_text()
+        self.skill = (SKILL_DIR / "references/transport-gate.md").read_text()
 
     def test_default_models_are_the_documented_ones(self) -> None:
         for model in default_models():
