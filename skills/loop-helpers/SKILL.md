@@ -39,8 +39,14 @@ python3 <skill-dir>/scripts/context_pack.py \
   --recovery-handle "<optional handle>"
 ```
 
-The script prints one compact JSON object. Pass that object to a delegate or
-write it to a system temporary file; never append the parent transcript.
+The script prints one compact JSON object, capped at 8192 serialized UTF-8 bytes
+including its newline. This is a payload bound, not a token estimate. Oversized
+packs exit 2 with no stdout and no silently dropped fields. Replace detailed
+evidence with artifact references and retry; preserve constraints and recovery
+handles. Use `--max-bytes <positive integer>` only when a larger receiving budget
+is justified. Pass the object to a delegate or save it to a system temporary
+file; never append the parent transcript. Persist referenced evidence in an
+authorized durable store before a cross-session handoff.
 
 ## Transport gate
 
