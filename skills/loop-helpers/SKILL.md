@@ -45,8 +45,10 @@ write it to a system temporary file; never append the parent transcript.
 ## Transport gate
 
 Only for a shrink, convert, or pixel decision, read
-[transport.md](references/transport.md). It owns flags, allowlist requirements,
-and fail-open semantics. Do not read it for context-pack requests.
+[transport-gate.md](references/transport-gate.md). It owns this helper's flags
+and allowlist requirements; `loop-engineering/references/transport.md` owns the
+policy (authorization, candidacy, fail-open). Do not read it for context-pack
+requests.
 
 Return the helper result or its artifact path concisely. Formatting a result
 does not require loading another skill.
