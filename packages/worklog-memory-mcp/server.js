@@ -152,7 +152,12 @@ async function run(script, args, opts = {}) {
       maxBuffer: 4 * 1024 * 1024,
       ...opts,
     });
-    return { ok: true, out: stdout || stderr };
+    // Both streams, always. This was `stdout || stderr`, which threw stderr
+    // away whenever the script also wrote to stdout — and a successful
+    // checkpoint always does. checkpoint.sh prints "lint SKIPPED" and
+    // "lint ERROR" to stderr, so the lint outcome never reached the caller
+    // and a lint that never ran read exactly like a clean one.
+    return { ok: true, out: [stdout.trim(), stderr.trim()].filter(Boolean).join("\n") };
   } catch (err) {
     return { ok: false, out: `${err.stdout || ""}${err.stderr || err.message}` };
   }
