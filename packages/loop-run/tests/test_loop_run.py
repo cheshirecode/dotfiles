@@ -713,12 +713,7 @@ if __name__ == "__main__":
 
 
 class ContextPressureTest(unittest.TestCase):
-    """--context-pct surfaces window pressure and flags the degrade zone.
-
-    Past half the window answers degrade and the prefix stops being reused; a
-    local scan of 77461 turns found 21472 over that line. The driver cannot read
-    harness usage, so the agent supplies it and the driver records it.
-    """
+    """--context-pct reports window pressure and flags it past DUMBZONE_PCT."""
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory(prefix="loop ctx ")

@@ -5,11 +5,9 @@
 > Not a general guide to Claude Code or to software engineering — the harness
 > ships that, and a local copy only drifts from it.
 
-<!-- Append new entries at the END of this file. Prompt caching matches a
-     prefix, so an edit invalidates everything from its line onward: measured
-     over 12 commits the median first-changed line was 59 of 295, discarding
-     ~80% of the cached prefix each time. The two list sections below grow most,
-     so they sit last on purpose. tests/run.sh static enforces that order. -->
+<!-- Append new entries at the END. Caching matches a prefix, so an edit
+     invalidates from its line onward; the two growing lists sit last for that
+     reason and tests/run.sh static enforces it. -->
 
 ## Commit hygiene
 
