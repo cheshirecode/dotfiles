@@ -1,17 +1,9 @@
 #!/usr/bin/env bash
-# Every command substitution in a PS1 must render with no stderr and a
-# non-empty result.
-#
-# Reported 2026-09-16: .zshrc and .bashrc built PS1 from /bin/sed and /bin/grep,
-# which do not exist on macOS (they live in /usr/bin). Every prompt render
-# emitted "no such file or directory" three times and the prompt's own fields
-# came out empty - measured " files, b" instead of "14 files, 344b". It was
-# latent rather than new: ~/.zshrc had been a dangling link, so no prompt was
-# rendered at all until the link was repaired.
-#
-# The substitutions are EXTRACTED from the shell files rather than restated
-# here. A fixture holding its own copy of the pipeline would pass while the
-# committed one was broken, which is this repo's recurring defect shape.
+# Every PS1 command substitution must render with no stderr and a non-empty
+# result. Substitutions are extracted from the rc files, not restated here.
+# Bodies calling a function defined in the same rc file are skipped: they
+# cannot resolve outside that shell.
+
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd -P)"

@@ -54,7 +54,6 @@ ok()   { say PASS "$1"; PASS=$((PASS+1)); }
 fail() { say FAIL "$1"; FAIL=$((FAIL+1)); }
 # Fixture output is discarded on success to keep the suite readable. On failure
 # it is the only thing that says WHY, and without it a failure is diagnosable
-# only on a machine that reproduces it. Measured 2026-09-06: a CI-only
 # crew-reap failure cost four container experiments and a throwaway CI commit
 # to see one line. Capped, because a runaway fixture must not bury the summary.
 FIXTURE_LOG_LINES=${FIXTURE_LOG_LINES:-120}
@@ -453,7 +452,6 @@ PY
   # Symbols are deliberately untouched - the repo uses box drawing, arrows, math
   # and emoji on purpose, and a check that fought those would be quieted into
   # uselessness. Accented Latin letters (Jose, Muller) also pass, so a real name
-  # never forces a carve-out. Measured 2026-09-16: zero non-Latin letters
   # repo-wide, so this starts green with no allowlist.
   if python3 - <<'NONLATIN'
 import pathlib
@@ -748,7 +746,6 @@ PY
   # CLEAN -- grep matches nothing -- so errexit killed the run silently
   # there. `all` skipped its last 27 checks and printed no summary, while
   # each mode passed when run alone. The suite aborted because a lane
-  # passed. Measured 2026-09-07.
   set +e
   if [[ $rc -eq 3 ]]; then
     ok "install-skills refuses unowned dst (exit=3)"
@@ -2085,7 +2082,6 @@ EOF
 
   rm -rf "$(dirname "$vault")" "$NORG"
 }
-
 
 # --- packages/ (products folded into this repo) ------------------------------
 test_packages() {

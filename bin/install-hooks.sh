@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Wire bin/git-hooks/ into this clone. Mirrors the approach in
-# skills/worklog/bin/install-hooks.sh: prefer core.hooksPath, but CHAIN into
-# .git/hooks/ when an outer (system or global) hooksPath is already set, because
-# some platforms ship their own hooksPath pointing at a secret scanner and
-# overwriting it would disable that.
+# Wire bin/git-hooks/ into this clone.
 #
-#   bin/install-hooks.sh          report what would happen
-#   bin/install-hooks.sh --write  apply
+#   install-hooks.sh          dry run
+#   install-hooks.sh --write  apply
+#
+# Sets core.hooksPath, or symlinks into .git/hooks/ when an outer
+# (system/global) core.hooksPath is already set, so an existing scanner there
+# keeps running.
+
 set -uo pipefail
 
 WRITE=0

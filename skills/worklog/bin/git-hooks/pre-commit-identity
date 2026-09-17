@@ -1,19 +1,12 @@
 #!/usr/bin/env bash
-# Refuse a commit whose author email does not belong to THIS vault.
+# Refuse a commit whose author email domain is not this vault's.
 #
-# The two vaults cross-contaminated: the work vault carries 795 commits authored
-# by the personal identity and 210 by oss@local, while the personal vault
-# carries 37 authored by the work identity. Measured 2026-09-16 across all refs.
-# Both are private, so that is hygiene rather than exposure - but
-# every one of those commits was preventable at commit time, and rewriting
-# 6545 commits shared across live worktrees to fix it afterwards is not.
+#   WORKLOG_IDENTITY_DOMAIN   domain this vault accepts; unset = report and skip
+#   WORKLOG_NO_IDENTITY_HOOK=1  bypass once
 #
-# Policy, derived from the vault rather than hardcoded per machine:
-#   WORKLOG_IDENTITY_DOMAIN  the email domain this vault accepts
-# If unset, the check is REPORTED and skipped, never silently passed - an
-# unconfigured identity gate that stays quiet is the failure it exists to stop.
-#
-# Bypass once: WORKLOG_NO_IDENTITY_HOOK=1 git commit ...
+# Reads the resolved author via `git var GIT_AUTHOR_IDENT`, so GIT_AUTHOR_EMAIL
+# env wins over config exactly as git resolves it.
+
 set -uo pipefail
 
 [ "${WORKLOG_NO_IDENTITY_HOOK:-0}" = "1" ] && exit 0

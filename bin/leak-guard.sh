@@ -1,19 +1,15 @@
 #!/usr/bin/env bash
-# Single owner for "what must never reach a commit in this public repo".
+# Reject work identifiers and hardcoded home paths.
 #
-#   bin/leak-guard.sh --tree     scan every tracked file (suite gate)
-#   bin/leak-guard.sh --staged   scan only staged ADDED lines (commit gate)
+#   --tree     scan tracked files (suite gate)
+#   --staged   scan staged added lines (commit gate)
 #
 # Exit 0 clean, 1 findings, 2 usage.
 #
-# The matcher is Python, deliberately. Two earlier attempts failed on the
-# toolchain rather than the logic: a shell loop over patterns x lines x 399
-# files took over two minutes (useless in a hook), and the grep rewrite matched
-# nothing because this machine's `grep` is ugrep, whose flags differ from GNU's.
-# A guard must not depend on which grep is installed.
-#
-# Deliberate exception: put `pragma: allowlist owner` on that line. One marker
-# per line, never a whole-file carve-out, so the rest of the file stays checked.
+# Per-line exemption: `pragma: allowlist owner`. Never exempt a whole file.
+# Matcher is Python, not grep: grep -P is unavailable or differs (ugrep, BSD).
+# Pattern list lives here only; the hook and the suite both call this script.
+
 set -uo pipefail
 
 MODE="${1:---tree}"

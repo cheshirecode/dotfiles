@@ -1,12 +1,8 @@
 #!/usr/bin/env bash
-# The leak guard and its pre-commit hook must block work identifiers and
-# hardcoded home paths, and must NOT block placeholders.
-#
-# Both halves matter. A guard that blocks everything gets bypassed or deleted;
-# the placeholder case is why the path pattern classifies a username rather than
-# banning every /home/<x>/ (a WSL tutorial's /home/user/project is correct).
-#
-# Runs in a disposable repo, so no real commit is ever at risk.
+# bin/leak-guard.sh and its pre-commit hook: block identifiers and real home
+# paths, allow placeholder paths, honour the bypass, and catch via --tree what
+# --staged would have. Runs in a disposable repo.
+
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd -P)"

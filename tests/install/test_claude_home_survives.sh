@@ -1,17 +1,9 @@
 #!/usr/bin/env bash
-# install.sh must not replace a real ~/.claude with a symlink into the repo,
-# and a dangling link under ~/.cursor must not abort the installer.
-#
-# Both defects are invisible on the Coder template, where ~/.claude and
-# ~/.cursor are persistent-disk mountpoints: mv fails EBUSY and backup() only
-# warns. They fire wherever $HOME is a plain directory, which is every laptop.
-# Reported 2026-09-16 after install.sh moved a real ~/.claude (33 entries,
-# settings, transcripts, memory) aside and linked the repo's gitignored
-# .claude/ in its place.
-#
-# HOME is pinned to $DEST as well as CODER_SYMLINK_DIR: install.sh sources
-# $HOME/.shell_common.vault and runs tic into $HOME/.terminfo, so an unpinned
-# HOME would reach into the real one.
+# install.sh must not replace a real $DEST/.claude or $DEST/.config/<child>
+# with a symlink, and a dangling link under $DEST/.cursor must not abort it.
+# HOME is pinned to $DEST as well as CODER_SYMLINK_DIR: install.sh reads
+# $HOME/.shell_common.vault and runs tic into $HOME/.terminfo.
+
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd -P)"
@@ -29,7 +21,6 @@ ln -s "$TMP/gone/mcp.json" "$DEST/.cursor/mcp.json"
 # The .config children loop is a SECOND call site for the same guard, and it
 # was unwired: it called backup() and ln -sfn directly, so a real
 # ~/.config/opencode was moved aside and the repo directory linked over it.
-# Reported 2026-09-16 after 11 local items vanished from the live path.
 mkdir -p "$DEST/.config/opencode/plugins"
 printf '%s\n' '{"local":"tui"}' > "$DEST/.config/opencode/tui.jsonc"
 printf '%s\n' 'local plugin' > "$DEST/.config/opencode/plugins/mine.js"
