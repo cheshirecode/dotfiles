@@ -28,7 +28,31 @@ import sys
 # Owner-shaped literals: each named explicitly, so placeholders (<work-org>,
 # other-owner, example-org) are the intended form and never match. A new
 # employer goes on this list rather than behind a broad class.
-OWNERS = ["ideogram", "textemma", "coderv2"]  # pragma: allowlist owner
+OWNERS = ["ideogram", "textemma", "coderv2",  # pragma: allowlist owner
+          "snaptravel", "superinc"]  # pragma: allowlist owner
+
+# Owner names that are ALSO ordinary English or a language keyword. A bare
+# substring match on these floods: "super" alone hits 95 lines in this repo,
+# almost all superseded/supersedes plus Python and TypeScript super() calls.
+# A guard noisy enough to be ignored is worse than no guard, so this is a
+# correctness problem, not a tidiness one -- and the answer is to classify,
+# not to filter. Each entry matches only a shape that names an ORGANISATION:
+# a CLI invocation, a dotfile the org ships, a domain label, or an org path.
+# super() and superseded stay legal everywhere, with no carve-out to rot.
+#
+# Measured 2026-09-17: these shapes were live in tracked files of this public
+# repo -- a work CLI invoked in .bashrc, an autocomplete dotfile it ships,
+# and two internal Vault hostnames in bin/restore-home-links.sh. The bare
+# literal was never added to OWNERS precisely because it would flood, so
+# nothing caught them.
+AMBIGUOUS_OWNER_RES = [
+    re.compile(r"\.super-", re.I),  # a dotfile the org ships  # pragma: allowlist owner
+    re.compile(r"\bsuper\s+(extensions|vault|login|exec|run)\b", re.I),  # CLI  # pragma: allowlist owner
+    re.compile(r"\bcommand -v super\b", re.I),  # probing for it  # pragma: allowlist owner
+    re.compile(r"\bsuper/[a-z0-9_-]+", re.I),  # org path  # pragma: allowlist owner
+    re.compile(r"\bsuper\.(com|net|io|dev|ai)\b", re.I),  # domain  # pragma: allowlist owner
+    re.compile(r"\bat Super\b"),  # prose, case-sensitive  # pragma: allowlist owner
+]
 
 # Home paths: a REAL username is a leak; a placeholder is the correct way to
 # write an example. Banning every /home/<x>/ would fail a WSL tutorial's
@@ -47,6 +71,11 @@ def offenders_in(where, line):
     m = OWNER_RE.search(line)
     if m:
         out.append(f"{where}: {m.group(0)!r}")
+    for rx in AMBIGUOUS_OWNER_RES:
+        m = rx.search(line)
+        if m:
+            out.append(f"{where}: org-shaped {m.group(0)!r}")
+            break
     for m in HOME_RE.finditer(line):
         who = m.group(1)
         if (who.lower() not in PLACEHOLDERS and not who.startswith("<")
