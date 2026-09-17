@@ -50,8 +50,14 @@ context argument for fan-out, and it is separate from the cost argument in
 A turn budget does not measure context. Turns count recorded advances, not bytes
 read, so two loops at the same turn count can consume very different amounts —
 one cycle that reads a whole test log outweighs many that read a grep result.
-Where the host exposes usage, record it per cycle next to the turn count, so the
-trend is visible before the ceiling is.
+
+Pass `--context-pct <n>` on each cycle. The driver records it and prints
+`context: n%`, adding `OVER — checkpoint and hand off` at 50 or above. Half the
+window is where answers degrade and the cached prefix stops being reused: a
+local scan of 77461 turns found 21472 past that line, the largest single penalty
+in that report, against ~1 point for the whole always-loaded prefix. The driver
+cannot read the harness's usage, so the figure comes from the agent; omitting it
+changes nothing.
 
 Hand off before forced compaction, not after. A checkpoint you write keeps the
 evidence you chose; a compaction the host runs keeps what the host chose. When
