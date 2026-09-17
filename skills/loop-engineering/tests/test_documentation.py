@@ -68,6 +68,12 @@ class DocumentationTest(unittest.TestCase):
             for key in list(env):
                 if key.startswith("WORKLOG_"):
                     env.pop(key)
+            # BASH_ENV is sourced by every non-interactive bash, so it runs
+            # AFTER this dict is built and re-exports WORKLOG_BIN from the HOME
+            # set below -- pointing it at the scratch tree, which has no
+            # project.sh. The queue probe then reports an error instead of the
+            # stubbed task and the WORKLOG_ sweep above reads as sufficient.
+            env.pop("BASH_ENV", None)
             env.update(
                 SKILL_DIR=str(SKILL),
                 EVIDENCE_GATE=str(SKILL.parent / "evidence-gate/scripts/evidence_gate.py"),
