@@ -497,6 +497,33 @@ if offenders:
 NONLATIN
   then ok "prose and scripts carry no non-Latin letters"; else fail "prose and scripts carry no non-Latin letters"; fi
 
+  # CLAUDE.md loads into every turn, and prompt caching matches a PREFIX: an
+  # edit invalidates everything from its line onward. Measured over 12 commits,
+  # the median first-changed line was 59 of 295 - roughly 80% of the cached
+  # prefix discarded per edit. The two sections that grow (appended 5 and 11
+  # entries) therefore sit last, so an append lands near EOF and leaves the rest
+  # cacheable. This check stops that order regressing.
+  if python3 - <<'ORDER'
+import pathlib
+import sys
+
+heads = [l[3:].strip() for l in pathlib.Path("CLAUDE.md").read_text().splitlines()
+         if l.startswith("## ")]
+if len(heads) < 2:
+    print("CLAUDE.md has fewer than two sections; ordering check cannot apply")
+    raise SystemExit(1)
+tail = [h.lower() for h in heads[-2:]]
+want = ("test discipline", "checks that fail silent")
+if not (want[0] in tail[0] and want[1] in tail[1]):
+    print("CLAUDE.md's two growing sections must remain the last two, in order:")
+    print(f"  want last two: {want[0]!r} then {want[1]!r}")
+    print(f"  found:         {heads[-2]!r} then {heads[-1]!r}")
+    print("New entries append to those lists, so keeping them last preserves the")
+    print("cached prefix above them. Move a new section ABOVE them, not below.")
+    raise SystemExit(1)
+ORDER
+  then ok "CLAUDE.md keeps its growing sections last (cache prefix stability)"; else fail "CLAUDE.md keeps its growing sections last (cache prefix stability)"; fi
+
   # One owner for the banned-literal list: bin/leak-guard.sh. The pre-commit
   # hook runs it with --staged, this runs it with --tree, so the suite and the
   # hook cannot drift. Inlining the patterns here again would be a second copy.
