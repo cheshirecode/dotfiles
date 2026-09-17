@@ -27,24 +27,72 @@ run one server per vault).
 
 ## Use
 
+The npm package is not published yet, so point at the checkout directly.
+`WORKLOG_BIN` defaults to the sibling worklog skill, so one variable is
+enough inside a dotfiles checkout:
+
 ```json
 {
   "mcpServers": {
     "worklog-memory": {
-      "command": "npx",
-      "args": ["worklog-memory-mcp"],
+      "command": "node",
+      "args": ["/path/to/dotfiles/packages/worklog-memory-mcp/server.js"],
       "env": {
-        "WORKLOG_REPO": "/path/to/your/worklog-vault",
-        "WORKLOG_BIN": "/path/to/dotfiles/skills/worklog/bin",
-        "WORKLOG_LDAP": "you"
+        "WORKLOG_REPO": "/path/to/your/worklog-vault"
       }
     }
   }
 }
 ```
 
+One server per vault. Give each one its own entry and its own name.
+
 Vault conventions (task file format, FSM, slug grammar) come from the
 [worklog skill](https://github.com/cheshirecode/dotfiles/tree/main/skills/worklog).
+
+## Identity comes from the vault, not from your shell
+
+A person usually has more than one vault — a personal one and a work one —
+with a different git author, a different forge token and a different
+`people/` namespace each. direnv normally keeps them apart per directory.
+An MCP server breaks that assumption: the client starts it once, with the
+environment of whatever directory the session began in, and it then writes
+to a vault somewhere else.
+
+So this server does not forward its own environment to the worklog scripts.
+It drops every variable that carries identity, namespace or credentials
+(`WORKLOG_*`, `GIT_AUTHOR_*`, `GIT_COMMITTER_*`, `GIT_USER_*`, `GIT_CONFIG*`,
+`GH_*`, `GITHUB_*`, `NPM_*`, `NODE_AUTH_*`, `DIRENV_*`), then runs
+`direnv exec <vault>` so the vault's own `.envrc` chain puts back the right
+ones. `DIRENV_*` is dropped too, so the result does not depend on the
+caller's direnv state — a client launched from a desktop icon has none.
+
+The startup line reports which of four states applies, and they are never
+collapsed into "it worked":
+
+| `env:` | Meaning |
+|---|---|
+| `direnv` | the vault's `.envrc` was loaded; its values are in force |
+| `scrubbed:no-envrc` | the vault has no `.envrc`; the scrub alone applies |
+| `scrubbed:no-direnv` | no `.envrc` and no direnv; the scrub alone applies |
+| `blocked:*` | an `.envrc` exists but could not be applied — the server **exits 78** rather than write with the wrong identity |
+
+`blocked` is usually an un-approved file: run `direnv allow` in the vault.
+Note that direnv keys its approvals by the *canonical* path, so the server
+resolves symlinks in `WORKLOG_REPO` before asking.
+
+**`WORKLOG_LDAP` is not defaulted.** It used to default to `oss`, which wrote
+every task under `people/oss/` whatever the vault, and — because
+`verify_provenance` in the worklog skill only compares namespace against git
+email when no explicit namespace is set — switched the vault's own identity
+gate off. The namespace now comes from the vault's `resolve_ldap`, the same
+resolver the scripts use. A client's configured `WORKLOG_LDAP` is honoured
+only for a vault that has no `.envrc` of its own; where an `.envrc` exists,
+that file wins, because a value arriving in the process environment cannot
+be told apart from one a sibling directory leaked.
+
+`test/env-isolation.js` asserts all of this against a probe `bin/` that
+prints the environment it was handed. It needs no vault and no network.
 
 ## Proven round trip
 
