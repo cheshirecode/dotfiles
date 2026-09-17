@@ -95,18 +95,33 @@ else
   bad "uncloned vault was not reported as ABSENT: $(printf '%s' "$out" | grep -F "$missing")"
 fi
 
-# ABSENT alone must not fail the run; a disarmed gate must.
-WORKLOG_VAULTS="$missing" bash "$DOCTOR" >/dev/null 2>&1; absent_rc=$?
-WORKLOG_VAULTS="$disarmed" bash "$DOCTOR" >/dev/null 2>&1; disarmed_rc=$?
-if [ "$disarmed_rc" -eq 1 ]; then
-  ok "a disarmed gate gates the exit code (rc=1)"
+# Which counter each state feeds.
+#
+# These asserted doctor's overall exit code, which reads the whole host and
+# not the classification under test. python3 is 3.14 on one shell and the
+# system 3.9 on another, so doctor returned 2 here and 1 there for a reason
+# that has nothing to do with vaults — and the absent assertion then failed
+# with the message "collapsing absent into broken", which was not true. A
+# fixture that fails for the wrong reason reads exactly like proof.
+#
+# Assert what this check consumed instead: doctor prints its own tally, and
+# the vault lines say which vault produced what.
+counts() { WORKLOG_VAULTS="$1" bash "$DOCTOR" 2>&1; }
+
+out="$(counts "$missing")"
+absent_n="$(printf '%s' "$out" | sed -n 's/^doctor: .*, \([0-9]*\) absent.*/\1/p' | tail -1)"
+if [ "${absent_n:-0}" -ge 1 ] && ! printf '%s' "$out" | grep -q "FAIL .*$missing"; then
+  ok "an absent vault feeds the absent count ($absent_n) and produces no failure line"
 else
-  bad "disarmed gate did not fail the run (rc=$disarmed_rc)"
+  bad "absent vault was counted as something else (absent=$absent_n, failure line present: $(printf '%s' "$out" | grep -c "FAIL .*$missing"))"
 fi
-if [ "$absent_rc" -ne 1 ]; then
-  ok "an absent vault alone does not fail the run (rc=$absent_rc)"
+
+out="$(counts "$disarmed")"
+fail_n="$(printf '%s' "$out" | sed -n 's/^doctor: \([0-9]*\) failure.*/\1/p' | tail -1)"
+if [ "${fail_n:-0}" -ge 1 ] && printf '%s' "$out" | grep -q "FAIL .*$disarmed identity gate DISARMED"; then
+  ok "a disarmed gate feeds the failure count ($fail_n) with its own named line"
 else
-  bad "an absent vault failed the run, collapsing absent into broken"
+  bad "disarmed gate did not feed the failure count (failures=$fail_n)"
 fi
 
 printf 'tests: %d pass, %d fail\n' "$pass" "$fail"
