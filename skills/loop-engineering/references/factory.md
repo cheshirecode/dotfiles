@@ -29,8 +29,10 @@ Before implementation, record a compact work order in the existing task store:
   stage: locally verified, PR delivered, merged, or deployed and runtime verified.
 - Repository, base revision, owned paths, dependencies, and isolated worktree.
 - Available tools and effective capabilities: build, test, browser, provider
-  access. Check readiness with the least expensive real probe. An installed tool
-  whose required session is unavailable does not satisfy the capability.
+  access. Probe readiness in the execution boundary that will use the tool. A
+  browser working in the controller does not prove it can launch in a sandboxed
+  worker. If an authorized controller owns verification, explicitly return its
+  observations to the bounded inner loop; do not label them worker-side checks.
 - Allowed effects, budget, accepting owner, and the next action on failure.
 
 Translate UI claims into browser behavior: keyboard/focus transitions, request
