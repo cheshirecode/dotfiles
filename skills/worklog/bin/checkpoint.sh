@@ -232,6 +232,11 @@ for item in data.get("issues", []):
 fi
 
 git pull --no-rebase --autostash -q
+# Every path this run stages, collected so the commit can name them. A bare
+# commit writes whatever is in the index, and this vault checkout is shared
+# with other sessions — see CLAUDE.md, "Never a bare `git commit` in a
+# checkout another session may use".
+COMMIT_PATHS=("$FILE")
 git add "$FILE"
 
 for inc in ${INCLUDES[@]+"${INCLUDES[@]}"}; do
@@ -240,6 +245,7 @@ for inc in ${INCLUDES[@]+"${INCLUDES[@]}"}; do
     exit 1
   fi
   git add "$inc"
+  COMMIT_PATHS+=("$inc")
 done
 
 if [[ -n "$RENAME_FROM" ]]; then
@@ -247,6 +253,9 @@ if [[ -n "$RENAME_FROM" ]]; then
   [[ -f "$OLD_FILE" ]] || OLD_FILE="people/$LDAP/archive/$RENAME_FROM.md"
   if [[ -f "$OLD_FILE" ]]; then
     git rm -q "$OLD_FILE" 2>/dev/null || true
+    # The deletion is part of this commit, so the pathspec must carry the old
+    # path too or the rename lands as an add with the delete left behind.
+    COMMIT_PATHS+=("$OLD_FILE")
   fi
 fi
 
@@ -290,6 +299,7 @@ for rec in sys.stdin.read().split("\x1e"):
     exit 0
   fi
   echo "checkpoint: frontmatter already reads '$STATUS', trailer says '${CUR_TRAILER:-<none>}' — re-asserting"
+  # commit-pathspec-exempt: --allow-empty trailer re-assert; a pathspec changes what an empty commit means. Tracked by vault task wlp-pathspec-commits-resistant
   git commit -q --allow-empty -m "$SLUG: re-assert status $STATUS" \
     -m "Worklog-Status: $STATUS
 Worklog-Slug: $SLUG"
@@ -470,7 +480,7 @@ PR_EMIT="${PR:-$FM_PRS}"
 COMMIT_ARGS=(-q -m "$SUBJECT")
 [[ -n "$BODY" ]] && COMMIT_ARGS+=(-m "$BODY")
 [[ -n "$TRAILERS" ]] && COMMIT_ARGS+=(-m "$TRAILERS")
-git commit "${COMMIT_ARGS[@]}"
+git commit --only "${COMMIT_ARGS[@]}" -- "${COMMIT_PATHS[@]}"
 push_with_retry || exit 1
 if [[ -x "$SCRIPT_DIR/autosave-flush.sh" ]]; then
   "$SCRIPT_DIR/autosave-flush.sh" >/dev/null 2>&1 || true

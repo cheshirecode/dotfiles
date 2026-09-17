@@ -52,6 +52,7 @@ if [[ -z "${WORKLOG_REPO:-}" ]]; then
     mkdir -p people
     touch people/.gitkeep
     git add -A
+    # commit-pathspec-exempt: commits inside a throwaway scratch repo e2e.sh creates itself; no other session's work can be in that index
     git commit -q -m "e2e: scratch base"
     # checkpoint.sh pulls and pushes, so the scratch needs an upstream. A local
     # bare repo keeps every push in the scratch tree and off any real remote.
