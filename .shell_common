@@ -177,6 +177,31 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"                   # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
 
+# Homebrew ahead of /usr/bin. macOS path_helper reads /etc/paths BEFORE
+# /etc/paths.d, so the homebrew entry in paths.d lands AFTER /usr/bin and
+# /usr/bin wins every lookup. Measured 2026-09-17: interactive zsh,
+# interactive bash, login zsh and a non-interactive tool shell ALL resolved
+# python3 to /usr/bin/python3 (3.9.6) while /opt/homebrew/bin/python3 was
+# 3.14.6 and installed. That one ordering broke two things at once --
+# bin/doctor.sh's python>=3.10 check reported FAIL, and unittest's
+# enterContext (needs 3.11) raised AttributeError in the browser-use
+# fixtures. Prepended, not appended: appending is what path_helper already
+# did, and it is the bug.
+#
+# Gated on the brew binary, not on the directory: a bare /opt/homebrew left
+# behind by an uninstall would otherwise put a dead path ahead of /usr/bin.
+# /opt/homebrew is Apple Silicon, /usr/local is Intel; the loop stops at the
+# first real one and is a no-op on Linux, where brew lives elsewhere and the
+# distro python is already current.
+for _brew_prefix in /opt/homebrew /usr/local; do
+    if [ -x "$_brew_prefix/bin/brew" ]; then
+        PATH="$_brew_prefix/bin:$_brew_prefix/sbin:$PATH"
+        break
+    fi
+done
+unset _brew_prefix
+export PATH
+
 # Add local bin to PATH
 export PATH="$HOME/.local/bin:$PATH"
 
