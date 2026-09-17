@@ -24,6 +24,7 @@ model guidance tunes its use, while host capabilities determine what can run.
 | Three or more Worklog tasks | [orchestrator.md](references/orchestrator.md) |
 | Astra/Fable prompting, Sol orchestration, or another model | [models.md](references/models.md) |
 | Tool availability, installation, OS, or recurrence | [hosts.md](references/hosts.md) |
+| Validate native Claude Code, GPT/Codex or OpenCode execution and usage | [native-harnesses.md](references/native-harnesses.md) |
 | Resume, delegation, or compaction | [durable-context.md](references/durable-context.md) |
 | Code quality or architectural boundaries | [quality.md](references/quality.md) |
 | Repeated trials judged by one metric | [experiments.md](references/experiments.md) |

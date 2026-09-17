@@ -317,6 +317,12 @@ PY
   else
     fail "loop-engineering executable documentation and links"
   fi
+  if PYTHONPATH="$REPO_ROOT/skills/loop-engineering/scripts/native_harness" \
+    python3 -m unittest discover -s skills/loop-engineering/tests/native_harness -p 'test_*.py'; then
+    ok "native harness protocol and metering controls (no model calls)"
+  else
+    fail "native harness protocol and metering controls (no model calls)"
+  fi
   if python3 - <<'PY'
 import pathlib
 
