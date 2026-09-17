@@ -226,7 +226,10 @@ class CdpAutoWiring(unittest.TestCase):
     def test_wsl_detected_from_proc_version_without_fake_flag(self) -> None:
         # The real detection path on this host: /proc/version says Microsoft.
         # Probe must run (and wire) without BU_SETUP_FAKE_WSL.
-        proc_version = pathlib.Path("/proc/version").read_text()
+        proc = pathlib.Path("/proc/version")
+        if not proc.exists():
+            self.skipTest("not a Linux/WSL host")
+        proc_version = proc.read_text()
         if "microsoft" not in proc_version.lower():
             self.skipTest("not a WSL host")
         tmp = pathlib.Path(self.enterContext(tempfile.TemporaryDirectory()))

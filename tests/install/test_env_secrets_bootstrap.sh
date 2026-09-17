@@ -19,10 +19,10 @@ out="$(run)"
 f="$DEST/.env.secrets"
 
 if [ ! -f "$f" ]; then
-  note "install.sh did not create ~/.env.secrets"
+  note "install.sh did not create $HOME/.env.secrets"
 else
   mode="$(stat -f '%Lp' "$f" 2>/dev/null || stat -c '%a' "$f" 2>/dev/null)"
-  [ "$mode" = "600" ] || note "~/.env.secrets mode is $mode, want 600"
+  [ "$mode" = "600" ] || note "$HOME/.env.secrets mode is $mode, want 600"
 
   grep -q '^GH_TOKEN_CHESHIRECODE=' "$f" ||
     note "template does not seed the GH_TOKEN_CHESHIRECODE key"
@@ -40,7 +40,7 @@ printf 'GH_TOKEN_CHESHIRECODE=filled-by-hand\n' > "$f"
 chmod 600 "$f"
 run >/dev/null
 grep -q '^GH_TOKEN_CHESHIRECODE=filled-by-hand$' "$f" ||
-  note "a re-run overwrote the filled-in ~/.env.secrets"
+  note "a re-run overwrote the filled-in $HOME/.env.secrets"
 
 # The repo must not hand a .shell_common.* overlay out to $HOME.
 for stray in "$DEST"/.shell_common.*; do
