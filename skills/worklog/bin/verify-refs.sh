@@ -64,7 +64,10 @@ ACTIVE="$REPO_ROOT/people/$LDAP/active"
 TOKEN="${GITLAB_PAT:-${GITLAB_TOKEN:-}}"
 JIRA_USER="${MCP_JIRA_EMAIL:-}"; JIRA_TOKEN="${MCP_JIRA_API_TOKEN:-}"
 GL_HOST="${GITLAB_HOST:-gitlab.com}"
-JIRA_HOST="${JIRA_HOST:example-org.atlassian.net}"
+# No default: a Jira host names a specific organisation and this repo is
+# public. Supplied per installation, like WORKLOG_FORGE_NAMESPACE below, and
+# an unset value is reported at the lookup rather than silently skipped.
+JIRA_HOST="${JIRA_HOST:-}"
 
 files=()
 if [ -n "$SLUG" ]; then
@@ -89,6 +92,12 @@ lookup() {  # lookup <kind> <ref> <project> -> prints state
 try: print(json.load(sys.stdin)["state"])
 except Exception: print("")' 2>/dev/null) || state=""
     [ -z "$state" ] && state="unchecked"
+  elif [ "$1" = issue ] && [ -n "$JIRA_TOKEN" ] && [ -n "$JIRA_USER" ] && [ -z "$JIRA_HOST" ]; then
+    # Credentials present, host missing: a configuration gap, not an
+    # unreachable issue. Saying so beats an "unchecked" that looks like a
+    # network result.
+    echo "note: JIRA_HOST unset; cannot check issue $2, set it in your .envrc" >&2
+    state="unchecked"
   elif [ "$1" = issue ] && [ -n "$JIRA_TOKEN" ] && [ -n "$JIRA_USER" ]; then
     state=$(curl -sf --max-time 10 -u "$JIRA_USER:$JIRA_TOKEN" -H "Accept: application/json" \
       "https://$JIRA_HOST/rest/api/3/issue/$2?fields=status" 2>/dev/null \
