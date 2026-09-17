@@ -54,13 +54,24 @@ if [[ "${WORKLOG_E2E_IN_PLACE:-0}" == "1" ]]; then
   fi
   echo "e2e: running IN PLACE against $WORKLOG_REPO — it will be written to and committed into." >&2
 else
-  unset WORKLOG_REPO
+  # Neutralise the caller's whole worklog scope, not just the repo. The
+  # namespace has to come from the scratch's own git email, because the seed
+  # paths below are built from resolve_ldap while checkpoint.sh resolves it
+  # again at call time. An inherited WORKLOG_LDAP makes those two disagree:
+  # seeds land in people/<email-derived>/ and checkpoint.sh then reports
+  # "people/<inherited>/active/seed-impl.md not found".
+  unset WORKLOG_REPO WORKLOG_LDAP WORKLOG_NS
   E2E_SCRATCH="$(mktemp -d -t worklog-e2e-XXXXXX)"
   export WORKLOG_REPO="$E2E_SCRATCH/repo"
   mkdir -p "$WORKLOG_REPO" "$E2E_SCRATCH/nohooks"
   cp -R "$SCRIPT_DIR" "$WORKLOG_REPO/bin"
   # Steps below also invoke tests/*.sh by relative path.
   [[ -d "$SCRIPT_DIR/../tests" ]] && cp -R "$SCRIPT_DIR/../tests" "$WORKLOG_REPO/tests"
+  # _lint.py reads the task vocabulary from <bin>/../task-schema.json, so the
+  # scratch needs it beside bin/ or every lint step dies with "cannot read the
+  # task schema". Copying bin/ alone was enough only while the vocabulary was
+  # hardcoded inside _lint.py.
+  [[ -f "$SCRIPT_DIR/../task-schema.json" ]] && cp "$SCRIPT_DIR/../task-schema.json" "$WORKLOG_REPO/task-schema.json"
   (
     cd "$WORKLOG_REPO" || exit 1
     git init -q .
@@ -294,8 +305,15 @@ fi
 
 run "worklog hooks are reachable by git" bash -c '
   hp="$(git config --get core.hooksPath || true)"
-  if [[ "$hp" == "bin/git-hooks" ]]; then
-    exit 0                      # hooksPath mechanism
+  # Accept any hooksPath that ends in bin/git-hooks and actually holds the
+  # hooks. This compared against the literal "bin/git-hooks", but
+  # install-hooks.sh writes an ABSOLUTE path — both live vaults carry
+  # /…/skills/worklog/bin/git-hooks — so the equality test failed on a
+  # correctly wired repo and sent the check down the chained-symlink branch,
+  # which then reported "missing .git/hooks/pre-commit". The condition that
+  # matters is that git reaches the worklog hooks, not how the path is spelt.
+  if [[ "${hp%/}" == */bin/git-hooks && -e "$hp/pre-commit" ]]; then
+    exit 0                      # hooksPath mechanism, relative or absolute
   fi
   # chained mechanism: .git/hooks entries point at bin/git-hooks/
   for h in pre-commit commit-msg post-commit; do
