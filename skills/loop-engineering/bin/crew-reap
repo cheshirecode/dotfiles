@@ -27,7 +27,7 @@
 #
 # Usage:
 #   crew-reap [--target <ref>] [--roster <file|list|->] [--apply] [--no-fetch] [--json] <repo>
-#   ListAgents-names | crew-reap --apply /workspace/midas
+#   ListAgents-names | crew-reap --apply /workspace/example-repo
 #
 # Exit: 0 nothing to do or dry run clean, 3 removals performed (or pending in
 # dry run), 4 --apply refused because the ownership gate was inert (a human must

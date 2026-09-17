@@ -19,7 +19,7 @@ slug: with-refs
 owner: tester
 status: in-progress
 kind: impl
-repos: [midas]
+repos: [example-repo]
 ---
 
 ## Context
@@ -41,12 +41,12 @@ status: in-progress
 kind: impl
 repos:
   - monorepo
-  - midas
+  - example-repo
 ---
 
 ## Context
 
-Block-form repos:. The first entry is not midas.
+Block-form repos:. The first entry is not example-repo.
 
 ## Next
 
@@ -63,7 +63,7 @@ kind: impl
 
 ## Context
 
-No repos: field at all. The project is unknown, not midas.
+No repos: field at all. The project is unknown, not example-repo.
 
 ## Next
 
@@ -76,7 +76,7 @@ slug: no-next
 owner: tester
 status: draft
 kind: impl
-repos: [midas]
+repos: [example-repo]
 ---
 
 ## Context
@@ -162,21 +162,21 @@ no "merged MR is not counted live"         '1 live'
 ck "nested author state does not win"      '!1234'
 
 # repos: block form. Only the inline shape was parsed, so every block-form
-# task silently resolved to examplens/midas whatever its repos: actually said —
+# task silently resolved to examplens/example-repo whatever its repos: actually said —
 # measured 62 block-form tasks in one namespace, 15 naming another repo first.
-# The stub answers only for monorepo, so a midas lookup falls through to
+# The stub answers only for monorepo, so a example-repo lookup falls through to
 # unchecked and the assertion below fails, which is exactly the old behaviour.
 # The two projects answer with DIFFERENT states for the SAME id. A stub where
 # the wrong project merely 404s would only prove the loud failure; the one that
 # matters is a low MR number that exists in both repos, resolves against the
-# wrong one, and returns a confident wrong verdict with no signal. Here midas
+# wrong one, and returns a confident wrong verdict with no signal. Here example-repo
 # says opened, monorepo says merged: reading the wrong project yields "live".
 cat > "$TMP/stub/curl" <<'STUB'
 #!/usr/bin/env bash
 for a in "$@"; do
   case "$a" in
     *examplens%2Fmonorepo*merge_requests*) printf '%s' '{"iid":4321,"state":"merged","author":{"state":"active"}}'; exit 0 ;;
-    *examplens%2Fmidas*merge_requests*)    printf '%s' '{"iid":4321,"state":"opened","author":{"state":"active"}}'; exit 0 ;;
+    *examplens%2Fexample-repo*merge_requests*)    printf '%s' '{"iid":4321,"state":"opened","author":{"state":"active"}}'; exit 0 ;;
     *merge_requests*) exit 22 ;;
   esac
 done
@@ -189,11 +189,11 @@ OUT=$(cd "$TMP/wl" && PATH="$TMP/stub:$PATH" WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP
       GITLAB_PAT=fake \
       "$BIN/verify-refs.sh" block-repos 2>&1)
 ck "block-form repos resolves to its own repo" 'stale.*!4321.*merged'
-no "block-form repos does not default to midas" '(unchecked|live).*!4321'
+no "block-form repos does not default to example-repo" '(unchecked|live).*!4321'
 no "wrong project cannot yield a confident live verdict" '1 live'
 
 # A missing repos: must not be guessed. The stub answers for BOTH projects, so
-# a default-to-midas would resolve and print a confident verdict; only refusing
+# a default-to-example-repo would resolve and print a confident verdict; only refusing
 # to guess yields unchecked.
 OUT=$(cd "$TMP/wl" && PATH="$TMP/stub:$PATH" WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP=tester WORKLOG_FORGE_NAMESPACE=examplens \
       GITLAB_HOST=gitlab.example JIRA_HOST=127.0.0.1:1 GITLAB_PAT=fake \

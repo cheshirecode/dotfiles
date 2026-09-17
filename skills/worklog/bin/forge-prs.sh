@@ -114,7 +114,7 @@ cmd_list() {
   fi
 
   # Two clones of one project (a worktree-style sibling checkout, e.g.
-  # midas and midas-wt-mockfix) would otherwise query it twice and report every
+  # example-repo and example-repo-wt-mockfix) would otherwise query it twice and report every
   # MR twice, which reads as drift that is not there. Plain string, not an
   # associative array: macOS ships Bash 3.
   local dir url forge slug reason user rows seen=""

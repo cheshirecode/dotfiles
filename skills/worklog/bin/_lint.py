@@ -793,7 +793,7 @@ def main() -> None:
   # Every repo name declared anywhere in the corpus. Keyed corpus-wide, not
   # per-file, because a task that names a repo it ruled OUT will never declare
   # that repo — "decision-engine carries no CA underwriting deny rules" is a
-  # recorded negative result, and its repos: is [midas, monorepo] permanently.
+  # recorded negative result, and its repos: is [example-repo, monorepo] permanently.
   # Per-file, those mentions stayed unresolvable warnings. Measured 2026-08-31:
   # across 297 tasks and 17 declared repos, exactly ONE name is both a slug and
   # a repo, so the union changes behaviour for that name and no other.

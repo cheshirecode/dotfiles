@@ -161,7 +161,7 @@ class ZgContractTest(unittest.TestCase):
 
     def test_repo_search_doc_scopes_the_gitignore_claim(self) -> None:
         # It said ".zvec-grep/, gitignored" unqualified. True in this repo,
-        # false in /workspace/midas and /workspace/worklog -- the repos an
+        # false in /workspace/example-repo and /workspace/worklog -- the repos an
         # agent actually indexes. Following the guidance there leaves a ~15M
         # untracked directory one `git add -A` from a commit.
         text = self.repo_search_doc.read_text()

@@ -25,11 +25,18 @@ import re
 import subprocess
 import sys
 
+# A work REPO name also lives here, not only orgs. It is a weaker signal than
+# an org or a hostname -- a usage example naming a repo is not actionable --
+# but 53 occurrences across 11 tracked files had accumulated, 48 lines of them,
+# and nothing could see them. The bare literal is safe for this one because it
+# has no benign English use, unlike the ambiguous entries below.
+#
 # Owner-shaped literals: each named explicitly, so placeholders (<work-org>,
 # other-owner, example-org) are the intended form and never match. A new
 # employer goes on this list rather than behind a broad class.
 OWNERS = ["ideogram", "textemma", "coderv2",  # pragma: allowlist owner
-          "snaptravel", "superinc"]  # pragma: allowlist owner
+          "snaptravel", "superinc",  # pragma: allowlist owner
+          "midas"]  # pragma: allowlist owner
 
 # Owner names that are ALSO ordinary English or a language keyword. A bare
 # substring match on these floods: "super" alone hits 95 lines in this repo,

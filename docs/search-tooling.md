@@ -14,7 +14,7 @@ CLI, three lanes; results keep file:line locations:
   the exact terms. Requires the workspace index (`zg index`; stored in
   `.zvec-grep/`; rebuild after large refactors). **`.zvec-grep/` is
   gitignored in THIS repo only.** Verified 2026-09-03: it is not ignored
-  in /workspace/midas or /workspace/worklog, so indexing there drops a
+  in /workspace/example-repo or /workspace/worklog, so indexing there drops a
   ~15M untracked directory into `git status`, one `git add -A` from being
   committed. Before `zg index` in any other repo, check
   `git check-ignore .zvec-grep` and add it (or set a global

@@ -109,7 +109,7 @@ ck "prose reference still warns"          "$(mention 'blocked on decision-engine
 # Live 2026-08-31: 8 of 9 remaining collisions in a peer's clone were prose like
 # "`decision-engine` carries no CA deny rules" — a repo, unfixable as a warning.
 mention_repo() {
-  printf -- '---\nslug: mentions\nowner: tester\nstatus: in-progress\nkind: impl\nproject: none\nrepos: [decision-engine, midas]\nlast_updated: 2026-08-31\nnext_action: "x"\n---\n\n## Context\n\n%s\n\n## Next\n\n- [ ] x\n' "$1" > people/tester/active/mentions.md
+  printf -- '---\nslug: mentions\nowner: tester\nstatus: in-progress\nkind: impl\nproject: none\nrepos: [decision-engine, example-repo]\nlast_updated: 2026-08-31\nnext_action: "x"\n---\n\n## Context\n\n%s\n\n## Next\n\n- [ ] x\n' "$1" > people/tester/active/mentions.md
   python3 "$ROOT/bin/_lint.py" --cross-task 2>&1 | grep -c "body mentions slug 'decision-engine'" || true
 }
 ck "repo the task declares does not warn" "$(mention_repo 'decision-engine has no deny rules')" 0
@@ -143,7 +143,7 @@ owner: tester
 status: in-progress
 kind: impl
 project: none
-repos: [decision-engine, midas]
+repos: [decision-engine, example-repo]
 last_updated: 2026-08-31
 next_action: "x"
 ---

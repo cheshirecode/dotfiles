@@ -59,12 +59,12 @@ Options:
 Exit codes: 0 clean · 2 collision · 1 usage or repo error
 
 Examples:
-  $PROG /workspace/midas
-  $PROG --json /workspace/midas | jq -S -c .          # fingerprint for Monitor
-  $PROG --quiet /workspace/midas || echo "crew collision"
-  $PROG --roster a,b /workspace/midas                 # inline names
-  $PROG --remote --fetch /workspace/midas             # include pushed peers
-  ListAgents-names | $PROG --roster - /workspace/midas
+  $PROG /workspace/example-repo
+  $PROG --json /workspace/example-repo | jq -S -c .          # fingerprint for Monitor
+  $PROG --quiet /workspace/example-repo || echo "crew collision"
+  $PROG --roster a,b /workspace/example-repo                 # inline names
+  $PROG --remote --fetch /workspace/example-repo             # include pushed peers
+  ListAgents-names | $PROG --roster - /workspace/example-repo
 EOF
 }
 

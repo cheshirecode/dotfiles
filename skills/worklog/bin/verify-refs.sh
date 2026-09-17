@@ -20,7 +20,7 @@
 #
 # Scope: only UNCHECKED `- [ ]` items under `## Next`, only refs of the form
 # !NNNN (merge request) and KEY-NNNN (Jira). The project for an MR comes from
-# the task's `repos:` frontmatter, first entry, defaulting to midas.
+# the task's `repos:` frontmatter, first entry, defaulting to example-repo.
 #
 # Exit: 0 nothing stale, 3 stale refs found, 1 usage or setup error.
 # Exit 3 is a verdict, not an error — capture the output before parsing it, or
@@ -113,7 +113,7 @@ except Exception: print("")' 2>/dev/null) || state=""
 for f in "${files[@]}"; do
   slug=$(basename "$f" .md)
   # repos: comes in two YAML shapes and both are in active use. Reading only
-  # the inline one silently defaulted every block-form task to midas: measured
+  # the inline one silently defaulted every block-form task to example-repo: measured
   # 94 inline vs 62 block in one namespace, 15 of those block tasks naming a
   # different repo first. A wrong project 404s (loud, reported unchecked) —
   # but 4-digit MR numbers exist in several repos, so it can also return a
@@ -137,7 +137,7 @@ for f in "${files[@]}"; do
     }
     inblock && /^[^[:space:]#-]/ { inblock = 0 }
   ' "$f")
-  # No repos: at all means the project is unknown, not midas. Guessing turns a
+  # No repos: at all means the project is unknown, not example-repo. Guessing turns a
   # missing field into a confident verdict about some other repo's MR; an empty
   # proj skips the lookup and reports unchecked, which is a gap you can see.
   # (0 of 156 active tasks lack the field today, so this changes no current
