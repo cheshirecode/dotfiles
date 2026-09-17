@@ -94,6 +94,37 @@ if ! git ls-files --error-unmatch "$SRC" >/dev/null 2>&1; then
   exit 1
 fi
 
+# Summary gate, PRE-FLIGHT. Refuse before anything is written, never after.
+#
+# A warning was not enough: 60 of 244 archived tasks across this vault's
+# namespaces carry no summary:, because the warning is printed after the push
+# and a session archiving in a loop under `>/dev/null 2>&1` never saw it. The
+# archive is the long-term record and it is already degraded.
+#
+# This cannot become a non-zero exit at the END of the run — the comment above
+# the existing warning explains why, and it is right: the archive genuinely
+# succeeded by then, and project.sh flows and tests/ fixtures run archive.sh
+# under `set -e` and would abort on a successful archive. Refusing up front
+# has neither problem. Nothing has been written, so exiting non-zero is
+# honest, and a caller under `set -e` aborts on a run that did nothing.
+#
+# WORKLOG_ARCHIVE_NO_SUMMARY=1 is the deliberate escape, matching the
+# WORKLOG_ARCHIVE_FORCE convention just below. The existing post-push warning
+# stays: it still covers a summary supplied but empty, and callers that set
+# the escape.
+if [[ -z "$SUMMARY" && -z "${WORKLOG_ARCHIVE_NO_SUMMARY:-}" ]]; then
+  {
+    echo "archive: refusing to archive $SLUG with no --summary."
+    echo "  The archive is the long-term record; 60 of 244 archived tasks in"
+    echo "  this vault already have none, and a summary cannot be reconstructed"
+    echo "  later as cheaply as it can be written now."
+    echo "  Fix:    $0 $SLUG --summary=\"<2-3 line recap>\""
+    echo "  Bypass: WORKLOG_ARCHIVE_NO_SUMMARY=1 $0 $SLUG ..."
+    echo "  Nothing has been written; the task is untouched."
+  } >&2
+  exit 2
+fi
+
 # Orphan check: refuse if any active task points at this slug via a
 # directional relation (parent_slug / supersedes / reopens) — those imply
 # durable structural dependence and the child should be reparented first.
