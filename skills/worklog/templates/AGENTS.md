@@ -46,7 +46,7 @@ Uniqueness invariant: slugs are globally unique across `people/*/`. That's what 
 ```
 ---
 slug: <slug>
-status: draft | in-progress | in-review | blocked | shipping | archived
+status: draft | ready | in-progress | in-review | blocked | shipping | archived
 kind: design | review | spike | impl | ops | debug | program | project | postmortem | runbook | proposal | bugfix | investigation | plan | infra   # extended; lint also grandfathers legacy bug | perf | tooling
 repos: [<name>, ...]   # e.g. [ui, website]; [] for doc-only work
 linear:                # optional; add ENG-<N> if/when one exists. Omit the key entirely when not applicable.

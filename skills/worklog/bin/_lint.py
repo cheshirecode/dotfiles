@@ -61,7 +61,12 @@ KINDS = {
   # but do not force-rewrite shipped files.
   "bug", "perf", "tooling",
 }
-STATUSES = {"draft", "in-progress", "in-review", "blocked", "shipping", "archived"}
+# "ready" sits between draft and in-progress: scope is settled and the task is
+# claimable, where draft means scope is still shifting. Added 2026-09-16 after
+# 21 committed task files already used it and lint errored on all 21 - the
+# practice was ahead of this list, not wrong.
+STATUSES = {"draft", "ready", "in-progress", "in-review", "blocked", "shipping",
+            "archived"}
 # Common wrong statuses → the intended FSM state. active/ is a directory,
 # not a status, so a fresh task shouldn't have to guess its way past the hook.
 STATUS_HINTS = {
