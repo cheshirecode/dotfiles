@@ -2008,6 +2008,24 @@ test_worklog_skill() {
     fail "expected hard-fail outside clone, got: $(echo "$out" | head -1)"
   fi
 
+  # The end-to-end suite. bin/e2e.sh is the largest test asset in the repo and
+  # nothing ran it: it lives in bin/, not tests/*/*.sh, so no glob reached it,
+  # and its header still names Dockerfile.debian and Dockerfile.alpine, neither
+  # of which exists. It had been red since the skill/data split.
+  #
+  # It builds its own scratch repo with a local bare origin and now clears the
+  # caller's whole worklog scope, so it touches no real vault and needs no
+  # network. ~13s. Asserted on its exit code, not on a step count.
+  if [[ -x "$sb/e2e.sh" ]]; then
+    if out=$(bash "$sb/e2e.sh" 2>&1); then
+      ok "worklog e2e suite (scratch repo, end to end)"
+    else
+      fail_with_output "worklog e2e suite" "$(printf '%s' "$out" | tail -25)"
+    fi
+  else
+    say SKIP "worklog e2e suite ($sb/e2e.sh missing or not executable)"
+  fi
+
   # These five used to be named file by file. Glob the two directories instead,
   # so a new worklog_manager or context fixture runs in `run.sh worklog-skill`
   # by existing. Both directories are also covered by test_fixtures(); this mode
