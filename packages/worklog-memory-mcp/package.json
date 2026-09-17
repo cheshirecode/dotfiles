@@ -7,12 +7,13 @@
     "worklog-memory-mcp": "server.js"
   },
   "scripts": {
-    "test": "node test/surface-sync.js && node test/schema-sync.js && node test/env-isolation.js && node test/tool-output.js && node test/e2e.js",
+    "test": "node test/surface-sync.js && node test/schema-sync.js && node test/env-isolation.js && node test/tool-output.js && node test/semantic-states.js && node test/e2e.js",
     "test:env": "node test/env-isolation.js",
     "test:e2e": "node test/e2e.js",
     "test:surface": "node test/surface-sync.js",
     "test:output": "node test/tool-output.js",
-    "test:schema": "node test/schema-sync.js"
+    "test:schema": "node test/schema-sync.js",
+    "test:semantic": "node test/semantic-states.js"
   },
   "license": "MIT",
   "dependencies": {

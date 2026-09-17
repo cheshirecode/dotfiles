@@ -229,9 +229,44 @@ const server = new McpServer({ name: "worklog-memory", version: "0.1.0" });
 
 server.tool(
   "memory_search",
-  "Search the worklog vault (task bodies + frontmatter index). Returns slug-grouped hits.",
-  { pattern: z.string().min(1) },
-  async ({ pattern }) => text(await run("search.sh", [pattern]))
+  "Search the worklog vault. Default is a literal/regex grep over task bodies and the frontmatter index, returning slug-grouped hits. Set semantic=true for meaning-based search, which finds paraphrases a grep cannot — 'lock between concurrent agents' reaching a task about task mutexes.",
+  {
+    pattern: z.string().min(1),
+    semantic: z.boolean().default(false).describe("cosine over the embedding index instead of grep; finds paraphrases"),
+    top: z.number().int().min(1).max(50).optional().describe("how many semantic hits to return"),
+  },
+  async ({ pattern, semantic, top }) => {
+    if (!semantic) return text(await run("search.sh", [pattern]));
+
+    const args = [pattern, "--semantic"];
+    if (top) args.push(`--top=${top}`);
+    const res = await run("search.sh", args);
+
+    // Four states for the embedding index, never collapsed into "no hits".
+    // A grep that finds nothing means nothing matched; a semantic search that
+    // finds nothing can equally mean the index was never built, is stale, or
+    // that fastembed is unreachable from this server's scrubbed child env.
+    // Those are different answers and the caller has to be able to tell them
+    // apart — an absent index reporting "no results" is the absent-vs-ok
+    // collapse, in the one tool where the user cannot see the cause.
+    const out = res.out || "";
+    let state = "ok";
+    if (/missing — run bin\/embed\.sh/.test(out)) state = "absent";
+    else if (/embedding cache is unreadable/.test(out)) state = "broken";
+    else if (/semantic cache stale/.test(out)) state = "stale";
+    else if (/ModuleNotFoundError|No module named/.test(out)) state = "absent";
+    else if (!res.ok) state = "unknown";
+
+    const note = {
+      ok: "",
+      stale: "\n\n[index: STALE — some tasks changed since the last embed. Hits below may miss recent work. Refresh with bin/embed.sh --refresh]",
+      absent: "\n\n[index: ABSENT — no embedding index, or fastembed is not importable here. These are NOT zero results; the search did not run. Build it with bin/embed.sh]",
+      broken: "\n\n[index: BROKEN — the embedding cache exists but could not be read. Rebuild with bin/embed.sh --refresh]",
+      unknown: "\n\n[index: UNKNOWN — the semantic search exited non-zero for a reason this tool could not classify. Treat the result as unanswered, not empty]",
+    }[state];
+
+    return text({ ok: res.ok && state !== "absent" && state !== "broken", out: out + note });
+  }
 );
 
 server.tool(

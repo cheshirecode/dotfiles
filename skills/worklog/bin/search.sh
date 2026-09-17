@@ -18,7 +18,10 @@
 #   bin/search.sh <pattern> --pr=N             # filter tasks with PR N in pr: or body
 #   bin/search.sh <pattern> --repo=REPO        # filter by frontmatter repos: entry
 #   bin/search.sh <pattern> --ldap=LDAP        # filter by owner
-#   bin/search.sh --list [filters...]          # no pattern; list slugs matching filters
+#   bin/search.sh <pattern> --semantic         # cosine over the embedding index;
+                                             #   finds paraphrases rg cannot
+  bin/search.sh <pattern> --semantic --top=N # how many semantic hits (default 10)
+  bin/search.sh --list [filters...]          # no pattern; list slugs matching filters
 #   bin/search.sh --json [args...]             # one JSON record per hit (slug + line)
 #   bin/search.sh --refresh                    # rebuild .cache/index.jsonl first
 #

@@ -68,7 +68,10 @@
   "contracts": {
     "memory_search": {
       "script": "search.sh",
-      "flags": []
+      "flags": [
+        "--semantic",
+        "--top="
+      ]
     },
     "memory_context": {
       "script": "context.sh",
