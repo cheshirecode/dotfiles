@@ -1,6 +1,6 @@
 ---
 name: job-application
-description: Generate a tailored job-application package (resume, cover letter, and skills keyword block) for one job description. Use when the user provides a job URL or ID and asks to apply, generate a resume, or tailor application materials. Scope is one named job description and one application package; exclude general resume review, interview prep, and career strategy.
+description: Generate a tailored job-application package (resume, cover letter, skills keyword block) for one job description. Use when the user gives a job URL or ID and asks to apply, generate a resume, or tailor materials. Scope is one job description and one package; exclude general resume review, interview prep, and career strategy.
 ---
 
 # job-application
