@@ -30,15 +30,21 @@ coverage/
 *.swo
 *~
 
-# Local environment files (keep example tracked)
+# Local environment files (keep example tracked).
+# `.env.*` covers ~/.env.secrets, the machine-local credential file that
+# install.sh generates. Its tracked template is templates/env.secrets.example
+# -- deliberately NOT named .env.secrets.example, which `.env.*` would ignore
+# while looking tracked, leaving every fresh clone with no template to copy.
 .env
 .env.*
 !.env.example
 
-# Per-host secrets and identity overlays
-.envrc.github
+# Per-host secrets and identity overlays.
+# `.shell_common.*` is a class, not a name: every suffixed variant is
+# machine-local by definition, so a new one cannot be tracked by accident.
+# `.shell_common` itself has no dot after it and stays tracked.
 .gitconfig.local
-.shell_common.local
+.shell_common.*
 # Agent worktrees + any install residue; harness-created, never source.
 .claude/
 # Hand-made `git worktree add` targets; the .claude/ rule above misses these.

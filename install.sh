@@ -42,7 +42,7 @@ for src in "$REPO_DIR"/.*; do
     .cursor) continue ;; # handled below
     .claude) continue ;; # real Claude home in $DEST: settings, transcripts, memory. The repo's copy is gitignored scratch; linking it over ~/.claude destroys the user's.
     .config) continue ;; # handled below — repo lives under ~/.config, symlinking it wholesale creates a self-referential loop
-    .envrc.github) continue ;; # gitignored secret holder, sourced explicitly
+    .shell_common.*) continue ;; # machine-local overlays; see .gitignore. The repo must never supply one, so never link one out of it.
   esac
   target="$DEST/$name"
   if [ -L "$target" ] && [ "$(readlink "$target")" = "$src" ]; then
@@ -198,10 +198,9 @@ if [ ! -e "$DEST/.shell_common.local" ]; then
 # Sourced from .bashrc above the interactive guard, so this applies to
 # non-interactive shells (bash -c from tools/hooks) as well.
 
-# Vault helpers live in the tracked .shell_common.vault (symlinked into $HOME
-# by this installer). Sourced here, not from ~/.shell_common, because that file
-# is read below .bashrc's interactive guard and so is invisible to `bash -c`.
-[ -r "$HOME/.shell_common.vault" ] && . "$HOME/.shell_common.vault"
+# Machine-local helpers belong in this file, not in the repo. Anything you
+# would have put in a ~/.shell_common.<suffix> overlay goes here: the repo no
+# longer tracks or supplies one. Credentials go in ~/.env.secrets instead.
 
 # --- drop Kubernetes service-discovery injection ---------------------------
 # Only meaningful when running as a k8s pod; a harmless no-op elsewhere.
@@ -215,6 +214,27 @@ unset KUBERNETES_PORT_443_TCP_PORT
 unset KUBERNETES_PORT_443_TCP_PROTO
 SCLEOF
   chmod 600 "$DEST/.shell_common.local"
+fi
+
+# Bootstrap ~/.env.secrets (machine-local credentials, untracked). This is the
+# one format for every credential on every machine: dotenv KEY=value, mode
+# 0600, generated empty, filled in by hand per host. It follows the pattern
+# Coder documents for workspace secrets -- a persistent file the user writes
+# after the workspace is built -- because a dotfiles repo cannot carry values
+# that differ per machine, and must never carry values at all.
+#
+# Guarded on absence like the two bootstraps above: a re-run must not clobber
+# a file you already filled in. The installer only ever writes empty keys.
+if [ ! -e "$DEST/.env.secrets" ]; then
+  # Absent template and successful copy are different outcomes, and a silent
+  # skip would read like a pass on a clone whose template failed to check out.
+  if [ -r "$REPO_DIR/templates/env.secrets.example" ]; then
+    echo "Creating $DEST/.env.secrets — fill in the keys for this machine."
+    cp "$REPO_DIR/templates/env.secrets.example" "$DEST/.env.secrets"
+    chmod 600 "$DEST/.env.secrets"
+  else
+    echo "warning: templates/env.secrets.example is missing; did not create $DEST/.env.secrets." >&2
+  fi
 fi
 
 # Install xterm-ghostty terminfo. ~/.terminfo sits on the ephemeral overlay
