@@ -243,6 +243,12 @@ def queue_line(project):
         return "queue: error=" + cell(proc.stderr.strip() or str(exc)), None
 
 
+# Past half the window, answers degrade and the prefix stops being reused: a
+# local scan of 77461 turns found 21472 over this line, the single largest
+# penalty in that report. Checkpoint and hand off rather than pushing on.
+DUMBZONE_PCT = 50
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="One call per loop cycle; everything but the "
@@ -266,6 +272,13 @@ def main():
                         "orchestrator queue")
     parser.add_argument("--allowed-effect", dest="allowed_effect",
                         default="read-only until a wider effect is declared")
+    # Context pressure, as a percentage of the window the agent has consumed.
+    # Optional: the driver cannot read the harness's usage, so the agent
+    # supplies it. Recorded and echoed on the status line so the trend is
+    # visible before the ceiling is, and flagged past DUMBZONE_PCT.
+    parser.add_argument("--context-pct", dest="context_pct", type=int,
+                        help="percent of the context window consumed; "
+                             "warns past %d" % DUMBZONE_PCT)
     parser.add_argument("--approval-boundary", dest="approval_boundary",
                         default="no merge, deploy, publish, or force-push")
     ns = parser.parse_args()
@@ -361,9 +374,16 @@ def drive(ns, parser):
     q_line, _slug = queue_line(config.get("project"))
     status = line.split(" ", 1)[0]
     decide = "stopped" if status in TERMINAL else "continue or stop"
-    print("%s | %s | %s | decide: %s" % (
+    ctx = ""
+    if ns.context_pct is not None:
+        ctx = " | context: %d%%%s" % (
+            ns.context_pct,
+            " OVER — checkpoint and hand off" if ns.context_pct >= DUMBZONE_PCT
+            else "",
+        )
+    print("%s | %s | %s%s | decide: %s" % (
         line, radar_line(config.get("repo"), config.get("remote", False), run_dir),
-        q_line, decide,
+        q_line, ctx, decide,
     ))
     return 0
 

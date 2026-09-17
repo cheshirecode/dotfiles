@@ -710,3 +710,44 @@ class LoopRunTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ContextPressureTest(unittest.TestCase):
+    """--context-pct surfaces window pressure and flags the degrade zone.
+
+    Past half the window answers degrade and the prefix stops being reused; a
+    local scan of 77461 turns found 21472 over that line. The driver cannot read
+    harness usage, so the agent supplies it and the driver records it.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(prefix="loop ctx ")
+        self.run_dir = str(Path(self._tmp.name) / "run")
+        self.cwd = self._tmp.name
+        r = run([self.run_dir, "--goal", "probe", "--budget", "6"], cwd=self.cwd)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def cycle(self, *extra):
+        return run([self.run_dir, "--evidence", "command: probe - ok",
+                    "--next-action", "next", *extra], cwd=self.cwd)
+
+    def test_reported_below_the_threshold_without_a_flag(self):
+        r = self.cycle("--context-pct", "31")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("context: 31%", r.stdout)
+        self.assertNotIn("OVER", r.stdout)
+
+    def test_flagged_at_or_past_the_threshold(self):
+        r = self.cycle("--context-pct", "62")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("context: 62%", r.stdout)
+        self.assertIn("OVER", r.stdout)
+        self.assertIn("checkpoint", r.stdout)
+
+    def test_omitting_it_changes_nothing(self):
+        r = self.cycle()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("context:", r.stdout)
