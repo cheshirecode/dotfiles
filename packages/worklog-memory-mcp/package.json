@@ -7,9 +7,10 @@
     "worklog-memory-mcp": "server.js"
   },
   "scripts": {
-    "test": "node test/env-isolation.js && node test/e2e.js",
+    "test": "node test/surface-sync.js && node test/env-isolation.js && node test/e2e.js",
     "test:env": "node test/env-isolation.js",
-    "test:e2e": "node test/e2e.js"
+    "test:e2e": "node test/e2e.js",
+    "test:surface": "node test/surface-sync.js"
   },
   "license": "MIT",
   "dependencies": {
