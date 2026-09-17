@@ -85,9 +85,16 @@ function session() {
 const a = session();
 await a.init();
 
+// The exact tool set belongs to test/surface-sync.js, which checks it against
+// the worklog skill's mode registry. Here, only that the lifecycle is whole:
+// a session can discover, start, advance and finish a task.
 const tools = await a.request("tools/list", {});
-if (tools.result.tools.length === 4) ok("session A lists 4 tools");
-else bad(`expected 4 tools, got ${tools.result?.tools?.length}`);
+const names = (tools.result?.tools || []).map((t) => t.name);
+const lifecycle = ["memory_status", "memory_related", "memory_search", "memory_context",
+  "memory_task_create", "memory_checkpoint", "memory_archive", "memory_lint"];
+const absent = lifecycle.filter((t) => !names.includes(t));
+if (absent.length === 0) ok(`session A lists the whole task lifecycle (${names.length} tools)`);
+else bad(`lifecycle tools missing: ${absent.join(", ")}`);
 
 const created = await a.call("memory_task_create", {
   slug: "e2e-memory-round-trip", kind: "spike",
@@ -117,6 +124,42 @@ else bad(`hydrate failed: ${textOut.slice(0, 200)}`);
 const search = await b.call("memory_search", { pattern: "round trip in flight" });
 if ((search.result?.content?.[0]?.text || "").includes("e2e-memory-round-trip")) ok("session B finds the evidence by search");
 else bad("search did not find the checkpointed evidence");
+
+// Discovery without a slug in hand: the cold-resume path.
+const status = await b.call("memory_status", { since: "1.day.ago" });
+if (!status.result.isError && (status.result?.content?.[0]?.text || "").includes("e2e-memory-round-trip")) ok("session B sees the task in status without knowing the slug");
+else bad(`status did not surface the task: ${(status.result?.content?.[0]?.text || "").slice(0, 200)}`);
+
+const related = await b.call("memory_related", { keywords: ["round", "trip"] });
+if (!related.result.isError) ok("session B runs the prior-art probe");
+else bad(`related failed: ${(related.result?.content?.[0]?.text || "").slice(0, 200)}`);
+
+const lint = await b.call("memory_lint", { slug: "e2e-memory-round-trip", format: "json" });
+if (!lint.result.isError) ok("session B lints the task it did not create");
+else bad(`lint failed: ${(lint.result?.content?.[0]?.text || "").slice(0, 200)}`);
+
+// The terminal transition. Before this existed a task could be started and
+// advanced through the MCP but never finished.
+const archived = await b.call("memory_archive", {
+  slug: "e2e-memory-round-trip", reason: "shipped",
+  summary: "e2e round trip completed; archived by the same server that created it.",
+});
+if (!archived.result.isError) ok("session B archives the task");
+else bad(`archive failed: ${(archived.result?.content?.[0]?.text || "").slice(0, 300)}`);
+
+// status=archived alone is not the transition: the file must have moved.
+const inArchive = fs.existsSync(path.join(vault, "people", "oss", "archive", "e2e-memory-round-trip.md"));
+const inActive = fs.existsSync(path.join(vault, "people", "oss", "active", "e2e-memory-round-trip.md"));
+if (inArchive && !inActive) ok("the task file moved from active/ to archive/");
+else bad(`archive did not move the file (archive=${inArchive} active=${inActive})`);
+
+// An archived task is a closed record, not a draft to keep appending to.
+const reopened = await b.call("memory_checkpoint", {
+  slug: "e2e-memory-round-trip", evidence: "command: none — should be refused",
+});
+if (reopened.result.isError) ok("checkpointing an archived task is refused");
+else bad("checkpoint appended to an archived task");
+
 b.close();
 
 fs.rmSync(scratch, { recursive: true, force: true });

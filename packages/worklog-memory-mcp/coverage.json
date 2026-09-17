@@ -1,0 +1,123 @@
+{
+  "_comment": [
+    "Which worklog skill modes this MCP server covers, and which it deliberately does not.",
+    "test/surface-sync.js checks this file against skills/worklog/modes/registry.md in both",
+    "directions, and against the server's live tools/list. A new mode, a removed mode, a",
+    "renamed tool or an orphan tool all fail the test.",
+    "Every entry is exactly one of `tools` or `exempt`. An exemption names one literal mode",
+    "and carries its reason: a pattern or a glob would silently exempt whatever is added later.",
+    "`contracts` pins the script and flags each tool passes. surface-sync.js asserts every flag still appears in that script's --help, because a renamed flag is the drift a name check cannot see: the tool keeps working right up to the moment the script rejects it."
+  ],
+  "registry": "../../skills/worklog/modes/registry.md",
+  "modes": {
+    "help": {
+      "exempt": "The MCP client lists tools itself; a help mode has nothing to wrap."
+    },
+    "init": {
+      "exempt": "Session onboarding: preamble, pull, external scan, cache rebuild. It sets up a machine, it does not read or write task memory. memory_status answers the part an agent actually needs when resuming cold."
+    },
+    "sync": {
+      "tools": [
+        "memory_checkpoint",
+        "memory_archive"
+      ],
+      "note": "sync is an umbrella that routes by intent: a slug plus flags goes to checkpoint.sh, archive intent goes to archive.sh. Both are now tools, so the routing is the caller's choice rather than a mode. Conversation-WIP detection stays out: it needs judgement and sync itself skips it in non-interactive sessions."
+    },
+    "status": {
+      "tools": [
+        "memory_status"
+      ]
+    },
+    "context": {
+      "tools": [
+        "memory_context"
+      ]
+    },
+    "plan": {
+      "exempt": "Three reasoning passes compressed into a markdown block. A pure generator with no vault operation; the model does this work, not a tool. memory_related covers the prior-art probe the mode leans on."
+    },
+    "spawn": {
+      "exempt": "Emits a standalone handoff prompt. Pure text generation, no vault operation."
+    },
+    "export": {
+      "exempt": "Packages this machine's worklog setup for transfer, with secrets masked. Machine setup, not task memory."
+    },
+    "import": {
+      "exempt": "Merges an export artifact into this machine's setup, LLM-judged per file. Machine setup, not task memory."
+    },
+    "lint": {
+      "tools": [
+        "memory_lint"
+      ]
+    },
+    "project": {
+      "exempt": "Multi-task projects: declaration-order sequencing, a depends_on graph and a per-task advisory mutex arbitrated by session id. Deliberately not wrapped yet. The mutex assumes one caller per session, and this server serialises every write through a single in-process queue, so claim/release needs its own design before it is safe to expose."
+    },
+    "scrape-slack": {
+      "exempt": "Scrapes Slack for task enrichments behind a mandatory human review gate. An external integration with an approval step, not a memory operation."
+    },
+    "review": {
+      "exempt": "Periodic protocol review across structure, skills, commands and performance. A reasoning mode with no fixed vault operation."
+    }
+  },
+  "extra_tools": {
+    "memory_search": "Slug-grouped search over task bodies and the frontmatter index. No mode of its own; the skill reaches search.sh from inside several modes.",
+    "memory_task_create": "Creating a task file. The skill does this inside sync and plan rather than as a mode.",
+    "memory_related": "Prior-art probe over active and archive, and the in-use project slugs. The skill reaches related-search.sh from plan and sync."
+  },
+  "contracts": {
+    "memory_search": {
+      "script": "search.sh",
+      "flags": []
+    },
+    "memory_context": {
+      "script": "context.sh",
+      "flags": [
+        "--for="
+      ]
+    },
+    "memory_task_create": {
+      "script": "checkpoint.sh",
+      "flags": []
+    },
+    "memory_checkpoint": {
+      "script": "checkpoint.sh",
+      "flags": [
+        "--status=",
+        "--next="
+      ]
+    },
+    "memory_archive": {
+      "script": "archive.sh",
+      "flags": [
+        "--reason=",
+        "--summary=",
+        "--pr="
+      ]
+    },
+    "memory_status": {
+      "script": "status.sh",
+      "flags": [
+        "--since=",
+        "--slug=",
+        "--project=",
+        "--format=",
+        "--include-meta"
+      ]
+    },
+    "memory_related": {
+      "script": "related-search.sh",
+      "flags": [
+        "--projects"
+      ]
+    },
+    "memory_lint": {
+      "script": "lint.sh",
+      "flags": [
+        "--file=",
+        "--cross-task",
+        "--format="
+      ]
+    }
+  }
+}
