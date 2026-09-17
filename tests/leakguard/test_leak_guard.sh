@@ -109,5 +109,15 @@ git add host.md
 git commit -q -m "host-case" 2>/dev/null
 committed host-case && note "committed an internal hostname carrying an owner name"
 
+# 10. A work REPO name must block too. 53 occurrences across 11 tracked files
+#     had accumulated with nothing able to see them, because the list held
+#     only orgs. Composed from $WREPO for the same reason as $ORG above: a
+#     spelled-out fixture would make this file fail its own guard.
+WREPO=midas   # pragma: allowlist owner
+git reset -q
+printf 'repos: [%s, monorepo]\n' "$WREPO" > repo.md; git add repo.md
+git commit -q -m "repo-case" 2>/dev/null
+committed repo-case && note "committed a work repo name"
+
 [ "$fails" -eq 0 ] || exit 1
 echo "ok: leak guard blocks identifiers, real home paths and org-shaped ambiguous names, allows placeholders and English/keyword uses, honours the bypass"
