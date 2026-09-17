@@ -1,18 +1,9 @@
 #!/usr/bin/env bash
-# The per-vault identity gate must block a commit authored under the other
-# vault's domain, allow the right one, report an unset policy rather than
-# silently passing, and honour its documented bypass.
-#
-# Why it exists: the two vaults cross-contaminated — 795 personal-identity and
-# 210 oss@local commits in the work vault, 37 work-identity commits in the
-# personal one (measured 2026-09-16). Both private, so hygiene not exposure,
-# but each was preventable at commit time and unfixable afterwards without
-# rewriting thousands of commits across live worktrees.
-#
-# Identity is set with GIT_AUTHOR_EMAIL, not `-c user.email`. The env wins over
-# config, and a first version of this test used -c while the session's own
-# GIT_AUTHOR_EMAIL was exported — so the "wrong identity" case committed under
-# the RIGHT identity and the hook looked broken when the fixture was.
+# The identity gate must block a commit authored under another vault's domain,
+# allow its own, report an unset policy without blocking, and honour the
+# bypass. Identity is set with GIT_AUTHOR_EMAIL, which is how git resolves it;
+# `-c user.email` loses to an exported env var.
+
 set -uo pipefail
 
 HOOK="$(cd "$(dirname "$0")/../../bin/git-hooks" && pwd)/pre-commit-identity"

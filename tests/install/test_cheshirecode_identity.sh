@@ -1,18 +1,12 @@
 #!/usr/bin/env bash
-# The cheshireCode identity must apply from any checkout path, and must never
-# apply to a repository owned by someone else.
+# The cheshireCode identity must apply from any checkout and never to a repo
+# owned by someone else.
 #
-# Reported 2026-09-16: .gitconfig carried
-# an absolute path to a workspace-specific checkout of this repo
-# committed from a Coder workspace. On a machine whose checkout lives elsewhere
-# that path does not exist, and git ignores a missing include with no error, so
-# the identity silently never applied. The include pattern was broken too:
-# `**/cheshireCode/**` matches neither the lowercase owner in the URL nor the
-# scp-style SSH form this repo's origin uses.
-#
-# Two separate things are asserted, because either alone passes while the
-# identity is still wrong: the file must be LINKED into $DEST by the installer,
-# and the include rule must actually RESOLVE for both remote URL forms.
+# Asserts four things separately: the identity file is linked into $DEST,
+# .gitconfig names no checkout path, the include resolves for every owner URL
+# form (git's glob is case-sensitive and treats the scp colon and https slash
+# differently), and it leaks onto none of the foreign forms.
+
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd -P)"

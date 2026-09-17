@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# install.sh must remove a top-level link left behind by an older checkout, and
-# must leave every other dangling link alone.
-#
-# Reported 2026-09-16: after the checkout moved, ~/.zshenv and ~/.gitignore
-# stayed dangling through a repair run, because the install loop only creates
-# links for files the repo still ships and had no pass that removes the rest.
+# install.sh must remove a top-level dangling link whose target lay under a
+# dotfiles checkout, and leave every other dangling link alone.
+
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd -P)"
