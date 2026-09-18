@@ -23,7 +23,14 @@ import sys
 SECTION = re.compile(r'<section\b[^>]*>.*?</section>', re.S | re.I)
 SECTION_ID = re.compile(r'<section\b[^>]*\bid="([^"]+)"', re.I)
 STRONG = re.compile(r"<strong\b[^>]*>(.*?)</strong>", re.S | re.I)
-NUMERIC = re.compile(r"\d")
+# A STANDALONE number, not any digit. `\d` also matches a date, a ticket id, a
+# version and a unit -- 2026-09-17, SPLUS-19835, v3_3_0, 5xx, 3s -- none of
+# which is a measurement, and all of which are ordinary in these documents.
+# That is the years-and-identifiers false-positive class that sank the broad
+# form of this check, reappearing inside the narrow one. It also matters that
+# the 3% rate in gates.md was measured with THIS matcher: on `\d` the same page
+# yields 71 emphasised spans instead of 56, and all 15 extra ones are false.
+NUMERIC = re.compile(r"(?<![\w.#-])\d[\d,]*(?:\.\d+)?(?![\w%-]*[\w])")
 ANCHOR = re.compile(r'href="#([^"]+)"')
 DEFAULT_EVIDENCE_CLASSES = ("evidence",)
 DEFAULT_EVIDENCE_TAGS = (r"<details\b[^>]*\bclass=\"[^\"]*\bsql\b", r"/-/blob/", r"/blob/")
