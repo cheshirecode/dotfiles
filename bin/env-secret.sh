@@ -8,9 +8,8 @@
 # different identities (personal vs work), and sourcing the file would put
 # every credential into all of them. See templates/env.secrets.example.
 #
-# The same logic is inlined in .envrc, which is symlinked to ~/.envrc and so
-# cannot depend on this repo's path. tests/shell/test_env_secret_reader.sh
-# asserts the two agree; change both or neither.
+# This is the only reader. .envrc.example calls it rather than inlining a
+# copy; tests/shell/test_env_secret_reader.sh pins the key-selection contract.
 set -uo pipefail
 
 key="${1:-}"

@@ -62,16 +62,18 @@ RUN echo "=== Stage 3: real install ===" \
  && INSTALL_RUNTIME_DEPS_YES=1 bin/install.sh --no-worklog --no-gws
 
 # --- Stage 4: doctor ------------------------------------------------------
-# This fresh image has no approved .envrc or live credentials. Doctor must
-# report exactly that auth probe as UNKNOWN (exit 2), with zero failures.
-# Do not accept exit 2 alone: another unanswered probe must still fail CI.
+# This fresh image has no .envrc anywhere above /src and no gh login. The
+# auth probe must answer ABSENT (not logged in), not UNKNOWN: with no .envrc
+# to approve, direnv has nothing to block, so the probe can answer. Zero
+# failures and zero unknown, exit 0. The blocked-.envrc branch is covered by
+# tests/doctor/test_gh_auth_blocked_envrc.sh in the suite.
 RUN echo "=== Stage 4: doctor ===" \
  && doctor_rc=0 \
  && { bin/doctor.sh > /tmp/dotfiles-doctor.log 2>&1 || doctor_rc=$?; } \
  && cat /tmp/dotfiles-doctor.log \
- && test "$doctor_rc" -eq 2 \
- && grep -Fq 'UNKNOWN gh auth unverifiable: .envrc not approved for /src' /tmp/dotfiles-doctor.log \
- && grep -Eq '^doctor: 0 failure\(s\), [0-9]+ warning\(s\), [0-9]+ absent, 1 unknown ' /tmp/dotfiles-doctor.log
+ && test "$doctor_rc" -eq 0 \
+ && grep -Fq 'ABSENT  gh not authenticated' /tmp/dotfiles-doctor.log \
+ && grep -Eq '^doctor: 0 failure\(s\), [0-9]+ warning\(s\), [0-9]+ absent, 0 unknown ' /tmp/dotfiles-doctor.log
 
 # --- Stage 5: browser-use-setup (Linux proof, sandboxed) -------------------
 # Runs the skill's installer against a bare HOME with uv bootstrapped from
