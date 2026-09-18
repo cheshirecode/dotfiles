@@ -19,15 +19,38 @@ This skill does the finding. It does not decide what is true.
 
 Do not use it to make the decision. It surfaces disagreement; a human resolves it.
 
-## Initialise: declare the surfaces
+## Initialise: scan, ask, declare
 
 The skill assumes no particular tracker, document store or publishing tool.
-Before the first run, the operator declares what exists here and how to
-interrogate each one. Everything below refers to these declarations.
+Before the first run, work out what exists here — in that order, because a scan
+sees structure and cannot see intent.
 
-For each surface: **what it is**, **how to search it**, **how to read one item**,
-and **how to write to it**. For a tracker, additionally: **how to tell a closed
-item's reason for closing from its state** — see step 3 for why that is separate.
+**Scan.** `scripts/discover_surfaces.py [root]` walks the project read-only,
+writes nothing and makes no network call. It reports each kind of surface in
+one of four states, never collapsed: `found` with the evidence named, `absent`
+meaning it looked and there is nothing, `unknown` meaning a scan cannot decide,
+or `n/a`. `--json` emits the same as a declarations skeleton.
+
+Two things it deliberately will not do:
+
+- **It never reports a tracker as `found`.** A forge is where the code lives,
+  not evidence of where work is tracked — plenty of projects keep code in one
+  place and issues in another. It names the host and asks.
+- **It separates test data and templates from live surfaces without hiding
+  them.** A fixture looks exactly like the surface it stands in for; running
+  this against the repository that ships it reported its own worklog fixtures
+  as live working notes. Those matches are counted and named, not filtered,
+  because a filter would also hide a real surface that happens to sit under one
+  of those directory names.
+
+**Ask.** Every `unknown` prints the question to put to the operator. Answer
+those before declaring anything; a guess here is the one error the rest of the
+procedure cannot detect, because every later step trusts the declarations.
+
+**Declare.** For each surface: **what it is**, **how to search it**, **how to
+read one item**, and **how to write to it**. For a tracker, additionally: **how
+to tell a closed item's reason for closing from its state** — see step 3 for why
+that is separate.
 
 Keep the declarations in one file the procedure can read. If a surface cannot
 answer one of those questions, record that; a missing capability changes the
