@@ -26,9 +26,18 @@ implemented. Passing mocked/unit controls on another OS is not live support.
 
 The packaged smoke command passed on 2026-09-17 with Codex CLI
 `0.155.0-alpha.2.6`, Claude Code `2.1.274` and OpenCode `1.18.31`: four named
-checks, one public-verifier call and complete usage in each lane. The 38 offline
+checks, one public-verifier call and complete usage in each lane. The 41 offline
 controls also passed under Python 3.9 and 3.14. Recheck on your host; these are
 observations, not minimum-version promises or savings measurements.
+
+A second host confirmed the Claude lane on Claude Code `2.1.275` with
+`claude-haiku-4-5-20251001`: four checks, one verifier call, complete usage.
+That run first failed on usage reconciliation, not on the work. Asking for the
+model the harness also uses for its own auxiliary calls collapses both into one
+`modelUsage` entry, whose totals then exceed `result.usage`; the dated alias and
+its `canonicalModel` are also two names for one model. Both are fixed. Prefer a
+model your account can use, and read the artifact rather than the exit code
+alone when a run fails: the four checks and the usage verdict fail separately.
 
 ## Validate after pulling
 
