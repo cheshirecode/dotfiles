@@ -70,9 +70,16 @@ clean-looking pass that measures nothing, and a pass that always looks the same
 is one nobody reads.
 
 **Declare.** For each surface: **what it is**, **how to search it**, **how to
-read one item**, and **how to write to it**. For a tracker, additionally: **how
-to tell a closed item's reason for closing from its state** — see step 3 for why
-that is separate.
+read one item**, and **how to write to it**. For a tracker, two more:
+
+- **How to tell a closed item's reason for closing from its state** — see step 3
+  for why that is separate.
+- **What this credential can actually see.** The tracker and your visibility
+  into it are two different facts, and a scan sees neither. One real setup files
+  the same incidents across two projects where the account can read one and not
+  the other. Declare the scope you can search, because a search that returns
+  nothing for lack of permission looks exactly like a search that returns
+  nothing because there is nothing there.
 
 Keep the declarations in one file the procedure can read. If a surface cannot
 answer one of those questions, record that; a missing capability changes the
@@ -114,6 +121,11 @@ invariant is evidence that someone knew it mattered and did not encode it.
    carries the requirement; an item closed as not-planned does not. If the
    declared surface cannot report a reason, step 3 degrades to reading every
    closed match, which is slower and still cheaper than filing a duplicate.
+
+   The same applies to reach. A clean result from a scope you cannot see is not
+   a clean result — it is no result, wearing the same face. If the declared
+   visibility does not cover where this kind of work is filed, say so in the
+   finding rather than reporting nothing found.
 
 4. **Classify each hit before editing**: FALSIFIED (rewrite), NARROWED (qualify),
    UNAFFECTED (leave). Most hits are the third. Editing them is how a sync turns
