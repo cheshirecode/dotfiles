@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Contracts for the browser-use-setup skill.
 
-Three artifacts are pinned: the thin-root SKILL.md routing document, the
-installer (bin/install-browser-use.sh), and the wrapper (bin/bu). The vendor
+Controls cover the routing document, installer, wrapper, duplicate-safe
+registration and read-only WebMCP discovery. The vendor
 `browser-use skill install` command owns the ~/.claude/skills/browser-use/
 namespace -- that is why this skill is named browser-use-setup, and the test
 asserts the name so nobody "fixes" it into a collision that lets the vendor
@@ -17,6 +17,8 @@ sandbox runs and the Dockerfile.test-matrix stage, not by unit fixtures.
 from __future__ import annotations
 
 import pathlib
+import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -26,6 +28,8 @@ SKILL_MD = SKILL_DIR / "SKILL.md"
 INSTALLER = SKILL_DIR / "bin" / "install-browser-use.sh"
 WRAPPER = SKILL_DIR / "bin" / "bu"
 PLATFORMS_MD = SKILL_DIR / "references" / "platforms.md"
+REGISTER = SKILL_DIR / "bin" / "register-browser-use-skills.sh"
+PROBE = SKILL_DIR / "bin" / "webmcp-probe.js"
 
 
 
@@ -109,6 +113,98 @@ class InstallerContract(unittest.TestCase):
         )
         self.assertEqual(gate.returncode, 1, gate.stderr)
         self.assertIn("WSL", gate.stderr)
+
+
+class RegistrationContract(unittest.TestCase):
+    def setUp(self) -> None:
+        self.root = _temp_dir(self)
+        self.shared = self.root / '.agents/skills/browser-use/SKILL.md'
+        self.legacy = self.root / '.codex/skills/browser-use'
+        self.shared.parent.mkdir(parents=True)
+        self.shared.write_text('vendor skill\n')
+        self.legacy.mkdir(parents=True)
+        (self.legacy / 'SKILL.md').write_text('vendor skill\n')
+        self.cli = self.root / 'fake-browser-use'
+        self.cli.write_text('#!/bin/bash\nprintf "%s\\n" "$*" >> "$HOME/calls"\n')
+        self.cli.chmod(0o700)
+
+    def register(self):
+        return run(['bash', str(REGISTER), str(self.cli)],
+                   env={**os.environ, 'HOME': str(self.root)})
+
+    def test_identical_copy_archived_and_explicit_targets_do_not_recreate_it(self):
+        result = self.register()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(self.legacy.exists())
+        backups = list(self.root.glob('.local/state/browser-use-setup/duplicate.*/browser-use/SKILL.md'))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_bytes(), self.shared.read_bytes())
+        calls = (self.root / 'calls').read_text().splitlines()
+        self.assertEqual(calls, ['skill install --target '+t+' --no-install'
+                                for t in ('agents', 'claude', 'copilot', 'cursor', 'gemini', 'openclaw', 'opencode')])
+        self.assertEqual(self.register().returncode, 0)
+        self.assertEqual(len(list(self.root.glob('.local/state/browser-use-setup/duplicate.*'))), 1)
+
+    def test_customized_copy_preserved(self):
+        (self.legacy / 'SKILL.md').write_text('user edit')
+        self.assertEqual(self.register().returncode, 0)
+        self.assertEqual((self.legacy / 'SKILL.md').read_text(), 'user edit')
+
+    def test_extra_hidden_file_preserved(self):
+        (self.legacy / '.local').write_text('keep')
+        self.assertEqual(self.register().returncode, 0)
+        self.assertTrue((self.legacy / '.local').exists())
+
+    def test_symlink_preserved(self):
+        (self.legacy / 'SKILL.md').unlink()
+        self.legacy.rmdir()
+        self.legacy.symlink_to(self.shared.parent, target_is_directory=True)
+        self.assertEqual(self.register().returncode, 0)
+        self.assertTrue(self.legacy.is_symlink())
+
+    def test_failed_registration_stops(self):
+        self.cli.write_text('#!/bin/bash\nexit 7\n')
+        self.assertEqual(self.register().returncode, 7)
+        self.assertTrue(self.shared.exists())
+
+
+class WebMCPProbeContract(unittest.TestCase):
+    def probe(self, setup):
+        code = ("globalThis.location={origin:'https://example.test'};"
+                "globalThis.window={};globalThis.document={};"
+                "Object.defineProperty(globalThis,'navigator',{value:{},configurable:true});"
+                + setup + '\n' + PROBE.read_text() + '.then(x=>console.log(JSON.stringify(x)))')
+        return run(['node', '-e', code])
+
+    def test_absent_api_is_not_an_empty_supported_site(self):
+        result = self.probe('')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(json.loads(result.stdout)['supported'])
+
+    def test_current_api_awaits_metadata_and_excludes_window(self):
+        result = self.probe("window.self=window;document.modelContext={getTools:async()=>"
+                            "[{name:'lookup',window, inputSchema:{type:'object'}}],"
+                            "executeTool:()=>{throw Error('must not execute')}};")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(result.stdout)
+        self.assertEqual(value['api'], 'document.modelContext')
+        self.assertEqual(value['tools'], [{'name':'lookup','inputSchema':{'type':'object'}}])
+
+    def test_testing_api_fallback(self):
+        result = self.probe("window.WebMCP=function(){};navigator.modelContextTesting={listTools:()=>[]};")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(result.stdout)
+        self.assertEqual(value['api'], 'navigator.modelContextTesting')
+
+    def test_legacy_constructor_alone_is_not_native_support(self):
+        result = self.probe('window.WebMCP=function(){};')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(json.loads(result.stdout)['supported'])
+
+    def test_discovery_error_is_not_silently_recoded_as_unsupported(self):
+        result = self.probe("document.modelContext={getTools:async()=>{throw Error('denied')}};")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('denied', result.stderr)
 
 
 class WrapperContract(unittest.TestCase):
@@ -252,7 +348,7 @@ class CdpAutoWiring(unittest.TestCase):
 
 class ScriptSyntax(unittest.TestCase):
     def test_both_scripts_parse(self) -> None:
-        for script in (INSTALLER, WRAPPER):
+        for script in (INSTALLER, WRAPPER, REGISTER):
             result = run(["bash", "-n", str(script)])
             self.assertEqual(result.returncode, 0, f"{script.name}: {result.stderr}")
 
