@@ -74,7 +74,7 @@ operator needs to see the cause rather than a missing token.
 
 ## Precedence, and why a keychain still wins
 
-`resolve_gh_token()` in `.envrc` tries, in order:
+`resolve_gh_token()` in `.envrc.example` tries, in order:
 
 1. `gh auth token`
 2. `pass show github.com/<owner>`
