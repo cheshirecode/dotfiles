@@ -53,6 +53,15 @@ skills:
       path: skills/browser-use-setup
     install_to: ~/.claude/skills/browser-use-setup
 
+  - name: webmcp-integration
+    description: Apply page-scoped WebMCP tools to an existing repo, with impresspress-inspired sandbox guidance.
+    optional: true
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/webmcp-integration
+    install_to: ~/.claude/skills/webmcp-integration
+
   - name: worklog
     description: Cross-machine work journal — the /worklog command surface.
     source:
