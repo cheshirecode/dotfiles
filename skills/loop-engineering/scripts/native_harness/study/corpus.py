@@ -100,7 +100,8 @@ add(
     "python",
     "run({root,path}) joins an absolute POSIX root with a relative user path without filesystem "
     "access. Percent-decode the path once and treat backslashes as separators; normalize dot "
-    "segments. Reject absolute paths and escapes above root with ValueError. Empty path returns root.",
+    "segments in both root and path and remove trailing slashes except for /. Reject absolute "
+    "paths and escapes above root with ValueError. Empty path returns the normalized root.",
     "def run(d):\n    return d['root'].rstrip('/')+'/'+d['path']",
     """
 import posixpath

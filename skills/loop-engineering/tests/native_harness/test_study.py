@@ -1,4 +1,5 @@
 import copy
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -10,9 +11,48 @@ from corpus import TASKS  # noqa: E402
 from evaluate import calibrate  # noqa: E402
 from run import acceptance, schedule  # noqa: E402
 from analyze import arm_summary, bootstrap, mcnemar, wilson  # noqa: E402
+from sensitivity import analyze_sensitivity  # noqa: E402
 
 
 class StudyControls(unittest.TestCase):
+    def test_sensitivity_excludes_whole_pairs_without_rewriting_primary_results(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            plans = []
+            for lane in ("claude", "codex", "opencode"):
+                for task in ("path-containment", "other-task"):
+                    for arm, tokens in (("baseline", 100), ("candidate", 80)):
+                        ident = lane + "-" + task + "-" + arm
+                        row = {
+                            "id": ident,
+                            "harness": lane,
+                            "task": task,
+                            "arm": arm,
+                            "language": "python",
+                            "accepted": True,
+                            "seconds_including_setup": 1,
+                            "turn": {
+                                "usage_complete": True,
+                                "native_usage": {"reported_tokens": tokens},
+                            },
+                        }
+                        plans.append(row)
+                        directory = root / "attempts" / ident
+                        directory.mkdir(parents=True)
+                        (directory / "result.json").write_text(json.dumps(row))
+            (root / "manifest.json").write_text(json.dumps({"schedule": plans}))
+            (root / "summary.json").write_text("original primary summary")
+            result = analyze_sensitivity(root)
+            self.assertEqual(len(result["excluded_attempts"]), 6)
+            self.assertEqual(sum(r["tokens"] for r in result["excluded_attempts"]), 540)
+            for lane in result["lanes"].values():
+                self.assertEqual(lane["arms"]["baseline"]["scheduled"], 1)
+                self.assertEqual(lane["arms"]["candidate"]["scheduled"], 1)
+                self.assertEqual(lane["token_cost_ratio"], 0.8)
+            self.assertEqual(
+                (root / "summary.json").read_text(), "original primary summary"
+            )
+
     def test_every_reference_passes_and_every_original_fails(self):
         with tempfile.TemporaryDirectory() as temporary:
             rows = calibrate(Path(temporary) / "calibration.json")
