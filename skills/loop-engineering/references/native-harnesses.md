@@ -31,6 +31,21 @@ checks, one public-verifier call and complete usage in each lane. The 38 offline
 controls also passed under Python 3.9 and 3.14. Recheck on your host; these are
 observations, not minimum-version promises or savings measurements.
 
+A 2026-09-18 macOS check reproduced a Claude Code `2.1.275` receipt defect:
+the work passed all four checks, but reconciliation rejected the dated
+`claude-haiku-4-5-20251001` alias. Reconciliation now accepts a unique alias or
+canonical name and retains auxiliary usage when it shares the primary model.
+Ambiguous identities, unexpected assistant models and main-thread counts above
+per-model totals still fail. The original failed receipt was retained and
+reconciled separately; a fresh Claude run passed after the fix.
+
+Fresh smoke runs also passed with Codex `0.155.0-alpha.2.6` (`gpt-5.6-sol`) and
+OpenCode `1.18.31` (`openrouter/anthropic/claude-haiku-4.5`). Each lane passed
+four checks, made one public-verifier call and had complete usage, valid timing
+and scope, and unchanged Git identity. The 43 offline controls passed on Python
+3.14.6, alongside 20 static checks. These validate the host execution and receipt
+contracts; they are not independent task samples or a cost-saving comparison.
+
 ## Research closeout
 
 The study adapted the bounded experiment loop from
