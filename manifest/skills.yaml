@@ -114,6 +114,14 @@ skills:
       path: skills/evidence-gate
     install_to: ~/.claude/skills/evidence-gate
 
+  - name: requirement-sync
+    description: Propagate a changed requirement across every place it is written down, and find where the old version still reads as current.
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/requirement-sync
+    install_to: ~/.claude/skills/requirement-sync
+
   - name: pr-review
     description: Single-PR review and closeout — ownership-based review modes, then distill, codify, deslop, checkpoint.
     source:
