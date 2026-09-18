@@ -276,6 +276,61 @@ class EvidenceReachabilityTest(unittest.TestCase):
                 '<a href="https://git.example.com/o/r/-/blob/abc/f.py">f.py</a></section>')
         self.assertEqual(self.ev(html), [])
 
+    def test_b_tag_claims_are_inspected(self):
+        # The silent pass: a page marking weight with <b> was invisible to the
+        # gate, which printed OK having inspected nothing. Measured on a
+        # four-page corpus at 1 of 72 claims looked at.
+        html = '<section id="a"><p>ceiling is <b>10,005 items</b></p></section>'
+        self.assertTrue(only(self.ev(html), "section 'a'"))
+
+    def test_b_and_strong_are_treated_alike(self):
+        for tag in ("strong", "b"):
+            html = f'<section id="a"><p><{tag}>24,000 items</{tag}></p></section>'
+            self.assertTrue(only(self.ev(html), "section 'a'"), tag)
+
+    def test_br_and_body_are_not_emphasis(self):
+        # `<b\b` must not match <br> or <body>; a probe wrong this way looks
+        # exactly like a page with claims it does not have.
+        html = '<section id="a"><p>10,005 items<br/></p></section>'
+        self.assertEqual(self.ev(html), [])
+
+    def test_coverage_reports_what_was_inspected(self):
+        html = ('<section id="a"><p><b>10,005 items</b> and 42 loose</p></section>'
+                '<section id="b"><p>prose only</p></section>')
+        secs, inspected, outside = check_evidence.coverage(html)
+        self.assertEqual((secs, inspected), (2, 1))
+        self.assertGreaterEqual(outside, 1)
+
+    def test_coverage_is_a_report_not_a_refusal(self):
+        # A prose page has nothing to inspect and is not thereby unsafe.
+        # Refusing here would produce a finding the author cannot act on.
+        html = '<section id="a"><p>no numbers here at all</p></section>'
+        self.assertEqual(self.ev(html), [])
+        self.assertEqual(check_evidence.coverage(html), (1, 0, 0))
+
+    def test_section_without_id_is_located_and_given_the_remedy(self):
+        html = '<section><p><strong>10,005 items</strong></p></section>'
+        found = self.ev(html)
+        self.assertTrue(only(found, "section 1 of 1"))
+        self.assertTrue(only(found, "no id"))
+        self.assertEqual(only(found, "__unnamed"), [])
+
+    def test_evidence_in_an_unaddressable_section_is_not_reachable(self):
+        # Evidence sitting in a section with no id cannot be cross-referenced,
+        # so a claim elsewhere is not rescued by it. Documentation test: no
+        # simple mutation breaks it, because anchors resolve by literal id.
+        # Kept so that inventing synthetic anchor targets later reads as the
+        # behaviour change it would be.
+        html = ('<section id="a"><p><strong>5 items</strong>'
+                '<a href="#b">see</a></p></section>'
+                '<section><div class="evidence">query</div></section>')
+        self.assertTrue(only(self.ev(html), "section 'a'"))
+
+    def test_no_section_message_names_the_remedy(self):
+        found = self.ev('<p><strong>10 items</strong></p>')
+        self.assertTrue(only(found, "cannot be established"))
+        self.assertTrue(only(found, 'section id='))
+
     def test_configured_evidence_host_counts(self):
         html = ('<section id="a"><p><strong>10 items</strong></p>'
                 '<a href="https://metrics.example.com/d/1">dashboard</a></section>')

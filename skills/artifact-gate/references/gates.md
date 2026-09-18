@@ -109,7 +109,59 @@ discovering:
   you are actually going to run.
 
 With no `section` elements the gate fails closed rather than passing a document
-it had no scope to judge.
+it had no scope to judge, and says what to do about it.
+
+## Corroboration, and the hole it exposed
+
+A second session measured the gate on four published artifacts it had never
+seen, importing the gate's own section, emphasis and number matchers so the
+counting was like for like. **4%** against the 3% measured by the first
+document's own author, on a disjoint corpus. That is real corroboration of the
+rate.
+
+The finding was not the rate. They also measured **coverage**, and unmodified
+the gate inspected **1 of 72** emphasised numeric claims across those pages and
+reported clean. Two of the four mark weight with `b` rather than `strong` —
+hand-written HTML rather than Markdown output — so the gate saw nothing and
+passed. That is the failure named at the top of this file, produced by the
+gate's own scope: a page with sections and zero matched spans was
+indistinguishable from a well-sourced one, and both printed OK.
+
+Three consequences, all now implemented:
+
+- **`b` counts as emphasis.** The stated scope is author-marked weight, and a
+  hand-authored `b` meets it. The split was authoring provenance, not intent.
+- **Coverage is reported on every run**, as a note and never a refusal. Zero
+  emphasised spans is a legitimate state for a prose page, or one whose numbers
+  live in tables; refusing there produces a finding the author cannot act on,
+  which is how a gate teaches people to bypass it and then gates nothing. The
+  report degrades quietly on a prose page and is unmissable on a page where it
+  inspected one claim in seventy-two. It also survives the next scope change
+  without anyone predicting where the gap will be.
+- **A finding locates the section.** A missing id used to surface as
+  `__unnamed_2`, which points at nothing; it now gives the position and names
+  the remedy, because on a page with no ids the cross-reference fix is
+  unavailable and the only alternative is duplicating evidence — the outcome
+  the anchor rule exists to prevent.
+
+If a blocking form is ever wanted, the defensible predicate is not "zero spans"
+but **zero emphasised spans AND standalone numbers present outside emphasis** —
+the state where the page plainly makes numeric claims and the gate saw none of
+them. That predicate is unmeasured; it is recorded as a suggestion, not a
+result.
+
+## Conditions the rates depend on
+
+- **`--evidence-host` is load-bearing.** On that corpus, unconfigured hosts
+  gave 4 fires and configured gave 3; the one that disappeared cited a
+  dashboard. A run without hosts configured over-reports on any page citing
+  dashboards rather than code. **The measured rate assumes hosts configured for
+  the corpus.**
+- **4% is an upper bound on the true-positive rate, not a measurement of it.**
+  Of the three fires, one was adjudicated and is genuine — a figure derived in
+  one section and restated bare in another with no anchor, the carry-over shape
+  in a new document. The other two were not adjudicated.
+- Both rates are single-corpus measurements by one session each.
 
 ## Validating a gate
 
