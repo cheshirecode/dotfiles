@@ -46,7 +46,7 @@ SKILL_COMMANDS=(
   artifact-gate brainstorm browser-use-setup council evidence-gate
   example-led-instructions job-application karpathy-guidelines loop-engineering
   loop-helpers pr-cost pr-review serena-rg-search ship-hygiene tightening-a-pr
-  which-model worklog
+  webmcp-integration which-model worklog
 )
 
 build_pattern() {
