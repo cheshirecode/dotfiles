@@ -57,6 +57,18 @@ Three things it deliberately will not do:
 those before declaring anything; a guess here is the one error the rest of the
 procedure cannot detect, because every later step trusts the declarations.
 
+**What the scan is and is not.** Discovery is one of six steps and the only
+scripted one; the rest is procedure followed by hand. So it gives a surface
+inventory and a checklist — it does not detect drift on its own, and `found` is
+not a completed inventory. A page published straight from a scratch directory,
+or a store that sits outside every plausible root, is visible only if someone
+names it. That is what the declarations are for.
+
+**Run it when a fact changes** — a tracked item closes, a change merges, a
+decision reverses — and not on a schedule. On a schedule it becomes another
+clean-looking pass that measures nothing, and a pass that always looks the same
+is one nobody reads.
+
 **Declare.** For each surface: **what it is**, **how to search it**, **how to
 read one item**, and **how to write to it**. For a tracker, additionally: **how
 to tell a closed item's reason for closing from its state** — see step 3 for why

@@ -159,8 +159,12 @@ def find_published(files):
 
 def find_memory(files):
     names = {"AGENTS.md", "CLAUDE.md", "CONVENTIONS.md", "CONTRIBUTING.md"}
+    # Match on the ABSOLUTE path, not the path relative to its root. An agent
+    # memory store is often handed in AS a root, and then its relative paths
+    # carry no `memory` component at all -- so the detector reported `absent`
+    # for 50 files of standing rules while pointed straight at them.
     hits = [rel for rel, p in files
-            if p.name in names or "memory" in pathlib.PurePath(rel).parts[:-1]]
+            if p.name in names or "memory" in p.parts[:-1]]
     live, staged = partition(hits)
     ask = ("Where are the standing rules for this project written down, including any "
            "agent memory store outside the repository?")
@@ -195,13 +199,22 @@ def discover(*roots):
     often are too. Reporting `absent` from one root states a conclusion about
     places that were never looked at."""
     paths = [pathlib.Path(r).resolve() for r in (roots or ["."])]
+    # With one root a bare relative path is unambiguous. With several it is not:
+    # two roots each holding AGENTS.md both render as "AGENTS.md", collapsing
+    # distinct files into one string, and a reader following the citation has to
+    # guess. Qualify by root name, and by full root path if the names collide.
+    names = [r.name for r in paths]
+    unique = len(set(names)) == len(names)
+    prefixes = {r: ("" if len(paths) == 1
+                    else f"{r.name}/" if unique else f"{r}/") for r in paths}
     files = []
     for root in paths:
         for f in walk(root):
             try:
-                files.append((str(f.relative_to(root)), f))
+                rel = str(f.relative_to(root))
             except ValueError:
-                files.append((str(f), f))
+                rel = str(f)
+            files.append((prefixes[root] + rel, f))
     return {
         "roots": [str(r) for r in paths],
         "files_scanned": len(files),
@@ -229,8 +242,12 @@ def main(argv=None):
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
 
+    # Say what the number counts. "scanned N file(s)" previously hid a cap, so
+    # the line names its exclusions rather than leaving the denominator implied.
     print(f"scanned {result['files_scanned']} file(s) under "
-          f"{', '.join(result['roots'])}\n")
+          f"{', '.join(result['roots'])}\n"
+          f"  (excluding vendored, build and duplicate-checkout directories: "
+          f"{', '.join(sorted(SKIP_DIRS))})\n")
     questions = []
     for kind, info in result["surfaces"].items():
         detail = ", ".join(info.get("evidence", [])) or info.get("why", "")
