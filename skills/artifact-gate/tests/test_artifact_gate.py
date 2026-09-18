@@ -13,6 +13,7 @@ import unittest
 SCRIPTS = pathlib.Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import check_evidence  # noqa: E402
 import check_html  # noqa: E402
 import verify_links  # noqa: E402
 
@@ -197,6 +198,74 @@ class VerifyLinksTest(unittest.TestCase):
         html = (f'<a href="https://{self.HOST}/{self.NS}/other/-/blob/'
                 f'{self.sha}/app.py">x</a>')
         self.assertTrue(only(self.run_verify(html), "unknown repo"))
+
+
+class EvidenceReachabilityTest(unittest.TestCase):
+    """The gate is scoped to <strong>: emphasised claims, not every digit."""
+
+    def ev(self, html, **kw):
+        return check_evidence.check(html, **kw)
+
+    def test_claim_with_evidence_in_its_own_section_passes(self):
+        html = ('<section id="a"><p>up to <strong>10,005 items</strong></p>'
+                '<div class="evidence">query</div></section>')
+        self.assertEqual(self.ev(html), [])
+
+    def test_claim_with_no_reachable_evidence_is_flagged(self):
+        # The defect a table of contents introduces: the section became an
+        # entry point, so evidence further down is no longer on the path.
+        html = ('<section id="a"><p>up to <strong>10,005 items</strong></p></section>'
+                '<section id="b"><div class="evidence">query</div></section>')
+        found = self.ev(html)
+        self.assertTrue(only(found, "section 'a'"))
+        self.assertEqual(only(found, "section 'b'"), [])
+
+    def test_anchor_to_a_section_with_evidence_counts(self):
+        html = ('<section id="a"><p><strong>24,000 items</strong> '
+                '<a href="#b">see the query</a></p></section>'
+                '<section id="b"><div class="evidence">query</div></section>')
+        self.assertEqual(self.ev(html), [])
+
+    def test_anchor_to_a_section_without_evidence_does_not_count(self):
+        html = ('<section id="a"><p><strong>24,000 items</strong> '
+                '<a href="#b">see</a></p></section>'
+                '<section id="b"><p>prose only</p></section>')
+        self.assertTrue(only(self.ev(html), "section 'a'"))
+
+    def test_mutual_anchors_cannot_invent_evidence(self):
+        html = ('<section id="a"><p><strong>5 items</strong><a href="#b">b</a></p></section>'
+                '<section id="b"><p><a href="#a">a</a></p></section>')
+        self.assertTrue(only(self.ev(html), "section 'a'"))
+
+    def test_no_sections_fails_closed(self):
+        # Nothing to scope by must not read as nothing wrong.
+        self.assertTrue(only(self.ev('<p><strong>10 items</strong></p>'),
+                             "evidence scope cannot be established"))
+
+    def test_unemphasised_number_is_ignored(self):
+        # A stated limitation, pinned so it is a decision rather than a surprise.
+        html = '<section id="a"><p>about 10,005 items</p></section>'
+        self.assertEqual(self.ev(html), [])
+
+    def test_emphasis_without_a_number_is_ignored(self):
+        html = '<section id="a"><p><strong>important</strong></p></section>'
+        self.assertEqual(self.ev(html), [])
+
+    def test_sql_panel_counts_as_evidence(self):
+        html = ('<section id="a"><p><strong>10 items</strong></p>'
+                '<details class="sql">select 1</details></section>')
+        self.assertEqual(self.ev(html), [])
+
+    def test_forge_blob_link_counts_as_evidence(self):
+        html = ('<section id="a"><p><strong>10 items</strong></p>'
+                '<a href="https://git.example.com/o/r/-/blob/abc/f.py">f.py</a></section>')
+        self.assertEqual(self.ev(html), [])
+
+    def test_configured_evidence_host_counts(self):
+        html = ('<section id="a"><p><strong>10 items</strong></p>'
+                '<a href="https://metrics.example.com/d/1">dashboard</a></section>')
+        self.assertTrue(only(self.ev(html), "section 'a'"))
+        self.assertEqual(self.ev(html, hosts=("metrics.example.com",)), [])
 
 
 if __name__ == "__main__":

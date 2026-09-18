@@ -50,43 +50,55 @@ failed in production, not because it seemed prudent.
    a word list that stopped at "twenty" and silently stopped checking at 21
    items. Read digits and words, and treat "no claim at all" as a finding.
 
-## A gate that was proposed, measured, and rejected
+## Sourcing a claim: one rejected gate and one built
 
 The failure that keeps landing is a claim that was **true when written** and
 quietly became false. No internal-consistency check can see it.
 
-The proposal: flag any number in the prose that does not also appear in a query
-or computation shown in the document, so an unsourced figure must be justified
-or dropped. It was motivated by two real misses — `711.88` printed for a
-`710.88` sum, and "two-thirds are partials" carried over from a 6-sample when
-the figure at n=19 was 37%.
+**Rejected.** The first proposal was to flag any number in the prose that does
+not also appear in a query or computation shown in the document. Measured on
+one document of 123 numeric tokens which was unusually well sourced, the naive
+rule flagged 67% and a fair refinement excluding identifiers and tables still
+flagged 43%. The survivors were mostly not errors: a line range from a
+`file.py:49,56` citation, a merge-request number, a documented `5.00` minimum,
+a `1.7` that is "1.7 days".
 
-**Do not implement it as specified.** Measured on one document (123 distinct
-numeric tokens in visible prose), which was unusually well sourced — it carried
-SQL panels and per-section evidence rows:
+The reason is this file's own subject. "Appears in a shown query" is a proxy for
+"is sourced", and real documents source figures by a *link* to a dashboard or
+warehouse, or by a table — not by an inline query. The check answers a nearby
+question. A gate that fires on 43% of a good page gets ignored, and an ignored
+gate is worse than none.
 
-| rule | flagged | rate |
-| --- | ---: | ---: |
-| naive: number absent from any shown query or computation | 83 | 67% |
-| ignoring identifiers (no thousands separator) | 57 | 46% |
-| also accepting numbers in a table or evidence row | 53 | 43% |
+**Built: `check_evidence.py`.** Narrowing the same idea to numbers inside
+`strong` — the emphasised claims, not every digit — measured **3%** on the same
+document (2 of 56 emphasised claims). That is a different kind of number: low
+enough that a person reads the output.
 
-The survivors are mostly not errors: a line range from a `file.py:49,56`
-citation, a merge-request number, a documented `5.00` minimum, a `1.7` that is
-"1.7 days". This is one document measured by one session, not a general rate —
-but a floor of 43% on a well-sourced page is enough to decide against it.
+The flag rate is not the best argument for it. On its first run it caught two
+real defects, and their cause is the point: both claims had been fine while the
+document was read top to bottom, because the reader met the SQL panel and the
+dashboard breakdown *before* the claims. Then a table of contents was added and
+**every section became an entry point**, so the evidence was no longer on the
+path. The claim did not change and the evidence did not move; the navigation
+changed underneath them. Nothing else in this skill looks at reachability, and
+a table of contents is a normal thing to add.
 
-The reason is this skill's own subject. "Does this number appear in a shown
-query" is a proxy for "is this number sourced", and in a real document most
-sourced numbers are sourced by a *link* to a dashboard or warehouse, or by a
-table — not by an inline query. The check answers a nearby question, which is
-exactly the failure named at the top of this file. A gate that fires on 43% of
-a good page gets ignored, and an ignored gate is worse than none.
+Both rates are one document measured by one session, not general rates.
 
-A narrower version that might survive, unbuilt and unmeasured: require every
-number inside `<strong>` — the emphasised claims, not every digit on the page —
-to carry an evidence link in the same section. That targets the figures which
-carry weight and ignores the incidental ones.
+Two definitions the gate needs, and one limitation worth stating rather than
+discovering:
+
+- **"Evidence in this section"** means an evidence block, a SQL panel, a forge
+  blob link, or a configured dashboard or warehouse host.
+- **A same-page anchor to a section that itself has evidence counts.** That
+  clause is what makes a cross-reference a fix rather than a dodge. Cycles are
+  guarded, so two sections pointing at each other cannot invent evidence
+  neither of them has.
+- **Scoped to `strong`**, a proxy for author-marked weight. It will miss an
+  unemphasised figure. That is the trade which buys the 3%.
+
+With no `section` elements the gate fails closed rather than passing a document
+it had no scope to judge.
 
 ## Validating a gate
 

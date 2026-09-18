@@ -15,20 +15,27 @@ The corollary governs how you use everything below:
 > **A check that has never failed has not been shown to work.** Force every
 > gate red before trusting a green.
 
-## Two gates
+## Three gates
 
 `check_html.py` reads the document. `verify_links.py` reads the repositories
 the document points at, which is where the interesting failures live.
+`check_evidence.py` asks whether each emphasised numeric claim still has
+evidence a reader can reach from the section it sits in.
 
 ```bash
 python3 scripts/check_html.py page.html --count-claim qnum:questions
 python3 scripts/verify_links.py page.html --repo name=/path/to/clone \
   --forge-host git.example.com --forge-namespace example-org
+python3 scripts/check_evidence.py page.html --evidence-host metrics.example.com
 ```
 
-Both exit 0 clean, 1 on findings, 2 on a usage or environment error. Neither
-reads a working tree: every lookup goes through an explicit ref, because a
-shared checkout has a colleague's HEAD, not the reader's.
+All exit 0 clean, 1 on findings, 2 on a usage or environment error. None reads
+a working tree: every lookup goes through an explicit ref, because a shared
+checkout has a colleague's HEAD, not the reader's.
+
+The evidence gate is scoped to `strong`, a proxy for "the author marked this as
+carrying weight". It will miss an unemphasised figure — the trade that keeps
+its flag rate low enough that the output gets read.
 
 Run both before publishing, and again before telling anyone the page is still
 accurate. Read [references/gates.md](references/gates.md) before changing
