@@ -55,22 +55,44 @@ def normalize_claude(events,exit_code,requested_model):
             counts['provider']=usage.get('provider')
             counts['cost_basis']=usage.get('costBasis')
             out['models'][model]=counts
-        primary=[v for v in out['models'].values() if v['canonical_model']==expected]
-        if len(primary)!=1:raise ValueError('Primary model absent or ambiguous in usage')
+        # A dated alias and its canonical name are the same model. Claude reports
+        # the alias as the modelUsage key and the undated name as canonicalModel,
+        # while assistant events carry the alias. Matching only one of the two
+        # made every dated model ID unusable: the alias failed here and the
+        # undated name failed the assistant check below. Accept either spelling,
+        # and keep the exactly-one rule so a genuine reroute is still ambiguous.
+        matches=[(k,v) for k,v in out['models'].items() if expected in (k,v['canonical_model'])]
+        if len(matches)!=1:raise ValueError('Primary model absent or ambiguous in usage')
+        primary_key,primary=matches[0]
+        names={primary_key,primary['canonical_model']}
         actual={e.get('message',{}).get('model') for e in events if e.get('type')=='assistant'}
-        if actual!={expected}:raise ValueError('Assistant model differs from requested canonical model')
+        if not actual or not actual<=names:raise ValueError('Assistant model differs from requested canonical model')
         out['model_valid']=True
+        # result.usage covers the main thread only; modelUsage also counts the
+        # auxiliary calls. Equality holds only while the auxiliary model differs
+        # from the requested one. Ask for the model the harness also uses for
+        # its own auxiliary calls and both collapse into a single modelUsage
+        # entry, so the per-model total legitimately exceeds result.usage.
+        # Measured on Claude Code 2.1.275 with claude-haiku-4-5-20251001:
+        # result.usage 34 input / 715 output against modelUsage 959 / 728.
+        # The invariant is per-model >= main thread. The reverse is impossible
+        # and stays an error, so a terminal receipt claiming more than the
+        # per-model totals is still caught.
         main_usage=terminal.get('usage',{})
+        auxiliary_on_primary={}
         for name,key in [('uncached_input','input_tokens'),('cache_read_input','cache_read_input_tokens'),
                          ('cache_write_input','cache_creation_input_tokens'),('output','output_tokens')]:
-            if integer(main_usage.get(key),'primary.'+key)!=primary[0][name]:
+            main=integer(main_usage.get(key),'primary.'+key)
+            if main>primary[name]:
                 raise ValueError('Primary and per-model usage disagree: '+key)
+            auxiliary_on_primary[name]=primary[name]-main
+        out['auxiliary_on_primary_model']=auxiliary_on_primary
         out['reported_tokens']=sum(v['reported_tokens'] for v in out['models'].values())
         out['reported_cost_usd']=money(terminal.get('total_cost_usd'),'total_cost_usd')
         if abs(out['reported_cost_usd']-sum(v['reported_cost_usd'] for v in out['models'].values()))>1e-6:
             raise ValueError('Per-model and total cost estimates disagree')
         out['cost_basis']='harness client estimate; not an invoice'
-        out['auxiliary_models']=[k for k,v in out['models'].items() if v['canonical_model']!=expected]
+        out['auxiliary_models']=[k for k in out['models'] if k!=primary_key]
         out['terminal_session']=terminal['session_id']
         out['usage_complete']=(exit_code==0 and terminal.get('subtype')=='success'
             and terminal.get('is_error') is False and terminal.get('terminal_reason')=='completed')
