@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # The machine-local credential reader must pick the RIGHT key and the RIGHT
-# occurrence, and bin/env-secret.sh must agree with the copy inlined in
-# .envrc. Every case here is a way a near-miss reader returns a confident
+# occurrence. Every case here is a way a near-miss reader returns a confident
 # wrong value instead of failing.
+#
+# bin/env-secret.sh is the only reader. .envrc.example calls it; the inlined
+# copy that once lived in a root .envrc is gone, so there is one contract.
 
 set -uo pipefail
 
@@ -15,7 +17,7 @@ note() { echo "FAIL: $1"; fails=$((fails + 1)); }
 
 # --- the file under test ----------------------------------------------------
 F="$TMP/.env.secrets"
-cat > "$F" <<'EOF'
+cat > "$F" <<'EOT'
 # a comment
 GH_TOKEN_CHESHIRECODE=first-value
 GH_TOKEN_CHESHIRECODE=second-value
@@ -25,24 +27,11 @@ SQUOTED='squoted-value'
 EMPTY=
 NOTE=documentation mentioning MIDLINE_KEY=not-a-real-assignment
 MIDLINE_KEY=real-value
-EOF
+EOT
 printf 'CRLF_KEY=crlf-value\r\n' >> "$F"
 chmod 600 "$F"
 
-# --- extract the inlined copy from .envrc so both are exercised -------------
-sed -n '/^secret_get() {/,/^}/p' "$REPO/.envrc" > "$TMP/inlined.sh"
-if [ ! -s "$TMP/inlined.sh" ]; then
-  note "could not extract secret_get() from .envrc"
-  echo "fails=$fails"; exit 1
-fi
-
-# Two readers, one contract. `envrc` runs the extracted function; `script`
-# runs bin/env-secret.sh. Both are pointed at the same file.
-read_via_script() { ENV_SECRETS_FILE="$F" HOME="$TMP" bash "$REPO/bin/env-secret.sh" "$1" 2>/dev/null; }
-read_via_envrc()  {
-  ENV_SECRETS_FILE="$F" HOME="$TMP" bash -c \
-    'source "$1"; secret_get "$2"' _ "$TMP/inlined.sh" "$1" 2>/dev/null
-}
+read_key() { ENV_SECRETS_FILE="$F" HOME="$TMP" bash "$REPO/bin/env-secret.sh" "$1" 2>/dev/null; }
 
 # Show invisible bytes. A stray CR or trailing space otherwise prints a
 # mismatch whose two sides look identical, which reads like a passing test.
@@ -50,14 +39,12 @@ vis() { printf '%s' "$1" | od -c | sed -n '1p' | cut -c9-; }
 
 check() { # check <key> <want> <label>
   local key="$1" want="$2" label="$3" got
-  for impl in script envrc; do
-    got="$(read_via_"$impl" "$key")"
-    if [ "$got" != "$want" ]; then
-      note "$label [$impl]: got '$got', want '$want'"
-      echo "      bytes got:  $(vis "$got")"
-      echo "      bytes want: $(vis "$want")"
-    fi
-  done
+  got="$(read_key "$key")"
+  if [ "$got" != "$want" ]; then
+    note "$label: got '$got', want '$want'"
+    echo "      bytes got:  $(vis "$got")"
+    echo "      bytes want: $(vis "$want")"
+  fi
 }
 
 check GH_TOKEN_CHESHIRECODE first-value "takes the FIRST assignment, not the last"
@@ -74,19 +61,15 @@ check MIDLINE_KEY real-value "ignores a key name appearing mid-line"
 # A prefix must not satisfy a shorter key. This is the assertion that catches
 # an unanchored or unterminated pattern, which would hand back the
 # cheshirecode token to anything asking for a bare GH_TOKEN.
-for impl in script envrc; do
-  got="$(read_via_"$impl" GH_TOKEN)"
-  [ -z "$got" ] || note "GH_TOKEN matched the GH_TOKEN_CHESHIRECODE line [$impl]: got '$got'"
-done
+got="$(read_key GH_TOKEN)"
+[ -z "$got" ] || note "GH_TOKEN matched the GH_TOKEN_CHESHIRECODE line: got '$got'"
 
 # An empty key and an absent key are both "no value", and both must be rc 1 —
 # never rc 0 with an empty string, which a caller reads as success.
 for key in EMPTY ABSENT_KEY; do
-  for impl in script envrc; do
-    if read_via_"$impl" "$key" >/dev/null 2>&1; then
-      note "$key returned rc 0 [$impl]; want rc 1"
-    fi
-  done
+  if read_key "$key" >/dev/null 2>&1; then
+    note "$key returned rc 0; want rc 1"
+  fi
 done
 
 # A loose mode must be reported, not silently used.
@@ -102,5 +85,13 @@ rc=$?
 [ "$rc" -eq 1 ] || note "absent file gave rc $rc, want 1"
 printf '%s' "$out" | grep -q 'no readable' || note "absent file printed no explanation"
 
+# .envrc.example must route through this reader, not carry its own copy.
+# A second implementation is exactly the drift this test used to police.
+if grep -q 'sed -n "s/^\[\[:space:\]\]\*' "$REPO/.envrc.example"; then
+  note ".envrc.example carries its own key reader; call bin/env-secret.sh instead"
+fi
+grep -q 'bin/env-secret.sh' "$REPO/.envrc.example" ||
+  note ".envrc.example does not call bin/env-secret.sh"
+
 if [ "$fails" -ne 0 ]; then exit 1; fi
-echo "ok: both readers agree on key selection, quoting, CRLF, rc and mode warning"
+echo "ok: reader agrees on key selection, quoting, CRLF, rc and mode warning; .envrc.example routes through it"
