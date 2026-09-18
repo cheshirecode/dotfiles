@@ -21,6 +21,11 @@ Run `bin/install-browser-use.sh` (from this skill's directory). Flags:
 Sandbox-safe: the script honors `UV_TOOL_DIR`, `UV_TOOL_BIN_DIR`, and `HOME`,
 so a test install never touches the real one.
 
+Registration uses the shared `.agents/skills/browser-use` copy for Codex.
+An identical, single-file `.codex/skills/browser-use` duplicate is archived
+outside discovery roots; customized copies are preserved. See
+[skill-registration.md](references/skill-registration.md) for recovery.
+
 ## Wrapper
 
 `bin/bu [--ensure] <args…>` locates the CLI across PATH layouts and execs it.
@@ -28,6 +33,12 @@ so a test install never touches the real one.
 Windows-side browser, `bu` probes the gateway portproxy and localhost CDP
 endpoints and exports `BU_CDP_URL` itself; caller-set `BU_CDP_URL`,
 `BU_CDP_WS`, or `BU_NAME` always win.
+
+## WebMCP integration
+
+For site-provided tools alongside browser navigation, read
+[webmcp.md](references/webmcp.md). It distinguishes the legacy webmcp.dev bridge
+from the current browser API and provides a read-only capability probe.
 
 ## Platform notes
 

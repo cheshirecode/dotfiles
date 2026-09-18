@@ -98,7 +98,8 @@ log "installed $("$BU_BIN" --version)"
 # --- Vendor skill registration ----------------------------------------------
 if [ "$NO_SKILL" -eq 0 ]; then
   log "registering vendor skill (browser-use skill install)"
-  "$BU_BIN" skill install
+  bash "$(dirname "$0")/register-browser-use-skills.sh" "$BU_BIN" ||
+    die "vendor skill registration failed" 1
 else
   log "skipping vendor skill registration (--no-skill)"
 fi
