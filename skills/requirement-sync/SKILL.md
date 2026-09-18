@@ -25,13 +25,23 @@ The skill assumes no particular tracker, document store or publishing tool.
 Before the first run, work out what exists here — in that order, because a scan
 sees structure and cannot see intent.
 
-**Scan.** `scripts/discover_surfaces.py [root]` walks the project read-only,
-writes nothing and makes no network call. It reports each kind of surface in
-one of four states, never collapsed: `found` with the evidence named, `absent`
-meaning it looked and there is nothing, `unknown` meaning a scan cannot decide,
-or `n/a`. `--json` emits the same as a declarations skeleton.
+**Scan.** `scripts/discover_surfaces.py [root ...]` walks read-only, writes
+nothing and makes no network call. It reports each kind of surface in one of
+four states, never collapsed: `found` with the evidence named, `absent`,
+`unknown`, or `n/a`. `--json` emits the same as a declarations skeleton.
 
-Two things it deliberately will not do:
+**Pass every root, not just the repository.** A project's notes, ledger and
+memory store routinely live in another checkout or off-disk entirely, and the
+tracker always does. `absent` means *not under the roots you scanned* — it is
+never evidence that a surface does not exist, which is why every absent row
+still prints the question asking where else to look.
+
+Three things it deliberately will not do:
+
+- **It will not claim `absent` from a partial look.** If inspection stops early
+  the state degrades to `unknown`. An absence claim from a sample is not a
+  measurement: an earlier version read 4,000 of 109,475 files on a real tree,
+  3.7%, and reported two surfaces absent off that.
 
 - **It never reports a tracker as `found`.** A forge is where the code lives,
   not evidence of where work is tracked — plenty of projects keep code in one
