@@ -16,8 +16,9 @@ On the development macOS host, one paired workflow repair passed all eight
 independent checks in each harness. The candidate's token/time changes were
 OpenCode -0.3%/-2.5%, Claude +38.1%/+15.5%, and Codex -10.7%/+57.2%.
 This single-case screen establishes neither broad reliability nor portable
-savings. No held-out confirmation trial has run. Text-as-image transport remains
-a research proposal; these adapters accept text only.
+savings. No held-out confirmation trial has run. The research was closed on
+2026-09-17 with no cost-saving method promoted. These packaged adapters accept
+text only; the subsequent image experiments remained in the private study.
 
 The implementation uses Python's standard library, Git, Unix process groups and
 the installed CLI. Python 3.9+ is required. Live validation currently covers
@@ -38,6 +39,59 @@ model the harness also uses for its own auxiliary calls collapses both into one
 its `canonicalModel` are also two names for one model. Both are fixed. Prefer a
 model your account can use, and read the artifact rather than the exit code
 alone when a run fails: the four checks and the usage verdict fail separately.
+
+## Research closeout
+
+The study adapted the bounded experiment loop from
+[autoresearch-mlx](https://github.com/trevin-creator/autoresearch-mlx) to the
+software-factory objective described in
+[Loop Engineering 101](https://dev.to/aairom/loop-engineering-101-83o).
+The reusable outcome is native execution with independent acceptance checks,
+scope checks and complete usage receipts. Broad factory reliability and cost
+savings remain **unproven**. New portable trials excluded Astra and used Claude
+Code, GPT/Codex and OpenCode separately; older Astra-only observations do not
+establish portability.
+
+The [text-as-image proposal](https://wavect.io/blog/text-as-image-token-savings/)
+was tested as a hypothesis, not adopted as a default. A synthetic image-only
+capability probe returned 9/9 correct values in each harness. That established
+readability for that image, not savings or software-repair quality.
+
+A later text/compact-text/image comparison stopped after 7 of 324 planned
+calls. On its first roughly 4K-character packet:
+
+| Harness | Full-text tokens | Compact-text tokens | Image tokens | Result |
+| --- | ---: | ---: | ---: | --- |
+| Claude Code | 12,395 | 19,503 | 25,894 | All three accepted; both alternatives recovered original text |
+| GPT/Codex | 21,236 | 41,917 | 49,925 | All three accepted; both alternatives recovered original text |
+| OpenCode | Not run | Not run | 13,977 | Correct answers, rejected search scope |
+
+Images used about 109% more reported tokens in Claude and 135% more in Codex,
+and took longer in both. OpenCode requested a search rooted above its assigned
+workspace; the returned matches were allowed, but the requested scope was not.
+All seven calls answered 10/10 correctly and had complete usage; only six were
+accepted. The remaining 317 calls, larger packets and warm conditions were not
+executed. These observations cannot establish general image-transport effects.
+
+A separate OpenCode calibration supplied the exact recovery file and search
+boundary: 10/10 correct, valid scope, 15,670 tokens. It does not replace the
+failed receipt or supply a paired savings result. The original stop and costs
+remain retained. Reported tokens and provider estimates are not invoices.
+
+The private closeout is `factory_proof/CLOSEOUT.md` at research revision
+`2e68d1b6f3a9df12fbab211c763bd03673fe8fc5`, with frozen inputs and failed receipts
+retained in private archives. The final experiment source before closeout is
+`7ee2a7ee246ef449dccdc65dffce1331f5b64027`; it is not an upstream release.
+No image transport, experimental read-only adapter or automatic optimization
+policy is included in this published kit.
+
+For future work, keep task delivery equivalent between baseline and candidate;
+do not manufacture savings through an extra baseline read. Charge recovery,
+retries, warmups and verification, assert nonzero named-check coverage, and keep
+failures in the denominator. A host smoke pass establishes only that host's
+execution contract. Any new optimization needs fresh paired evidence with the
+same acceptance criteria in all three harnesses. The unrun confirmation study
+and unfinished corpus are deferred, not passing results or scheduled work.
 
 ## Validate after pulling
 
