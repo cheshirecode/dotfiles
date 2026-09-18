@@ -19,6 +19,15 @@ import sys
 
 SHA = re.compile(r"^[0-9a-f]{7,40}$")
 
+# Forge objects this script cannot check without API access. They are a THIRD
+# state, not a failure: a merge-request citation is legitimate and common, and
+# refusing it would mean the only way to publish such a page is to bypass the
+# gate -- which is how a gate stops being run at all. They are counted and
+# named so "unverified" never reads as "verified"; collapsing them into either
+# neighbour is the same defect this script exists to catch.
+NEEDS_API = ("merge_requests", "issues", "pipelines", "jobs", "releases",
+             "tags", "compare")
+
 
 def git(repo, *args):
     p = subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True)
@@ -61,17 +70,22 @@ def verify(html, repos, host, namespace, branch):
     hosts = collections.Counter(
         re.match(r"https://([^/]+)", u).group(1) if u.startswith("https://") else "#fragment"
         for u in hrefs)
-    verified = unrecognised = 0
+    verified = unrecognised = unverifiable = 0
 
     for url in sorted(set(hrefs)):
         if host not in url:
             continue
         blob, tree = blob_re.match(url), tree_re.match(url)
         if not (blob or tree):
-            # Silence is the dangerous shape: an unrecognised form is NOT
-            # verified, so it is reported rather than passed over.
-            unrecognised += 1
-            problems.append(f"unrecognised link form, so NOT checked: {url}")
+            # Silence is the dangerous shape. Both branches below are reported;
+            # what differs is whether the form is one we know we cannot check
+            # (fine, counted) or one we do not recognise at all (a finding).
+            if any(f"/{kind}/" in url for kind in NEEDS_API):
+                unverifiable += 1
+                notes.append(f"recognised but needs API access, NOT checked: {url}")
+            else:
+                unrecognised += 1
+                problems.append(f"unrecognised link form, so NOT checked: {url}")
             continue
         m = blob or tree
         repo, ref, filepath = m.group(1), m.group(2), m.group(3)
@@ -124,7 +138,8 @@ def verify(html, repos, host, namespace, branch):
                 continue
         verified += 1
 
-    notes.append(f"verified {verified} link(s); {unrecognised} unrecognised")
+    notes.append(f"verified {verified} link(s); {unverifiable} recognised but "
+                 f"unverifiable here; {unrecognised} unrecognised")
     notes.append("host coverage (only the forge host is checkable here): " +
                  ", ".join(f"{h}={n}" for h, n in hosts.most_common()))
     return problems, notes

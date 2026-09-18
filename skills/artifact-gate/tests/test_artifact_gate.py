@@ -119,6 +119,9 @@ class VerifyLinksTest(unittest.TestCase):
     def run_verify(self, html):
         return verify_links.verify(html, self.repos, self.HOST, self.NS, "main")[0]
 
+    def run_notes(self, html):
+        return verify_links.verify(html, self.repos, self.HOST, self.NS, "main")[1]
+
     def url(self, ref, path="app.py", frag=""):
         return f"https://{self.HOST}/{self.NS}/widget/-/blob/{ref}/{path}{frag}"
 
@@ -173,8 +176,22 @@ class VerifyLinksTest(unittest.TestCase):
         self.assertTrue(only(self.run_verify(html), "no longer contains"))
 
     def test_unrecognised_form_is_reported_not_skipped(self):
-        html = f'<a href="https://{self.HOST}/{self.NS}/widget/-/issues/7">x</a>'
+        html = f'<a href="https://{self.HOST}/{self.NS}/widget/-/wat/7">x</a>'
         self.assertTrue(only(self.run_verify(html), "unrecognised link form"))
+
+    def test_api_only_form_is_counted_not_refused(self):
+        # A merge-request citation is legitimate and common. Refusing it would
+        # mean the only way to publish such a page is to bypass the gate, which
+        # is how a gate stops being run. It must pass AND stay visible.
+        html = f'<a href="https://{self.HOST}/{self.NS}/widget/-/merge_requests/1776">x</a>'
+        self.assertEqual(self.run_verify(html), [])
+        self.assertTrue(only(self.run_notes(html), "needs API access"))
+
+    def test_api_only_form_is_not_silently_counted_as_verified(self):
+        # The third state must not collapse into "verified" either: a page of
+        # nothing but MR links has verified zero code links.
+        html = f'<a href="https://{self.HOST}/{self.NS}/widget/-/issues/7">x</a>'
+        self.assertTrue(only(self.run_notes(html), "verified 0 link(s)"))
 
     def test_unknown_repo_is_reported(self):
         html = (f'<a href="https://{self.HOST}/{self.NS}/other/-/blob/'
