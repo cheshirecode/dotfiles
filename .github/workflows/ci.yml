@@ -66,7 +66,7 @@ jobs:
       - name: install shellcheck + ruff + yaml
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y shellcheck jq
+          sudo apt-get install -y shellcheck jq direnv ripgrep
           pip install --quiet 'ruff==0.15.12' pyyaml
       - name: set git identity for fixture vault commits
         run: |
@@ -81,9 +81,8 @@ jobs:
   fixtures:
     # The red-path guardrail suite, which ran in no job at all, so a
     # regression in it surfaced only when someone invoked the mode by hand.
-    # Measured green at 9e9a4d0 both normally and with rg, shellcheck and ruff
-    # absent from PATH, which is what a bare runner looks like: the lanes
-    # needing a missing tool skip rather than fail.
+    # Identity and tool-preflight fixtures require direnv and ripgrep. Their
+    # missing-tool paths deliberately fail instead of claiming unrun checks.
     #
     # No check count in the name: it said 105 while the mode ran 107, and
     # nothing compared the two. The count grows whenever a fixture is added,
@@ -107,7 +106,7 @@ jobs:
       - name: install shellcheck + ruff + yaml
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y shellcheck jq
+          sudo apt-get install -y shellcheck jq direnv ripgrep
           pip install --quiet 'ruff==0.15.12' pyyaml
       - name: git identity for fixture vault commits
         run: |
@@ -127,6 +126,11 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: packages/worklog-memory-mcp/package-lock.json
+      - name: install fixture tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y direnv ripgrep jq
+          pip install --quiet pyyaml
       - name: deps
         run: cd packages/worklog-memory-mcp && npm install
       - name: git identity for e2e fixture vault
