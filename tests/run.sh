@@ -2254,7 +2254,13 @@ test_packages() {
     # script instead of one file stops four suites running in no lane at all.
     # Turning on the exit code subsumes the count question entirely: there is
     # no number in a pattern left to go stale.
-    if mcp_out="$(cd packages/worklog-memory-mcp && WORKLOG_SOURCE="$mini" npm test 2>&1)"; then
+    # Under WL_HERMETIC like every other worklog lane. Without it a developer
+    # BASH_ENV is sourced by the shells npm spawns and re-exports WORKLOG_REPO
+    # and WORKLOG_LDAP after the per-command assignment, so the suite asserted
+    # against the real vault: "WORKLOG_REPO was <real vault>, expected <temp>"
+    # and a scoping probe that found a stray live namespace. Invisible until
+    # node_modules existed, because the lane skipped instead of running.
+    if mcp_out="$(cd packages/worklog-memory-mcp && "${WL_HERMETIC[@]}" WORKLOG_SOURCE="$mini" npm test 2>&1)"; then
       ok "worklog-memory-mcp suite ($(printf '%s' "$mcp_out" | grep -cE '^  PASS ') checks)"
     else
       # These suites exit 2 for "not run"; that must not read as a pass.
