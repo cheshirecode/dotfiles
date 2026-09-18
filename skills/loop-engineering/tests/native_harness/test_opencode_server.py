@@ -1,9 +1,13 @@
 from pathlib import Path
+import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
 
-from opencode_server import OpenCodeServer,load_key,metadata,verifier_connected
+from opencode_server import OpenCodeServer,load_key,metadata,verifier_connected,export_metadata
 
 
 class OpenCodeAdapterControls(unittest.TestCase):
@@ -49,6 +53,34 @@ class OpenCodeAdapterControls(unittest.TestCase):
             for model in ('openrouter/openai/gpt-6-astra','github-copilot/gpt-5.6-sol'):
                 with self.assertRaises(ValueError):OpenCodeServer(Path(temp)/'never',model=model)
             read.assert_not_called();self.assertFalse((Path(temp)/'never').exists())
+
+    def test_large_export_survives_early_exit_without_retaining_content(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);cli=root/'opencode';output=root/'out';output.mkdir()
+            cli.write_text('#!'+sys.executable+'\n'+'''import json,os
+data={'messages':[{'info':{'id':'fake-secret','role':'assistant','modelID':'test'},
+                  'parts':[{'type':'reasoning','text':'private-content'*10000}]}]}
+payload=json.dumps(data).encode()
+os.set_blocking(1,False)
+try:os.write(1,payload)
+except BlockingIOError:pass
+os._exit(0)
+''')
+            cli.chmod(0o700)
+            env={**os.environ,'PATH':temp+os.pathsep+os.environ.get('PATH','')}
+            old=subprocess.run(['opencode','export','s','--pure','--sanitize'],env=env,
+                               capture_output=True,text=True,timeout=5)
+            with self.assertRaises(ValueError):json.loads(old.stdout)
+            value=export_metadata('s',temp,env,'fake-secret',output)
+            self.assertEqual(value['assistant_messages'],
+                             [{'id':'[REDACTED]','role':'assistant','modelID':'test'}])
+            diagnostic=json.loads((output/'export-diagnostic.json').read_text())
+            self.assertGreater(diagnostic['stdout_bytes'],65536)
+            self.assertEqual(diagnostic['exit'],0)
+            self.assertNotIn('private-content',str(value))
+            for path in output.iterdir():
+                self.assertNotIn('fake-secret',path.read_text())
+                self.assertNotIn('private-content',path.read_text())
 
 
 if __name__=='__main__':unittest.main()

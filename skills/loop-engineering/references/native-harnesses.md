@@ -56,7 +56,7 @@ and scope, and unchanged Git identity. The 43 offline controls passed on Python
 3.14.6, alongside 20 static checks. These validate the host execution and receipt
 contracts; they are not independent task samples or a cost-saving comparison.
 
-## Research closeout
+## Earlier research closeout
 
 The study adapted the bounded experiment loop from
 [autoresearch-mlx](https://github.com/trevin-creator/autoresearch-mlx) to the
@@ -64,7 +64,10 @@ software-factory objective described in
 [Loop Engineering 101](https://dev.to/aairom/loop-engineering-101-83o).
 The reusable outcome is native execution with independent acceptance checks,
 scope checks and complete usage receipts. Broad factory reliability and cost
-savings remain **unproven**. New portable trials excluded Astra and used Claude
+savings remained **unproven** at that closeout. The subsequent
+[completed 144-run paired repair study](native-harness-study-2026-09-18.md)
+provides a broader comparison, but did not establish reliability noninferiority
+or full cost savings. New portable trials excluded Astra and used Claude
 Code, GPT/Codex and OpenCode separately; older Astra-only observations do not
 establish portability.
 
@@ -119,6 +122,9 @@ that need the user-installed CLI/Node toolchain.
 
 Offline controls make no model calls and need no credentials:
 
+The paired-study calibration cases also execute the user's `node` and
+`/bin/bash`; their SQLite checks use Python's standard-library `sqlite3`.
+
 ```bash
 PYTHONPATH="$PWD/skills/loop-engineering/scripts/native_harness" \
   python3 -m unittest discover \
@@ -154,8 +160,10 @@ reads only the `OPENROUTER_API_KEY` assignment in `~/.env.secrets`, parsing it
 without executing the file, and passes the value in the child environment. It
 does not print or persist the value, pass it in arguments, or write it to a
 configuration file. Never paste a key into a prompt, command argument or receipt.
-OpenCode output is redacted before retention; its full session export is not
-persisted. Treat retained local receipts as private and review before sharing.
+OpenCode output is redacted before retention. Full session exports use anonymous
+temporary storage to avoid stdout-pipe truncation; only selected model and usage
+metadata are retained after it closes. Treat retained local receipts as private
+and review before sharing.
 
 Claude uses an explicit temporary MCP configuration, removes it on close and
 excludes ambient settings. OpenCode uses process-local configuration and `--pure`;
@@ -201,5 +209,7 @@ Do not reuse the synthetic smoke task as an independent reliability sample.
 For a broader paired comparison, the [24-task study protocol](../scripts/native_harness/study/PROTOCOL.md)
 defines a fixed efficiency candidate, balanced baseline/candidate order, native
 usage accounting and independent acceptance cases across Python, JavaScript,
-shell and SQLite repairs. Its 144-invocation budget is specific to that study;
+shell and SQLite repairs. Its [completed results](native-harness-study-2026-09-18.md)
+retain every failure and disclose incomplete usage and specification ambiguity.
+Its 144-invocation budget is specific to that study;
 the ordinary smoke command above does not launch it.

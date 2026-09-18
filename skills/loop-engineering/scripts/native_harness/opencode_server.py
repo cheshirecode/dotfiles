@@ -8,6 +8,7 @@ import shlex
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
@@ -41,6 +42,22 @@ def metadata(data,session,exit_code):
         if info.get('role')=='assistant':
             messages.append({k:info[k] for k in ('id','role','modelID','providerID','finish','cost','tokens') if k in info})
     return {'session_id':session,'export_exit':exit_code,'assistant_messages':messages}
+
+
+def export_metadata(session,workspace,env,key,output):
+    # OpenCode can exit before a large stdout pipe drains (observed at 65536
+    # bytes). An anonymous regular file avoids that truncation. Retain only
+    # selected metadata; close the temporary full export even on parse failure.
+    with tempfile.TemporaryFile(mode='w+',encoding='utf-8') as captured:
+        probe=subprocess.run(['opencode','export',session,'--pure','--sanitize'],
+            cwd=workspace,env=env,stdin=subprocess.DEVNULL,stdout=captured,
+            stderr=subprocess.PIPE,text=True,timeout=30)
+        size=os.fstat(captured.fileno()).st_size
+        (Path(output)/'export-diagnostic.json').write_text(json.dumps({'exit':probe.returncode,
+            'stdout_bytes':size,'stderr_bytes':len(probe.stderr.encode()),
+            'mode':'anonymous temporary export; retain only selected model and usage metadata'},indent=2)+'\n')
+        captured.seek(0)
+        return metadata(json.loads(captured.read().replace(key,'[REDACTED]')),session,probe.returncode)
 
 
 def verifier_connected(text):
@@ -118,12 +135,7 @@ class OpenCodeServer:
         exported={}
         if len(sessions)==1:
             session=next(iter(sessions))
-            probe=subprocess.run(['opencode','export',session,'--pure','--sanitize'],cwd=self.workspace,env=self.env,
-                stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=30)
-            (self.output/'export-diagnostic.json').write_text(json.dumps({'exit':probe.returncode,
-                'stdout_bytes':len(probe.stdout.encode()),'stderr_bytes':len(probe.stderr.encode()),
-                'mode':'sanitized native export; retain only selected model and usage metadata'},indent=2)+'\n')
-            try:exported=metadata(json.loads(probe.stdout.replace(self.key,'[REDACTED]')),session,probe.returncode)
+            try:exported=export_metadata(session,self.workspace,self.env,self.key,self.output)
             except (ValueError,TypeError):errors.append('Session export failed; raw output discarded')
         else:errors.append('No unique native session to reconcile')
         (self.output/'resolved-model.json').write_text(json.dumps(exported,indent=2)+'\n')
