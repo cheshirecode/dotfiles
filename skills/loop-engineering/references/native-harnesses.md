@@ -196,3 +196,9 @@ public_verifier)`, `turn(prompt, seconds=...)`, then `close()` in a `finally`
 block. Keep acceptance outside the worker's write scope. Preserve source hashes,
 complete check names and model/usage receipts when building your own work orders.
 Do not reuse the synthetic smoke task as an independent reliability sample.
+
+For a broader paired comparison, the [24-task study protocol](../scripts/native_harness/study/PROTOCOL.md)
+defines a fixed efficiency candidate, balanced baseline/candidate order, native
+usage accounting and independent acceptance cases across Python, JavaScript,
+shell and SQLite repairs. Its 144-invocation budget is specific to that study;
+the ordinary smoke command above does not launch it.
