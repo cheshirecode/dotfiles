@@ -55,7 +55,7 @@ class DiscoverTest(unittest.TestCase):
         tree(self.root, {"skills/w/tests/fixtures/a.md": NOTE})
         s = self.scan()["working note"]
         self.assertEqual(s["state"], "absent")
-        self.assertTrue(any("test/template" in e for e in s["evidence"]))
+        self.assertTrue(any("test or template" in e for e in s["evidence"]))
         self.assertTrue(s.get("question"))
 
     def test_a_live_note_outranks_fixtures(self):
@@ -99,6 +99,56 @@ class DiscoverTest(unittest.TestCase):
         before = sorted(p.name for p in pathlib.Path(self.root).rglob("*"))
         self.scan()
         self.assertEqual(sorted(p.name for p in pathlib.Path(self.root).rglob("*")), before)
+
+    def test_truncated_read_is_unknown_not_absent(self):
+        # An absence claim from a sample is not a measurement. One real tree
+        # read 4,000 of 109,475 files, 3.7%, and reported two surfaces absent.
+        tree(self.root, {f"notes/n{i}.md": "no frontmatter\n" for i in range(5)})
+        original = ds.READ_CAP
+        ds.READ_CAP = 2
+        try:
+            s = self.scan()["working note"]
+        finally:
+            ds.READ_CAP = original
+        self.assertEqual(s["state"], "unknown")
+        self.assertIn("sample", s["why"])
+
+    def test_worktree_copies_are_skipped_entirely(self):
+        # A worktree is a second checkout: every file duplicates one at the root.
+        tree(self.root, {"CLAUDE.md": "canonical",
+                         ".claude/worktrees/old/CLAUDE.md": "stale copy"})
+        s = self.scan()["durable memory"]
+        self.assertEqual(s["count"], 1)
+        self.assertEqual(s["evidence"], ["CLAUDE.md"])
+
+    def test_citation_prefers_the_shallowest_path(self):
+        # Across two roots, walk order yields the deep copy first, so this
+        # distinguishes shallowest-first from first-found. Within one root
+        # os.walk is top-down and the two orders agree, which is why an
+        # earlier version of this test passed against both.
+        other = tempfile.TemporaryDirectory()
+        self.addCleanup(other.cleanup)
+        tree(self.root, {"a/b/c/AGENTS.md": "deep copy"})
+        tree(other.name, {"AGENTS.md": "canonical"})
+        ev = ds.discover(self.root, other.name)["surfaces"]["durable memory"]["evidence"]
+        self.assertEqual(ev[0], "AGENTS.md")
+
+    def test_more_than_one_root_is_scanned(self):
+        other = tempfile.TemporaryDirectory()
+        self.addCleanup(other.cleanup)
+        tree(self.root, {"src/a.py": "x = 1\n"})
+        tree(other.name, {"notes/a.md": NOTE})
+        s = ds.discover(self.root, other.name)
+        self.assertEqual(s["surfaces"]["working note"]["state"], "found")
+        self.assertEqual(s["surfaces"]["code comment"]["state"], "found")
+        self.assertEqual(len(s["roots"]), 2)
+
+    def test_absent_rows_still_ask_where_else_to_look(self):
+        # The state used to contradict the question and the state won.
+        for kind in ("working note", "published page", "durable memory"):
+            info = self.scan()[kind]
+            self.assertEqual(info["state"], "absent", kind)
+            self.assertTrue(info.get("question"), kind)
 
     def test_missing_root_exits_2(self):
         self.assertEqual(ds.main(["/nonexistent/path/here"]), 2)
