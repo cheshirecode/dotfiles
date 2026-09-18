@@ -121,3 +121,30 @@ case certifies nothing.
 When adding one, add both halves, and check that the red arrives through the
 assertion you meant rather than through a broken fixture — a `SyntaxError` and
 a caught defect look identical in a pass/fail column.
+
+## State the rule separately from the code that implements it
+
+Passing tests do not show that a gate implements the rule. They show that the
+code matches **the implementer's reading** of the rule, because the same person
+usually writes both — so a misreading is inherited by the tests that were
+supposed to catch it, and green means agreement with the misreading.
+
+Two gates in this skill shipped wrong while every test passed. One collapsed
+"unverifiable here" into "unrecognised", so a legitimate merge-request citation
+became a hard failure. The other matched any digit rather than a standalone
+number, so dates and ticket ids counted as measurements — and because the flag
+rate that justified it had been measured with a different matcher, the
+documentation quoted a cost for a check nobody had run.
+
+The antidote is a rule stated **independently of the implementation**, as
+input-and-expected-output rather than prose: the list of tokens that must count
+and the list that must not, written down before or apart from the code, and
+best supplied by someone who did not write it. When a number is quoted as
+justification, publish the instrument that produced it — a rate without its
+matcher does not transfer, and the next person will implement a different rule
+and inherit the old number.
+
+The cheap check that closes it: run the rule on a known input and see whether
+the count matches the claim. Here the span count went 56 before the gate was
+built, 71 with the wrong matcher, and 56 again once it was fixed. That equality
+is what finally showed the two rules were the same rule.
