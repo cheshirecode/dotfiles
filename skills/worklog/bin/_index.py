@@ -3,7 +3,7 @@
 
 Called by bin/index.sh. Emits one JSON object per line on stdout:
 
-  {slug, ldap, state, file, kind, status, project, linear, pr, repos,
+  {slug, ldap, state, file, kind, status, project, tracker, linear, pr, repos,
    parent_slug, related, supersedes, superseded_by, reopens,
    last_updated, size_bytes, body_refs: {prs, linear, slugs}}
 
@@ -116,6 +116,13 @@ def build_record(
     "kind": str(fm.get("kind") or ""),
     "status": str(fm.get("status") or ""),
     "project": str(fm.get("project") or ""),
+    # The external ticket id. Distinct from linear:, which predates this
+    # vault's Jira use: tasks are filed under tracker: and nothing in the index
+    # carried it, so every derived query was blind to the field. Note it is not
+    # a unique key — several ids carry two task files with different kind and
+    # sometimes different status, so join on slug and treat tracker as an
+    # attribute.
+    "tracker": str(fm.get("tracker") or ""),
     "linear": str(fm.get("linear") or ""),
     "pr": _parse_pr_numbers(fm.get("pr")),
     "repos": [str(r) for r in _ensure_list(fm.get("repos"))],
