@@ -52,9 +52,23 @@ reconciled separately; a fresh Claude run passed after the fix.
 Fresh smoke runs also passed with Codex `0.155.0-alpha.2.6` (`gpt-5.6-sol`) and
 OpenCode `1.18.31` (`openrouter/anthropic/claude-haiku-4.5`). Each lane passed
 four checks, made one public-verifier call and had complete usage, valid timing
-and scope, and unchanged Git identity. The 43 offline controls passed on Python
+and scope, and unchanged Git identity. The offline controls passed on Python
 3.14.6, alongside 20 static checks. These validate the host execution and receipt
 contracts; they are not independent task samples or a cost-saving comparison.
+
+Do not write the control count into this page. It was stated twice and grew
+twice in two days, 38 to 41 to 43 to 50, and each stale copy had to be found by
+hand. Let the discovery run report it.
+
+A second macOS host repeated the Codex lane on 2026-09-18 with the release
+build `codex-cli 0.155.0`, not the alpha, and `gpt-5.6-sol`: accepted, four
+checks, complete usage, valid timing and scope, unchanged Git identity, 111,930
+reported tokens and 13.5s. It made **two** public-verifier calls, and that is
+not a defect: acceptance requires at least one call whose last result succeeded,
+so treat the single call recorded above as an observation, not a limit. Codex
+reports no dollar estimate on a ChatGPT plan, so the cost stays null rather than
+becoming zero. The same host ran the offline controls under both of its
+interpreters, Python 3.9.6 and 3.14.6.
 
 ## Earlier research closeout
 
