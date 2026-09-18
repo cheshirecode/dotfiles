@@ -251,6 +251,21 @@ class EvidenceReachabilityTest(unittest.TestCase):
         html = '<section id="a"><p><strong>important</strong></p></section>'
         self.assertEqual(self.ev(html), [])
 
+    def test_dates_ids_versions_and_units_are_not_numeric_claims(self):
+        # Any-digit matching treats all of these as measurements. None is one,
+        # and every one is ordinary in these documents - this is the
+        # years-and-identifiers false-positive class that sank the broad form
+        # of the check, reappearing inside the narrow one.
+        for token in ("2026-09-17", "08-24", "SPLUS-19835", "v3_3_0",
+                      "DDA_MACHINE_V2", "uuid4", "5xx", "3s", "L568"):
+            html = f'<section id="a"><p><strong>{token}</strong></p></section>'
+            self.assertEqual(self.ev(html), [], token)
+
+    def test_real_figures_are_still_numeric_claims(self):
+        for token in ("10,005", "24,000 items", "2.08", "$5.00", "1.7 days", "37%"):
+            html = f'<section id="a"><p><strong>{token}</strong></p></section>'
+            self.assertTrue(only(self.ev(html), "section 'a'"), token)
+
     def test_sql_panel_counts_as_evidence(self):
         html = ('<section id="a"><p><strong>10 items</strong></p>'
                 '<details class="sql">select 1</details></section>')

@@ -96,6 +96,17 @@ discovering:
   neither of them has.
 - **Scoped to `strong`**, a proxy for author-marked weight. It will miss an
   unemphasised figure. That is the trade which buys the 3%.
+- **A standalone number, not any digit.** `\d` also matches a date, a ticket
+  id, a version and a unit — `2026-09-17`, `SPLUS-19835`, `v3_3_0`, `5xx`,
+  `3s` — none of which is a measurement and all of which are ordinary here.
+  The matcher is
+  `(?<![\w.#-])\d[\d,]*(?:\.\d+)?(?![\w%-]*[\w])`.
+  **The 3% belongs to this matcher**: on the same page, any-digit matching
+  yields 71 emphasised spans instead of 56, and all 15 extra ones are false
+  positives. The first implementation shipped with `\d` and therefore measured
+  a different rule than the one that was costed — the rate did not transfer.
+  That is this file's own subject turned on the file itself: quantify the rule
+  you are actually going to run.
 
 With no `section` elements the gate fails closed rather than passing a document
 it had no scope to judge.
