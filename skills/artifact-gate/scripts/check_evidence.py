@@ -22,7 +22,13 @@ import sys
 
 SECTION = re.compile(r'<section\b[^>]*>.*?</section>', re.S | re.I)
 SECTION_ID = re.compile(r'<section\b[^>]*\bid="([^"]+)"', re.I)
-STRONG = re.compile(r"<strong\b[^>]*>(.*?)</strong>", re.S | re.I)
+# <b> as well as <strong>. The scope is "the author marked this as carrying
+# weight", and a hand-authored <b> meets that test exactly as much; the split is
+# authoring provenance, not intent, since Markdown-to-HTML emits <strong> while
+# hand-written HTML tends to emit <b>. Measured on a four-page corpus, matching
+# <strong> alone inspected 1 of 72 emphasised numeric claims and printed OK.
+# `<b\b` does not match <br> or <body>, because b-r and b-o are both word pairs.
+EMPHASIS = re.compile(r"<(?:strong|b)\b[^>]*>(.*?)</(?:strong|b)>", re.S | re.I)
 # A STANDALONE number, not any digit. `\d` also matches a date, a ticket id, a
 # version and a unit -- 2026-09-17, SPLUS-19835, v3_3_0, 5xx, 3s -- none of
 # which is a measurement, and all of which are ordinary in these documents.
@@ -37,14 +43,37 @@ DEFAULT_EVIDENCE_TAGS = (r"<details\b[^>]*\bclass=\"[^\"]*\bsql\b", r"/-/blob/",
 
 
 def _sections(html):
-    """id -> section html. Order preserved; unnamed sections get a synthetic id."""
-    out, n = {}, 0
-    for m in SECTION.finditer(html):
+    """[(index, real_id_or_None, block)] in document order.
+
+    A synthetic id used to stand in for a missing one and then surfaced in
+    findings as `__unnamed_2`, which locates nothing for the person fixing it.
+    Only a REAL id can be an anchor target, so the two are kept apart.
+    """
+    out = []
+    for i, m in enumerate(SECTION.finditer(html), 1):
         block = m.group(0)
         sid = SECTION_ID.search(block)
-        n += 1
-        out[sid.group(1) if sid else f"__unnamed_{n}"] = block
+        out.append((i, sid.group(1) if sid else None, block))
     return out
+
+
+def coverage(html):
+    """What the gate actually looked at: (sections, inspected, unemphasised).
+
+    A flag rate means nothing without this. Reporting what was NOT inspected is
+    what makes the next scope gap visible without anyone having to predict it.
+    Deliberately a report and not a refusal: a prose page, or one whose numbers
+    all sit in tables, legitimately has nothing to inspect and is not thereby
+    unsafe, and a refusal the author cannot act on just teaches people to
+    bypass the gate.
+    """
+    sections = _sections(html)
+    inspected = unemphasised = 0
+    for _idx, _rid, block in sections:
+        inspected += sum(1 for s in EMPHASIS.findall(block) if NUMERIC.search(s))
+        outside = re.sub(r"<[^>]+>", " ", EMPHASIS.sub(" ", block))
+        unemphasised += len(NUMERIC.findall(outside))
+    return len(sections), inspected, unemphasised
 
 
 def _has_direct_evidence(block, classes, hosts):
@@ -64,30 +93,38 @@ def check(html, classes=DEFAULT_EVIDENCE_CLASSES, hosts=()):
         # Fail closed. With no sections there is no scope to judge reachability
         # in, and a gate that passes everything because it found nothing to look
         # at is the silent failure this skill is about.
-        return ["no <section> elements: evidence scope cannot be established"]
+        return ['no <section> elements: evidence scope cannot be established — '
+                'wrap each part in <section id="..."> so a claim has a scope and '
+                'a cross-reference has something to point at']
 
-    direct = {sid: _has_direct_evidence(b, classes, hosts) for sid, b in sections.items()}
+    total = len(sections)
+    by_id = {rid: idx for idx, rid, _ in sections if rid}
+    blocks = {idx: block for idx, _rid, block in sections}
+    direct = {idx: _has_direct_evidence(b, classes, hosts) for idx, b in blocks.items()}
 
-    def reachable(sid, seen):
+    def reachable(idx, seen):
         # A same-page anchor to a section that carries evidence counts: that is
         # what makes a cross-reference a fix rather than a dodge. Cycles are
         # guarded, so a pair of sections pointing at each other cannot invent
         # evidence neither of them has.
-        if sid in seen:
+        if idx in seen:
             return False
-        seen.add(sid)
-        if direct.get(sid):
+        seen.add(idx)
+        if direct.get(idx):
             return True
-        return any(reachable(t, seen) for t in ANCHOR.findall(sections.get(sid, ""))
-                   if t in sections)
+        return any(reachable(by_id[t], seen)
+                   for t in ANCHOR.findall(blocks.get(idx, "")) if t in by_id)
 
-    for sid, block in sections.items():
+    for idx, rid, block in sections:
         claims = [re.sub(r"<[^>]+>", "", s).strip()
-                  for s in STRONG.findall(block) if NUMERIC.search(s)]
-        if claims and not reachable(sid, set()):
+                  for s in EMPHASIS.findall(block) if NUMERIC.search(s)]
+        if claims and not reachable(idx, set()):
             shown = "; ".join(c[:60] for c in claims[:3])
+            where = (f"section {rid!r}" if rid else
+                     f"section {idx} of {total} (no id — add one so a "
+                     f"cross-reference can point at the evidence)")
             problems.append(
-                f"section {sid!r}: emphasised numeric claim with no evidence "
+                f"{where}: emphasised numeric claim with no evidence "
                 f"reachable from this section ({shown})"
             )
     return problems
@@ -106,6 +143,9 @@ def main(argv=None):
     except OSError as exc:
         print(f"check_evidence: cannot read {args.path}: {exc}", file=sys.stderr)
         return 2
+    secs, inspected, outside = coverage(html)
+    print(f"  coverage: {secs} section(s); {inspected} emphasised numeric claim(s) "
+          f"inspected; {outside} standalone number(s) outside emphasis not inspected")
     problems = check(html, tuple(args.evidence_class) or DEFAULT_EVIDENCE_CLASSES,
                      tuple(args.evidence_host))
     if problems:
