@@ -27,9 +27,10 @@ implemented. Passing mocked/unit controls on another OS is not live support.
 
 The packaged smoke command passed on 2026-09-17 with Codex CLI
 `0.155.0-alpha.2.6`, Claude Code `2.1.274` and OpenCode `1.18.31`: four named
-checks, one public-verifier call and complete usage in each lane. The 41 offline
+checks, one public-verifier call and complete usage in each lane. The offline
 controls also passed under Python 3.9 and 3.14. Recheck on your host; these are
-observations, not minimum-version promises or savings measurements.
+observations, not minimum-version promises or savings measurements. The control
+count below is the only one stated, so the two cannot drift apart.
 
 A second host confirmed the Claude lane on Claude Code `2.1.275` with
 `claude-haiku-4-5-20251001`: four checks, one verifier call, complete usage.
