@@ -163,6 +163,14 @@ skills:
       path: skills/which-model
     install_to: ~/.claude/skills/which-model
 
+  - name: artifact-gate
+    description: Gate an HTML artifact before publishing — structure, dead anchors, self-claims, and code links that resolve while no longer saying what the page claims.
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/artifact-gate
+    install_to: ~/.claude/skills/artifact-gate
+
 # Notes:
 # - `source.ref: HEAD` is a placeholder for skills that live inside THIS repo
 #   (vendored under skills/<name>/). When a skill graduates to its own repo,

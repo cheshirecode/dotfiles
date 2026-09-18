@@ -113,11 +113,30 @@ fi
 # stays: it still covers a summary supplied but empty, and callers that set
 # the escape.
 if [[ -z "$SUMMARY" && -z "${WORKLOG_ARCHIVE_NO_SUMMARY:-}" ]]; then
+  # Count from the vault being archived into. The pair was written as literals
+  # (60 of 244) and was a second copy of a fact: already wrong here by the time
+  # it shipped -- this vault holds 187 of 279 -- and false in every other vault,
+  # including the scratch ones the fixtures build, where nothing is archived at
+  # all. An empty `summary:` counts as missing, matching _lint.py's
+  # `not fm.get("summary")`.
+  archived_total=0
+  archived_nosummary=0
+  for _f in people/*/archive/*.md; do
+    [[ -f "$_f" ]] || continue
+    archived_total=$((archived_total + 1))
+    grep -qiE '^summary:[[:space:]]*("[^"]|[^"[:space:]])' "$_f" ||
+      archived_nosummary=$((archived_nosummary + 1))
+  done
   {
     echo "archive: refusing to archive $SLUG with no --summary."
-    echo "  The archive is the long-term record; 60 of 244 archived tasks in"
-    echo "  this vault already have none, and a summary cannot be reconstructed"
-    echo "  later as cheaply as it can be written now."
+    if (( archived_nosummary > 0 )); then
+      echo "  The archive is the long-term record; $archived_nosummary of $archived_total archived tasks in"
+      echo "  this vault already have none, and a summary cannot be reconstructed"
+      echo "  later as cheaply as it can be written now."
+    else
+      echo "  The archive is the long-term record, and a summary cannot be"
+      echo "  reconstructed later as cheaply as it can be written now."
+    fi
     echo "  Fix:    $0 $SLUG --summary=\"<2-3 line recap>\""
     echo "  Bypass: WORKLOG_ARCHIVE_NO_SUMMARY=1 $0 $SLUG ..."
     echo "  Nothing has been written; the task is untouched."
