@@ -131,7 +131,10 @@ class DiscoverTest(unittest.TestCase):
         tree(self.root, {"a/b/c/AGENTS.md": "deep copy"})
         tree(other.name, {"AGENTS.md": "canonical"})
         ev = ds.discover(self.root, other.name)["surfaces"]["durable memory"]["evidence"]
-        self.assertEqual(ev[0], "AGENTS.md")
+        # Root-qualified now, so assert the property rather than a literal:
+        # the canonical copy is cited first and the deep one is not.
+        self.assertTrue(ev[0].endswith("AGENTS.md"), ev)
+        self.assertNotIn("a/b/c", ev[0], ev)
 
     def test_more_than_one_root_is_scanned(self):
         other = tempfile.TemporaryDirectory()
@@ -149,6 +152,46 @@ class DiscoverTest(unittest.TestCase):
             info = self.scan()[kind]
             self.assertEqual(info["state"], "absent", kind)
             self.assertTrue(info.get("question"), kind)
+
+    def test_memory_store_handed_in_as_a_root_is_found(self):
+        # An agent memory store sits outside every plausible project root, so it
+        # gets passed AS a root -- and then its relative paths carry no `memory`
+        # component. Matching on the relative path reported `absent` for 50 files
+        # of standing rules while pointed straight at them.
+        store = tempfile.TemporaryDirectory()
+        self.addCleanup(store.cleanup)
+        pathlib.Path(store.name, "memory").mkdir()
+        pathlib.Path(store.name, "memory", "rule.md").write_text("a standing rule\n")
+        s = ds.discover(pathlib.Path(store.name, "memory"))["surfaces"]["durable memory"]
+        self.assertEqual(s["state"], "found")
+        self.assertEqual(s["count"], 1)
+
+    def test_one_root_cites_bare_relative_paths(self):
+        tree(self.root, {"AGENTS.md": "x"})
+        self.assertEqual(self.scan()["durable memory"]["evidence"], ["AGENTS.md"])
+
+    def test_several_roots_qualify_citations_by_root(self):
+        # Two roots each holding AGENTS.md rendered as the same string, so a
+        # reader following the citation had to guess which file was meant.
+        other = tempfile.TemporaryDirectory()
+        self.addCleanup(other.cleanup)
+        tree(self.root, {"AGENTS.md": "one"})
+        tree(other.name, {"AGENTS.md": "two"})
+        ev = ds.discover(self.root, other.name)["surfaces"]["durable memory"]["evidence"]
+        self.assertEqual(len(set(ev)), 2, ev)
+        self.assertTrue(all("/" in e for e in ev), ev)
+
+    def test_colliding_root_names_fall_back_to_full_paths(self):
+        outer = tempfile.TemporaryDirectory()
+        self.addCleanup(outer.cleanup)
+        a = pathlib.Path(outer.name, "a", "proj")
+        b = pathlib.Path(outer.name, "b", "proj")
+        for d in (a, b):
+            d.mkdir(parents=True)
+            (d / "AGENTS.md").write_text("x")
+        ev = ds.discover(a, b)["surfaces"]["durable memory"]["evidence"]
+        self.assertEqual(len(set(ev)), 2, ev)
+        self.assertTrue(all(e.startswith(outer.name) for e in ev), ev)
 
     def test_missing_root_exits_2(self):
         self.assertEqual(ds.main(["/nonexistent/path/here"]), 2)
