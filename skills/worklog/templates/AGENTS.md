@@ -50,6 +50,7 @@ status: draft | ready | in-progress | in-review | blocked | shipping | archived
 kind: design | review | spike | impl | ops | debug | program | project | postmortem | runbook | proposal | bugfix | investigation | plan | infra   # extended; lint also grandfathers legacy bug | perf | tooling
 repos: [<name>, ...]   # e.g. [ui, website]; [] for doc-only work
 linear:                # optional; add ENG-<N> if/when one exists. Omit the key entirely when not applicable.
+tracker:               # optional; the external ticket this task is filed under (e.g. SPLUS-1234). Same rule: omit the key entirely when not applicable — `tracker: null` reads as present to anything checking for the key rather than its value.
 project:               # see "Resolving project:" below
 last_updated: YYYY-MM-DD
 next_action: "<one sentence — what unblocks progress>"

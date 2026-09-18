@@ -595,6 +595,26 @@ def _lint_file(
       "and a summary cannot be reconstructed later as cheaply as written now"
     )
 
+  # An optional identifier key written as an explicit null is not the same as
+  # an absent one. yaml.safe_load turns `tracker: null` into None, so a YAML
+  # consumer cannot tell the two apart, but a line-oriented reader sees the key
+  # present with the string "null" and counts the task as tracked. Measured
+  # 2026-09-18 on this vault: 17 active tasks carried `tracker: null` against 68
+  # that omitted the key, so presence-testing overcounted the tracked set by 17.
+  # AGENTS.md already says to omit an optional identifier rather than empty it;
+  # this enforces what was previously only written down.
+  # Warning not error, and active/ only, for the same reasons as project: below
+  # — archive/ is frozen history, and a lint that goes red on history is a lint
+  # that gets suppressed instead of satisfied.
+  if state == "active":
+    for _key in ("tracker", "linear"):
+      if _key in fm and (fm[_key] is None or not str(fm[_key]).strip()):
+        warnings.append(
+          f"{_key}: is present but empty — omit the key entirely when not "
+          f"applicable; an explicit null reads as present to any consumer that "
+          f"checks for the key rather than its value"
+        )
+
   project = fm.get("project")
   if project is None or project == "":
     # Archive/ tasks are frozen history — don't pester about missing project there.
