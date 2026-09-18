@@ -111,13 +111,24 @@ discovering:
 With no `section` elements the gate fails closed rather than passing a document
 it had no scope to judge, and says what to do about it.
 
-## Corroboration, and the hole it exposed
+## A second measurement, and the hole it exposed
 
 A second session measured the gate on four published artifacts it had never
 seen, importing the gate's own section, emphasis and number matchers so the
-counting was like for like. **4%** against the 3% measured by the first
-document's own author, on a disjoint corpus. That is real corroboration of the
-rate.
+counting was like for like.
+
+**It is not corroboration of the 3%, and was briefly recorded here as though it
+were.** The first figure reported, 4%, put the tuning document in the
+denominator: that one page contributed 56 of the 72 emphasised spans and none
+of the fires, so it diluted the rate rather than testing it. On the four pages
+the gate had never seen the figure is **3 of 16, or 19%** — same numerator,
+honest denominator.
+
+The two rates measure different populations and must not be reported as
+agreeing: 56 spans on a page the rule was tuned against, versus 16 untuned ones.
+Sixteen spans cannot settle a 3% claim in either direction, and only one of the
+three fires was adjudicated, so 19% is an upper bound on a small sample rather
+than a measurement. Both published rates are single-corpus.
 
 The finding was not the rate. They also measured **coverage**, and unmodified
 the gate inspected **1 of 72** emphasised numeric claims across those pages and
@@ -157,11 +168,34 @@ result.
   dashboard. A run without hosts configured over-reports on any page citing
   dashboards rather than code. **The measured rate assumes hosts configured for
   the corpus.**
-- **4% is an upper bound on the true-positive rate, not a measurement of it.**
-  Of the three fires, one was adjudicated and is genuine — a figure derived in
-  one section and restated bare in another with no anchor, the carry-over shape
-  in a new document. The other two were not adjudicated.
-- Both rates are single-corpus measurements by one session each.
+- **19% is an upper bound on a small sample, not a measurement.** Of the three
+  fires, one was adjudicated and is genuine — a figure derived in one section
+  and restated bare in another with no anchor, the carry-over shape in a new
+  document. The other two were not adjudicated.
+- **Check what is in the denominator before quoting a rate.** The 4% that first
+  appeared here was arithmetically correct and still wrong, because it counted
+  the document the rule was tuned on as part of the corpus that was supposed to
+  test it. It was found by re-running, not by re-reading the report that
+  produced it.
+
+## What the coverage line did on first contact
+
+Re-run after the fix, the four pages gave:
+
+| page | sections | inspected | not inspected | result |
+| --- | ---: | ---: | ---: | --- |
+| Plaid Limits | 4 | 14 | 27 | 1 finding |
+| Async DDA Monitor Readiness | 6 | 0 | 10 | OK |
+| Decline Reason Boundary | 6 | 1 | 18 | 1 finding |
+| Super+ ACH Precheck | 4 | 1 | 15 | 1 finding |
+
+Row one is the scope fix: 0 inspected became 14. Row two is the case the
+report-versus-refuse argument was about — it returns OK having inspected
+nothing, and now says so on the same line. Not blocked, because there is
+genuinely nothing to judge; no longer indistinguishable from a page that
+passed. Zero inspected against ten standalone numbers present is the ratio that
+makes it legible, and it required no prediction about which convention was
+missing.
 
 ## Validating a gate
 
@@ -173,6 +207,19 @@ case certifies nothing.
 When adding one, add both halves, and check that the red arrives through the
 assertion you meant rather than through a broken fixture — a `SyntaxError` and
 a caught defect look identical in a pass/fail column.
+
+**Read the gate's exit code, not a pipeline's.** `check_evidence.py page.html |
+head -12; echo $?` prints `head`'s status, which is 0 on a run that exited 1.
+Anyone verifying a fix the obvious way will conclude the gate still fails open.
+Redirect to a file and check `$?`, or capture with `$(...)` and test that. This
+is the single most repeated mistake in this skill's own history: it has produced
+a "suite passed" claim from a failing suite, a "test passed" from an exit-2
+test, and a "still broken" from a working gate.
+
+**Exit 0 does not mean the page was checked.** It cannot distinguish "inspected
+the claims and they are fine" from "inspected nothing". That is what the
+coverage line is for, and it is why the coverage line is read first and the exit
+code second.
 
 ## State the rule separately from the code that implements it
 
