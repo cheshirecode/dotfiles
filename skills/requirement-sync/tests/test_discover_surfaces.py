@@ -184,14 +184,18 @@ class DiscoverTest(unittest.TestCase):
     def test_colliding_root_names_fall_back_to_full_paths(self):
         outer = tempfile.TemporaryDirectory()
         self.addCleanup(outer.cleanup)
-        a = pathlib.Path(outer.name, "a", "proj")
-        b = pathlib.Path(outer.name, "b", "proj")
+        # discover() resolves its roots. On macOS the temp dir is handed out
+        # as /var/... but resolves to /private/var/..., so compare against the
+        # resolved form or the assertion fails on a correct citation.
+        outer_path = pathlib.Path(outer.name).resolve()
+        a = outer_path / "a" / "proj"
+        b = outer_path / "b" / "proj"
         for d in (a, b):
             d.mkdir(parents=True)
             (d / "AGENTS.md").write_text("x")
         ev = ds.discover(a, b)["surfaces"]["durable memory"]["evidence"]
         self.assertEqual(len(set(ev)), 2, ev)
-        self.assertTrue(all(e.startswith(outer.name) for e in ev), ev)
+        self.assertTrue(all(e.startswith(str(outer_path) + "/") for e in ev), ev)
 
     def test_missing_root_exits_2(self):
         self.assertEqual(ds.main(["/nonexistent/path/here"]), 2)
