@@ -31,9 +31,20 @@
 # tests/install/test_cheshirecode_identity.sh asserts both directions.
 [include]
 	path = ~/.gitconfig.local
+# Git's hasconfig glob is CASE-SENSITIVE, and the account is spelled both ways
+# in the wild: the GitHub canonical form is cheshireCode, while a clone URL is
+# often lowercased. Each spelling needs both a scp/SSH form (**owner/**) and an
+# https form (**/owner/**), so four entries rather than two. Miss one and the
+# clone falls through to ~/.gitconfig.local and commits under the machine's
+# other identity, silently, in a public repo. Observed three times on one host
+# when the platform re-cloned with the capital-C spelling.
 [includeIf "hasconfig:remote.*.url:**cheshirecode/**"]
 	path = ~/.gitconfig.cheshireCode
 [includeIf "hasconfig:remote.*.url:**/cheshirecode/**"]
+	path = ~/.gitconfig.cheshireCode
+[includeIf "hasconfig:remote.*.url:**cheshireCode/**"]
+	path = ~/.gitconfig.cheshireCode
+[includeIf "hasconfig:remote.*.url:**/cheshireCode/**"]
 	path = ~/.gitconfig.cheshireCode
 [rebase]
 	# autosquash = true
