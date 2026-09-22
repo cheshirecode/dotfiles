@@ -19,6 +19,11 @@ DOM=users.noreply.github.com
 RIGHT=cheshirecode@users.noreply.github.com
 WRONG=someone@example-work.invalid
 
+# The hook reads only GIT_AUTHOR_IDENT, but git still needs a committer
+# identity to land any case at all. Carry it in env so the fixture does not
+# depend on a global user.name (CI sets one; a dev machine may not).
+export GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=fixture@example.invalid
+
 stage() { echo "$RANDOM" > "$1"; git add "$1"; }
 landed() { git log --oneline -1 2>/dev/null | grep -q "$1"; }
 
