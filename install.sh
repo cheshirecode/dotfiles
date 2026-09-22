@@ -174,14 +174,54 @@ fi
 # Bootstrap ~/.gitconfig.local (machine-local identity, untracked). The
 # committed .gitconfig pulls it in via [include]; without it, git complains
 # about a missing include path on every invocation.
-if [ ! -e "$DEST/.gitconfig.local" ]; then
-  echo "Creating empty $DEST/.gitconfig.local — fill in [user] for this machine."
-  cat > "$DEST/.gitconfig.local" <<'EOF'
+#
+# Posture: the fallback identity is the PERSONAL one, seeded from the tracked
+# .gitconfig.cheshireCode so the identity has one copy in the repo, not two.
+# Any other identity — work or otherwise — is declared by that tree's .envrc
+# (direnv walks up to the nearest one; see .envrc.example), never here.
+seed_local_gitconfig() {
+  seed_name="$(git config -f "$REPO_DIR/.gitconfig.cheshireCode" user.name 2>/dev/null || true)"
+  seed_email="$(git config -f "$REPO_DIR/.gitconfig.cheshireCode" user.email 2>/dev/null || true)"
+  if [ -n "$seed_name" ] && [ -n "$seed_email" ]; then
+    cat > "$DEST/.gitconfig.local" <<EOF
+# Per-machine git identity fallback: the PERSONAL identity, seeded from the
+# repo's tracked .gitconfig.cheshireCode. Do not commit this file. Any other
+# identity — work or otherwise — is declared by that tree's own .envrc
+# (GIT_AUTHOR_* + GIT_COMMITTER_* + WORKLOG_IDENTITY_DOMAIN); direnv loads
+# the nearest .envrc walking up from the cwd, and a child .envrc must
+# source_up to inherit the tree default. A checkout with no .envrc on its
+# walk-up path commits personal by design.
+[user]
+	name = $seed_name
+	email = $seed_email
+EOF
+  else
+    echo "warning: could not read user.name/user.email from $REPO_DIR/.gitconfig.cheshireCode; seeding an empty template — fill in [user] or commits fall back to git's machine default." >&2
+    cat > "$DEST/.gitconfig.local" <<'EOF'
 # Per-machine git identity. Add a [user] block here; do not commit this file.
 [user]
 	# name = Your Name
 	# email = you@example.com
 EOF
+  fi
+}
+
+# Upgrade a seed left by the empty-template era to the personal fallback.
+# Exact match against that template only: a file the machine has edited
+# carries its own identity decisions and is not ours to replace.
+old_local_seed='# Per-machine git identity. Add a [user] block here; do not commit this file.
+[user]
+	# name = Your Name
+	# email = you@example.com'
+if [ -e "$DEST/.gitconfig.local" ] \
+   && [ "$(cat "$DEST/.gitconfig.local")" = "$old_local_seed" ]; then
+  echo "Upgrading untouched $DEST/.gitconfig.local to the personal-fallback seed..."
+  seed_local_gitconfig
+fi
+
+if [ ! -e "$DEST/.gitconfig.local" ]; then
+  echo "Creating $DEST/.gitconfig.local — personal fallback identity."
+  seed_local_gitconfig
 fi
 
 # Bootstrap ~/.shell_common.local (machine-local shell env, untracked). The
