@@ -81,8 +81,20 @@ echo "doctor: tracked-file drift"
 # workspace; it survives a pull, dies on a reset, and can carry content that
 # must never be committed. Machine-local shell config belongs in
 # ~/.shell_common.local, which is untracked by design.
-_drift="$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null | awk '$1 ~ /M/ {print $2}')"
-if [[ -z "$_drift" ]]; then
+# Separate "asked and nothing is dirty" from "could not ask". An extracted
+# tarball or an exported tree has no .git, and reporting it clean would be a
+# confident answer about a question that was never put -- the failure this
+# whole section exists to surface.
+if ! git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  unknown "$REPO_ROOT is not a git checkout — drift cannot be measured here"
+  _drift=""
+  _drift_unmeasurable=1
+fi
+: "${_drift_unmeasurable:=0}"
+[[ "$_drift_unmeasurable" -eq 1 ]] || _drift="$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null | awk '$1 ~ /M/ {print $2}')"
+if [[ "$_drift_unmeasurable" -eq 1 ]]; then
+  :
+elif [[ -z "$_drift" ]]; then
   ok "no modified tracked files in $REPO_ROOT"
 else
   while read -r _f; do

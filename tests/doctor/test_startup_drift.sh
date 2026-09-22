@@ -58,5 +58,17 @@ printf '%s' "$out" | grep -q 'README.md modified — uncommitted work' \
 printf '%s' "$out" | grep -q 'README.md modified — machine-local' \
   && note "an ordinary modified file was told to move to ~/.shell_common.local"
 
+# 4. A tree with no .git cannot be asked about drift, and must say so rather
+#    than reporting it clean. Caught by verifying the COMMITTED state through
+#    `git archive`, which produces exactly that shape: the check answered "no
+#    modified tracked files" about a directory it could not inspect.
+cp -r "$D" "$TMP/nogit"
+rm -rf "$TMP/nogit/.git"
+out="$( cd "$TMP/nogit" && timeout 180 bash bin/doctor.sh 2>&1 )" || true
+printf '%s' "$out" | grep -q 'drift cannot be measured here' \
+  || note "a tree with no .git did not report drift as unmeasurable"
+printf '%s' "$out" | grep -q 'no modified tracked files' \
+  && note "a tree with no .git was reported clean, which it cannot be known to be"
+
 [ "$fails" -eq 0 ] || exit 1
 echo "ok: doctor reports function-shaped tools, missing node_modules, and tracked-file drift"
