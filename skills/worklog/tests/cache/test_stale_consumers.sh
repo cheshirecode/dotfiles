@@ -34,12 +34,22 @@ WORKLOG_REPO="$TMP" WORKLOG_LDAP=tester \
   | grep -Eq '^active  +draft  +cache-task$'
 [[ -s "$TMP/.cache/index.jsonl" ]]
 
-sleep 1
-python3 - "$TMP/people/tester/active/cache-task.md" <<'PY'
+python3 - "$TMP/people/tester/active/cache-task.md" "$TMP/.cache/index.jsonl" <<'PY'
 from pathlib import Path
+import os
 import sys
 
 path = Path(sys.argv[1])
+index = Path(sys.argv[2])
+
+# Deterministic staleness: backdate the built index by 10s so the edit below
+# is always strictly newer than it, and still inside the 300s MAX_AGE window
+# — the rebuild must fire on the task-vs-index mtime comparison, not on the
+# age shortcut. The previous mechanism raced a `sleep 1` against the edit;
+# it flaked once under full-suite load (2026-09-21).
+index_mtime = index.stat().st_mtime - 10
+os.utime(index, (index_mtime, index_mtime))
+
 text = path.read_text()
 text = text.replace("status: draft", "status: in-progress")
 text = text.replace(
