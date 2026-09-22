@@ -63,8 +63,20 @@ if token=$(resolve_gh_token) && [[ -n "$token" ]]; then
   export GH_TOKEN="$token"
 fi
 
-# git author identity for this tree (don't rely on global config).
+# git identity for this tree (don't rely on global config). This is the
+# tree DEFAULT: direnv loads the nearest .envrc walking up from the cwd, so
+# every checkout under this directory commits with it until one carries an
+# .envrc of its own. A child .envrc must `source_up` to inherit these values
+# — without it, the child replaces the tree default wholesale (measured: a
+# checkout whose .envrc lacked source_up silently lost the tree's org scrub).
 export GIT_AUTHOR_NAME="${GITHUB_USER:-cheshirecode}"
 export GIT_AUTHOR_EMAIL="${GITHUB_USER:-cheshirecode}@users.noreply.github.com"
 export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME"
 export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
+
+# The worklog pre-commit hook enforces this domain: a commit whose author is
+# outside it is refused, so the tree default is enforced, not just cosmetic.
+# This tree is the personal default, so its domain is the personal one; a
+# $DAYJOB tree sets its own in its own .envrc. Unset means the hook reports
+# and allows.
+export WORKLOG_IDENTITY_DOMAIN=users.noreply.github.com

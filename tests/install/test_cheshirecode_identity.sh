@@ -37,38 +37,58 @@ if grep -nE '^\s*path\s*=\s*~?/?\.?[^ ]*dotfiles/' "$REPO/.gitconfig" \
 fi
 
 # 3. The identity must resolve for a repo owned by cheshirecode, in BOTH remote
-# URL forms. git's glob is case-sensitive and treats the scp-style colon and the
-# https slash differently, so one pattern cannot cover both.
+# URL forms, and from the OWNED-identity file — not the fallback. git's glob is
+# case-sensitive and treats the scp-style colon and the https slash
+# differently, so one pattern cannot cover both.
 identity_for() { # identity_for <url>
   local url="$1" repo="$TMP/probe"
   rm -rf "$repo"; mkdir -p "$repo"
   git -C "$repo" init -q .
   git -C "$repo" remote add origin "$url"
-  HOME="$DEST" git -C "$repo" config --get user.email 2>/dev/null
+  HOME="$DEST" git -C "$repo" config --show-origin --get user.email 2>/dev/null
 }
 
 want="1631630+cheshirecode@users.noreply.github.com"
+
+# check <url> <origin-basename> <label>: the value must equal the pinned
+# identity AND come from the expected file. Under the personal-fallback
+# posture the fallback and the pinned identity carry the same value, so the
+# origin is the only observable that tells an includeIf match apart from a
+# fallthrough.
+check() {
+  local got origin value
+  got="$(identity_for "$1")"
+  origin="${got%%$'\t'*}"
+  value="${got#*$'\t'}"
+  case "$origin" in
+    */"$2") ;;
+    *) note "$3: identity came from '${origin:-none}', expected $2" ;;
+  esac
+  [ "$value" = "$want" ] || note "$3: identity was '${value:-none}', expected $want"
+}
+
 for url in \
   'git@gh-cheshirecode:cheshirecode/dotfiles.git' \
   'git@github.com:cheshirecode/dotfiles.git' \
   'https://github.com/cheshirecode/dotfiles.git'
 do
-  got="$(identity_for "$url")"
-  [ "$got" = "$want" ] || note "cheshireCode identity did not apply for $url (got '${got:-none}')"
+  check "$url" .gitconfig.cheshireCode "cheshirecode-owned $url"
 done
 
-# 4. It must NOT leak onto a repository owned by anyone else. An SSH host alias
-# can itself carry the owner name (the git@host-<owner>: form), so a looser glob
-# would match a third party's repo cloned through that alias and sign their
-# commit with this identity. The foreign owners below are placeholders on
-# purpose: no real account name other than cheshirecode belongs in this repo.
+# 4. Foreign owners resolve to the PERSONAL fallback: the posture is
+# personal-by-default, and any other identity is declared by that tree's
+# .envrc. The leak assertion is therefore origin-based — a foreign URL must
+# never originate from .gitconfig.cheshireCode, because an includeIf glob
+# leak (an SSH host alias carrying a third party's owner, say) would show up
+# there even though the value is indistinguishable from the fallback. The
+# foreign owners below are placeholders on purpose: no real account name
+# other than cheshirecode belongs in this repo.
 for url in \
   'git@gh-cheshirecode:other-owner/dotfiles.git' \
   'git@github.com:other-owner/dotfiles.git' \
   'https://github.com/another-org/project.git'
 do
-  got="$(identity_for "$url")"
-  [ -z "$got" ] || note "cheshireCode identity leaked onto $url (got '$got')"
+  check "$url" .gitconfig.local "foreign-owner $url"
 done
 
 if ! printf '%s\n' "$out" | grep -q 'Dotfiles installation complete.'; then
