@@ -22,7 +22,17 @@ note() { echo "FAIL: $1"; fails=$((fails + 1)); }
 cp -r "$REPO" "$TMP/d"
 D="$TMP/d"
 
-run_doctor() { ( cd "$D" && timeout 180 bash bin/doctor.sh 2>&1 ); }
+# `timeout` is GNU coreutils: present on Linux and in CI, absent on a stock
+# Mac. Without this fallback every run below died with "command not found"
+# and all six assertions failed on empty output, which read as six defects in
+# doctor rather than one missing tool in the harness (measured 2026-09-22).
+bounded() {
+  if command -v timeout >/dev/null 2>&1; then timeout 180 "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then gtimeout 180 "$@"
+  else "$@"
+  fi
+}
+run_doctor() { ( cd "$D" && bounded bash bin/doctor.sh 2>&1 ); }
 
 # 1. A shell function is not an executable. Exported so doctor's own bash sees
 #    it. PATH is deliberately left alone: a function takes precedence in command
@@ -64,7 +74,7 @@ printf '%s' "$out" | grep -q 'README.md modified — machine-local' \
 #    modified tracked files" about a directory it could not inspect.
 cp -r "$D" "$TMP/nogit"
 rm -rf "$TMP/nogit/.git"
-out="$( cd "$TMP/nogit" && timeout 180 bash bin/doctor.sh 2>&1 )" || true
+out="$( cd "$TMP/nogit" && bounded bash bin/doctor.sh 2>&1 )" || true
 printf '%s' "$out" | grep -q 'drift cannot be measured here' \
   || note "a tree with no .git did not report drift as unmeasurable"
 printf '%s' "$out" | grep -q 'no modified tracked files' \
