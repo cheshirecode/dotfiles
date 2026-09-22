@@ -43,9 +43,62 @@ SKILL_ROOTS=("$CLAUDE_SKILLS_DIR" "$AGENT_SKILLS_DIR" "$CURSOR_SKILLS_DIR")
 PROJECTS_DIR="${PROJECTS_DIR:-$HOME/Documents/projects}"
 
 echo "doctor: runtime deps"
+# Require a real executable, not merely a resolvable name. `command -v` also
+# succeeds for a shell function, and a Claude Code shell defines `rg` as one
+# that dispatches to the bundled ripgrep — so with the binary wiped this
+# printed "OK rg rg" (the doubled word is the tell) while no script could run
+# it. A path starting with / is the thing scripts actually need.
 for tool in python3 gh git rg jq direnv; do
-  command -v "$tool" >/dev/null && ok "$tool $(command -v $tool)" || fail "$tool not on PATH"
+  resolved="$(command -v "$tool" 2>/dev/null)"
+  case "$resolved" in
+    /*) ok "$tool $resolved" ;;
+    "") fail "$tool not on PATH (INSTALL_RUNTIME_DEPS_YES=1 bin/install-runtime-deps.sh)" ;;
+    *)  fail "$tool is a shell function or alias, not an executable — no script can run it" ;;
+  esac
 done
+
+echo "doctor: package deps"
+# node_modules is gitignored and per clone, so it does not arrive with a pull
+# and a machine can have it in one checkout and not another. When it is absent
+# the suite lane SKIPS: neither pass nor fail, and the summary still reads
+# green. Measured 2026-09-18: 38 checks hidden behind one skip.
+_pkg_seen=0
+for _pj in "$REPO_ROOT"/packages/*/package.json; do
+  [[ -f "$_pj" ]] || continue
+  _pkg_seen=1
+  _pd="$(dirname "$_pj")"; _pn="$(basename "$_pd")"
+  if [[ -d "$_pd/node_modules" ]]; then
+    ok "$_pn node_modules present"
+  else
+    warn "$_pn node_modules missing — its suite lane skips instead of running (cd packages/$_pn && npm install)"
+  fi
+done
+[[ "$_pkg_seen" -eq 1 ]] || absent "no packages/*/package.json in this checkout"
+
+echo "doctor: tracked-file drift"
+# ~/.bashrc is a symlink into this clone, so anything appended to it shows up
+# as a modified TRACKED file. The platform re-injects such a block on this
+# workspace; it survives a pull, dies on a reset, and can carry content that
+# must never be committed. Machine-local shell config belongs in
+# ~/.shell_common.local, which is untracked by design.
+_drift="$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null | awk '$1 ~ /M/ {print $2}')"
+if [[ -z "$_drift" ]]; then
+  ok "no modified tracked files in $REPO_ROOT"
+else
+  while read -r _f; do
+    [[ -n "$_f" ]] || continue
+    case "$_f" in
+      .bashrc|.zshrc|.profile|.bash_profile|.shell_common)
+        # The case this check exists for: a shell dotfile is a symlink target
+        # from $HOME, so an append lands on a tracked file.
+        warn "$_f modified — machine-local shell config belongs in ~/.shell_common.local, not a tracked file" ;;
+      *)
+        # Any other modified file is ordinary uncommitted work. Say what was
+        # observed rather than prescribing a fix for a problem it may not be.
+        warn "$_f modified — uncommitted work in a checkout other sessions share" ;;
+    esac
+  done <<< "$_drift"
+fi
 
 echo "doctor: python"
 if python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)' 2>/dev/null; then
