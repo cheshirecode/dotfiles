@@ -1953,11 +1953,17 @@ test_worklog_skill() {
 
   # 3. Fixture-vault smoke. Bootstrap a throwaway data repo using the skill's
   # init-new-data-repo.sh; then exercise the core mode surface against it.
+  # The bootstrap commits inside a repo with no remote, so git finds no
+  # identity in config; carry one in env rather than depending on a global
+  # user.name (CI sets one; a dev machine may not).
   local vault rc
   vault=$(mktemp -d)/test-vault
+  export GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@example.invalid \
+         GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.invalid
   set +e
   "${WL_HERMETIC[@]}" bash "$sb/init-new-data-repo.sh" "$vault" test-ldap >/dev/null 2>&1
   rc=$?
+  unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
   # Same leak as test_fixtures: restoring to `-e` enables errexit for the
   # first time, and here it would carry into test_packages.
   set +e
@@ -2119,8 +2125,13 @@ EOF
   # repo tells you to use) rg stayed on PATH, the fallback never ran, and the
   # last assertion went green against code it never reached. Same fix as
   # 6f32ea3 used for the forge CLIs: mirror /usr/bin + /bin minus rg.
+  # Measured 2026-09-21: the pinned list broke the other way on a dev machine
+  # whose jq lives in ~/.local/bin — the fallback PATH had no jq, search.sh
+  # could not read its index, and both cases failed on tool absence, not on
+  # the behaviour they pin. Mirror the machine's own PATH (per-file rg skip),
+  # so whatever the script needs stays reachable wherever it is installed.
   NORG="$(mktemp -d)"
-  for d in /usr/bin /bin; do
+  for d in ${PATH//:/ }; do
     [ -d "$d" ] || continue
     for f in "$d"/*; do
       [ -x "$f" ] && [ ! -d "$f" ] || continue
