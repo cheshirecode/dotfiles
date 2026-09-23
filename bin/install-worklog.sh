@@ -1,50 +1,49 @@
 #!/usr/bin/env bash
-# Clone the _worklog repo into $PROJECTS_DIR, wire its hooks, verify.
+# Set up a worklog vault for this machine and login, via the skill's
+# bootstrap.sh. Idempotent.
 #
-# Default upstream: cheshirecode/_worklog. Override via WORKLOG_REPO env.
-# Default location: $PROJECTS_DIR/_worklog (PROJECTS_DIR defaults to ~/Documents/projects).
+#   WORKLOG_REMOTE   vault to join: a git URL, or owner/repo for GitHub.
+#                    Unset = report the vaults already here and stop.
+#   WORKLOG_TARGET   clone path (default: bootstrap.sh probe's SUGGESTED_REPO)
+#   WORKLOG_NS       namespace under people/ (default: from the git identity)
 #
-# Idempotent. Re-running pulls + re-wires hooks.
+# No default remote. The old default cloned one fixed vault into
+# ~/Documents/projects/_worklog, which on a machine with a work vault at that
+# path is the other vault. It also called <vault>/bin/install-hooks.sh, which
+# the data repo does not ship, so hooks were never wired.
 
 set -euo pipefail
 
-WORKLOG_REPO="${WORKLOG_REPO:-cheshirecode/_worklog}"
-PROJECTS_DIR="${PROJECTS_DIR:-$HOME/Documents/projects}"
-TARGET="$PROJECTS_DIR/_worklog"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BOOT="$REPO_ROOT/skills/worklog/bin/bootstrap.sh"
+[[ -x "$BOOT" ]] || { echo "install-worklog: missing $BOOT" >&2; exit 1; }
 
-mkdir -p "$PROJECTS_DIR"
+probe="$("$BOOT" probe)"
+vaults="$(sed -n 's/^VAULTS=//p' <<<"$probe")"
 
-if [[ ! -d "$TARGET/.git" ]]; then
-  echo "install-worklog: cloning $WORKLOG_REPO → $TARGET"
-  if command -v gh >/dev/null; then
-    gh repo clone "$WORKLOG_REPO" "$TARGET" --
+remote="${WORKLOG_REMOTE:-}"
+if [[ -z "$remote" ]]; then
+  echo "install-worklog: WORKLOG_REMOTE unset — no vault cloned."
+  if [[ "${vaults:-0}" -gt 0 ]]; then
+    echo "install-worklog: vaults already here (path, origin, namespace, author):"
+    grep $'^vault\t' <<<"$probe" | cut -f2- | sed 's/^/  /'
+    echo "install-worklog: record this instance in each: $BOOT apply --repo <path> --ns <ns>"
   else
-    git clone "https://github.com/$WORKLOG_REPO.git" "$TARGET"
+    echo "install-worklog: next: WORKLOG_REMOTE=<url> bin/install-worklog.sh, or /worklog init"
   fi
-else
-  echo "install-worklog: $TARGET present — pulling latest"
-  git -C "$TARGET" pull --ff-only --autostash
+  exit 0
 fi
 
-# Wire hooks (PreCompact + SessionEnd autosave/compact-kernels).
-if [[ -x "$TARGET/bin/install-hooks.sh" ]]; then
-  echo "install-worklog: wiring hooks"
-  "$TARGET/bin/install-hooks.sh" --write
-else
-  echo "install-worklog: WARN — $TARGET/bin/install-hooks.sh not found, skipping hook wire-up" >&2
-fi
+# owner/repo short form -> GitHub HTTPS URL. Anything with a scheme, a colon
+# (scp-style SSH) or a leading / or . is already a location git understands.
+case "$remote" in
+  *://*|*:*|/*|.*) ;;
+  */*) remote="https://github.com/$remote.git" ;;
+  *) echo "install-worklog: WORKLOG_REMOTE='$remote' is neither a git URL nor owner/repo" >&2; exit 2 ;;
+esac
 
-# Smoke: status should not error.
-# Note: status.sh has no --quiet flag; just call it and limit output via head.
-# Dogfood discovery: passing --quiet here caused "unknown arg --quiet" abort
-# (status.sh exits non-zero on unknown args, tripping the elseif WARN even
-# when the underlying worklog is healthy).
-if [[ -x "$TARGET/bin/status.sh" ]]; then
-  echo "install-worklog: smoke-test bin/status.sh"
-  "$TARGET/bin/status.sh" 2>&1 | head -5 || {
-    echo "install-worklog: WARN — bin/status.sh exited non-zero (may need LDAP setup)" >&2
-  }
-fi
-
-echo "install-worklog: done — worklog repo at $TARGET"
+target="${WORKLOG_TARGET:-$(sed -n 's/^SUGGESTED_REPO=//p' <<<"$probe")}"
+args=(apply --repo "$target" --remote "$remote")
+[[ -n "${WORKLOG_NS:-}" ]] && args+=(--ns "$WORKLOG_NS")
+"$BOOT" "${args[@]}"
 echo "install-worklog: next: /worklog init  (inside Claude Code)"
