@@ -7,6 +7,51 @@ or rebuild caches.
 
 Onboard a session. Light by default; escalates to a full external scan when drift is detected or the user explicitly asks.
 
+## Bootstrap — no vault on this machine or login
+
+Run this before the preamble when no vault resolves: `WORKLOG_REPO` is unset
+and the cwd is not inside a clone with `people/`. Also run it when the preamble
+prints `INSTANCE=unset`, which marks a clone that predates bootstrap.
+
+1. Probe (read-only):
+
+   ```bash
+   "$WORKLOG_BIN/bootstrap.sh" probe
+   ```
+
+   It prints tools (`ok <ver>`, `absent`, `broken`), `GIT_IDENTITY`,
+   `GH_ACCOUNTS`, `SUGGESTED_REPO`, `SUGGESTED_NS`, and one `vault` row per
+   clone already on disk (path, origin, namespace, author email).
+
+2. Ask the user, once, with the probe values as defaults:
+   - Join an existing vault (remote URL) or start a local one?
+   - Path, namespace, and author email for this vault.
+   Each vault on one login gets its own answers: a personal and a work vault
+   keep separate namespaces and identities.
+
+3. Apply:
+
+   ```bash
+   "$WORKLOG_BIN/bootstrap.sh" apply --repo <path> [--remote <url>] \
+     [--ns <ns>] [--email <email>] [--name <name>]
+   ```
+
+   It clones or creates the vault, seeds templates, writes the instance
+   settings (`worklog.namespace`, `worklog.instance`,
+   `worklog.identityDomain`, `user.name`, `user.email`) to the clone's
+   `.git/config`, installs git hooks, and checks the namespace from a shell
+   with no direnv. `VERIFY=mismatch` exits 1: report it and stop.
+   `IDENTITY=placeholder` means no identity existed; relay its `NEXT=` line.
+   Exit 3 means the target is a different clone or a non-empty directory:
+   ask for another path. Re-running `apply` keeps earlier clone values unless
+   a flag replaces them.
+
+4. Continue with the preamble below, from the new clone.
+
+Instance = one (machine, login, vault). Machines that share a vault share the
+namespace and differ in `worklog.instance` (`<host>/<login>`). Two logins on
+one machine each have their own HOME, clone and settings.
+
 ## Detection — light vs. full
 
 Run these checks after the preamble:
