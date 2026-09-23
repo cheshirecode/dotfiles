@@ -50,13 +50,25 @@ TS="$(date +%Y-%m-%dT%H:%M:%S%z)"
 COMMIT_ARGS=(-q -m "autosave: snapshot $TS" -m "Worklog-Trigger: $TRIGGER")
 [[ -n "$PATHS_TRAILER" ]] && COMMIT_ARGS+=(-m "Worklog-Paths: $PATHS_TRAILER")
 
+# A refused commit (a pre-commit gate) still exits 0, so a session hook is never
+# blocked, but it must say why: `2>/dev/null || exit 0` left edits uncommitted
+# with no trace, and the caller read that as saved.
+COMMIT_ERR="$(mktemp "${TMPDIR:-/tmp}/worklog-autosave-err.XXXXXX")"
+commit_refused() {
+  echo "autosave: commit refused; edits stay uncommitted:" >&2
+  sed 's/^/  /' "$COMMIT_ERR" >&2
+  rm -f "$COMMIT_ERR"
+  exit 0
+}
+
 if autosave_can_amend_head; then
   # commit-pathspec-exempt: --amend rewrites the previous autosave commit; scoping needs that commit's own path set. Tracked by wlp-pathspec-commits-resistant
-  git commit --amend "${COMMIT_ARGS[@]}" 2>/dev/null || exit 0
+  git commit --amend "${COMMIT_ARGS[@]}" 2>"$COMMIT_ERR" || commit_refused
 else
   # commit-pathspec-exempt: pairs with the --amend branch above and must change together with it. Tracked by wlp-pathspec-commits-resistant
-  git commit "${COMMIT_ARGS[@]}" 2>/dev/null || exit 0
+  git commit "${COMMIT_ARGS[@]}" 2>"$COMMIT_ERR" || commit_refused
 fi
+rm -f "$COMMIT_ERR"
 
 mkdir -p .cache
 date +%s > .cache/autosave-last-run
@@ -69,6 +81,11 @@ NOW_TS="$(date +%s)"
 if [[ "$LAST_SUBJECT" == autosave:* ]] && (( NOW_TS - LAST_TS < 10 )); then
   touch .cache/autosave-push-pending
   echo "autosave: debounced push (previous autosave $((NOW_TS - LAST_TS))s ago); run autosave-flush or next push carries it" >&2
+  exit 0
+fi
+
+if [[ -z "$(git remote)" ]]; then
+  echo "autosave: no remote; commit kept local" >&2
   exit 0
 fi
 
