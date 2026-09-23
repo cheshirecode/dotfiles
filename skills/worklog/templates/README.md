@@ -1,19 +1,17 @@
 # _worklog
 
-## Quickstart (fresh machine)
+## Quickstart (fresh machine or login)
 
 ```bash
-# OSS machine:  ~/Documents/oss/_worklog
-# Work machine: ~/Documents/projects/_worklog
-gh repo clone <work-org>/_worklog ~/Documents/oss/_worklog   # or projects path
-export WORKLOG_REPO="${WORKLOG_REPO:-$HOME/Documents/oss/_worklog}"
 export WORKLOG_BIN="${WORKLOG_BIN:-$HOME/.claude/skills/worklog/bin}"
-# Optional but recommended for writes; omit --ldap on search sweeps to see all namespaces:
-# export WORKLOG_LDAP=fredtran
-cd "$WORKLOG_REPO" && cp -n .envrc.example .envrc && direnv allow
-# Prefer: direnv exec "$WORKLOG_REPO" "$WORKLOG_BIN/<helper>.sh" …
-"$WORKLOG_BIN/install-hooks.sh" --write
+"$WORKLOG_BIN/bootstrap.sh" probe          # read-only: tools, identity, vaults
+"$WORKLOG_BIN/bootstrap.sh" apply --repo <path> --remote <this-vault-url> \
+  --ns <namespace> --email <author-email>
 ```
+
+`apply` writes this clone's namespace, instance and author to its own
+`.git/config`, so hooks and agent tool calls resolve them without direnv.
+A `.envrc` with `WORKLOG_REPO` stays useful for interactive shells.
 
 Then in a fresh Claude Code session: `/worklog init`.
 Helpers and no-preamble modes (`plan` / `spawn` / `lint` / `export` / `import`) still need
