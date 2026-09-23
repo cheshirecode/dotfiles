@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Refuse a commit whose author email domain is not this vault's.
 #
-#   WORKLOG_IDENTITY_DOMAIN   domain this vault accepts; unset = report and skip
+#   WORKLOG_IDENTITY_DOMAIN   domain this vault accepts; else the clone's
+#                             `git config worklog.identityDomain` (set by
+#                             bootstrap.sh, read by shells with no direnv);
+#                             both unset = report and skip
 #   WORKLOG_NO_IDENTITY_HOOK=1  bypass once
 #
 # Reads the resolved author via `git var GIT_AUTHOR_IDENT`, so GIT_AUTHOR_EMAIL
@@ -11,10 +14,10 @@ set -uo pipefail
 
 [ "${WORKLOG_NO_IDENTITY_HOOK:-0}" = "1" ] && exit 0
 
-want="${WORKLOG_IDENTITY_DOMAIN:-}"
+want="${WORKLOG_IDENTITY_DOMAIN:-$(git config --local --get worklog.identityDomain 2>/dev/null || true)}"
 if [ -z "$want" ]; then
-  echo "note: WORKLOG_IDENTITY_DOMAIN unset; author-identity check skipped." >&2
-  echo "      Set it in this vault's .envrc to enforce one identity per vault." >&2
+  echo "note: WORKLOG_IDENTITY_DOMAIN unset (no worklog.identityDomain either); author-identity check skipped." >&2
+  echo "      Run: git config worklog.identityDomain <domain>   to enforce one identity per vault." >&2
   exit 0
 fi
 

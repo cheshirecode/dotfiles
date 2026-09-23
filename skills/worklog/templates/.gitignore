@@ -15,6 +15,8 @@ bin/*.py
 bin/__pycache__/
 bin/git-hooks/
 !bin/README.md
-# Per-machine agent state — never track across clones:
+# Per-machine state — never track across clones. .envrc holds this clone's
+# path and may source machine-local credentials:
+.envrc
 .agents/
 .claude/
