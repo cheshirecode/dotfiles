@@ -44,6 +44,26 @@ While asynchronous workers run, do independent work; wait when the next step
 needs a return. Reuse a worker with useful context when supported; re-brief after
 a context reset. Do not infer context or liveness from a name or filesystem mtime.
 
+## Model lane per delegate
+
+Choose a model lane for each dispatch, and record it. Use the cheapest lane
+that can meet the brief's acceptance check. A cheaper lane cuts the cost of
+each delegate; it does not make an unneeded delegate worth dispatching.
+
+| Brief shape | Lane |
+| --- | --- |
+| Bounded read-only sweep or inventory; the parent needs only the conclusion | Cheap (Haiku-class) |
+| Mechanical run with an exact expected outcome (replay, red-proof on a copy, log triage) | Cheap |
+| Design, dependent decisions, shared writes, final verification | Lead, or a lane of equal strength |
+
+A cheap return is data. Check each claim the parent acts on against the
+source. In one measured run, a Haiku inventory cited a file that did not exist.
+Set the lane through the host's dispatch option, for example the Claude Code
+Agent `model` parameter. If the host has no model selector, say so, as in the
+[models.md](models.md) limitations table. Record the lane and its usage in the
+evidence line: `artifact: <lane> delegate (<tokens>) — <outcome>`. Use the
+installed model-routing owner (`$which-model`) when the choice is not obvious.
+
 ## Failed calls and retries
 
 Choose fan-out only for independent work whose value exceeds dispatch, repeated
