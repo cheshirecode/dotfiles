@@ -38,6 +38,11 @@ PROJECTS_DIR="$(dirname "$REPO_ROOT")"
 
 printf 'LDAP=%s\n' "$LDAP"
 printf 'PROJECTS_DIR=%s\n' "$PROJECTS_DIR"
+# Instance = (machine, login, vault); bootstrap.sh records it in .git/config.
+printf 'INSTANCE=%s\n' "$(git config --local --get worklog.instance 2>/dev/null || echo 'unset (run bootstrap.sh apply)')"
+case "$(git config --get user.email 2>/dev/null || true)" in
+  *.invalid) printf '!! identity: placeholder %s — set user.email before adding a remote\n' "$(git config --get user.email)" ;;
+esac
 
 # Namespace check — create silently if missing (matches preamble step 4).
 ns="people/$LDAP"

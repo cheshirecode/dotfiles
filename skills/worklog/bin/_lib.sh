@@ -28,14 +28,20 @@ resolve_worklog_repo() {
 }
 
 # Resolve the caller's worklog namespace (historically named LDAP). Precedence:
-# $WORKLOG_LDAP -> $WORKLOG_NS -> git email -> $USER. Cache key includes the
-# resolved repo path so projects/_worklog and oss/_worklog cannot poison each
-# other's fallback result on the same machine. Cached 24h to avoid re-running
-# git config / gcloud on every invocation.
+# $WORKLOG_LDAP -> $WORKLOG_NS -> clone-local `git config worklog.namespace`
+# -> git email -> $USER. Cache key includes the resolved repo path so
+# projects/_worklog and oss/_worklog cannot poison each other's fallback result
+# on the same machine. Cached 24h to avoid re-running git config / gcloud on
+# every invocation.
+#
+# worklog.namespace lives in the clone's .git/config (written by bootstrap.sh),
+# so a shell with no direnv still resolves it. Without it, a tool shell inside
+# an `oss` vault fell through to the git email and resolved `cheshirecode`.
 resolve_ldap() {
-  local explicit_ns="${WORKLOG_LDAP:-${WORKLOG_NS:-}}"
   local repo_key repo_hash
   repo_key="${WORKLOG_REPO:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+  local explicit_ns="${WORKLOG_LDAP:-${WORKLOG_NS:-}}"
+  [[ -z "$explicit_ns" ]] && explicit_ns="$(git -C "$repo_key" config --local --get worklog.namespace 2>/dev/null || true)"
   if command -v shasum >/dev/null 2>&1; then
     repo_hash="$(printf '%s' "$repo_key" | shasum | awk '{print $1}')"
   else
@@ -91,7 +97,9 @@ verify_provenance() {
     return 1
   fi
   email_local="${git_email%@*}"
-  if [[ -z "${WORKLOG_LDAP:-${WORKLOG_NS:-}}" && "$email_local" != "$ldap" ]]; then
+  local explicit_ns="${WORKLOG_LDAP:-${WORKLOG_NS:-}}"
+  [[ -z "$explicit_ns" ]] && explicit_ns="$(git config --local --get worklog.namespace 2>/dev/null || true)"
+  if [[ -z "$explicit_ns" && "$email_local" != "$ldap" ]]; then
     echo "verify_provenance: LDAP/email mismatch — refusing to commit." >&2
     echo "  resolved namespace:  $ldap (from git email / cache)" >&2
     echo "  git config user.email: $git_email (local part: $email_local)" >&2

@@ -121,15 +121,14 @@ if [[ ! -f bin/README.md ]]; then
   cat > bin/README.md <<TOMBSTONE
 # bin/ moved to dotfiles skill
 
-Worklog protocol scripts live at:
+Worklog protocol scripts live in the dotfiles repo at
+\`skills/worklog/bin/\`, installed as \`~/.claude/skills/worklog/bin/\`.
+Invoke them via \`\$WORKLOG_BIN\`.
 
-    ~/Documents/oss/dotfiles/skills/worklog/bin/
+Set up this vault on a new machine or login:
 
-Invoke via the \`\$WORKLOG_BIN\` env var (set by the per-clone \`.envrc\`).
-
-Bootstrap a fresh data repo:
-
-    "\$WORKLOG_BIN/init-new-data-repo.sh" <path> [<ldap>]
+    "\$WORKLOG_BIN/bootstrap.sh" probe
+    "\$WORKLOG_BIN/bootstrap.sh" apply --repo <path> --remote <url>
 TOMBSTONE
   echo "  + bin/README.md (tombstone)"
 fi
