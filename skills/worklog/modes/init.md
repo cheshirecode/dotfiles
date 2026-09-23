@@ -162,14 +162,18 @@ Expensive: scans GitHub + Linear + Notion + Slack. Warn first:
 
 Wait for acknowledgement.
 
-1. **Verify auth in parallel.** Only `gh auth status` is required — stop with a clear message if it fails. Linear, Notion, and Slack are OPTIONAL enrichment sources: degrade gracefully — if one's auth is missing, skip its step-2 pull and note the gap in the report; don't hard-fail the whole init.
-   - `gh auth status` — **required**
+1. **Verify auth in parallel.** The forge check is per clone, as in the light
+   path: `"$WORKLOG_BIN/forge-prs.sh" list` picks `gh` or `glab` from each
+   clone's origin. A clone whose CLI is absent or unauthenticated is a `gap`
+   row: report it and keep going. Stop only when every clone is a `gap`,
+   because then no forge state can be read. Linear, Notion, and Slack are OPTIONAL enrichment sources: degrade gracefully — if one's auth is missing, skip its step-2 pull and note the gap in the report; don't hard-fail the whole init.
+   - `forge-prs.sh list` — **required to answer for at least one clone**; `gap` rows are reported
    - Linear MCP: `mcp__claude_ai_Linear__get_user` (self) — optional
    - Notion MCP: `mcp__claude_ai_Notion__notion-get-users` — optional
    - Slack MCP: `mcp__claude_ai_Slack__slack_search_users` for the user's own LDAP/name — optional
 
 2. **Pull external state in parallel.**
-   - **GitHub:** `gh pr list --author @me --state open --json number,title,url,headRepository,isDraft,reviewDecision` across known repos; `gh issue list --assignee @me --state open`.
+   - **Forge PRs/MRs:** the `open` rows from `forge-prs.sh list` (step 1). For GitHub clones, also `gh issue list --assignee @me --state open`.
    - **Linear:** `mcp__claude_ai_Linear__list_issues` filtered to assignee=self, non-terminal states.
    - **Notion:** `mcp__claude_ai_Notion__notion-search` for pages owned/recently-edited by user; filter to design/RFC-shaped docs (skip meeting notes).
    - **Slack:** `mcp__claude_ai_Slack__slack_search_public_and_private` with query `from:@me after:<90d-ago-YYYY-MM-DD>`. Compute the date once: `date -v-90d +%Y-%m-%d` (macOS) or `date -d '90 days ago' +%Y-%m-%d` (linux). Cap at ~50 most-recent matches; we want signal, not exhaustive history. The goal is to surface ongoing support/discussion threads that may warrant a task — Sarah Vo's use case (worklog-codex-compat thread, 2026-04-29) was support work happening in Slack that never materialized as a task file.
