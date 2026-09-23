@@ -52,7 +52,11 @@ CODEX_SKILL_SRC="$HOME/.codex/skills/worklog/SKILL.md"
 SETTINGS="$HOME/.claude/settings.json"
 SETTINGS_LOCAL="$HOME/.claude/settings.local.json"
 CODEX_CONFIG="$HOME/.codex/config.toml"
-MEM_DIR="$HOME/.claude/projects/-Users-${LDAP}-Documents-projects--worklog/memory"
+# Claude Code keys a project's memory dir by its path, with every character
+# outside [A-Za-z0-9] replaced by `-`. Derive it from this vault's own path; a
+# fixed `-Users-<ldap>-Documents-projects--worklog` matched only one macOS
+# layout, and for namespace `oss` not even that one.
+MEM_DIR="${WORKLOG_MEMORY_DIR:-$HOME/.claude/projects/$(printf '%s' "$REPO_ROOT" | sed 's|[^A-Za-z0-9]|-|g')/memory}"
 
 # ---- scrubbing ---------------------------------------------------------------
 # Mask secrets first (so org scrub can't accidentally unmask), then generalize
@@ -278,6 +282,11 @@ if (( DRY_RUN )); then
   echo "  ldap:   $LDAP"
   echo "  files:  $FILES"
   echo "  bytes:  $SIZE"
+  if [[ -d "$MEM_DIR" ]]; then
+    echo "  memory: $MEM_DIR ($(find "$MEM_DIR" -maxdepth 1 -name '*.md' | wc -l | tr -d ' ') files)"
+  else
+    echo "  memory: $MEM_DIR (absent)"
+  fi
   echo "  would write: $OUT"
   exit 0
 fi
