@@ -2,7 +2,11 @@
 # Read ONE key from the machine-local credential file (~/.env.secrets).
 #
 #   env-secret.sh GH_TOKEN_CHESHIRECODE      -> prints the value, rc 0
-#   env-secret.sh MISSING_KEY                -> prints nothing, rc 1
+#   env-secret.sh MISSING_KEY                -> rc 1, stderr says "not in"
+#   env-secret.sh BLANK_KEY                  -> rc 1, stderr says "no value"
+#
+# Nothing but the value ever reaches stdout, so a caller capturing it is
+# unaffected by the explanations; they go to stderr.
 #
 # One key at a time, never the whole file. Callers live in trees with
 # different identities (personal vs work), and sourcing the file would put
@@ -57,5 +61,18 @@ value="${value%\'}"; value="${value#\'}"
 # Strip a trailing CR so a file edited on Windows still yields a usable token.
 value="${value%$'\r'}"
 
-[ -n "$value" ] || exit 1
+# "Key not in the file" and "key in the file but blank" need different fixes —
+# add the line versus fill it in — and rc 1 alone cannot say which. The rc
+# stays 1 for both: callers branch on it, and a blank value must never read as
+# success. Only the explanation is new. Same anchor as the sed above, so a
+# prefix key (GH_TOKEN) is still reported absent when only GH_TOKEN_SUFFIX is
+# present, rather than being described as the empty form of a key it is not.
+if [ -z "$value" ]; then
+  if grep -q "^[[:space:]]*${key}=" "$file"; then
+    echo "env-secret.sh: $key is present in $file but has no value — fill it in" >&2
+  else
+    echo "env-secret.sh: $key is not in $file — add it, or check the spelling" >&2
+  fi
+  exit 1
+fi
 printf '%s\n' "$value"
