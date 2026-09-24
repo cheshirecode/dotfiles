@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+# Run a Snowflake query with key-pair auth, credentials from Vault.
+#
+# Configure with two environment variables, both required and neither defaulted:
+#   SNOWQ_VAULT_SERVICE   the Vault service holding the SNOWFLAKE_* keys
+#   SNOWQ_PYTHON          a python with snowflake-connector-python installed
+# Set them per machine (~/.env.secrets, .envrc or the machine-local shell file);
+# they are site values, not logic, and a default for either would bake one
+# organisation's layout into a generic tool.
+#
+#   snowq 'select current_version()'
+#   snowq -f query.sql
+#   snowq --env staging 'select 1'        (staging is the default. A role that
+#                                          may read a lower environment's key is
+#                                          often denied the production one by
+#                                          policy; that denial is reported as a
+#                                          setup error, never worked around.)
+#   snowq --json 'select 1'
+#
+# Exit status: 0 rows returned; 1 connect or auth failed; 2 bad invocation or a
+# credential this role cannot read; 3 the SQL itself was rejected. Kept apart on
+# purpose -- "retry" , "fix your command", "ask for access" and "fix your query"
+# are four different responses, and collapsing them into one non-zero is how a
+# caller ends up retrying a typo.
+#
+# Why this exists: the Snowflake MCP connector is interactively authenticated,
+# so it is absent from headless and cron runs, and there is no local token to
+# keep alive. Key-pair auth has no browser step and no daily expiry -- it is
+# valid until the key is rotated.
+#
+# The private key is NEVER written to disk and NEVER passed in argv, where `ps`
+# would show it. It goes into the child's environment only.
+set -uo pipefail
+
+# Both of these are machine-specific and carry no default. A default service
+# name would hardcode one organisation's Vault layout into a generic tool, and a
+# default interpreter path would silently pick some other checkout's virtualenv.
+PY="${SNOWQ_PYTHON:-}"
+SERVICE="${SNOWQ_VAULT_SERVICE:-}"
+ENVN=staging
+SQL=""; FILE=""; FMT=table
+
+# stderr, not stdout. A caller doing rows=$(snowq ...) must get an empty string
+# on a refusal, not the usage text to parse as data.
+usage() { sed -n '2,34p' "$0" >&2; exit 2; }
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --env)  ENVN="${2:-}"; [ -n "$ENVN" ] || usage; shift 2 ;;
+    -f)     FILE="${2:-}"; [ -n "$FILE" ] || usage; shift 2 ;;
+    --json) FMT=json; shift ;;
+    -h|--help) usage ;;
+    -*)     echo "snowq: unknown option: $1" >&2; exit 2 ;;
+    *)      SQL="$1"; shift ;;
+  esac
+done
+if [ -n "$FILE" ]; then
+  # Refuse rather than pick. Taking -f and silently discarding the typed query
+  # runs something the caller did not ask for and says nothing about it.
+  [ -z "$SQL" ] || { echo "snowq: give either -f FILE or a query, not both" >&2; exit 2; }
+  [ -r "$FILE" ] || { echo "snowq: cannot read $FILE" >&2; exit 2; }
+  SQL="$(cat "$FILE")"
+fi
+[ -n "$SQL" ] || usage
+[ -n "$PY" ] || { echo "snowq: set SNOWQ_PYTHON to a python that has snowflake-connector" >&2; exit 2; }
+[ -x "$PY" ] || { echo "snowq: SNOWQ_PYTHON is not executable: $PY" >&2; exit 2; }
+[ -n "$SERVICE" ] || { echo "snowq: set SNOWQ_VAULT_SERVICE to the Vault service holding the SNOWFLAKE_* keys" >&2; exit 2; }
+
+# supervault is a shell FUNCTION, so it is invisible to `timeout`, `xargs`, `env`
+# and any non-interactive shell that has not sourced the machine-local config.
+# Source it here rather than assuming the caller has it.
+if ! declare -F supervault >/dev/null 2>&1; then
+  if [ -r "$HOME/.shell_common.local" ]; then
+    # `set +u` around the source, deliberately. That file is written for
+    # interactive shells and its first line reads $_WORKSPACE_AUTH_LOADED, which
+    # is unbound in a bare environment. Under `set -u` an unbound variable in a
+    # sourced file kills the SOURCING shell immediately -- before supervault is
+    # defined and before the check below can report anything -- and with stderr
+    # redirected the script then exits 1 having printed nothing at all. Measured
+    # headless: exit 1, zero bytes of output, which reads like a connection
+    # failure and is not one.
+    set +u
+    # shellcheck disable=SC1091
+    . "$HOME/.shell_common.local" >/dev/null 2>&1 || true
+    set -u
+  fi
+fi
+declare -F supervault >/dev/null 2>&1 || {
+  echo "snowq: supervault helper not available; source ~/.shell_common.local" >&2; exit 2; }
+
+# The CLI prints a version-upgrade warning on stdout. Counting that as the value
+# reported a 17-character account identifier as 231 characters and made an
+# unreadable secret look present.
+vget() {
+  supervault get-secret "$SERVICE" "$ENVN" "$1" 2>/dev/null \
+    | grep -v -e '^Warning:' -e 'super-cli' -e '^$'
+}
+
+need() {
+  local v; v="$(vget "$1")"
+  if [ -z "$v" ] || printf '%s' "$v" | grep -qi 'error\|denied\|not found'; then
+    echo "snowq: $1 not readable from $ENVN vault${2:+ ($2)}" >&2
+    return 1
+  fi
+  printf '%s' "$v"
+}
+
+ACCOUNT="$(need SNOWFLAKE_ACCOUNT)"     || exit 2
+USERNAME="$(need SNOWFLAKE_USER)"       || exit 2
+ROLE="$(need SNOWFLAKE_ROLE)"           || exit 2
+WAREHOUSE="$(need SNOWFLAKE_WAREHOUSE)" || exit 2
+PKEY="$(need RESTRICTED_SNOWFLAKE_PRIVATE_KEY \
+        'a role permitted a lower environment is often denied production by policy')" || exit 2
+PASSPHRASE="$(vget RESTRICTED_SNOWFLAKE_PRIVATE_KEY_PASSPHRASE)"
+# SNOWFLAKE_SCHEMA holds a DATABASE name, not a schema: the monorepo builds
+# table references as "{SNOWFLAKE_SCHEMA}.public.stg_..." Without setting it the
+# session has no current database and any unqualified select fails with 090105.
+DATABASE="$(vget SNOWFLAKE_SCHEMA)"
+if [ -z "$DATABASE" ] || printf '%s' "$DATABASE" | grep -qi 'error\|denied'; then
+  # Not fatal -- a fully qualified query still works -- but never silent. Without
+  # this warning the caller meets Snowflake error 090105 ("no current database")
+  # and has no way to know the cause was an unreadable config value here.
+  echo "snowq: SNOWFLAKE_SCHEMA not readable from $ENVN vault; no current database will be set." >&2
+  echo "snowq: unqualified table names will fail with 090105 — qualify them, e.g. DB.public.table." >&2
+  DATABASE=""
+fi
+
+# Subshell + export, not `env VAR=... cmd`: the env form puts the key in argv.
+(
+  export SNOWQ_ACCOUNT="$ACCOUNT" SNOWQ_USER="$USERNAME" SNOWQ_ROLE="$ROLE" \
+         SNOWQ_WAREHOUSE="$WAREHOUSE" SNOWQ_KEY="$PKEY" \
+         SNOWQ_DATABASE="$DATABASE" \
+         SNOWQ_PASSPHRASE="$PASSPHRASE" SNOWQ_SQL="$SQL" SNOWQ_FMT="$FMT"
+  exec "$PY" - <<'PY'
+import json, os, sys
+from cryptography.hazmat.primitives import serialization
+import snowflake.connector
+
+key_pem = os.environ["SNOWQ_KEY"].replace("\\n", "\n").encode()
+pw = os.environ.get("SNOWQ_PASSPHRASE") or None
+try:
+    key = serialization.load_pem_private_key(key_pem, password=pw.encode() if pw else None)
+except Exception as e:
+    print(f"snowq: could not load the private key: {e}", file=sys.stderr)
+    sys.exit(2)
+der = key.private_bytes(
+    encoding=serialization.Encoding.DER,
+    format=serialization.PrivateFormat.PKCS8,
+    encryption_algorithm=serialization.NoEncryption())
+
+try:
+    conn = snowflake.connector.connect(
+        user=os.environ["SNOWQ_USER"], account=os.environ["SNOWQ_ACCOUNT"],
+        private_key=der, role=os.environ["SNOWQ_ROLE"],
+        warehouse=os.environ["SNOWQ_WAREHOUSE"],
+        **({"database": os.environ["SNOWQ_DATABASE"], "schema": "PUBLIC"}
+           if os.environ.get("SNOWQ_DATABASE") else {}))
+except Exception as e:
+    print(f"snowq: connect failed: {e}", file=sys.stderr)
+    sys.exit(1)
+
+try:
+    cur = conn.cursor()
+    try:
+        cur.execute(os.environ["SNOWQ_SQL"])
+    except snowflake.connector.errors.ProgrammingError as e:
+        # Exit 3, not 1. A bad query and a failed connection need different
+        # responses -- fix the SQL versus retry or re-auth -- and a traceback
+        # buries the one line that says which. Snowflake's own error code and
+        # message are the useful part; the Python frames are not.
+        print(f"snowq: SQL error: {e}", file=sys.stderr)
+        sys.exit(3)
+    cols = [c[0] for c in cur.description] if cur.description else []
+    rows = cur.fetchall()
+    if os.environ["SNOWQ_FMT"] == "json":
+        json.dump([dict(zip(cols, r)) for r in rows], sys.stdout, indent=2, default=str)
+        print()
+    else:
+        if cols:
+            w = [max(len(str(c)), *(len(str(r[i])) for r in rows)) if rows else len(str(c))
+                 for i, c in enumerate(cols)]
+            print("  ".join(str(c).ljust(w[i]) for i, c in enumerate(cols)))
+            print("  ".join("-" * x for x in w))
+            for r in rows:
+                print("  ".join(str(v).ljust(w[i]) for i, v in enumerate(r)))
+        print(f"\n{len(rows)} row(s).", file=sys.stderr)
+finally:
+    conn.close()
+PY
+)
