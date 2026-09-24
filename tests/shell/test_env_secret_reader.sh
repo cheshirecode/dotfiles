@@ -121,11 +121,22 @@ printf '%s' "$warn" | grep -q 'mode 644' ||
   note "reading a 0644 credential file printed no mode warning"
 chmod 600 "$F"
 
-# An absent file is rc 1 with a message, not a crash and not silence.
+# An absent file is rc 2 with a message, not a crash and not silence — and rc 2
+# specifically, NOT the rc 1 that means "this key has no value". Those need
+# different actions: run install.sh versus edit a line. Sharing a code put "you
+# have not filled this in" and "there is nothing to fill in" behind one number,
+# and a caller retrying the fill-it-in path would wait on a file that does not
+# exist. rc 2 is already this script's "cannot answer" code, from the usage path.
 out="$(ENV_SECRETS_FILE="$TMP/nope" HOME="$TMP/nope-home" bash "$REPO/bin/env-secret.sh" QUOTED 2>&1)"
 rc=$?
-[ "$rc" -eq 1 ] || note "absent file gave rc $rc, want 1"
+[ "$rc" -eq 2 ] || note "absent file gave rc $rc, want 2"
 printf '%s' "$out" | grep -q 'no readable' || note "absent file printed no explanation"
+
+# ...and the two codes must stay apart: a key with no value is still rc 1, so a
+# caller can tell "nothing to look in" from "nothing in it".
+ENV_SECRETS_FILE="$F" HOME="$TMP" bash "$REPO/bin/env-secret.sh" EMPTY >/dev/null 2>&1
+rc=$?
+[ "$rc" -eq 1 ] || note "a present-but-blank key gave rc $rc, want 1 (must differ from the absent-file rc 2)"
 
 # .envrc.example must route through this reader, not carry its own copy.
 # A second implementation is exactly the drift this test used to police.
