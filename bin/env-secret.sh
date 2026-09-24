@@ -4,6 +4,14 @@
 #   env-secret.sh GH_TOKEN_CHESHIRECODE      -> prints the value, rc 0
 #   env-secret.sh MISSING_KEY                -> rc 1, stderr says "not in"
 #   env-secret.sh BLANK_KEY                  -> rc 1, stderr says "no value"
+#   env-secret.sh KEY, with no secrets file  -> rc 2, stderr says "no readable"
+#   env-secret.sh          (no argument)     -> rc 2, usage
+#
+# Three outcomes, not two. rc 1 is an answer about the KEY -- it has no value,
+# and the fix is to edit the file. rc 2 means the question could not be asked at
+# all: a bad invocation, or no credential file to look in, where the fix is to
+# run install.sh. A missing file returning rc 1 put "you have not filled this in"
+# and "there is nothing to fill in" behind the same number.
 #
 # Nothing but the value ever reaches stdout, so a caller capturing it is
 # unaffected by the explanations; they go to stderr.
@@ -37,8 +45,12 @@ for candidate in "${ENV_SECRETS_FILE:-}" "$HOME/.env.secrets" "${USERPROFILE:-}/
 done
 
 if [ -z "${file:-}" ]; then
+  # rc 2, not 1: no file is not an answer about the key. The remedy is
+  # install.sh, where rc 1's remedy is editing a line -- and a caller that
+  # retried the "fill it in" path here would be waiting on a file that does
+  # not exist.
   echo "env-secret.sh: no readable ~/.env.secrets; run install.sh to create it" >&2
-  exit 1
+  exit 2
 fi
 
 # Mode check, loud. A file at 0644 is readable by every account on the box,
