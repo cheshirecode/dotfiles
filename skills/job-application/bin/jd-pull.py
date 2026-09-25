@@ -1,0 +1,1 @@
+../../job-search/bin/jd-pull.py
