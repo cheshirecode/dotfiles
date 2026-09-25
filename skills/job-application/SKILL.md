@@ -29,7 +29,9 @@ in the task when used so later runs can find the same source.
 
 ### 1. JD-pull
 
-Fetch the full JD. Record the **required** vs **bonus** split. If the JD is on Greenhouse, the og:description tag in the HTML usually contains the entire JD as one string — extract it directly. Note: salary, location, and visa language.
+Fetch the full JD. Mechanical helper: `skills/job-application/bin/jd-pull.py`
+(shared source with `job-search`) — curl ladder, og:description extraction,
+exit 3 on JS-only shells (escalate that URL to browser-use). Record the **required** vs **bonus** split. If the JD is on Greenhouse, the og:description tag in the HTML usually contains the entire JD as one string — extract it directly. Note: salary, location, and visa language.
 
 ### 2. Fit-assessment
 
