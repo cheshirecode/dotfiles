@@ -17,6 +17,15 @@ Skip / downgrade if: trivial blanket application, no worklog evidence to anchor 
 
 ## Canonical resume evidence
 
+**Default resume attachment (set 2026-09-25):** `resume-fred-full.pdf`
+(2-page PDF, Drive file ID `1kdHZK8YSGbZEIr6RJiRrIw5dptZqFIDN`, folder
+"job hunt"). Fetch with:
+`gws drive files get --params '{"fileId":"<ID>","alt":"media"}' -o <name>.pdf`
+(run from the target directory; gws refuses absolute output paths).
+Local canonical copy lives at `~/projects/applications/canonical/`.
+Attach this PDF on application forms by default — not synthesized .txt/.docx
+variants — unless the task names a tailored document.
+
 If the task records a canonical Drive file ID, try the available Drive reader
 or `gws drive files get`. If Drive is unavailable or no file ID is recorded,
 try the user’s canonical local resume; fall back to worklog evidence only if
