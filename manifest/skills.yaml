@@ -40,6 +40,18 @@ skills:
       path: skills/job-application
     install_to: ~/.claude/skills/job-application
 
+  # Sourcing half of the job-hunting pair: job-search finds and pools postings,
+  # job-application tailors one of them. Optional for the same reason as its
+  # sibling — personal tooling, not part of a working checkout.
+  - name: job-search
+    description: Source remote job postings from public boards and pool them into a _worklog program.
+    optional: true
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/job-search
+    install_to: ~/.claude/skills/job-search
+
   # Machine-setup tooling: installs the uv-managed browser-use CLI and its
   # vendor skill. Optional — named browser-use-setup deliberately, because the
   # vendor `browser-use skill install` owns the browser-use directory name in

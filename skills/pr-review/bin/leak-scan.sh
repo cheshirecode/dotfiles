@@ -44,7 +44,8 @@ TOKENS=(
 # skill is added, not the next time a leak ships.
 SKILL_COMMANDS=(
   artifact-gate brainstorm browser-use-setup council evidence-gate
-  example-led-instructions job-application karpathy-guidelines loop-engineering
+  example-led-instructions job-application job-search karpathy-guidelines
+  loop-engineering
   loop-helpers pr-cost pr-review requirement-sync serena-rg-search ship-hygiene
   tightening-a-pr webmcp-integration which-model worklog
 )
