@@ -80,6 +80,40 @@ fi
 # uncapped. Past that ceiling only a fresh OIDC login helps; this reports the
 # date rather than pretending to fix it.
 #
+
+# ~/.aws/config is ROOT-owned and ships in the image, so the platform restores
+# its own copy on a workspace restart -- overwriting local edits and any backup
+# beside it. That is not the overlay wipe the rest of this file handles: the
+# file is not deleted, it is REPLACED with an older version, and the mtime goes
+# backwards to the image build date. A session that edits it and then verifies
+# "$HOME persists" by looking at old timestamps proves nothing, because this
+# file is one of the old timestamps.
+#
+# Measured 2026-09-25: an sso-session migration applied the previous day was
+# gone after a restart, the token cache was back to the start-url key with no
+# refreshToken, and the symptom read as "SSO refresh is broken" when the config
+# had simply reverted.
+#
+# The canonical copy lives on the persistent volume. Nothing about its CONTENT
+# is in this repo -- it carries account ids, role names and a start url.
+AWS_CANON="${AWS_CANON:-/workspace/aws-config}"
+if [ -r "$AWS_CANON" ]; then
+  aws_live="$HOME/.aws/config"
+  if ! cmp -s "$AWS_CANON" "$aws_live" 2>/dev/null; then
+    mkdir -p "$HOME/.aws" 2>/dev/null
+    if cp "$AWS_CANON" "$aws_live" 2>/dev/null; then
+      note "restored ~/.aws/config from $AWS_CANON"
+    elif sudo -n cp "$AWS_CANON" "$aws_live" 2>/dev/null; then
+      sudo -n chmod 644 "$aws_live" 2>/dev/null
+      note "restored ~/.aws/config from $AWS_CANON (needed sudo; file is root-owned)"
+    else
+      # Absent is not ok. Saying nothing here is how the revert went unnoticed
+      # for a day and cost an interactive login.
+      note "WARNING ~/.aws/config differs from $AWS_CANON and could not be replaced (root-owned, no passwordless sudo)"
+    fi
+  fi
+fi
+
 # Network-guarded: one stamp file per day, tight timeouts, always exits 0.
 VAULT_STAMP="${VAULT_STAMP:-/workspace/.vault-renew-stamp}"
 VAULT_RENEW_BELOW_DAYS="${VAULT_RENEW_BELOW_DAYS:-7}"
