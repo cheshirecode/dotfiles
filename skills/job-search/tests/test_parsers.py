@@ -61,3 +61,14 @@ def io_stub(s):
 
 if __name__ == "__main__":
     unittest.main()
+
+class JdPullLargestBlock(unittest.TestCase):
+    def test_prefers_jd_block_over_banner(self):
+        jd = load("jd-pull")
+        src = ('<div class="banner">We use cookies. Accept all cookies Decline.</div>'
+               '<main><h1>Staff Engineer</h1><p>Role responsibilities include distributed '
+               'systems and you will own the full development lifecycle. Benefits included.</p></main>')
+        block = jd.largest_block(src)
+        self.assertIsNotNone(block)
+        self.assertIn('responsibilities', block)
+        self.assertNotIn('cookies', block)

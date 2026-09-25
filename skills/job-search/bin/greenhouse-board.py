@@ -10,11 +10,13 @@ import argparse, json, sys, urllib.request
 ENG = ("engineer", "developer", "software", "frontend", "front-end",
        "full stack", "full-stack", "web")
 
-def fetch(board):
-    url = f"https://boards-api.greenhouse.io/v1/boards/{board}/jobs"
+def fetch(board, job_id=None):
+    path = f"jobs/{job_id}" if job_id else "jobs"
+    url = f"https://boards-api.greenhouse.io/v1/boards/{board}/{path}"
     req = urllib.request.Request(url, headers={"User-Agent": "job-search/1.0"})
     with urllib.request.urlopen(req, timeout=30) as r:
-        return json.load(r).get("jobs", [])
+        payload = json.load(r)
+    return payload.get("jobs", []) if job_id is None else payload
 
 def select(jobs, country, remote_only):
     hits = []
@@ -40,8 +42,16 @@ def main():
     p.add_argument("--remote-only", action="store_true")
     p.add_argument("--limit", type=int, default=20)
     p.add_argument("--json", action="store_true")
+    p.add_argument("--jd", type=int, default=None, help="print full JD text for one job id")
     a = p.parse_args()
     try:
+        if a.jd:
+            import re, html as _html
+            d = fetch(a.board, a.jd)
+            txt = re.sub(r"<[^>]+>", "\n", _html.unescape(d.get("content", "")))
+            print(d.get("title", ""), "\n" + d.get("location", {}).get("name", ""), "\n\n" +
+                  re.sub(r"\n{2,}", "\n", txt).strip())
+            sys.exit(0)
         jobs = fetch(a.board)
     except Exception as e:
         print(f"fetch failed: {e}", file=sys.stderr); sys.exit(2)

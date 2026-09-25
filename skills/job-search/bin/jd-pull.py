@@ -22,9 +22,23 @@ def og_description(src):
     return html.unescape(m.group(1)) if m else None
 
 def strip_tags(src):
-    s = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", src, flags=re.S | re.I)
-    s = html.unescape(re.sub(r"<[^>]+>", " ", s))
-    return re.sub(r"[ \t]+", " ", s)
+    s = re.sub(r"<(script|style|nav|header|footer|svg)[^>]*>.*?</\1>", " ", src, flags=re.S | re.I)
+    s = html.unescape(re.sub(r"<[^>]+>", "\n", s))
+    lines = [l.strip() for l in s.splitlines()]
+    lines = [l for l in lines if l]
+    return "\n".join(lines)
+
+def largest_block(src):
+    """Return the text of the DOM block with the most text content (kills
+    cookie banners and nav chrome that dominate teamtailor-style pages)."""
+    blocks = re.findall(r"<(main|article|section|div)[^>]*>(.*?)</\1>", src, re.S | re.I)
+    best, best_len = None, 0
+    for _, inner in blocks:
+        txt = strip_tags(inner)
+        # require job-ish vocabulary to avoid picking wrappers
+        if len(txt) > best_len and re.search(r"role|experience|responsibilit|you.{0,3}ll|benefit", txt, re.I):
+            best, best_len = txt, len(txt)
+    return best
 
 def main():
     if len(sys.argv) != 2:
@@ -36,10 +50,11 @@ def main():
     jd = og_description(src)
     if jd and len(jd) > 200:
         print(jd); sys.exit(0)
-    text = strip_tags(src)
+    block = largest_block(src)
+    text = block if block and len(block) > 600 else strip_tags(src)
     if JS_SHELL.search(text) or len(text) < 600:
         print("JS-only shell; escalate to browser-use", file=sys.stderr); sys.exit(3)
-    print(text[:6000]); sys.exit(0)
+    print(text[:8000]); sys.exit(0)
 
 if __name__ == "__main__":
     main()
