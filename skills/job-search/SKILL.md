@@ -17,8 +17,18 @@ to the `job-application` skill once shortlisted.
 
 ## Source ladder — cheapest first
 
-1. **Public boards via HTTP** (no browser): `greenhouse-board.py`, `hn-wih.py`,
-   `remoteok.py`. Run these before any browser work.
+1. **Public boards via HTTP** (no browser): `greenhouse-board.py` (with
+   `--jd <id>` for full JD text), `hn-wih.py` (with `--max-age-days`),
+   `remoteok.py`, `remotive.py`, `workingnomads.py`. Run these before any browser work. Himalayas.app has a paginated JSON API (`/jobs/api`, thin per page). Working Nomads yield skews agency-mediated (Lemon.io, Proxify) — flag those as staffing roles.
+   **ATS board discovery**: probe `jobs.ashbyhq.com/<slug>` /
+   `boards-api.greenhouse.io/v1/boards/<token>/jobs` / `api.lever.co/v0/postings/<slug>`
+   across name variants — most companies live on one of the three (observed
+   2026-09: groundnews, hopper, thumbtack, ascend, xero, kake, oscilar,
+   clickup, gcai→gc-ai all on Ashby; discover slugs from careers-page embeds).
+   **Board notes**: arbeitnow is EU-only; jobicy returns malformed responses;
+   WeWorkRemotely hard-blocks HTTP (browser only); Job Bank Canada needs
+   interactive search and skews below staff-level tech; Work at a Startup
+   blocks plain HTTP.
 2. **Direct posting URLs**: `jd-pull.py <url>` (shared with `job-application`).
    Exit 3 means JS-only shell — escalate that URL to the browser harness.
 3. **LinkedIn via the browser harness** (background tabs only): run

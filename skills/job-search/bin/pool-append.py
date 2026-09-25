@@ -6,14 +6,18 @@ Idempotent per (date, source): re-running with the same label is a no-op.
 """
 import argparse, datetime, sys
 
+def utc_date():
+    return datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--file", required=True)
     p.add_argument("--source", required=True)
     p.add_argument("--rows-file", default="-")
+    p.add_argument("--date", default=None, help="ISO date; default UTC today (avoids local/UTC drift)")
     a = p.parse_args()
     text = open(a.file, encoding="utf-8").read()
-    stamp = datetime.date.today().isoformat()
+    stamp = a.date or utc_date()
     marker = f"### {stamp} — {a.source}"
     if marker in text:
         print(f"already present: {marker}"); sys.exit(0)
