@@ -26,7 +26,11 @@ to the `job-application` skill once shortlisted.
    `LJ_MODE=keyword` (keyword + location search) and `LJ_MODE=company`
    (a company slug's `/jobs/` page). LinkedIn's AI search may rewrite filter
    URLs and drop `f_WT=2` — capture the remote flag per posting from its
-   location text, never from the URL.
+   location text, never from the URL. Per-card posting URLs are frequently
+   absent from the results DOM in the AI-search variant (observed 2026-09:
+   one `/jobs/view/` anchor page-wide); when `url` comes back empty, take
+   company + title to the direct ATS ladder (greenhouse board tokens,
+   ashby board JSON) instead of fighting the page.
 
 ## Invocation
 
@@ -37,7 +41,7 @@ skills/job-search/bin/hn-wih.sh                     # latest Who-is-hiring month
 skills/job-search/bin/remoteok.py --country canada
 
 # LinkedIn (needs the browser-use daemon; BU_CDP_URL or local Chrome)
-BU_CDP_URL=http://<host>:9223 browser-use run skills/job-search/bin/linkedin-jobs.py
+BU_CDP_URL=http://<host>:9223 browser-use < skills/job-search/bin/linkedin-jobs.py
 
 # JD text for a direct URL (also: skills/job-application/bin/jd-pull.py)
 skills/job-search/bin/jd-pull.py https://boards.greenhouse.io/example/jobs/123
