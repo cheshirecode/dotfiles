@@ -218,6 +218,71 @@ fi
 # and WORKLOG_IDENTITY_DOMAIN unset makes pre-commit-identity report and skip.
 # Both halves must hold, and each can fail in a different way — which is why
 # this is read as four states rather than a boolean.
+echo "doctor: aws sso"
+# Three different things break here and all three present as "SSO is broken",
+# which is why they are reported separately rather than as one verdict:
+#   ~/.aws/config     root-owned and shipped in the image, so a restart REPLACES
+#                     it — the sso-session migration reverts and the next login
+#                     mints a token that cannot refresh.
+#   ~/.aws/sso/cache  coder-owned and on the container overlay, so a restart
+#                     DELETES it — the directory is simply gone and the CLI says
+#                     "Token for super does not exist", which reads as an expiry.
+#   the token         short-lived by design under sso-session; only the absence
+#                     of a refreshToken means a daily login.
+# No site value appears below: this checks structure, never account ids or urls.
+AWS_CANON="${AWS_CANON:-/workspace/aws-config}"
+AWS_CFG="$HOME/.aws/config"
+AWS_CACHE="$HOME/.aws/sso/cache"
+AWS_PERSIST="${AWS_SSO_CACHE:-/workspace/.aws-sso-cache}"
+
+if [ ! -e "$AWS_CFG" ]; then
+  absent "~/.aws/config not present (no AWS configured here)"
+elif [ ! -r "$AWS_CANON" ]; then
+  absent "no canonical AWS config at $AWS_CANON — drift after a restart cannot be detected"
+elif cmp -s "$AWS_CANON" "$AWS_CFG"; then
+  ok "~/.aws/config matches the canonical copy"
+elif grep -q '^\[sso-session' "$AWS_CANON" 2>/dev/null && ! grep -q '^\[sso-session' "$AWS_CFG" 2>/dev/null; then
+  fail "~/.aws/config lost its sso-session block — the image copy was restored; run bin/restore-home-links.sh"
+else
+  warn "~/.aws/config differs from $AWS_CANON (not the known revert; diff them)"
+fi
+
+if [ -L "$AWS_CACHE" ]; then
+  if [ "$(readlink "$AWS_CACHE")" = "$AWS_PERSIST" ]; then
+    ok "~/.aws/sso/cache is linked to the persistent volume (a login survives a restart)"
+  else
+    warn "~/.aws/sso/cache links to $(readlink "$AWS_CACHE"), not $AWS_PERSIST"
+  fi
+elif [ -d "$AWS_CACHE" ]; then
+  warn "~/.aws/sso/cache is a real directory on the overlay — the next restart deletes the login"
+else
+  absent "~/.aws/sso/cache not present (no SSO login yet, or a restart removed it)"
+fi
+
+# The token: absent is not a failure, it just means log in. No refreshToken IS
+# worth flagging, because it is the difference between one login and a daily one.
+aws_tok="$(find "$AWS_CACHE/" -maxdepth 1 -name '*.json' 2>/dev/null | head -50)"
+if [ -z "$aws_tok" ]; then
+  absent "no SSO token cached — run: aws sso login --sso-session <name>"
+else
+  aws_state="$(printf '%s\n' "$aws_tok" | python3 -c '
+import json,sys
+best=None
+for line in sys.stdin.read().split():
+    try: d=json.load(open(line))
+    except Exception: continue
+    if "accessToken" in d:
+        best = "refreshable" if "refreshToken" in d else "no-refresh"
+        if best == "refreshable": break
+print(best or "registration-only")' 2>/dev/null)"
+  case "$aws_state" in
+    refreshable)      ok     "SSO token present and refreshable" ;;
+    no-refresh)       warn   "SSO token has no refreshToken — expect a login every session (legacy layout?)" ;;
+    registration-only) absent "only a client registration cached, no access token — log in" ;;
+    *)                unknown "could not read the SSO token cache" ;;
+  esac
+fi
+
 echo "doctor: vault identity gate"
 # Overridable so the states below can be exercised against scratch vaults;
 # a check whose failure paths cannot be reached is not a check.
