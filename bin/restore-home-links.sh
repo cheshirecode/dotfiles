@@ -96,6 +96,52 @@ fi
 #
 # The canonical copy lives on the persistent volume. Nothing about its CONTENT
 # is in this repo -- it carries account ids, role names and a start url.
+# The SSO TOKEN CACHE is a separate problem from the config above, with the
+# opposite failure mode. ~/.aws/config is root-owned and gets REPLACED by the
+# image copy; ~/.aws/sso/cache is coder-owned, sits on the container overlay,
+# and is simply DESTROYED — after a restart the directory does not exist at all.
+#
+# The symptom is easy to misread as the credential having failed: `aws` reports
+# "Error loading SSO Token: Token for super does not exist", which reads like an
+# expiry or a broken refresh. It is neither. Measured 2026-09-28: a token that
+# had been refreshing silently for two days was gone, along with its directory,
+# purely because the workspace restarted.
+#
+# Linking the cache onto the persistent volume means one login survives restarts
+# and keeps refreshing. The trade is that the token now outlives a container
+# reset: it is the same 0600 material the CLI already writes to disk, on the
+# same box under the same user, but it is no longer destroyed by a restart.
+# Set AWS_SSO_CACHE to another path, or to an empty value, to opt out.
+AWS_SSO_CACHE="${AWS_SSO_CACHE-/workspace/.aws-sso-cache}"
+if [ -n "$AWS_SSO_CACHE" ]; then
+  if mkdir -p "$AWS_SSO_CACHE" 2>/dev/null; then
+    chmod 700 "$AWS_SSO_CACHE" 2>/dev/null
+    aws_cache="$HOME/.aws/sso/cache"
+    # NOT the generic link() helper. `ln -sfn TARGET DIR` where DIR already
+    # exists as a real directory puts the link INSIDE it — you get
+    # ~/.aws/sso/cache/.aws-sso-cache and a cache that is still on the overlay,
+    # while the command reports success. The aws CLI recreates this directory on
+    # any failed call, so "it will not exist yet" is not a safe assumption.
+    if [ -d "$aws_cache" ] && [ ! -L "$aws_cache" ]; then
+      # Preserve whatever is already cached: a live token here is a login the
+      # operator would otherwise have to repeat.
+      find "$aws_cache" -maxdepth 1 -type f -name '*.json' -exec mv -n {} "$AWS_SSO_CACHE"/ \; 2>/dev/null
+      rm -f "$aws_cache/.aws-sso-cache" 2>/dev/null   # a stray link from the bug above
+      rmdir "$aws_cache" 2>/dev/null || {
+        note "WARNING $aws_cache is a non-empty real directory; not linking (tokens will not survive a restart)"
+        aws_cache=""
+      }
+    fi
+    if [ -n "$aws_cache" ] && [ "$(readlink "$aws_cache" 2>/dev/null)" != "$AWS_SSO_CACHE" ]; then
+      mkdir -p "$(dirname "$aws_cache")" 2>/dev/null
+      ln -sfn "$AWS_SSO_CACHE" "$aws_cache" 2>/dev/null \
+        && note "linked $aws_cache -> $AWS_SSO_CACHE (SSO tokens now survive a restart)"
+    fi
+  else
+    note "WARNING could not create $AWS_SSO_CACHE; SSO tokens will not survive a restart"
+  fi
+fi
+
 AWS_CANON="${AWS_CANON:-/workspace/aws-config}"
 if [ -r "$AWS_CANON" ]; then
   aws_live="$HOME/.aws/config"
