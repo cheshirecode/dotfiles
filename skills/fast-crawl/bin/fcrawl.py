@@ -211,6 +211,23 @@ def order() -> list[str]:
     return names
 
 
+# Bot-wall interstitials: short pages that exit 0 and pass the thin check.
+# Measured 2026-09-29: lightpanda got a 438-char Cloudflare challenge from
+# a Cloudflare-fronted landing page while crw read the real page. Only short
+# pages are checked, so a long article that quotes a phrase is not flagged.
+BOT_WALL_MARKERS = (
+    "Performing security verification",
+    "Checking your browser before accessing",
+    "Enable JavaScript and cookies to continue",
+    "Attention Required! | Cloudflare",
+)
+BOT_WALL_MAX_CHARS = 2000
+
+
+def walled(markdown: str) -> bool:
+    return len(markdown) <= BOT_WALL_MAX_CHARS and any(m in markdown for m in BOT_WALL_MARKERS)
+
+
 def ok(row: dict, min_chars: int) -> bool:
     return row["error"] is None and row["chars"] >= min_chars
 
@@ -228,6 +245,8 @@ def fetch(urls: list[str], engines: list[str], min_chars: int, timeout: float) -
             continue
         tried.append(name)
         for row in RUNNERS[name](exe, pending, timeout):
+            if row["error"] is None and walled(row["markdown"]):
+                row["error"] = f"blocked: bot-wall page from {name}"
             prev = best.get(row["url"])
             if prev is None or ok(row, min_chars) or row["chars"] > prev["chars"]:
                 best[row["url"]] = row

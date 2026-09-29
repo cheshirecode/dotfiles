@@ -39,8 +39,12 @@ args = sys.argv[1:]
 if args == ["version"]:
     sys.exit(int(os.environ.get("STUB_LP_VERSION_EXIT", "0")) or print("0.4.1"))
 urls = [a for a in args if a.startswith("http")]
-rows = [{{"url": u + "/", "content": "" if "thin" in u or "js" in u else "lp " + u + " {LONG}",
-          "error": None}} for u in urls]
+WALL = "## Performing security verification\\nThis website uses a security service. " * 3
+def content(u):
+    if "thin" in u or "js" in u:
+        return ""
+    return WALL if "wall" in u else "lp " + u + " {LONG}"
+rows = [{{"url": u + "/", "content": content(u), "error": None}} for u in urls]
 print(json.dumps({{"results": rows[::-1]}} if len(urls) > 1 else rows[0]))
 """
 
@@ -133,6 +137,20 @@ class AutoFallback(StubHome):
     def test_jobs_below_one_is_refused(self) -> None:
         proc = self.run_tool(FCRAWL, "--jobs", "0", "https://a.test/x")
         self.assertEqual(proc.returncode, 2)
+
+    def test_bot_wall_page_falls_back_to_the_next_engine(self) -> None:
+        # The wall page is long enough to pass the thin check, and exits 0.
+        proc = self.run_tool(FCRAWL, "--format", "jsonl", "https://a.test/wall")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        row = self.jsonl(proc)["https://a.test/wall"]
+        self.assertEqual(row["engine"], "crw")
+        self.assertNotIn("security verification", row["markdown"])
+
+    def test_bot_wall_everywhere_exits_1_with_blocked_error(self) -> None:
+        proc = self.run_tool(FCRAWL, "--engine", "lightpanda", "--format", "jsonl", "https://a.test/wall")
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(self.jsonl(proc)["https://a.test/wall"]["error"],
+                         "blocked: bot-wall page from lightpanda")
 
     def test_thin_everywhere_exits_1_and_names_the_engines(self) -> None:
         proc = self.run_tool(FCRAWL, "--format", "jsonl", "https://a.test/thin")
