@@ -8,7 +8,8 @@ description: Install, upgrade, wrap, and connect the browser-use CLI across macO
 Use when browser automation needs installing, upgrading, or connecting: the
 uv-managed `browser-use` CLI, its vendor skill registration, and the browser
 connection gate. For day-to-day browser work use the vendor `browser-use`
-skill this skill installs — this skill owns setup, not usage.
+skill this skill installs — this skill owns setup, not usage. To read many
+pages as markdown with no browser session, use the `fast-crawl` skill.
 
 ## Install
 
