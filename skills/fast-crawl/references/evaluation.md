@@ -111,6 +111,38 @@ Each one returned exit 0.
    `--timeout 3` both came back `timeout`. `fcrawl.py` now passes the
    per-page `--http-timeout` to lightpanda.
 
+## Council review, 2026-09-29
+
+A council (4 research angles, 5 voters, majority-plus-one with a veto) voted
+on 13 changes. Kept and done:
+
+- Keep the order lightpanda, crw, crawl4ai. `crw` JS escalation could not be
+  turned off: `CRW_RENDERER__MODE=none`, `CRW_RENDERER__RENDER_JS_DEFAULT=false`
+  and a config file with `mode = "none"` all still took 19–20 s on the JS page.
+- Resolve relative links. crw `abs_links` went from 0.38 to 0.95 on the mixed
+  set, with hits unchanged (6/6). The rest sit in crw's fake code fences.
+- Cap connections per host (default 6 in total) and add `--obey-robots`.
+  Mixed set after both changes: lightpanda batch 0.72 s, 6/6; 20-page site
+  crawl 1.20–1.32 s, 20/20.
+- Do not use `semantic_tree_text`; document lightpanda's `(`, `)`, `*`
+  escaping in code.
+
+Rejected, with the measurement that settled it:
+
+- `--jobs 8` by default: no gain over 4 on 24 single-host URLs (0.48–0.50 s
+  against 0.49–0.64 s) or on 4 mixed URLs (about 0.8 s each).
+- A content-type check for non-HTML URLs: `crw map` returned 0 non-HTML
+  URLs out of 1000 on two sites, so the 5.26 s cost of a PDF is rare here.
+- "crw main content fails on GitHub": on three repeat runs crw's output held
+  the README text plus a login banner, so the claim was only half true.
+- A pointer in the vendor browser-use skill (an update overwrites it) and a
+  job-search note (every call site fetches one URL).
+- A `--dump-max-bytes` default: lightpanda's cap works (a 10.5 MB page cut at
+  2,000,014 bytes with a `[truncated]` marker), but the item got only
+  qualified votes, below the keep threshold.
+- Registering `lightpanda mcp` or `crw mcp`: not kept either way (one veto),
+  so nothing changed; the skill stays a CLI.
+
 ## Not measured
 
 - Sites behind bot protection, logins or consent walls. Use browser-use.

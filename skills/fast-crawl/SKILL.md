@@ -50,6 +50,20 @@ Exit codes: 0 every URL ok, 1 a URL failed or was thin, 2 usage error,
 3 no engine installed. A JSONL row has `url`, `engine`, `chars`, `error`,
 `seconds` and `markdown`.
 
+Relative link and image targets are resolved against the page URL, so every
+engine's links are absolute. Links inside fenced code blocks are left alone.
+
+## Be polite
+
+- One fcrawl run opens at most 6 connections to one host, summed over all
+  processes (`--host-open N` or `FAST_CRAWL_HOST_OPEN`). Each lightpanda
+  process gets `N / --jobs`, but never less than 1, so above 6 jobs the total
+  is one per process. With the default 4 processes each gets 1. Measured on 20 pages of one site: 1.13 s with 4
+  connections in total, 1.14 s with lightpanda's own 6 per process (24).
+- `robots.txt` is not read by default. `--obey-robots` honours it. That mode
+  runs lightpanda only, because `crw scrape` and crawl4ai have no such option.
+  A blocked URL gets the error `RobotsBlocked`.
+
 ## Crawl a site
 
 ```bash
@@ -59,9 +73,10 @@ FC="$FAST_CRAWL_HOME/bin"   # or ~/.local/share/fast-crawl/bin
 ```
 
 `crw map` finds URLs. `fcrawl.py` fetches them with 4 lightpanda processes
-(`--jobs N` changes that). This gives absolute links. `crw crawl URL --depth N
---limit N` does the same in one step and is also fast on static sites, but
-about half of its links stay relative.
+(`--jobs N` changes that). `crw crawl URL --depth N --limit N` does the same
+in one step and is also fast on static sites. It does not pass through
+`fcrawl.py`, so its links stay relative and its host limit is crw's own
+`--rate-limit` (default 2 per second).
 
 `crw map` with no `--depth` or `--limit` walks the whole site: 800 URLs took
 30 s on books.toscrape.com. Always set a limit.
@@ -98,7 +113,16 @@ some do not, so the marker then scores the engine, not the read.
 - lightpanda sends usage telemetry unless `LIGHTPANDA_DISABLE_TELEMETRY=true`.
   `fcrawl.py` sets it; set it yourself when you call the binary directly.
 - lightpanda markdown escapes `-` (`a-b` becomes `a\-b`), so a marker with a
-  hyphen misses. Use plain words as benchmark markers.
+  hyphen misses. Use plain words as benchmark markers. It also escapes `(`,
+  `)` and `*` inside code samples: one MDN page printed
+  `array.map\(\(x\) =&gt; x \* 2\);`. Read code from a lightpanda page with
+  care, or fetch that page with crw.
+- `crw` put each product block on books.toscrape.com inside a bare ` ``` `
+  fence. Links in those blocks stay relative, because fenced code is not
+  rewritten.
+- lightpanda `--dump semantic_tree_text` is not a compact text mode: it
+  printed one node per character, 5.7 times the markdown size on
+  example.com. `fcrawl.py` does not use it.
 
 ## Tests
 
