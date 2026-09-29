@@ -65,6 +65,18 @@ skills:
       path: skills/browser-use-setup
     install_to: ~/.claude/skills/browser-use-setup
 
+  # The no-browser half of web reading: local engines (lightpanda, crw,
+  # crawl4ai) that turn many pages into markdown. browser-use keeps clicks,
+  # logins and bot walls. Optional: the engines are a separate install.
+  - name: fast-crawl
+    description: Fetch and crawl web pages as markdown locally with lightpanda, crw or crawl4ai.
+    optional: true
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/fast-crawl
+    install_to: ~/.claude/skills/fast-crawl
+
   - name: webmcp-integration
     description: Apply page-scoped WebMCP tools to an existing repo, with impresspress-inspired sandbox guidance.
     optional: true
