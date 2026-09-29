@@ -32,16 +32,35 @@ import concurrent.futures
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
+import urllib.parse
 
 ENGINES = ("lightpanda", "crw", "crawl4ai")
 DEFAULT_MIN_CHARS = 100
 DEFAULT_TIMEOUT = 60.0
 CRW_PARALLEL = 8
 DEFAULT_JOBS = 4
+# Connections one host may see from one fcrawl run, summed over processes.
+# Measured on 20 pages of one site: 4 processes x 1 connection took 1.13 s,
+# 4 x 6 (lightpanda's own default, 24 in total) took 1.14 s. The speed comes
+# from process count, not per-host connections.
+DEFAULT_HOST_OPEN = 6
+
+
+def host_open_wanted() -> int:
+    try:
+        return max(1, int(os.environ.get("FAST_CRAWL_HOST_OPEN", DEFAULT_HOST_OPEN)))
+    except ValueError:
+        return DEFAULT_HOST_OPEN
+
+
+def obey_robots() -> bool:
+    return os.environ.get("FAST_CRAWL_OBEY_ROBOTS") == "1"
 
 
 def jobs_wanted() -> int:
@@ -92,7 +111,34 @@ def engine_env() -> dict[str, str]:
     return env
 
 
+LINK_TARGET = re.compile(r"(\]\()([^)\s]+)")
+FENCE = re.compile(r"(?ms)^```.*?^```[^\n]*$")
+
+
+def absolutize(markdown: str, base: str) -> str:
+    """Resolve relative markdown link and image targets against the page URL.
+
+    crw keeps them relative (measured: 196 of 231 links on one news page), and
+    a relative link is useless once the text leaves the page. Targets with a
+    scheme, `#fragment` targets and fenced code blocks are left alone.
+    """
+    def fix(m: re.Match) -> str:
+        target = m.group(2)
+        if target.startswith("#") or re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*:", target):
+            return m.group(0)
+        return m.group(1) + urllib.parse.urljoin(base, target)
+
+    out, last = [], 0
+    for fence in FENCE.finditer(markdown):
+        out.append(LINK_TARGET.sub(fix, markdown[last:fence.start()]))
+        out.append(fence.group(0))
+        last = fence.end()
+    out.append(LINK_TARGET.sub(fix, markdown[last:]))
+    return "".join(out)
+
+
 def record(url: str, engine: str, markdown: str, error: str | None, seconds: float) -> dict:
+    markdown = absolutize(markdown, url) if markdown else markdown
     return {"url": url, "engine": engine, "chars": len(markdown.strip()), "error": error,
             "seconds": round(seconds, 3), "markdown": markdown}
 
@@ -144,7 +190,9 @@ def _lightpanda_batch(exe: str, urls: list[str], timeout: float) -> list[dict]:
     # with it as the only limit, one slow URL marked every URL in its chunk
     # "timeout" and their content was lost.
     cmd = [exe, "fetch", "--json", "--dump", "markdown", "--wait-until", "load",
-           "--http-timeout", str(int(timeout * 1000)), *urls]
+           "--http-timeout", str(int(timeout * 1000)),
+           "--http-max-host-open", str(max(1, host_open_wanted() // jobs_wanted())),
+           *(["--obey-robots"] if obey_robots() else []), *urls]
     start = time.perf_counter()
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True,
@@ -179,9 +227,18 @@ def _crw_one(exe: str, url: str, timeout: float) -> dict:
 
 
 def run_crw(exe: str, urls: list[str], timeout: float) -> list[dict]:
-    # crw scrape takes one URL per process; run them side by side.
+    # crw scrape takes one URL per process and has no rate limit of its own,
+    # so cap how many run at once against one host.
+    slots: dict[str, threading.Semaphore] = {}
+    for u in urls:
+        slots.setdefault(urllib.parse.urlsplit(u).netloc, threading.Semaphore(host_open_wanted()))
+
+    def one(u: str) -> dict:
+        with slots[urllib.parse.urlsplit(u).netloc]:
+            return _crw_one(exe, u, timeout)
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=CRW_PARALLEL) as pool:
-        return list(pool.map(lambda u: _crw_one(exe, u, timeout), urls))
+        return list(pool.map(one, urls))
 
 
 def run_crawl4ai(exe: str, urls: list[str], timeout: float) -> list[dict]:
@@ -314,6 +371,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--format", default="md", choices=("md", "jsonl"))
     ap.add_argument("--min-chars", type=int, default=DEFAULT_MIN_CHARS)
     ap.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT)
+    ap.add_argument("--obey-robots", action="store_true",
+                    help="honour robots.txt; runs lightpanda only, the one engine that can")
+    ap.add_argument("--host-open", type=int, help=f"connections per host, summed over processes "
+                    f"(default {DEFAULT_HOST_OPEN}, or $FAST_CRAWL_HOST_OPEN)")
     ap.add_argument("--jobs", type=int, help=f"lightpanda processes per batch (default {DEFAULT_JOBS}, "
                     "or $FAST_CRAWL_JOBS)")
     args = ap.parse_args(argv)
@@ -326,7 +387,16 @@ def main(argv: list[str]) -> int:
         urls += [line.strip() for line in sys.stdin if line.strip()]
     if not urls:
         ap.error("no URLs given")
+    if args.host_open is not None:
+        if args.host_open < 1:
+            ap.error("--host-open must be 1 or more")
+        os.environ["FAST_CRAWL_HOST_OPEN"] = str(args.host_open)
     engines = order() if args.engine == "auto" else [args.engine]
+    if args.obey_robots:
+        if engines != ["lightpanda"] and args.engine != "auto":
+            ap.error("--obey-robots works with lightpanda only")
+        os.environ["FAST_CRAWL_OBEY_ROBOTS"] = "1"
+        engines = ["lightpanda"]
     rows = fetch(urls, engines, args.min_chars, args.timeout)
     if not rows:
         print(f"fcrawl: no engine installed among {', '.join(engines)}; "

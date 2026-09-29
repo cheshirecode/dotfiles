@@ -44,23 +44,37 @@ urls = [a for a in args if a.startswith("http")]
 if any("slow" in u for u in urls) and "--http-timeout" not in args:
     import time; time.sleep(30)
 WALL = "## Performing security verification\\nThis website uses a security service. " * 3
+HOST_OPEN = args[args.index("--http-max-host-open") + 1] if "--http-max-host-open" in args else "unset"
+ROBOTS = "--obey-robots" in args
 def content(u):
     if "thin" in u or "js" in u:
         return ""
-    return WALL if "wall" in u else "lp " + u + " {LONG}"
-rows = [{{"url": u + "/", "content": "" if "slow" in u else content(u),
-          "error": "HttpTimeout" if "slow" in u else None}} for u in urls]
+    return WALL if "wall" in u else "lp " + u + " host_open=" + HOST_OPEN + " {LONG}"
+def error(u):
+    if "slow" in u:
+        return "HttpTimeout"
+    return "RobotsBlocked" if ROBOTS and "private" in u else None
+rows = [{{"url": u + "/", "content": "" if "slow" in u else content(u), "error": error(u)}}
+        for u in urls]
 print(json.dumps({{"results": rows[::-1]}} if len(urls) > 1 else rows[0]))
 """
 
 # Stub crw: renders everything except URLs marked thin.
 CRW_STUB = f"""#!{sys.executable}
-import sys
+import os, sys, time
 args = sys.argv[1:]
 if args == ["--version"]:
     print("crw 0.36.0"); sys.exit(0)
 url = args[1]
-print("" if "thin" in url else "crw " + url + " {LONG}")
+log = os.environ.get("STUB_CRW_LOG")
+if log:
+    with open(log, "a") as f:
+        f.write(f"start {{time.time()}}\\n")
+    time.sleep(0.3)
+    with open(log, "a") as f:
+        f.write(f"end {{time.time()}}\\n")
+# crw keeps links relative, as the real engine does.
+print("" if "thin" in url else "crw " + url + " [login](/login) {LONG}")
 """
 
 # Stub crawl4ai venv python: ignores the -c script, returns reversed rows.
@@ -146,6 +160,48 @@ class AutoFallback(StubHome):
         self.assertIsNone(rows["https://a.test/fast"]["error"])
         self.assertIn("lp https://a.test/fast ", rows["https://a.test/fast"]["markdown"])
         self.assertEqual(rows["https://a.test/slow"]["error"], "HttpTimeout")
+
+    def test_crw_relative_links_come_back_absolute(self) -> None:
+        proc = self.run_tool(FCRAWL, "--engine", "crw", "--format", "jsonl", "https://a.test/dir/page")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        md = self.jsonl(proc)["https://a.test/dir/page"]["markdown"]
+        self.assertIn("[login](https://a.test/login)", md)
+        self.assertNotIn("](/login)", md)
+
+    def test_host_open_budget_is_split_over_processes(self) -> None:
+        for extra, want in ((["--jobs", "4"], "1"), (["--jobs", "1"], "6"),
+                            (["--jobs", "4", "--host-open", "12"], "3")):
+            proc = self.run_tool(FCRAWL, "--engine", "lightpanda", *extra, "https://a.test/x")
+            self.assertIn(f"host_open={want} ", proc.stdout, extra)
+
+    def test_crw_runs_at_most_host_open_at_once_per_host(self) -> None:
+        log = pathlib.Path(self.tmp.name) / "crw.log"
+        urls = [f"https://one.test/p{i}" for i in range(6)]
+        proc = self.run_tool(FCRAWL, "--engine", "crw", "--host-open", "2", "--format", "jsonl", *urls,
+                             STUB_CRW_LOG=str(log))
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        events = sorted((float(t), kind) for kind, t in
+                        (line.split() for line in log.read_text().splitlines()))
+        live = peak = 0
+        for _, kind in events:
+            live += 1 if kind == "start" else -1
+            peak = max(peak, live)
+        self.assertEqual(len(events), 12)
+        self.assertEqual(peak, 2)
+
+    def test_obey_robots_runs_lightpanda_only_and_keeps_the_block(self) -> None:
+        proc = self.run_tool(FCRAWL, "--obey-robots", "--format", "jsonl",
+                             "https://a.test/private/x", "https://a.test/pub")
+        self.assertEqual(proc.returncode, 1)
+        rows = self.jsonl(proc)
+        self.assertEqual(rows["https://a.test/private/x"]["error"], "RobotsBlocked")
+        self.assertEqual(rows["https://a.test/private/x"]["engine"], "lightpanda")
+        self.assertIsNone(rows["https://a.test/pub"]["error"])
+
+    def test_obey_robots_refuses_a_forced_other_engine(self) -> None:
+        proc = self.run_tool(FCRAWL, "--obey-robots", "--engine", "crw", "https://a.test/x")
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("lightpanda only", proc.stderr)
 
     def test_jobs_below_one_is_refused(self) -> None:
         proc = self.run_tool(FCRAWL, "--jobs", "0", "https://a.test/x")
@@ -255,6 +311,22 @@ class Bench(StubHome):
         proc = self.run_tool(BENCH, "--urls", str(urls))
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn(":1: expected URL<TAB>marker", proc.stderr)
+
+    def test_absolutize_rules(self) -> None:
+        sys.path.insert(0, str(SKILL_DIR / "bin"))
+        try:
+            import fcrawl
+        finally:
+            sys.path.pop(0)
+        base = "https://a.test/dir/page"
+        md = ("[a](/root) [b](rel?x=1) ![i](img.png) [p](//cdn.test/x) [h](https://b.test/) "
+              "[f](#top) [m](mailto:x@a.test)\n```\n[code](/not-a-link)\n```\n[after](/z)")
+        out = fcrawl.absolutize(md, base)
+        for want in ("[a](https://a.test/root)", "[b](https://a.test/dir/rel?x=1)",
+                     "![i](https://a.test/dir/img.png)", "[p](https://cdn.test/x)",
+                     "[h](https://b.test/)", "[f](#top)", "[m](mailto:x@a.test)",
+                     "[code](/not-a-link)", "[after](https://a.test/z)"):
+            self.assertIn(want, out)
 
     def test_absolute_link_ratio(self) -> None:
         sys.path.insert(0, str(SKILL_DIR / "bin"))
