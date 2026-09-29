@@ -137,11 +137,18 @@ def run_lightpanda(exe: str, urls: list[str], timeout: float) -> list[dict]:
 def _lightpanda_batch(exe: str, urls: list[str], timeout: float) -> list[dict]:
     # One process per chunk. More than one URL requires --json, and --json
     # with one URL prints a bare object instead of {"results": [...]}.
-    cmd = [exe, "fetch", "--json", "--dump", "markdown", "--wait-until", "load", *urls]
+    #
+    # `timeout` is per page. lightpanda enforces it per transfer
+    # (--http-timeout), so one slow URL fails alone and the rest of the chunk
+    # survives. The subprocess deadline is only a backstop for a hung process:
+    # with it as the only limit, one slow URL marked every URL in its chunk
+    # "timeout" and their content was lost.
+    cmd = [exe, "fetch", "--json", "--dump", "markdown", "--wait-until", "load",
+           "--http-timeout", str(int(timeout * 1000)), *urls]
     start = time.perf_counter()
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
-                              env=engine_env(), check=False)
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              timeout=timeout * len(urls) + 10, env=engine_env(), check=False)
     except subprocess.TimeoutExpired:
         took = time.perf_counter() - start
         return [record(u, "lightpanda", "", "timeout", took) for u in urls]

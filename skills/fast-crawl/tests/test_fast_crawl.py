@@ -39,12 +39,17 @@ args = sys.argv[1:]
 if args == ["version"]:
     sys.exit(int(os.environ.get("STUB_LP_VERSION_EXIT", "0")) or print("0.4.1"))
 urls = [a for a in args if a.startswith("http")]
+# A "slow" URL fails alone when a per-page --http-timeout is passed, as the
+# real engine does; without it the whole process hangs past its deadline.
+if any("slow" in u for u in urls) and "--http-timeout" not in args:
+    import time; time.sleep(30)
 WALL = "## Performing security verification\\nThis website uses a security service. " * 3
 def content(u):
     if "thin" in u or "js" in u:
         return ""
     return WALL if "wall" in u else "lp " + u + " {LONG}"
-rows = [{{"url": u + "/", "content": content(u), "error": None}} for u in urls]
+rows = [{{"url": u + "/", "content": "" if "slow" in u else content(u),
+          "error": "HttpTimeout" if "slow" in u else None}} for u in urls]
 print(json.dumps({{"results": rows[::-1]}} if len(urls) > 1 else rows[0]))
 """
 
@@ -133,6 +138,14 @@ class AutoFallback(StubHome):
             self.assertIn(f"lp {url} ", row["markdown"], f"{url} got another page's document")
         self.assertEqual([json.loads(line)["url"] for line in proc.stdout.splitlines()], urls,
                          "output order must follow input order")
+
+    def test_one_slow_url_does_not_lose_its_chunk(self) -> None:
+        proc = self.run_tool(FCRAWL, "--engine", "lightpanda", "--jobs", "1", "--timeout", "2",
+                             "--format", "jsonl", "https://a.test/fast", "https://a.test/slow")
+        rows = self.jsonl(proc)
+        self.assertIsNone(rows["https://a.test/fast"]["error"])
+        self.assertIn("lp https://a.test/fast ", rows["https://a.test/fast"]["markdown"])
+        self.assertEqual(rows["https://a.test/slow"]["error"], "HttpTimeout")
 
     def test_jobs_below_one_is_refused(self) -> None:
         proc = self.run_tool(FCRAWL, "--jobs", "0", "https://a.test/x")
