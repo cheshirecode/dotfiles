@@ -265,18 +265,36 @@ aws_tok="$(find "$AWS_CACHE/" -maxdepth 1 -name '*.json' 2>/dev/null | head -50)
 if [ -z "$aws_tok" ]; then
   absent "no SSO token cached — run: aws sso login --sso-session <name>"
 else
+  # EXPIRY, not just the presence of a refreshToken. A refreshToken key proves
+  # the sso-session layout is in use; it does NOT prove the token still works.
+  # Refresh is bounded by the IAM Identity Center session duration, and once
+  # that is reached the CLI fails with "Token has expired and refresh failed"
+  # while the cache still looks perfectly healthy. Measured 2026-09-29: a token
+  # that had refreshed silently for ~11.6h reported "present and refreshable"
+  # here while every aws call returned 255.
   aws_state="$(printf '%s\n' "$aws_tok" | python3 -c '
-import json,sys
+import json,sys,datetime
+now=datetime.datetime.now(datetime.timezone.utc)
 best=None
 for line in sys.stdin.read().split():
     try: d=json.load(open(line))
     except Exception: continue
-    if "accessToken" in d:
+    if "accessToken" not in d: continue
+    live=False
+    try:
+        live = datetime.datetime.fromisoformat(d["expiresAt"].replace("Z","+00:00")) > now
+    except Exception:
+        best = best or "unreadable-expiry"; continue
+    if live:
         best = "refreshable" if "refreshToken" in d else "no-refresh"
         if best == "refreshable": break
+    elif best is None:
+        best = "expired"
 print(best or "registration-only")' 2>/dev/null)"
   case "$aws_state" in
-    refreshable)      ok     "SSO token present and refreshable" ;;
+    refreshable)      ok     "SSO token present, unexpired and refreshable" ;;
+    expired)          fail   "SSO token EXPIRED and refresh failed — the Identity Center session duration was reached; run: aws sso login --sso-session <name>" ;;
+    unreadable-expiry) unknown "SSO token cached but its expiresAt could not be read" ;;
     no-refresh)       warn   "SSO token has no refreshToken — expect a login every session (legacy layout?)" ;;
     registration-only) absent "only a client registration cached, no access token — log in" ;;
     *)                unknown "could not read the SSO token cache" ;;

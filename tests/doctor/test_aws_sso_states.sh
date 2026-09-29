@@ -52,6 +52,19 @@ section "$H3" "$CANON" "$P3"
 has WARN 'no refreshToken' || note "a non-refreshable token was not flagged"
 has OK 'linked to the persistent volume' || note "a correctly linked cache was not reported OK"
 
+# 3b. EXPIRED but carrying a refreshToken. This is the false green that shipped:
+#     doctor read the refreshToken KEY and reported "present and refreshable"
+#     while every aws call returned 255 with "Token has expired and refresh
+#     failed". A refreshToken proves the sso-session layout is in use; it does
+#     not prove the token still works, because refresh is bounded by the
+#     Identity Center session duration. Measured 2026-09-29: refresh ran
+#     silently for ~11.6h after login, then stopped.
+printf '{"accessToken":"x","refreshToken":"y","expiresAt":"2000-01-01T00:00:00Z"}' > "$P3/t.json"
+section "$H3" "$CANON" "$P3"
+has FAIL 'EXPIRED' || note "an expired token with a refreshToken was not reported FAIL"
+grep -q 'aws sso login' "$TMP/sec" || note "the expired verdict does not name the remedy"
+has OK 'refreshable' && note "an expired token was still reported refreshable"
+
 # 4. A refreshable token is OK, so the WARN above is not simply always-on.
 printf '{"accessToken":"x","refreshToken":"y","expiresAt":"2030-01-01T00:00:00Z"}' > "$P3/t.json"
 section "$H3" "$CANON" "$P3"
