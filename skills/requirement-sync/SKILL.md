@@ -17,6 +17,10 @@ This skill does the finding. It does not decide what is true.
 - A tracked item closes and its premise was carried into other documents.
 - Before a sign-off, to check the evidence under it has not moved.
 
+- A page is assembled from several sources and has to follow them as they move.
+  That is the same problem from the end with more inputs than editors; see
+  [references/derived-views.md](references/derived-views.md).
+
 Do not use it to make the decision. It surfaces disagreement; a human resolves it.
 
 ## Initialise: scan, ask, declare
@@ -84,6 +88,12 @@ read one item**, and **how to write to it**. For a tracker, two more:
 Keep the declarations in one file the procedure can read. If a surface cannot
 answer one of those questions, record that; a missing capability changes the
 procedure rather than invalidating it.
+
+A source feeding a derived view answers the same four questions and three more —
+which fields it owns, where its snapshot lives, and how old that snapshot is.
+Those go in a manifest beside the declarations, which is also the extension
+point: a new source adds an entry and a script and edits neither the skill nor
+an existing script. See [references/derived-views.md](references/derived-views.md).
 
 ## How records go stale
 
