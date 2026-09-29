@@ -79,6 +79,13 @@ some do not, so the marker then scores the engine, not the read.
 
 ## Known traps
 
+- A Cloudflare challenge page ("Performing security verification") exits 0
+  and is long enough to pass the thin check. `fcrawl.py` marks a short page
+  with a known challenge phrase as `blocked` and tries the next engine.
+  Engines differ per site: on one landing page lightpanda was blocked and crw
+  was not; on producthunt.com crawl4ai was blocked and lightpanda was not.
+- `--timeout` is per page. lightpanda gets it as `--http-timeout`, so one slow
+  page fails alone and does not take its chunk down with it.
 - `crw` escalates a thin page to a JS renderer that it starts itself. That
   took 19–20 s for one page here. lightpanda renders the same page in under
   1 s. `auto` puts lightpanda first for this reason.

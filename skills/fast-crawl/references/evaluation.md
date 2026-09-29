@@ -102,6 +102,14 @@ Each one returned exit 0.
    marker now uses body text.
 5. **lightpanda escapes `-` in markdown** (`marker-from-js` became
    `marker\-from\-js`), so a hyphenated marker misses.
+6. **A bot-wall page passed the thin check.** A later live check on a
+   Cloudflare-fronted landing page: lightpanda returned a 438-char challenge
+   page, so auto mode never tried crw, which read the real page (10252
+   chars). `fcrawl.py` now detects the challenge phrases.
+7. **One slow page failed its whole lightpanda chunk.** The chunk had one
+   subprocess deadline. A fast page and a 6 s page in one chunk with
+   `--timeout 3` both came back `timeout`. `fcrawl.py` now passes the
+   per-page `--http-timeout` to lightpanda.
 
 ## Not measured
 
