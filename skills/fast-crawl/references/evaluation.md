@@ -9,6 +9,13 @@ a different network or site set can change the order. Re-run
 Versions: lightpanda 0.4.1, crw (fastCRW) 0.36.0, crawl4ai 0.9.4 with
 Playwright Chrome Headless Shell 153.
 
+The installer now pins crw 0.37.1. Re-checked on 2026-09-30: the same hits
+(6/6 mixed, 5/5 static) and links (0.95 and 0.94 absolute). In seven
+alternating runs of the static set, 0.37.1 took a median 0.42 s and 0.36.0
+took 0.44 s. The JS-page escalation still costs about 20 s. The new
+"solver tier" is off by default (`renderer.cloak_after_egress`), so a local
+install does not use it.
+
 ## What each engine is
 
 | Engine | What it is | Runs JS | Install size | Licence |
