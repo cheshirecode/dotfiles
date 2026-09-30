@@ -13,7 +13,7 @@
 set -uo pipefail
 
 LIGHTPANDA_VERSION="0.4.1"
-CRW_VERSION="0.36.0"
+CRW_VERSION="0.37.1"
 CRAWL4AI_VERSION="0.9.4"
 CRAWL4AI_PYTHON="3.12"
 
@@ -79,22 +79,22 @@ case "$os/$arch" in
     LP_ASSET="lightpanda-aarch64-macos"
     LP_SHA="99e67739ed8cf5b985af7cbfa7c76b2bab257b171b2dad21109bd74b4f3bb510"
     CRW_ASSET="crw-darwin-arm64.tar.gz"
-    CRW_SHA="4293f288a66515bc65acd3536323994fa8fb650408e662daa1d378e6209c3077" ;;
+    CRW_SHA="62345b12519e46d5bf4ef4f82ab92004f7a0e3ebc22a5308608b35de21292eb2" ;;
   Darwin/x86_64)
     LP_ASSET="lightpanda-x86_64-macos"
     LP_SHA="9f8ed2787476e39e9c8ba4890a4971391fb7098bbe6384350b21a3649b485eec"
     CRW_ASSET="crw-darwin-x64.tar.gz"
-    CRW_SHA="b9d3261977287ef24fa1e0342ad4f14243338c315e538f3ec614ca7481face02" ;;
+    CRW_SHA="7baff76c29b41a4a7ac460d5bcda661ca34535c90dec29a7813c7b568999f6e5" ;;
   Linux/x86_64|Linux/amd64)
     LP_ASSET="lightpanda-x86_64-linux"
     LP_SHA="1d40801e72c0bc61b2cbd3f3562bcfc46de7b79e0568f33f686b64f2e587610a"
     CRW_ASSET="crw-linux-x64.tar.gz"
-    CRW_SHA="d72c6900b6355630cf0251f4e712a53f645655a43bc19998e7cfed0f2932bfb1" ;;
+    CRW_SHA="9562a66b32c6905bd3af6c6ce102e6a5a0a918b5ccbd2e2ec1ac4b8a9557ed18" ;;
   Linux/aarch64|Linux/arm64)
     LP_ASSET="lightpanda-aarch64-linux"
     LP_SHA="664775c7f5ab69cc3189954c7f9345e25c167cb4dace016173e629f9a5e82c42"
     CRW_ASSET="crw-linux-arm64.tar.gz"
-    CRW_SHA="945a9e6bbe850f865997e36c11ed467866eaa35e3cfd09d8ec7cb17f71bdc5d8" ;;
+    CRW_SHA="15665156c573025e75355c1bdaf99570b2fb3ad9b4d873c8ce6b39a21668afe6" ;;
   *) die "unsupported platform '$os/$arch' (macOS or Linux on arm64/x86_64; Windows via WSL)" 5 ;;
 esac
 

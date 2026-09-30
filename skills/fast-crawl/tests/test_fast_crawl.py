@@ -64,7 +64,7 @@ CRW_STUB = f"""#!{sys.executable}
 import os, sys, time
 args = sys.argv[1:]
 if args == ["--version"]:
-    print("crw 0.36.0"); sys.exit(0)
+    print("crw 0.37.1"); sys.exit(0)
 url = args[1]
 log = os.environ.get("STUB_CRW_LOG")
 if log:
