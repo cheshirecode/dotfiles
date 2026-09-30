@@ -77,7 +77,7 @@ done
 # versus fill it in. Both must SAY which. A reader that is silent here sends
 # the operator to look for a key that is already there, or to fill in one that
 # does not exist. stderr only — stdout stays clean for callers capturing it.
-err_for() { ENV_SECRETS_FILE="$F" HOME="$TMP" bash "$REPO/bin/env-secret.sh" "$1" 2>&1 >/dev/null; }
+err_for() { { ENV_SECRETS_FILE="$F" HOME="$TMP" bash "$REPO/bin/env-secret.sh" "$1" >/dev/null; } 2>&1; }
 
 printf '%s' "$(err_for EMPTY)" | grep -q 'no value' ||
   note "a key present but blank printed no explanation naming it as blank"

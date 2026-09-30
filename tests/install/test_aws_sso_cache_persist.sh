@@ -49,7 +49,7 @@ grep -q 'SSO tokens now survive' "$TMP/out" && note "a no-op run re-announced th
 
 # 4. Opt-out must be honoured, and must not touch the home dir.
 H3="$TMP/h3"; mkdir -p "$H3/.aws"
-HOME="$H3" AWS_SSO_CACHE= AWS_CANON=/nonexistent ENV_SECRETS=/nonexistent \
+HOME="$H3" AWS_SSO_CACHE='' AWS_CANON=/nonexistent ENV_SECRETS=/nonexistent \
   VAULT_STAMP="$TMP/stamp" bash "$SCRIPT" >"$TMP/out" 2>&1
 grep -q 'SSO tokens now survive' "$TMP/out" && note "an empty AWS_SSO_CACHE still linked the cache"
 [ -e "$H3/.aws/sso/cache" ] && note "an empty AWS_SSO_CACHE still created the cache path"

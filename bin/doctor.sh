@@ -236,27 +236,27 @@ AWS_CACHE="$HOME/.aws/sso/cache"
 AWS_PERSIST="${AWS_SSO_CACHE:-/workspace/.aws-sso-cache}"
 
 if [ ! -e "$AWS_CFG" ]; then
-  absent "~/.aws/config not present (no AWS configured here)"
+  absent "$AWS_CFG not present (no AWS configured here)"
 elif [ ! -r "$AWS_CANON" ]; then
   absent "no canonical AWS config at $AWS_CANON — drift after a restart cannot be detected"
 elif cmp -s "$AWS_CANON" "$AWS_CFG"; then
-  ok "~/.aws/config matches the canonical copy"
+  ok "$AWS_CFG matches the canonical copy"
 elif grep -q '^\[sso-session' "$AWS_CANON" 2>/dev/null && ! grep -q '^\[sso-session' "$AWS_CFG" 2>/dev/null; then
-  fail "~/.aws/config lost its sso-session block — the image copy was restored; run bin/restore-home-links.sh"
+  fail "$AWS_CFG lost its sso-session block — the image copy was restored; run bin/restore-home-links.sh"
 else
-  warn "~/.aws/config differs from $AWS_CANON (not the known revert; diff them)"
+  warn "$AWS_CFG differs from $AWS_CANON (not the known revert; diff them)"
 fi
 
 if [ -L "$AWS_CACHE" ]; then
   if [ "$(readlink "$AWS_CACHE")" = "$AWS_PERSIST" ]; then
-    ok "~/.aws/sso/cache is linked to the persistent volume (a login survives a restart)"
+    ok "$AWS_CACHE is linked to the persistent volume (a login survives a restart)"
   else
-    warn "~/.aws/sso/cache links to $(readlink "$AWS_CACHE"), not $AWS_PERSIST"
+    warn "$AWS_CACHE links to $(readlink "$AWS_CACHE"), not $AWS_PERSIST"
   fi
 elif [ -d "$AWS_CACHE" ]; then
-  warn "~/.aws/sso/cache is a real directory on the overlay — the next restart deletes the login"
+  warn "$AWS_CACHE is a real directory on the overlay — the next restart deletes the login"
 else
-  absent "~/.aws/sso/cache not present (no SSO login yet, or a restart removed it)"
+  absent "$AWS_CACHE not present (no SSO login yet, or a restart removed it)"
 fi
 
 # The token: absent is not a failure, it just means log in. No refreshToken IS
