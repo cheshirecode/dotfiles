@@ -38,10 +38,12 @@ cmp -s "$CANON" "$H/.aws/config" || note "a reverted ~/.aws/config was not resto
 grep -q 'restored ~/.aws/config' "$TMP/out" || note "the restore was silent; it must say what it changed"
 
 # 2. Idempotent: an already-correct config produces no output and no rewrite.
-before="$(stat -c %Y "$H/.aws/config")"
+mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1"; }
+before="$(mtime "$H/.aws/config")"
+[ -n "$before" ] || note "could not read the config mtime, so the no-op check below would compare nothing"
 run "$H" "$CANON"
 grep -q 'restored ~/.aws/config' "$TMP/out" && note "a no-op run still reported a restore"
-[ "$(stat -c %Y "$H/.aws/config")" = "$before" ] || note "a no-op run rewrote the file"
+[ "$(mtime "$H/.aws/config")" = "$before" ] || note "a no-op run rewrote the file"
 
 # 3. No canonical copy: silent, and it must NOT delete or truncate the live one.
 H2="$TMP/h2"; mkdir -p "$H2/.aws"; printf 'keepme\n' > "$H2/.aws/config"

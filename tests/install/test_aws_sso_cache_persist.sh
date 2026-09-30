@@ -55,7 +55,7 @@ grep -q 'SSO tokens now survive' "$TMP/out" && note "an empty AWS_SSO_CACHE stil
 [ -e "$H3/.aws/sso/cache" ] && note "an empty AWS_SSO_CACHE still created the cache path"
 
 # 5. The persistent dir must not be world-readable: it holds live tokens.
-mode=$(stat -c '%a' "$P" 2>/dev/null)
+mode=$(stat -c '%a' "$P" 2>/dev/null || stat -f '%Lp' "$P" 2>/dev/null)
 case "$mode" in 700|2700) ;; *) note "persistent cache dir is mode $mode, want 700" ;; esac
 
 if [ "$fails" -ne 0 ]; then exit 1; fi
