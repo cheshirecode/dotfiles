@@ -34,12 +34,89 @@ backup() {
   fi
 }
 
+# ~/.bashrc is a machine-local stub that sources the tracked .bashrc, not a
+# symlink to it. The Coder template appends its own blocks with
+# `cat >> ~/.bashrc`; through a symlink that append lands in the tracked file.
+# Measured 2026-10-01: 46 template lines, employer-named, sat uncommitted in the
+# clone's .bashrc. The stub takes the append and the checkout stays clean.
+BASHRC_MARK='# dotfiles install.sh: sources the tracked .bashrc. Lines below are machine-local.'
+
+# Print what was appended to a tracked .bashrc. Fails unless the file is
+# HEAD:.bashrc plus a tail, so an edit to the tracked lines is never carried off.
+bashrc_tail() {  # <path to a tracked .bashrc>
+  local f="$1" repo size
+  repo="$(cd "$(dirname "$f")" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null)" || return 1
+  size="$(git -C "$repo" cat-file -s HEAD:.bashrc 2>/dev/null)" || return 1
+  cmp -s -n "$size" <(git -C "$repo" show HEAD:.bashrc) "$f" || return 1
+  tail -c +"$((size + 1))" "$f"
+}
+
+install_bashrc_stub() {
+  local rc="$DEST/.bashrc" src=". \"$REPO_DIR/.bashrc\"" tmp="$DEST/.bashrc.dotfiles-tmp.$$" real tail_
+  if [ -f "$rc" ] && [ ! -L "$rc" ] && [ "$(head -n 1 "$rc")" = "$BASHRC_MARK" ]; then
+    [ "$(sed -n 2p "$rc")" = "$src" ] && return 0
+    # The checkout moved: repoint the source line, keep every machine-local line.
+    { echo "$BASHRC_MARK"; echo "$src"; tail -n +3 "$rc"; } > "$tmp" && mv -f "$tmp" "$rc" &&
+      echo "Repointed $rc at $REPO_DIR/.bashrc"
+    return 0
+  fi
+  tail_=""
+  if [ -L "$rc" ]; then
+    real="$(readlink -f "$rc" 2>/dev/null)" || real=""
+    if [ -n "$real" ] && tail_="$(bashrc_tail "$real")" && [ -n "$tail_" ]; then
+      # A pure append to a tracked file: move it into the stub, then put the
+      # tracked file back to HEAD. Nothing else in that checkout is touched.
+      { echo "$BASHRC_MARK"; echo "$src"; printf '%s\n' "$tail_"; } > "$tmp" && mv -f "$tmp" "$rc" &&
+        git -C "$(dirname "$real")" checkout -- "$(basename "$real")" &&
+        echo "Moved ${#tail_} appended bytes from $real into $rc"
+      return 0
+    fi
+  elif [ -e "$rc" ]; then
+    backup "$rc"
+  fi
+  { echo "$BASHRC_MARK"; echo "$src"; } > "$tmp" && mv -f "$tmp" "$rc" && echo "Wrote $rc (sources $REPO_DIR/.bashrc)"
+}
+install_bashrc_stub || echo "warning: could not write the ~/.bashrc stub" >&2
+
+# One checkout, not two. Coder clones this repo into its own directory on a new
+# instance, while the working checkout lives on the persistent volume, and every
+# skill and shell link then resolves into the Coder clone: an edit in the working
+# checkout does not reach a session until both are pulled. When the clone is
+# clean and the primary already holds its commit, replace the clone with a
+# symlink to the primary and finish the install from there. Anything else leaves
+# the clone in place and says why.
+# The clone is recognised by where it lives (a checkout under ~/.config, which
+# is where Coder clones), not by its directory name.
+PRIMARY_DIR="${DOTFILES_PRIMARY:-/workspace/dotfiles}"
+CODER_CLONE_DIR="$REPO_DIR"
+config_real="$(cd "$HOME/.config" 2>/dev/null && pwd -P)" || config_real=""
+primary_real="$(cd "$PRIMARY_DIR" 2>/dev/null && pwd -P)" || primary_real=""
+if [ -z "${DOTFILES_DEDUPED:-}" ] && [ -n "$config_real" ] && [ "${REPO_DIR#"$config_real"/}" != "$REPO_DIR" ] &&
+   [ -d "$PRIMARY_DIR/.git" ] && [ "$primary_real" != "$REPO_DIR" ]; then
+  why=""
+  head_="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null)" || why="cannot read the clone's HEAD"
+  [ -z "$why" ] && [ -n "$(git -C "$REPO_DIR" status --porcelain 2>/dev/null)" ] && why="the clone has uncommitted changes"
+  [ -z "$why" ] && ! git -C "$PRIMARY_DIR" cat-file -e "$head_^{commit}" 2>/dev/null && why="$PRIMARY_DIR lacks the clone's commit ${head_:0:7}"
+  if [ -n "$why" ]; then
+    echo "Keeping $CODER_CLONE_DIR as a separate clone: $why." >&2
+  else
+    moved="$CODER_CLONE_DIR.bak-$(date +%Y%m%d%H%M%S)"
+    if mv "$CODER_CLONE_DIR" "$moved" && ln -s "$PRIMARY_DIR" "$CODER_CLONE_DIR"; then
+      echo "Replaced the clone with a link to $PRIMARY_DIR (old clone at $moved)"
+      exec env DOTFILES_DEDUPED=1 bash "$PRIMARY_DIR/install.sh" "$@"
+    fi
+    echo "warning: could not replace $CODER_CLONE_DIR with a link; continuing from the clone." >&2
+    [ -e "$CODER_CLONE_DIR" ] || mv "$moved" "$CODER_CLONE_DIR"
+  fi
+fi
+
 # Symlink top-level dotfiles (anything matching .* except VCS/meta dirs).
 for src in "$REPO_DIR"/.*; do
   name="$(basename "$src")"
   case "$name" in
     .|..|.git|.github|.gitignore) continue ;;
     .cursor) continue ;; # handled below
+    .bashrc) continue ;; # a machine-local stub, written above
     .claude) continue ;; # real Claude home in $DEST: settings, transcripts, memory. The repo's copy is gitignored scratch; linking it over ~/.claude destroys the user's.
     .config) continue ;; # handled below — repo lives under ~/.config, symlinking it wholesale creates a self-referential loop
     .shell_common.*) continue ;; # machine-local overlays; see .gitignore. The repo must never supply one, so never link one out of it.
