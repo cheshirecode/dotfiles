@@ -231,7 +231,12 @@ if [ -n "${VAULT_TOKEN_PROD:-}${VAULT_TOKEN_STAGING:-}${VAULT_TOKEN_PROD_BACKUP:
       # in this run. The two arms below are the whole outcome: a dead token
       # takes the failure arm and the success line is never printed. There is no
       # window in which a bad seed looks fine.
-      if [ -n "$(vault_ttl "$VAULT_PROD_ADDR" "${!seed_from}")" ]; then
+      # No address means nothing was asked, not that the token was refused.
+      # Measured 2026-09-29: with VAULT_PROD_ADDR unset this printed DOES NOT
+      # AUTHENTICATE for a token valid for 31 more days.
+      if [ -z "$VAULT_PROD_ADDR" ]; then
+        note "seeded ~/.vault-token from $seed_from, UNVERIFIED: \$VAULT_PROD_ADDR is unset -- set it in ~/.shell_common.local"
+      elif [ -n "$(vault_ttl "$VAULT_PROD_ADDR" "${!seed_from}")" ]; then
         note "seeded ~/.vault-token from $seed_from (overlay wipe)"
       else
         note "seeded ~/.vault-token from $seed_from BUT IT DOES NOT AUTHENTICATE -- needs an interactive OIDC login"
