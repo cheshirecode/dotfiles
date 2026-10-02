@@ -557,9 +557,12 @@ test_fixtures() {
   # Repo-root scripts (install.sh and friends) keep their fixtures in
   # tests/<area>/. Globbed, not listed: a new tests/<area>/test_*.sh runs by
   # existing rather than by someone remembering to add a line here.
+  # CODER_WORKSPACE_ID is dropped because install.sh runs apt for missing
+  # runtime deps on a Coder workspace; a fixture inheriting it from a developer
+  # shell would reach the real sudo. Fixtures that test that path set it.
   for t in tests/*/test_*.sh; do
     [[ -e "$t" ]] || continue
-    if out=$(bash "$t" 2>&1); then
+    if out=$(env -u CODER_WORKSPACE_ID bash "$t" 2>&1); then
       ok "root $(basename "$(dirname "$t")")/$(basename "$t" .sh)"
     else
       fail_with_output "root $(basename "$(dirname "$t")")/$(basename "$t" .sh)" "$out"

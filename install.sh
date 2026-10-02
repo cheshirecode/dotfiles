@@ -423,4 +423,31 @@ if [ -d "$(dirname "$HOOK_BIN_DIR")" ] && [ -f "$REPO_DIR/bin/restore-home-links
   ) || true
 fi
 
+# Runtime deps bin/doctor.sh requires. On a Coder workspace /usr is the image
+# overlay, so an apt install is lost on every rebuild and a new instance comes
+# up without them. Measured 2026-10-01: direnv, rg and gh were missing on a new
+# instance and three suite checks failed until they were installed by hand.
+# Coder only (CODER_WORKSPACE_ID): CI and laptops manage their own packages.
+# Missing tools are reported either way; nothing here aborts the installer.
+if [ -n "${CODER_WORKSPACE_ID:-}" ] && [ -z "${DOTFILES_NO_APT:-}" ]; then
+  (
+    set +e
+    missing=() pkgs=()
+    for pair in python3:python3 gh:gh git:git rg:ripgrep jq:jq direnv:direnv; do
+      command -v "${pair%%:*}" >/dev/null 2>&1 || { missing+=("${pair%%:*}"); pkgs+=("${pair#*:}"); }
+    done
+    [ "${#pkgs[@]}" -eq 0 ] && exit 0
+    if command -v apt-get >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+      echo "Installing missing runtime deps: ${missing[*]}"
+      sudo -n apt-get install -y -qq "${pkgs[@]}" >/dev/null 2>&1 ||
+        { sudo -n apt-get update -qq >/dev/null 2>&1 && sudo -n apt-get install -y -qq "${pkgs[@]}" >/dev/null 2>&1; }
+      still=()
+      for t in "${missing[@]}"; do command -v "$t" >/dev/null 2>&1 || still+=("$t"); done
+      [ "${#still[@]}" -eq 0 ] || echo "warning: still missing after apt: ${still[*]}" >&2
+    else
+      echo "warning: missing runtime deps (no apt-get or no passwordless sudo): ${missing[*]}" >&2
+    fi
+  ) || true
+fi
+
 echo "Dotfiles installation complete."
