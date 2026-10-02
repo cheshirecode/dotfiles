@@ -275,7 +275,7 @@ checks = {
     # also reject a constraint the USER states, which the skill must honour.
     "no self-interpreted approval gate": "unapproved provider" not in root
         and "Approval must be explicit enough to cite" not in root,
-    "Kimi detail deferred": "`kimi-k3`" in routing and "`kimi-k3`" not in root,
+    "Kimi detail deferred": "kimi-k3" in routing and "kimi-k3" not in root,
     "catalog helper deferred": "bin/model-catalog --env auto" in catalog and "--refresh-if-stale" not in root,
     "references one level deep": reference_names == {"routing.md", "catalog.md"},
 }

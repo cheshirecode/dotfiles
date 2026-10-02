@@ -63,12 +63,13 @@ Do not invent a restriction the user did not state. Approved providers, and whet
 - Tie the rationale to task capability, cost, and caveat in one line.
 - Summarize decision factors; do not print private chain-of-thought.
 
-## Hook automation
+## Claude Code hook automation
 
-No hook sets a session model; `SessionStart` only injects context. A
-`PreToolUse` hook matching `Agent|Task` does set a sub-agent model: it
-returns `hookSpecificOutput.updatedInput` carrying `model`.
+No hook sets a session model in Claude Code; `SessionStart` only injects
+context. When configured, a `PreToolUse` hook matching `Agent|Task` can set
+a sub-agent model by returning
+`hookSpecificOutput.updatedInput` carrying `model`.
 
-Tell the user this hook exists when they delegate, and ask before editing
-settings. Echo the whole input object or the harness discards it. Skip
-`subagent_type: "fork"`; it ignores `model`.
+Tell the user when this hook is configured; ask before editing settings. Echo
+the whole input object or the harness discards it. Skip `subagent_type: "fork"`;
+it ignores `model`. In Codex, use the dispatch tool's model selector.
