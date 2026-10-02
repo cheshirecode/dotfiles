@@ -41,13 +41,15 @@ backup() {
 # clone's .bashrc. The stub takes the append and the checkout stays clean.
 BASHRC_MARK='# dotfiles install.sh: sources the tracked .bashrc. Lines below are machine-local.'
 
-# Print what was appended to a tracked .bashrc. Fails unless the file is
-# HEAD:.bashrc plus a tail, so an edit to the tracked lines is never carried off.
-bashrc_tail() {  # <path to a tracked .bashrc>
-  local f="$1" repo size
+# Print what was appended to a tracked dotfile at a checkout's root. Fails unless
+# the file is HEAD's copy plus a tail, so an edit to tracked lines is never
+# carried off.
+tracked_tail() {  # <path to a tracked dotfile>
+  local f="$1" repo size rev
   repo="$(cd "$(dirname "$f")" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null)" || return 1
-  size="$(git -C "$repo" cat-file -s HEAD:.bashrc 2>/dev/null)" || return 1
-  cmp -s -n "$size" <(git -C "$repo" show HEAD:.bashrc) "$f" || return 1
+  rev="HEAD:$(basename "$f")"
+  size="$(git -C "$repo" cat-file -s "$rev" 2>/dev/null)" || return 1
+  cmp -s -n "$size" <(git -C "$repo" show "$rev") "$f" || return 1
   tail -c +"$((size + 1))" "$f"
 }
 
@@ -63,7 +65,7 @@ install_bashrc_stub() {
   tail_=""
   if [ -L "$rc" ]; then
     real="$(readlink -f "$rc" 2>/dev/null)" || real=""
-    if [ -n "$real" ] && tail_="$(bashrc_tail "$real")" && [ -n "$tail_" ]; then
+    if [ -n "$real" ] && tail_="$(tracked_tail "$real")" && [ -n "$tail_" ]; then
       # A pure append to a tracked file: move it into the stub, then put the
       # tracked file back to HEAD. Nothing else in that checkout is touched.
       { echo "$BASHRC_MARK"; echo "$src"; printf '%s\n' "$tail_"; } > "$tmp" && mv -f "$tmp" "$rc" &&
@@ -77,6 +79,56 @@ install_bashrc_stub() {
   { echo "$BASHRC_MARK"; echo "$src"; } > "$tmp" && mv -f "$tmp" "$rc" && echo "Wrote $rc (sources $REPO_DIR/.bashrc)"
 }
 install_bashrc_stub || echo "warning: could not write the ~/.bashrc stub" >&2
+
+# ~/.gitconfig likewise: a machine-local stub that includes the tracked file.
+# The Coder template runs `git config --global user.*` at start, and through a
+# symlink that wrote a work identity into the tracked .gitconfig. Measured
+# 2026-10-02: [user] with an employer email appended to the public file, and
+# placed after every include, so it overrode the per-remote identity rules and
+# this repo itself would have committed as the work account. The empty [user]
+# comes first: git fills that existing section, above the include, so the
+# tracked rules and ~/.gitconfig.local still decide and the template's identity
+# only applies where nothing else sets one.
+GITCONFIG_MARK='# dotfiles install.sh: includes the tracked .gitconfig. Lines below are machine-local.'
+install_gitconfig_stub() {
+  local rc="$DEST/.gitconfig" tmp="$DEST/.gitconfig.dotfiles-tmp.$$" want="$REPO_DIR/.gitconfig" real tail_ old k v
+  if [ -f "$rc" ] && [ ! -L "$rc" ] && [ "$(head -n 1 "$rc")" = "$GITCONFIG_MARK" ]; then
+    git config --file "$rc" --get-all include.path | grep -qxF "$want" && return 0
+    old="$(git config --file "$rc" --get-all include.path | grep '/\.gitconfig$' | head -n 1)"
+    [ -n "$old" ] || return 0
+    git config --file "$rc" --replace-all include.path "$want" "^$(printf '%s' "$old" | sed 's/[][\.*^$/]/\\&/g')\$" &&
+      echo "Repointed $rc at $want"
+    return 0
+  fi
+  {
+    echo "$GITCONFIG_MARK"
+    echo "# The empty [user] below comes first on purpose: git config --global user.* fills"
+    echo "# it, above the include, so the tracked rules still decide identity."
+    echo "[user]"
+    echo "[include]"
+    printf '\tpath = %s\n' "$want"
+  } > "$tmp" || return 1
+  tail_=""
+  if [ -L "$rc" ]; then
+    real="$(readlink -f "$rc" 2>/dev/null)" || real=""
+    if [ -n "$real" ] && tail_="$(tracked_tail "$real")" && [ -n "$tail_" ]; then
+      # Re-apply key by key, so a carried [user] lands in the leading section
+      # instead of after the include where it would override everything.
+      printf '%s\n' "$tail_" > "$tmp.tail"
+      git config --file "$tmp.tail" --list | while IFS='=' read -r k v; do
+        git config --file "$tmp" --add "$k" "$v"
+      done
+      rm -f "$tmp.tail"
+      mv -f "$tmp" "$rc" && git -C "$(dirname "$real")" checkout -- "$(basename "$real")" &&
+        echo "Moved settings appended to $real into $rc"
+      return 0
+    fi
+  elif [ -e "$rc" ]; then
+    backup "$rc"
+  fi
+  mv -f "$tmp" "$rc" && echo "Wrote $rc (includes $want)"
+}
+install_gitconfig_stub || echo "warning: could not write the ~/.gitconfig stub" >&2
 
 # One checkout, not two. Coder clones this repo into its own directory on a new
 # instance, while the working checkout lives on the persistent volume, and every
@@ -117,6 +169,7 @@ for src in "$REPO_DIR"/.*; do
     .|..|.git|.github|.gitignore) continue ;;
     .cursor) continue ;; # handled below
     .bashrc) continue ;; # a machine-local stub, written above
+    .gitconfig) continue ;; # a machine-local stub, written above
     .claude) continue ;; # real Claude home in $DEST: settings, transcripts, memory. The repo's copy is gitignored scratch; linking it over ~/.claude destroys the user's.
     .config) continue ;; # handled below — repo lives under ~/.config, symlinking it wholesale creates a self-referential loop
     .shell_common.*) continue ;; # machine-local overlays; see .gitignore. The repo must never supply one, so never link one out of it.
