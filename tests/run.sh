@@ -37,6 +37,14 @@ WL_HERMETIC=(env -u BASH_ENV -u WORKLOG_BIN -u WORKLOG_LDAP -u WORKLOG_NS -u WOR
 # Carry the site path explicitly; a per-line PYTHONPATH still overrides this one.
 WL_SITE=$(python3 -c 'import pathlib, yaml; print(pathlib.Path(yaml.__file__).resolve().parents[1])' 2>/dev/null || true)
 [[ -n "$WL_SITE" ]] && WL_HERMETIC+=("PYTHONPATH=$WL_SITE")
+# Every install.sh a fixture runs copies this tree's restore-home-links.sh into
+# HOOK_BIN_DIR, whose default is the live SessionStart hook in /workspace/bin.
+# Seven fixtures did not override it: measured 2026-10-02, a suite run installed
+# an uncommitted hook edit as the live hook. One throwaway dir for the whole
+# run covers them and any fixture added later; a fixture's own value still wins.
+HOOK_BIN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/suite-hookbin.XXXXXX")"
+export HOOK_BIN_DIR
+trap 'rm -rf "$HOOK_BIN_DIR"' EXIT
 # macOS has no `timeout` (and often no coreutils `gtimeout`). A bare
 # `timeout 180 cmd` there exits 127 before the fixture starts, so every
 # fixture in the loop reads FAIL for one missing wrapper. Resolve a portable
