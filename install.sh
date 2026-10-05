@@ -480,13 +480,15 @@ fi
 # overlay, so an apt install is lost on every rebuild and a new instance comes
 # up without them. Measured 2026-10-01: direnv, rg and gh were missing on a new
 # instance and three suite checks failed until they were installed by hand.
+# zsh and shellcheck are suite tools: without them tests/run.sh skips the
+# lint lanes and the zsh welcome check, and still reports green.
 # Coder only (CODER_WORKSPACE_ID): CI and laptops manage their own packages.
 # Missing tools are reported either way; nothing here aborts the installer.
 if [ -n "${CODER_WORKSPACE_ID:-}" ] && [ -z "${DOTFILES_NO_APT:-}" ]; then
   (
     set +e
     missing=() pkgs=()
-    for pair in python3:python3 gh:gh git:git rg:ripgrep jq:jq direnv:direnv; do
+    for pair in python3:python3 gh:gh git:git rg:ripgrep jq:jq direnv:direnv zsh:zsh shellcheck:shellcheck; do
       command -v "${pair%%:*}" >/dev/null 2>&1 || { missing+=("${pair%%:*}"); pkgs+=("${pair#*:}"); }
     done
     [ "${#pkgs[@]}" -eq 0 ] && exit 0
