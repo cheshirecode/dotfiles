@@ -111,6 +111,17 @@ class UiFeatureGateTest(unittest.TestCase):
         self.assertEqual(report["failed_step"], "case:visible-result")
         self.assertEqual(report["reason"], "browser evidence artifact missing or empty")
 
+    def test_browser_case_rejects_empty_artifact(self):
+        self.manifest["cases"][0]["check"] = [
+            sys.executable,
+            "-c",
+            "import os,pathlib; p=pathlib.Path(os.environ['UI_VALIDATION_OUTPUT_DIR'])/'cases/result.txt'; p.parent.mkdir(); p.write_text('')",
+        ]
+        result, report, _ = self.run_gate()
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(report["failed_step"], "case:visible-result")
+        self.assertEqual(report["reason"], "browser evidence artifact missing or empty")
+
     def test_dirty_source_cannot_claim_exact_revision(self):
         (self.repo / "app.txt").write_text("modified\n")
         result, report, _ = self.run_gate()

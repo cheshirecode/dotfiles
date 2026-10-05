@@ -36,6 +36,11 @@ class SentenceGateTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("pass", result.stdout)
 
+    def test_relative_link_target_is_not_prose(self):
+        target = "/".join(f"part{i}" for i in range(30)) + ".md"
+        result = self.run_gate(f"Read the [report]({target}).\n")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
