@@ -29,6 +29,13 @@ according to the Worklog owner's dedupe rules. Shared writes belong to the paren
 
 ## Compact pack
 
+Use a bounded pack for each session handoff, context reset, and agent dispatch.
+If `loop-helpers` is installed, run its `context_pack.py` with the five fields
+below and any recovery handles. If it is unavailable, write the same five
+fields directly. Send the pack and evidence references, not the parent
+transcript. Keep raw evidence in an authorized durable store for cross-session
+recovery. Do not use a proxy as the only copy of the pack.
+
 - `objective`: stable task identity and accepted outcome.
 - `known evidence`: repository, revision, checks/results and artifact references.
   Uncommitted review names HEAD and a scoped diff fingerprint including relevant

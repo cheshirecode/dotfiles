@@ -26,6 +26,7 @@ model guidance tunes its use, while host capabilities determine what can run.
 | Tool availability, installation, OS, or recurrence | [hosts.md](references/hosts.md) |
 | Validate native Claude Code, GPT/Codex or OpenCode execution and usage | [native-harnesses.md](references/native-harnesses.md) |
 | Resume, delegation, or compaction | [durable-context.md](references/durable-context.md) |
+| Any message to the user | [user-output.md](references/user-output.md) |
 | Code quality or architectural boundaries | [quality.md](references/quality.md) |
 | Repeated trials judged by one metric | [experiments.md](references/experiments.md) |
 | Brittle state/evidence sequencing | [examples.md](references/examples.md) |
@@ -79,6 +80,8 @@ Give brief progress updates when findings or next steps matter. Use concrete
 language and the structure the user needs; include essential results in the
 final reply even when tool output is hidden. Report decisions, evidence and
 uncertainty, rather than private reasoning or a process transcript.
+Apply [the user-output rule](references/user-output.md) to every user-facing
+message in this loop, including progress, questions, and the final reply.
 
 ## UI feature loops
 
