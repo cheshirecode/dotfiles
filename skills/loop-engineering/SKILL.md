@@ -88,20 +88,20 @@ observable result, and target build or preview. Prefer executable browser
 tests; when automation is unavailable, record the same case-by-case observations
 from real interactions in the user's main browser.
 
-Run a mechanical cycle against one exact revision:
+For executable cases, run
+`python3 <skill-dir>/scripts/ui_feature_gate.py <manifest.json>` after committing
+the change. The [UI gate contract](references/ui-feature-gate.md) defines the
+manifest and output. The runner checks a clean exact revision, builds, verifies
+an applicable preview serves that revision, executes every browser case, and
+requires a nonempty evidence artifact per case. It stops on the first failure;
+fix the cause and rerun the whole cycle. Include its result in the evidence gate.
+For cases that cannot be automated, keep case-by-case main-browser observations
+as separate runtime evidence and leave the scripted check unverified.
 
-1. Build; if it fails, fix the failure and restart the cycle.
-2. If an authorized preview applies, deploy that revision and verify the preview
-   serves it. A successful deployment command alone is insufficient.
-3. Open the built result or preview in the user's main browser and run every
-   case. Save the command result or observed browser evidence for each case.
-4. Compare the results with the case list. Fix any failed case and repeat from
-   the build. Treat unrun cases as unverified, not passed.
-
-Record the revision, build or preview identity, and case results in the evidence
-gate. Confirm UI completion only when every requested user-visible behavior has
-runtime evidence from that revision. If a check is blocked, report its cause and
-next action; leave completion unverified.
+Confirm UI completion only when every requested user-visible behavior has
+runtime evidence from the exact revision. If browser or preview verification is
+blocked, report the failed check, cause, and next action; leave completion
+unverified.
 
 ## Public PR gate
 
