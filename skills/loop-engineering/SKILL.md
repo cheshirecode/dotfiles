@@ -82,15 +82,38 @@ uncertainty, rather than private reasoning or a process transcript.
 
 ## UI feature loops
 
-Before changing a UI feature, prepare BDD test cases (`Given / When / Then`)
-for the requested behavior and relevant regressions. After implementation,
-build it; when an authorized preview deployment applies, deploy it. Open the
-built result or deployed preview in the user's main browser and exercise the
-cases through real user interactions. Record the exact build or preview and
-observed outcomes as runtime evidence. Do not confirm completion until that
-evidence verifies every requested user-visible behavior. If browser or preview
-verification is blocked, report the blocked check, cause, and next action;
-leave completion unverified.
+Before editing, list named `Given / When / Then` cases for each requested UI
+behavior and relevant regression. Give each case a repeatable check, expected
+observable result, and target build or preview. Prefer executable browser
+tests; when automation is unavailable, record the same case-by-case observations
+from real interactions in the user's main browser.
+
+Run a mechanical cycle against one exact revision:
+
+1. Build; if it fails, fix the failure and restart the cycle.
+2. If an authorized preview applies, deploy that revision and verify the preview
+   serves it. A successful deployment command alone is insufficient.
+3. Open the built result or preview in the user's main browser and run every
+   case. Save the command result or observed browser evidence for each case.
+4. Compare the results with the case list. Fix any failed case and repeat from
+   the build. Treat unrun cases as unverified, not passed.
+
+Record the revision, build or preview identity, and case results in the evidence
+gate. Confirm UI completion only when every requested user-visible behavior has
+runtime evidence from that revision. If a check is blocked, report its cause and
+next action; leave completion unverified.
+
+## Public PR gate
+
+Before creating or editing a public PR, prepare its title and body locally. In
+this repository, run `bin/pr-publication-gate.sh` with the base ref, title file,
+and body file on the exact branch head. It checks proposed text, added lines,
+and tracked files with the repository privacy scan, plus reviewer-text patterns
+on the title and body. Elsewhere use the available repository secret scan and
+the `pr-review` leak scan before publishing. Review names, paths, URLs, and test
+evidence for private context that pattern scans may miss. Keep private evidence
+in local artifacts; publish only public outcomes. A later body edit does not
+erase GitHub's edit history, so repeat the gate before every PR write.
 
 ## Compose with installed skills
 

@@ -4,6 +4,7 @@
 #   --tree     scan tracked files (suite gate)
 #   --staged   scan staged added lines (commit gate)
 #   --authors  scan author/committer headers on every ref (suite gate)
+#   --stdin    scan proposed public text before publishing it
 #
 # Exit 0 clean, 1 findings, 2 usage.
 #
@@ -15,12 +16,23 @@ set -uo pipefail
 
 MODE="${1:---tree}"
 case "$MODE" in
-  --tree|--staged|--authors) ;;
-  *) echo "usage: leak-guard.sh [--tree|--staged|--authors]" >&2; exit 2 ;;
+  --tree|--staged|--authors|--stdin) ;;
+  *) echo "usage: leak-guard.sh [--tree|--staged|--authors|--stdin]" >&2; exit 2 ;;
 esac
 cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" || exit 2
 
-MODE="$MODE" python3 - <<'SCAN'
+INPUT_FILE=""
+if [ "$MODE" = "--stdin" ]; then
+  INPUT_FILE="$(mktemp "${TMPDIR:-/tmp}/leak-guard.XXXXXX")" || exit 2
+  trap 'rm -f "$INPUT_FILE"' EXIT
+  cat > "$INPUT_FILE" || exit 2
+  if ! grep -q '[^[:space:]]' "$INPUT_FILE"; then
+    echo "leak-guard: refusing to scan empty stdin" >&2
+    exit 2
+  fi
+fi
+
+MODE="$MODE" INPUT_FILE="$INPUT_FILE" python3 - <<'SCAN'
 import os
 import re
 import subprocess
@@ -80,7 +92,7 @@ SKIP_SUFFIX = (".png", ".jpg", ".jpeg", ".gif", ".pdf", ".ico", ".zip", ".woff",
                ".woff2", ".ttf", ".pyc", ".lock")
 
 def offenders_in(where, line):
-    if "pragma: allowlist owner" in line:
+    if where != "stdin" and "pragma: allowlist owner" in line:
         return []
     out = []
     m = OWNER_RE.search(line)
@@ -112,6 +124,11 @@ if MODE == "--tree":
                     found += offenders_in(f"{path}:{n}", line.rstrip("\n"))
         except (OSError, UnicodeDecodeError):
             continue
+elif MODE == "--stdin":
+    with open(os.environ["INPUT_FILE"], encoding="utf-8") as handle:
+        for n, line in enumerate(handle, 1):
+            if offenders_in("stdin", line):
+                found.append(f"stdin:{n}: private reference")
 elif MODE == "--authors":
     # Author and committer headers, across every ref. A --replace-text rewrite
     # scrubs file CONTENT and leaves these untouched, so a scrub verified by
@@ -159,10 +176,11 @@ if found:
             "  rewrite leaves them untouched. Fix them in a --mailmap pass.\n"
             '  See CLAUDE.md "Repo identity".\n')
         raise SystemExit(1)
-    sys.stderr.write(
-        "\n  Real values belong in the per-clone .envrc, never in the repo.\n"
-        "  Describe a hazard by its shape; use placeholder owners in fixtures.\n"
-        "  Deliberate exception: add 'pragma: allowlist owner' to the line.\n"
-        '  See CLAUDE.md "Repo identity". Bypass once: DOTFILES_NO_HOOK=1\n')
+    if MODE != "--stdin":
+        sys.stderr.write(
+            "\n  Real values belong in the per-clone .envrc, never in the repo.\n"
+            "  Describe a hazard by its shape; use placeholder owners in fixtures.\n"
+            "  Deliberate exception: add 'pragma: allowlist owner' to the line.\n"
+            '  See CLAUDE.md "Repo identity". Bypass once: DOTFILES_NO_HOOK=1\n')
     raise SystemExit(1)
 SCAN
