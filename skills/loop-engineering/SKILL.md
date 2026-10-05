@@ -80,6 +80,18 @@ language and the structure the user needs; include essential results in the
 final reply even when tool output is hidden. Report decisions, evidence and
 uncertainty, rather than private reasoning or a process transcript.
 
+## UI feature loops
+
+Before changing a UI feature, prepare BDD test cases (`Given / When / Then`)
+for the requested behavior and relevant regressions. After implementation,
+build it; when an authorized preview deployment applies, deploy it. Open the
+built result or deployed preview in the user's main browser and exercise the
+cases through real user interactions. Record the exact build or preview and
+observed outcomes as runtime evidence. Do not confirm completion until that
+evidence verifies every requested user-visible behavior. If browser or preview
+verification is blocked, report the blocked check, cause, and next action;
+leave completion unverified.
+
 ## Compose with installed skills
 
 When choosing another skill, read [composition.md](references/composition.md)
