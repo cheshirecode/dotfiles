@@ -264,6 +264,27 @@ if [ -n "${VAULT_TOKEN_PROD:-}${VAULT_TOKEN_STAGING:-}${VAULT_TOKEN_PROD_BACKUP:
   unset vt
 fi
 
+# Worklog git hooks. .git/hooks rides the persistent volume, but a clone made
+# without bootstrap.sh never gets them, and then every commit skips the task
+# lint silently: 2026-10-06 a task with "status: bogus" was committed and
+# pushed. Repair here, on every session start, and say so. An empty
+# WORKLOG_HOOKS_REPO opts out.
+wl_repo="${WORKLOG_HOOKS_REPO-${WORKLOG_REPO:-/workspace/worklog}}"
+wl_bin="${WORKLOG_SKILL_BIN:-/workspace/dotfiles/skills/worklog/bin}"
+wl_hooked() {  # a repo-local hooksPath (fallback mode) or the chained links
+  [ -n "$(git -C "$wl_repo" config --local core.hooksPath 2>/dev/null)" ] ||
+    { [ -e "$wl_repo/.git/hooks/pre-commit" ] && [ -e "$wl_repo/.git/hooks/pre-commit-identity" ]; }
+}
+if [ -n "$wl_repo" ] && [ -d "$wl_repo/.git" ] && ! wl_hooked; then
+  if [ -f "$wl_bin/install-hooks.sh" ] &&
+     bash "$wl_bin/install-hooks.sh" --data-root="$wl_repo" --write --git-hooks-only >/dev/null 2>&1 &&
+     wl_hooked; then
+    note "installed worklog git hooks in $wl_repo"
+  else
+    note "worklog git hooks MISSING in $wl_repo, commits skip lint -- run $wl_bin/install-hooks.sh --data-root=$wl_repo --write --git-hooks-only"
+  fi
+fi
+
 # glab hangs ~2min on ssh; there is no SSH auth on this box.
 if command -v glab >/dev/null 2>&1; then
   [ "$(glab config get git_protocol 2>/dev/null)" = "https" ] \
