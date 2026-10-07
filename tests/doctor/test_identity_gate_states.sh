@@ -9,8 +9,13 @@
 #
 #   armed        hook installed AND domain set            -> OK
 #   disarmed     hook installed, domain unset             -> FAIL (reports and skips)
-#   hook absent  no hook at all                           -> FAIL (protects nothing)
+#   no hooks     no worklog hooks at all                  -> FAIL (lint skipped too)
+#   hook absent  worklog hooks, no identity hook          -> FAIL (protects nothing)
+#   chained      outer hooksPath, links in .git/hooks/    -> judged by .git/hooks/
 #   not cloned   vault is not on this machine             -> ABSENT (not a failure)
+#
+# With WORKLOG_VAULTS unset, $WORKLOG_REPO is checked too: a Coder clone at
+# /workspace/worklog sat outside both defaults and passed with no hooks.
 #
 # Each case is built as a scratch vault, so the failure paths are reachable
 # rather than asserted.
@@ -36,19 +41,26 @@ fi
 T="$(mktemp -d)"; T="$(cd "$T" && pwd -P)"
 trap 'rm -rf "$T"' EXIT
 
-# Build a vault. $2 = "armed" | "disarmed" | "nohook"
+# Build a vault. $2 = "armed" | "disarmed" | "nohook" | "noidentity" | "chained"
 make_vault() {
-  local v="$T/$1" mode="$2"
+  local v="$T/$1" mode="$2" h
   mkdir -p "$v"
   git init -q "$v"
   ( cd "$v" && git config user.email probe@test && git config user.name probe )
   if [ "$mode" != "nohook" ]; then
-    mkdir -p "$v/hooks"
-    printf '#!/usr/bin/env bash\nexit 0\n' > "$v/hooks/pre-commit-identity"
-    chmod +x "$v/hooks/pre-commit-identity"
-    ( cd "$v" && git config core.hooksPath "$v/hooks" )
+    h="$v/hooks"
+    # Chain mode: links in .git/hooks/ and NO repo-local hooksPath; the outer
+    # one (OUTER below) belongs to the platform scanner.
+    [ "$mode" = chained ] && h="$v/.git/hooks"
+    mkdir -p "$h"
+    for f in pre-commit pre-commit-identity; do
+      [ "$mode" = noidentity ] && [ "$f" = pre-commit-identity ] && continue
+      printf '#!/usr/bin/env bash\nexit 0\n' > "$h/$f"
+      chmod +x "$h/$f"
+    done
+    [ "$mode" = chained ] || ( cd "$v" && git config core.hooksPath "$v/hooks" )
   fi
-  if [ "$mode" = "armed" ]; then
+  if [ "$mode" = "armed" ] || [ "$mode" = chained ]; then
     printf 'export WORKLOG_IDENTITY_DOMAIN=probe.example\n' > "$v/.envrc"
   else
     printf 'export SOMETHING_ELSE=1\n' > "$v/.envrc"
@@ -56,6 +68,12 @@ make_vault() {
   direnv allow "$v" >/dev/null 2>&1
   echo "$v"
 }
+
+# An outer hooksPath with no identity hook, as on Coder: a check that reads
+# hooksPath from every scope looks there and misses the chained links.
+OUTER="$T/outer"; mkdir -p "$OUTER"
+printf '[core]\n\thooksPath = %s\n' "$OUTER" > "$T/gitconfig"
+export GIT_CONFIG_GLOBAL="$T/gitconfig" GIT_CONFIG_NOSYSTEM=1
 
 # Only the gate section matters here; read its lines for the vault under test.
 gate_lines() {
@@ -81,10 +99,37 @@ fi
 
 nohook="$(make_vault nohook nohook)"
 out="$(gate_lines "$nohook")"
-if printf '%s' "$out" | grep -q "FAIL .*$nohook identity hook not installed"; then
-  ok "missing hook reports FAIL"
+if printf '%s' "$out" | grep -q "FAIL .*$nohook worklog hooks not installed"; then
+  ok "a vault with no worklog hooks reports FAIL"
 else
-  bad "missing hook was not reported as FAIL: $(printf '%s' "$out" | grep -F "$nohook")"
+  bad "a vault with no worklog hooks was not reported as FAIL: $(printf '%s' "$out" | grep -F "$nohook")"
+fi
+
+noidentity="$(make_vault noidentity noidentity)"
+out="$(gate_lines "$noidentity")"
+if printf '%s' "$out" | grep -q "FAIL .*$noidentity identity hook not installed"; then
+  ok "missing identity hook reports FAIL"
+else
+  bad "missing identity hook was not reported as FAIL: $(printf '%s' "$out" | grep -F "$noidentity")"
+fi
+
+chained="$(make_vault chained chained)"
+out="$(gate_lines "$chained")"
+if printf '%s' "$out" | grep -q "OK .*$chained identity gate armed"; then
+  ok "a chained vault is judged by its .git/hooks/ links, not the outer hooksPath"
+else
+  bad "a chained vault was misjudged: $(printf '%s' "$out" | grep -F "$chained")"
+fi
+
+# env -i: a developer BASH_ENV re-exports the real WORKLOG_REPO after this
+# assignment, and the case then grades the live clone instead of the fixture.
+out="$(env -i PATH="$PATH" HOME="$T/nohome" PROJECTS_DIR="$T/noprojects" WORKLOG_REPO="$nohook" \
+  GIT_CONFIG_GLOBAL="$GIT_CONFIG_GLOBAL" GIT_CONFIG_NOSYSTEM=1 \
+  bash "$DOCTOR" 2>&1 | sed -n '/doctor: vault identity gate/,/^doctor: [0-9]/p')"
+if printf '%s' "$out" | grep -q "FAIL .*$nohook worklog hooks not installed"; then
+  ok "\$WORKLOG_REPO is checked when WORKLOG_VAULTS is unset"
+else
+  bad "\$WORKLOG_REPO was not checked by default: $(printf '%s' "$out" | head -5)"
 fi
 
 missing="$T/never-cloned"

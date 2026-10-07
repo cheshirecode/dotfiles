@@ -304,19 +304,33 @@ fi
 echo "doctor: vault identity gate"
 # Overridable so the states below can be exercised against scratch vaults;
 # a check whose failure paths cannot be reached is not a check.
-IFS=':' read -r -a VAULTS <<< "${WORKLOG_VAULTS:-$HOME/Documents/oss/_worklog:$PROJECTS_DIR/_worklog}"
+# $WORKLOG_REPO is the clone this machine actually commits to; a Coder
+# workspace keeps it at /workspace/worklog, outside both defaults, so a clone
+# with no hooks at all passed this section unseen (2026-10-06).
+default_vaults="$HOME/Documents/oss/_worklog:$PROJECTS_DIR/_worklog"
+case ":$default_vaults:" in
+  *":${WORKLOG_REPO:-}:"*) ;;
+  *) [[ -n "${WORKLOG_REPO:-}" ]] && default_vaults="$default_vaults:$WORKLOG_REPO" ;;
+esac
+IFS=':' read -r -a VAULTS <<< "${WORKLOG_VAULTS:-$default_vaults}"
 for vault in "${VAULTS[@]}"; do
   short="${vault/#$HOME/~}"
   if [[ ! -d "$vault/.git" ]]; then
     absent "$short not cloned here"
     continue
   fi
-  hooks="$(git -C "$vault" config core.hooksPath 2>/dev/null)"
+  # --local only: an outer (system/global) hooksPath is the platform scanner,
+  # and in that CHAIN mode the worklog hooks are links in .git/hooks/.
+  hooks="$(git -C "$vault" config --local core.hooksPath 2>/dev/null)"
   case "$hooks" in
     "")  hooks="$vault/.git/hooks" ;;
     /*)  ;;
     *)   hooks="$vault/$hooks" ;;
   esac
+  if [[ ! -e "$hooks/pre-commit" ]]; then
+    fail "$short worklog hooks not installed: commits skip lint (skills/worklog/bin/install-hooks.sh --data-root=$vault --write --git-hooks-only)"
+    continue
+  fi
   if [[ ! -e "$hooks/pre-commit-identity" ]]; then
     fail "$short identity hook not installed (bin/install-hooks.sh --write)"
     continue
