@@ -270,5 +270,52 @@ printf '%s' "$LOG" | grep -q '/api/v4/user' && printf '%s' "$LOG" | grep -q '/re
   && { PASS=$((PASS+1)); printf '  PASS  both credential probes ran\n'; } \
   || { FAIL=$((FAIL+1)); printf '  FAIL  a credential probe never ran\n'; }
 
+# WORKLOG_FORGE_NAMESPACE unset. The note was printed once per TASK, whether
+# or not the task had an MR ref: a live run printed it 301 times for one
+# project and buried the notes that mattered. And the MR rows gave the generic
+# "unresolved repo, or the lookup failed" instead of the cause. Two tasks share
+# example-repo here so a per-task note would print twice; no-next names
+# example-repo with no refs at all, and a ref-less project must not be listed.
+task with-refs-2 <<'EOF2'
+---
+slug: with-refs-2
+owner: tester
+status: in-progress
+kind: impl
+repos: [example-repo]
+---
+
+## Next
+
+- [ ] Chase !2222
+EOF2
+task only-refless <<'EOF2'
+---
+slug: only-refless
+owner: tester
+status: in-progress
+kind: impl
+repos: [refless-repo]
+---
+
+## Next
+
+- [ ] No ref here at all
+EOF2
+OUT=$(cd "$TMP/wl" && env -u WORKLOG_FORGE_NAMESPACE -u MCP_JIRA_EMAIL \
+      PATH="$TMP/stub:$PATH" STUB_LOG="$TMP/stub.log" WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP=tester \
+      GITLAB_HOST=gitlab.example GITLAB_TOKEN=fake \
+      "$BIN/verify-refs.sh" 2>&1)
+n=$(printf '%s\n' "$OUT" | grep -c 'note: WORKLOG_FORGE_NAMESPACE')
+[ "$n" = 1 ] && { PASS=$((PASS+1)); printf '  PASS  namespace note printed once per run\n'; } \
+             || { FAIL=$((FAIL+1)); printf '  FAIL  namespace note printed %s times, want 1\n' "$n"; }
+ck "the one note lists every skipped project"  'note: WORKLOG_FORGE_NAMESPACE unset; MR refs unchecked for example-repo, monorepo$'
+no "a project without MR refs is not listed"   'refless-repo'
+ck "namespace is the MR row's reason"          'unchecked +with-refs-2 +!2222 +WORKLOG_FORGE_NAMESPACE unset'
+ck "missing repos: is its own reason"          'unchecked +no-repos +!4321 +task has no repos: field'
+no "no MR row gives the generic reason"        'unresolved repo, or the lookup failed'
+# Inert-lane guard: the rows must exist, or every "no" above passes vacuously.
+ck "the namespace-less MR rows were emitted"   '0 stale, 0 live, [4-9] unchecked'
+
 printf '\n  %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

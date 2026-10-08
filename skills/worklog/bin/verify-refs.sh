@@ -124,6 +124,7 @@ ready() {  # ready mr|issue
 
 CACHE=$(mktemp); trap 'rm -f "$CACHE"' EXIT
 ROWS=$(mktemp); trap 'rm -f "$CACHE" "$ROWS"' EXIT
+NONS=$(mktemp); trap 'rm -f "$CACHE" "$ROWS" "$NONS"' EXIT
 stale=0; live=0; unchecked=0
 
 lookup() {  # lookup <kind> <ref> <project> -> prints state
@@ -187,14 +188,19 @@ for f in "${files[@]}"; do
   # here. Unset leaves proj bare, which skips the lookup and reports unchecked
   # rather than guessing a namespace and returning a confident verdict about
   # somebody else's project.
+  # proj_why names why proj is empty. It is the MR rows' reason, and the
+  # namespace case is noted once per run at the end, listing only projects
+  # whose refs were actually skipped: noting it per task printed 301 lines for
+  # one project in a live run, burying the notes that mattered.
+  proj_why=""
   case "$proj" in
-    "") ;;
+    "") proj_why="task has no repos: field" ;;
     */*) ;;
     *) if [ -n "${WORKLOG_FORGE_NAMESPACE:-}" ]; then
          proj="$WORKLOG_FORGE_NAMESPACE/$proj"
        else
-         echo "note: WORKLOG_FORGE_NAMESPACE unset; '$proj' has no namespace, skipping its lookup" >&2
-         proj=""
+         proj_why="WORKLOG_FORGE_NAMESPACE unset, so '$proj' has no namespace"
+         bare="$proj"; proj=""
        fi ;;
   esac
   # only unchecked items under ## Next
@@ -203,7 +209,8 @@ for f in "${files[@]}"; do
   while IFS= read -r ref; do
     [ -n "$ref" ] || continue
     case "$ref" in
-      !*) ready mr;    why=${GL_WHY:-"unresolved repo, or the lookup failed"}; st=$(lookup mr "$ref" "$proj") ;;
+      !*) ready mr;    why=${GL_WHY:-${proj_why:-"the lookup failed"}};   st=$(lookup mr "$ref" "$proj")
+          case "$proj_why" in WORKLOG_FORGE_NAMESPACE*) printf '%s\n' "$bare" >>"$NONS" ;; esac ;;
       *)  ready issue; why=${JIRA_WHY:-"the lookup failed"};                   st=$(lookup issue "$ref" "-") ;;
     esac
     case "$st" in
@@ -213,6 +220,10 @@ for f in "${files[@]}"; do
     esac
   done < <(printf '%s' "$items" | grep -ohE '![0-9]{3,5}|[A-Z]{2,6}-[0-9]+' | sort -u)
 done
+
+if [ -s "$NONS" ]; then
+  echo "note: WORKLOG_FORGE_NAMESPACE unset; MR refs unchecked for $(sort -u "$NONS" | paste -sd, - | sed 's/,/, /g')" >&2
+fi
 
 if [ "$FMT" = json ]; then
   printf '{"stale":%s,"live":%s,"unchecked":%s,"rows":[' "$stale" "$live" "$unchecked"
