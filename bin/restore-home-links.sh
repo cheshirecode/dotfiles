@@ -286,9 +286,14 @@ if [ -n "$wl_repo" ] && [ -d "$wl_repo/.git" ] && ! wl_hooked; then
 fi
 
 # glab hangs ~2min on ssh; there is no SSH auth on this box.
+# Bounded: with a fresh config glab checks for a new release over the network,
+# and on 2026-10-07 `glab config get` blocked for 9 minutes there, which would
+# stall every session start behind this hook. A timeout reads as "not https"
+# and the set is attempted once, also bounded.
 if command -v glab >/dev/null 2>&1; then
-  [ "$(glab config get git_protocol 2>/dev/null)" = "https" ] \
-    || { glab config set git_protocol https --global >/dev/null 2>&1 && note "glab -> https"; }
+  glab_t="${RESTORE_GLAB_TIMEOUT:-10}"
+  [ "$(timeout "$glab_t" glab config get git_protocol 2>/dev/null)" = "https" ] \
+    || { timeout "$glab_t" glab config set git_protocol https --global >/dev/null 2>&1 && note "glab -> https"; }
 fi
 
 [ "$changed" = 0 ] && echo "restore-home-links: nothing to do"
