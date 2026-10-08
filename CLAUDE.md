@@ -128,7 +128,10 @@ fixtures. Real values live in the per-clone `.envrc`: `WORKLOG_ORG`,
   clears it.
 
 `bin/leak-guard.sh` enforces the account-name and home-path half:
-`--tree` in the suite, `--staged` in the pre-commit hook.
+`--tree` in the suite, `--staged` in the pre-commit hook, `--range` in the
+pre-push hook for any remote not marked `remote.<name>.dotfiles-private`.
+`origin` is private and canonical; `github` is public and downstream. Read
+[docs/two-upstreams.md](docs/two-upstreams.md) before pushing to `github`.
 
 ## Test discipline
 
