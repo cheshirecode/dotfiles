@@ -29,7 +29,10 @@
 #
 # Degrades rather than blocking: with no token or no network every ref is
 # reported `unchecked` and the exit stays 0. An unverifiable ref is not a
-# passing ref, and saying so is the point.
+# passing ref, and saying so is the point. Each forge's credential is checked
+# once first (GitLab /user, Jira /myself); a missing variable, a rejected
+# credential or an unreachable host prints one note naming it, becomes the
+# rows' reason, and skips that forge's remaining lookups.
 
 set -uo pipefail
 PROG=${0##*/}
@@ -47,7 +50,7 @@ SLUG=""
 while [ $# -gt 0 ]; do
   case $1 in
     --json) shift ;;
-    -h|--help) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) die "unknown option: $1 (try --help)" ;;
     *) [ -z "$SLUG" ] || die "only one slug accepted"; SLUG=$1; shift ;;
   esac
@@ -77,6 +80,48 @@ else
   while IFS= read -r f; do files+=("$f"); done < <(find "$ACTIVE" -name '*.md' | sort)
 fi
 
+# Positive control, once per forge, before the first lookup that needs it.
+# Every per-ref failure collapses to `unchecked`, so without this a missing
+# MCP_JIRA_EMAIL, a revoked token and a dead network all print the same row
+# and nothing names the cause. Measured 2026-10-08: the email was absent from
+# the shared secrets file, and every Jira ref read `unchecked` with no note.
+# Runs in the main shell (not inside $(lookup)) so the verdict persists.
+# Sets GL_WHY / JIRA_WHY: empty when the credential works, else the reason.
+GL_READY=""; GL_WHY=""; JIRA_READY=""; JIRA_WHY=""
+probe() {  # probe <url> <key> [curl auth args...] -> "" when <key> is in the JSON body
+  local url=$1 key=$2 body rc; shift 2
+  body=$(curl -sf --max-time 10 "$@" "$url" 2>/dev/null); rc=$?
+  [ "$rc" = 0 ] || { [ "$rc" = 22 ] && echo "rejected (HTTP error)" || echo "unreachable (curl exit $rc)"; return; }
+  printf '%s' "$body" | python3 -c 'import json,sys
+try: sys.exit(0 if sys.argv[1] in json.load(sys.stdin) else 1)
+except Exception: sys.exit(1)' "$key" || echo "answered without $key"
+}
+ready() {  # ready mr|issue
+  if [ "$1" = mr ] && [ -z "$GL_READY" ]; then
+    GL_READY=1
+    if [ -z "$TOKEN" ]; then GL_WHY="GITLAB_TOKEN (or GITLAB_PAT) unset"
+    else
+      GL_WHY=$(probe "https://$GL_HOST/api/v4/user" id -H "PRIVATE-TOKEN: $TOKEN")
+      [ -n "$GL_WHY" ] && GL_WHY="GitLab token check against $GL_HOST: $GL_WHY"
+    fi
+    [ -n "$GL_WHY" ] && echo "note: $GL_WHY; every MR ref is unchecked" >&2
+  elif [ "$1" = issue ] && [ -z "$JIRA_READY" ]; then
+    JIRA_READY=1
+    local missing=""
+    [ -n "$JIRA_TOKEN" ] || missing="$missing MCP_JIRA_API_TOKEN"
+    [ -n "$JIRA_USER" ]  || missing="$missing MCP_JIRA_EMAIL"
+    [ -n "$JIRA_HOST" ]  || missing="$missing JIRA_HOST"
+    if [ -n "$missing" ]; then JIRA_WHY="unset:$missing"
+    else
+      JIRA_WHY=$(probe "https://$JIRA_HOST/rest/api/3/myself" accountId \
+        -u "$JIRA_USER:$JIRA_TOKEN" -H "Accept: application/json")
+      [ -n "$JIRA_WHY" ] && JIRA_WHY="Jira credential check against $JIRA_HOST: $JIRA_WHY"
+    fi
+    [ -n "$JIRA_WHY" ] && echo "note: $JIRA_WHY; every Jira ref is unchecked" >&2
+  fi
+  return 0
+}
+
 CACHE=$(mktemp); trap 'rm -f "$CACHE"' EXIT
 ROWS=$(mktemp); trap 'rm -f "$CACHE" "$ROWS"' EXIT
 stale=0; live=0; unchecked=0
@@ -85,20 +130,14 @@ lookup() {  # lookup <kind> <ref> <project> -> prints state
   local key="$1|$2|$3" hit
   hit=$(grep -m1 -F "$key=" "$CACHE" 2>/dev/null) && { printf '%s' "${hit#*=}"; return; }
   local state="unchecked"
-  if [ "$1" = mr ] && [ -n "$TOKEN" ] && [ -n "$3" ]; then
+  if [ "$1" = mr ] && [ -z "$GL_WHY" ] && [ -n "$3" ]; then
     state=$(curl -sf --max-time 10 -H "PRIVATE-TOKEN: $TOKEN" \
       "https://$GL_HOST/api/v4/projects/$(printf '%s' "$3" | sed 's|/|%2F|g')/merge_requests/${2#!}" 2>/dev/null \
       | python3 -c 'import json,sys
 try: print(json.load(sys.stdin)["state"])
 except Exception: print("")' 2>/dev/null) || state=""
     [ -z "$state" ] && state="unchecked"
-  elif [ "$1" = issue ] && [ -n "$JIRA_TOKEN" ] && [ -n "$JIRA_USER" ] && [ -z "$JIRA_HOST" ]; then
-    # Credentials present, host missing: a configuration gap, not an
-    # unreachable issue. Saying so beats an "unchecked" that looks like a
-    # network result.
-    echo "note: JIRA_HOST unset; cannot check issue $2, set it in your .envrc" >&2
-    state="unchecked"
-  elif [ "$1" = issue ] && [ -n "$JIRA_TOKEN" ] && [ -n "$JIRA_USER" ]; then
+  elif [ "$1" = issue ] && [ -z "$JIRA_WHY" ]; then
     state=$(curl -sf --max-time 10 -u "$JIRA_USER:$JIRA_TOKEN" -H "Accept: application/json" \
       "https://$JIRA_HOST/rest/api/3/issue/$2?fields=status" 2>/dev/null \
       | python3 -c 'import json,sys
@@ -164,12 +203,12 @@ for f in "${files[@]}"; do
   while IFS= read -r ref; do
     [ -n "$ref" ] || continue
     case "$ref" in
-      !*) st=$(lookup mr "$ref" "$proj") ;;
-      *)  st=$(lookup issue "$ref" "-") ;;
+      !*) ready mr;    why=${GL_WHY:-"unresolved repo, or the lookup failed"}; st=$(lookup mr "$ref" "$proj") ;;
+      *)  ready issue; why=${JIRA_WHY:-"the lookup failed"};                   st=$(lookup issue "$ref" "-") ;;
     esac
     case "$st" in
       merged|closed|done) printf 'stale|%s|%s|%s|%s\n' "$slug" "$ref" "$proj" "$st" >>"$ROWS"; stale=$((stale+1)) ;;
-      unchecked)          printf 'unchecked|%s|%s|%s|%s\n' "$slug" "$ref" "$proj" "no token, unresolved repo, or unreachable" >>"$ROWS"; unchecked=$((unchecked+1)) ;;
+      unchecked)          printf 'unchecked|%s|%s|%s|%s\n' "$slug" "$ref" "$proj" "$why" >>"$ROWS"; unchecked=$((unchecked+1)) ;;
       *)                  live=$((live+1)) ;;
     esac
   done < <(printf '%s' "$items" | grep -ohE '![0-9]{3,5}|[A-Z]{2,6}-[0-9]+' | sort -u)

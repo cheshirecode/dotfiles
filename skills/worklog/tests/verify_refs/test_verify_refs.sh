@@ -108,7 +108,12 @@ ck "unverifiable is reported, not passed" 'unchecked'
 run no-next
 ck "task without Next is a no-op"      '0 stale, 0 live, 0 unchecked'
 
-run --json with-refs
+# stdout only: the setup notes go to stderr, and merging them in makes valid
+# JSON unparseable (same reason as the error-path case below).
+OUT=$(cd "$TMP/wl" && WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP=tester WORKLOG_FORGE_NAMESPACE=examplens \
+      GITLAB_HOST=127.0.0.1:1 JIRA_HOST=127.0.0.1:1 \
+      GITLAB_PAT=fake MCP_JIRA_EMAIL=t@t.t MCP_JIRA_API_TOKEN=fake \
+      "$BIN/verify-refs.sh" --json with-refs 2>/dev/null)
 if printf '%s' "$OUT" | jq -e '.rows[0].ref' >/dev/null 2>&1; then
   PASS=$((PASS+1)); printf '  PASS  json is parseable\n'
 else FAIL=$((FAIL+1)); printf '  FAIL  json unparseable: %s\n' "$OUT"; fi
@@ -145,6 +150,8 @@ cat > "$TMP/stub/curl" <<'STUB'
 #!/usr/bin/env bash
 for a in "$@"; do
   case "$a" in
+    */api/v4/user) printf '%s' '{"id":1}'; exit 0 ;;
+    */rest/api/3/myself) printf '%s' '{"accountId":"a"}'; exit 0 ;;
     *merge_requests*) printf '%s' '{"iid":1682,"state":"merged","author":{"state":"active"},"merged_by":{"state":"active"}}'; exit 0 ;;
     *rest/api/3/issue*) printf '%s' '{"fields":{"status":{"statusCategory":{"key":"done"}}}}'; exit 0 ;;
   esac
@@ -160,6 +167,7 @@ OUT=$(cd "$TMP/wl" && PATH="$TMP/stub:$PATH" WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP
 ck "merged MR is reported stale, not live" 'stale.*!1234.*merged'
 no "merged MR is not counted live"         '1 live'
 ck "nested author state does not win"      '!1234'
+no "working credentials print no setup note" 'note:'
 
 # repos: block form. Only the inline shape was parsed, so every block-form
 # task silently resolved to examplens/example-repo whatever its repos: actually said —
@@ -175,6 +183,8 @@ cat > "$TMP/stub/curl" <<'STUB'
 #!/usr/bin/env bash
 for a in "$@"; do
   case "$a" in
+    */api/v4/user) printf '%s' '{"id":1}'; exit 0 ;;
+    */rest/api/3/myself) printf '%s' '{"accountId":"a"}'; exit 0 ;;
     *examplens%2Fmonorepo*merge_requests*) printf '%s' '{"iid":4321,"state":"merged","author":{"state":"active"}}'; exit 0 ;;
     *examplens%2Fexample-repo*merge_requests*)    printf '%s' '{"iid":4321,"state":"opened","author":{"state":"active"}}'; exit 0 ;;
     *merge_requests*) exit 22 ;;
@@ -200,6 +210,65 @@ OUT=$(cd "$TMP/wl" && PATH="$TMP/stub:$PATH" WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP
       "$BIN/verify-refs.sh" no-repos 2>&1)
 ck "absent repos: reports unchecked, not a guess" 'unchecked.*!4321'
 no "absent repos: does not silently resolve"      '(stale.*!4321|[1-9][0-9]* live)'
+
+# Credential positive control. Every per-ref failure collapses to `unchecked`,
+# so a missing MCP_JIRA_EMAIL, a revoked token and a dead network all printed
+# the same row with nothing naming the cause (measured 2026-10-08: the email
+# was absent from the shared secrets file). Each case below must NAME its cause,
+# and a rejected credential must stop the per-ref calls rather than repeat them.
+# The stub logs every URL so "no lookup was attempted" is asserted, not assumed.
+cat > "$TMP/stub/curl" <<'STUB'
+#!/usr/bin/env bash
+for a in "$@"; do case "$a" in https://*) echo "$a" >> "$STUB_LOG" ;; esac; done
+for a in "$@"; do
+  case "$a" in
+    */api/v4/user)       [ "${STUB_GL:-ok}" = ok ]   && { printf '%s' '{"id":1}'; exit 0; }; exit 22 ;;
+    */rest/api/3/myself) [ "${STUB_JIRA:-ok}" = ok ] && { printf '%s' '{"accountId":"a"}'; exit 0; }; exit 22 ;;
+    *merge_requests*)    printf '%s' '{"iid":1234,"state":"opened"}'; exit 0 ;;
+    *rest/api/3/issue*)  printf '%s' '{"fields":{"status":{"statusCategory":{"key":"indeterminate"}}}}'; exit 0 ;;
+  esac
+done
+exit 22
+STUB
+chmod +x "$TMP/stub/curl"
+creds() {  # creds <env assignments...> -> OUT, RC, LOG
+  : > "$TMP/stub.log"
+  OUT=$(cd "$TMP/wl" && env -u GITLAB_PAT -u GITLAB_TOKEN -u MCP_JIRA_EMAIL -u MCP_JIRA_API_TOKEN -u JIRA_HOST \
+        PATH="$TMP/stub:$PATH" STUB_LOG="$TMP/stub.log" WORKLOG_REPO="$TMP/wl" WORKLOG_LDAP=tester \
+        WORKLOG_FORGE_NAMESPACE=examplens GITLAB_HOST=gitlab.example "$@" \
+        "$BIN/verify-refs.sh" with-refs 2>&1)
+  RC=$?; LOG=$(cat "$TMP/stub.log")
+}
+JIRA_OK=(JIRA_HOST=jira.example MCP_JIRA_EMAIL=t@t.t MCP_JIRA_API_TOKEN=fake)
+
+creds GITLAB_TOKEN=fake JIRA_HOST=jira.example MCP_JIRA_API_TOKEN=fake
+ck "missing Jira email is named in a note"      'note: unset: MCP_JIRA_EMAIL; every Jira ref'
+ck "missing Jira email is the row's reason"     'unchecked.*SPLUS-4321.*MCP_JIRA_EMAIL'
+no "GITLAB_TOKEN alone is accepted (not only GITLAB_PAT)" 'unchecked.*!1234'
+
+creds GITLAB_TOKEN=fake "${JIRA_OK[@]}" STUB_JIRA=bad
+ck "rejected Jira credential is named"          'note: Jira credential check against jira.example: rejected'
+if printf '%s' "$LOG" | grep -q 'rest/api/3/issue'; then FAIL=$((FAIL+1)); printf '  FAIL  looked up issues after Jira rejected the credential\n'
+else PASS=$((PASS+1)); printf '  PASS  no issue lookups after Jira rejected the credential\n'; fi
+
+creds "${JIRA_OK[@]}"
+ck "missing GitLab token is named"              'note: GITLAB_TOKEN \(or GITLAB_PAT\) unset; every MR ref'
+ck "missing GitLab token is the row's reason"   'unchecked.*!1234.*GITLAB_TOKEN'
+
+creds GITLAB_TOKEN=fake "${JIRA_OK[@]}" STUB_GL=bad
+ck "rejected GitLab token is named"             'note: GitLab token check against gitlab.example: rejected'
+if printf '%s' "$LOG" | grep -q 'merge_requests'; then FAIL=$((FAIL+1)); printf '  FAIL  looked up MRs after GitLab rejected the token\n'
+else PASS=$((PASS+1)); printf '  PASS  no MR lookups after GitLab rejected the token\n'; fi
+[ "$RC" = 0 ] && { PASS=$((PASS+1)); printf '  PASS  a rejected credential still degrades (exit 0)\n'; } \
+              || { FAIL=$((FAIL+1)); printf '  FAIL  a rejected credential changed the exit (%s)\n' "$RC"; }
+
+creds GITLAB_TOKEN=fake "${JIRA_OK[@]}"
+no "working credentials: no note"               'note:'
+ck "working credentials: both refs resolved"    '0 stale, 2 live, 0 unchecked'
+# Inert-lane guard: the probes must have run, or "no note" proves nothing.
+printf '%s' "$LOG" | grep -q '/api/v4/user' && printf '%s' "$LOG" | grep -q '/rest/api/3/myself' \
+  && { PASS=$((PASS+1)); printf '  PASS  both credential probes ran\n'; } \
+  || { FAIL=$((FAIL+1)); printf '  FAIL  a credential probe never ran\n'; }
 
 printf '\n  %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
