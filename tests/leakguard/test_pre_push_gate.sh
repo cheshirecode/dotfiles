@@ -61,6 +61,15 @@ git checkout -q -b clean main~2
 commit ok.md "nothing notable"
 git push -q pub clean 2>/dev/null || note "refused a clean new branch"
 
+# 6b. Clean content under a leaking commit MESSAGE is refused: the message
+#     publishes with the commit, and a diff-only scan never reads it. The
+#     pragma, which exempts a content line, must not exempt a message line.
+git checkout -q clean
+echo "still nothing notable" > ok2.md; git add ok2.md
+git -c core.hooksPath=/dev/null commit -q -m "port the fix from $LEAK-ai/ui  # pragma: allowlist owner"
+git push -q pub clean 2>/dev/null && note "pushed a commit whose message leaks"
+remote_has pub clean HEAD~1 || note "the public remote moved despite a leaking message"
+
 # 7. Unmarking the private remote makes it public: the mark is opt-in.
 git config --unset remote.priv.dotfiles-private
 git checkout -q main

@@ -175,6 +175,17 @@ elif MODE == "--range":
             path = line[6:]
         elif line.startswith("+") and not line.startswith("+++"):
             found += offenders_in(f"{sha} {path}", line[1:])
+    # Commit messages publish with the commits, and the diff scan above never
+    # reads them. No pragma exemption here: a message has no reason to carry
+    # one, so it is scanned like --stdin text.
+    msgs = subprocess.run(["git", "log", "--format=%x01%h%x00%B", *revs],
+                          capture_output=True, text=True).stdout
+    for entry in msgs.split("\x01")[1:]:
+        sha, _, body = entry.partition("\0")
+        for line in body.splitlines():
+            if offenders_in("stdin", line):
+                found.append(f"{sha} commit message: private reference")
+                break
 else:
     # Only ADDED lines. Existing content is grandfathered on purpose: this gate
     # stops NEW leakage instead of demanding a tree-wide cleanup before anyone
