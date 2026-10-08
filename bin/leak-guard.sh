@@ -5,6 +5,8 @@
 #   --staged   scan staged added lines (commit gate)
 #   --authors  scan author/committer headers on every ref (suite gate)
 #   --stdin    scan proposed public text before publishing it
+#   --range <rev-list args>  scan each commit's added lines and identities
+#              (pre-push gate for a public remote, e.g. `A..B`)
 #
 # Exit 0 clean, 1 findings, 2 usage.
 #
@@ -17,7 +19,8 @@ set -uo pipefail
 MODE="${1:---tree}"
 case "$MODE" in
   --tree|--staged|--authors|--stdin) ;;
-  *) echo "usage: leak-guard.sh [--tree|--staged|--authors|--stdin]" >&2; exit 2 ;;
+  --range) shift; [ "$#" -gt 0 ] || { echo "leak-guard: --range needs rev-list args" >&2; exit 2; } ;;
+  *) echo "usage: leak-guard.sh [--tree|--staged|--authors|--stdin|--range <revs>]" >&2; exit 2 ;;
 esac
 cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" || exit 2
 
@@ -32,7 +35,9 @@ if [ "$MODE" = "--stdin" ]; then
   fi
 fi
 
-MODE="$MODE" INPUT_FILE="$INPUT_FILE" python3 - <<'SCAN'
+RANGE_ARGS=""
+[ "$MODE" = "--range" ] && RANGE_ARGS="$(printf '%s\n' "$@")"
+MODE="$MODE" INPUT_FILE="$INPUT_FILE" RANGE_ARGS="$RANGE_ARGS" python3 - <<'SCAN'
 import os
 import re
 import subprocess
@@ -149,6 +154,27 @@ elif MODE == "--authors":
                 first[addr] = sha
     for addr, sha in sorted(first.items()):
         found.append(f"{sha}: commit identity {addr!r}")
+elif MODE == "--range":
+    # Every commit, not the range's net diff: a leak added and then removed
+    # inside the range still lands in the public history.
+    revs = [a for a in os.environ["RANGE_ARGS"].split("\n") if a]
+    log = subprocess.run(
+        ["git", "log", "--no-color", "--unified=0", "-p", "--diff-filter=ACMR",
+         "--format=%x01%h%x00%ae%x00%ce", *revs], capture_output=True, text=True)
+    if log.returncode != 0:
+        sys.stderr.write(f"leak-guard: git log failed: {log.stderr.strip()}\n")
+        raise SystemExit(2)
+    sha, path = "?", "?"
+    for line in log.stdout.splitlines():
+        if line.startswith("\x01"):
+            sha, author, committer = line[1:].split("\0")
+            for addr in (author, committer):
+                if addr and not ALLOWED_IDENTITY_RE.match(addr):
+                    found.append(f"{sha}: commit identity {addr!r}")
+        elif line.startswith("+++ b/"):
+            path = line[6:]
+        elif line.startswith("+") and not line.startswith("+++"):
+            found += offenders_in(f"{sha} {path}", line[1:])
 else:
     # Only ADDED lines. Existing content is grandfathered on purpose: this gate
     # stops NEW leakage instead of demanding a tree-wide cleanup before anyone
