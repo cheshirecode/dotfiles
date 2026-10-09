@@ -33,24 +33,28 @@ at the moment it is made, as not publishable.
 
 ## Publishing
 
-List what GitHub lacks, then scan each commit on its own:
+Push to GitLab first, then publish from `origin/main`:
 
 ```sh
-git fetch origin && git fetch github
-for c in $(git rev-list --reverse github/main..origin/main); do
-  bin/leak-guard.sh --range "$c^..$c" >/dev/null 2>&1 && s=clean || s=PRIVATE
-  echo "$s $(git log -1 --format='%h %s' "$c")"
-done
+bin/publish-public.sh            # dry run: classify each commit, print the plan
+bin/publish-public.sh --apply    # publish
 ```
 
-- **All clean:** `git push github main`. The hook scans the range again.
-- **The clean commits form a prefix:** publish up to the last clean one with
-  `git push github <sha>:refs/heads/main`.
-- **A private commit sits between clean ones:** from here the two histories
-  diverge. Keep a `public` branch on top of `github/main`, cherry-pick the
-  clean commits onto it, and push `public:main`. `git cherry -v public main`
-  matches commits by patch-id, so it keeps listing exactly the commits not
-  yet published even after their hashes differ.
+It lists the commits `github/main` lacks by patch-id (`git cherry`), so a
+commit already published as a cherry-picked copy is not offered again. It
+checks each one on its own with `leak-guard --range` and gitleaks, then:
+
+- **While nothing private has landed:** it fast-forwards `github/main`
+  through the leading run of clean commits. The hashes stay identical, so
+  the histories do not diverge.
+- **Once a private commit lands:** that commit stays on GitLab, and every
+  later clean commit is cherry-picked onto `github/main` in a scratch
+  worktree. From then on the two histories differ by design, and `main` is
+  never pushed to `github` directly again.
+- **A clean commit that builds on a private one** cannot apply. The run
+  stops, names it, and pushes nothing.
+
+The push goes through the pre-push gate, which scans every commit again.
 
 A commit that mixes public and private hunks cannot be published as it
 stands, and `main` on GitLab is never rewritten to split it. Keep the private
