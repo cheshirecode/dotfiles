@@ -294,6 +294,27 @@ if command -v glab >/dev/null 2>&1; then
   glab_t="${RESTORE_GLAB_TIMEOUT:-10}"
   [ "$(timeout "$glab_t" glab config get git_protocol 2>/dev/null)" = "https" ] \
     || { timeout "$glab_t" glab config set git_protocol https --global >/dev/null 2>&1 && note "glab -> https"; }
+  # glab reads its token from its config or the environment, never from
+  # ~/.git-credentials, and the config is on the overlay. So after a restart
+  # git could push to GitLab while `glab auth status` reported "No token
+  # found" (2026-10-09). Seed it from the same secret, on stdin so the token
+  # never appears in a process list, then confirm it authenticates.
+  # Every call strips the token variables: the secrets file was sourced into
+  # this shell above, and glab answers `config get token` and `auth status`
+  # from GITLAB_TOKEN when it is set. With it set the stored token always
+  # "matched", so the login never ran -- and a tool shell has no such variable.
+  glab_cfg() { env -u GITLAB_TOKEN -u GITLAB_ACCESS_TOKEN -u OAUTH_TOKEN -u GLAB_TOKEN \
+                 timeout "$glab_t" glab "$@"; }
+  if [ -n "${want_gl:-}" ] &&
+     [ "$(glab_cfg config get token --host gitlab.com 2>/dev/null)" != "$want_gl" ]; then
+    if printf '%s' "$want_gl" | glab_cfg auth login --hostname gitlab.com --stdin \
+         --git-protocol https --api-protocol https >/dev/null 2>&1 &&
+       glab_cfg auth status --hostname gitlab.com >/dev/null 2>&1; then
+      note "glab logged in to gitlab.com from $SECRETS"
+    else
+      note "glab NOT logged in: the token from $SECRETS was refused, or glab timed out"
+    fi
+  fi
 fi
 
 [ "$changed" = 0 ] && echo "restore-home-links: nothing to do"
