@@ -21,6 +21,9 @@ destination:
   `bin/leak-guard.sh --range` (added lines and author/committer identities)
   and `gitleaks`. A missing scanner blocks the push.
 
+A gate that is not wired blocks nothing, so `bin/doctor.sh` fails when a
+public remote exists and `pre-push` is not the gate. Run it after cloning.
+
 An unmarked remote counts as public, so a fresh clone that forgot the mark
 gets a blocked GitLab push, never a leaked GitHub one.
 
