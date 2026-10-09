@@ -349,6 +349,39 @@ for vault in "${VAULTS[@]}"; do
   fi
 done
 
+echo "doctor: dotfiles push gate"
+# bin/git-hooks/pre-push is the only thing between a commit and the public
+# remote. It was simply not wired in a Coder clone (2026-10-08): .git/hooks
+# was empty, nothing reported it, and pushes would have reached GitHub
+# unscanned. Judged by the hook's own marker, not by a file existing, so an
+# unrelated pre-push reads as unwired. Overridable for the state fixtures.
+dot="${DOTFILES_REPO:-$REPO_ROOT}"
+if ! git -C "$dot" rev-parse --git-dir >/dev/null 2>&1; then
+  absent "no git checkout at $dot"
+else
+  public=""; private=""
+  for r in $(git -C "$dot" remote); do
+    if [[ "$(git -C "$dot" config --bool --get "remote.$r.dotfiles-private" 2>/dev/null)" == true ]]; then
+      private="$private $r"
+    else
+      public="$public $r"
+    fi
+  done
+  hooks="$(git -C "$dot" config --local core.hooksPath 2>/dev/null)"
+  case "$hooks" in
+    "") hooks="$(git -C "$dot" rev-parse --path-format=absolute --git-dir)/hooks" ;;
+    /*) ;;
+    *)  hooks="$dot/$hooks" ;;
+  esac
+  if [[ -z "$public" ]]; then
+    ok "no public remote; nothing to gate (private:${private:- none})"
+  elif grep -qs 'dotfiles-private' "$hooks/pre-push"; then
+    ok "push gate armed for${public} (private:${private:- none})"
+  else
+    fail "pushes to${public} are UNSCANNED: pre-push gate not wired (bin/install-hooks.sh --write)"
+  fi
+fi
+
 echo
 summary="$FAIL failure(s), $WARN warning(s), $ABSENT absent, $UNKNOWN unknown"
 if [[ $FAIL -eq 0 && $UNKNOWN -eq 0 ]]; then
