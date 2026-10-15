@@ -90,6 +90,54 @@ class LoopRunTest(unittest.TestCase):
         self.assertEqual(r.returncode, 2)
         self.assertIn("--evidence", r.stderr)
 
+    def test_repeated_evidence_survives_init_advance_and_finish(self):
+        records = [f"command: check-{i} — observed" for i in range(4)]
+        flags = [part for record in records for part in ("--evidence", record)]
+        for phase in ("init", "advance", "finish"):
+            with self.subTest(phase=phase):
+                run_dir = str(Path(self._tmp.name) / phase)
+                if phase != "init":
+                    result = run([run_dir, "--goal", "test goal"], cwd=self.cwd)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                args = [run_dir, *flags]
+                if phase == "init":
+                    args += ["--goal", "test goal"]
+                elif phase == "finish":
+                    args += ["--stop", "complete", "--verification", "command: gate — pass"]
+                result = run(args, cwd=self.cwd)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                state = json.loads((Path(run_dir) / "loop_state.json").read_text())
+                self.assertEqual(state["progress_evidence"][-4:], records)
+                self.assertEqual(state["history"][-1]["evidence"], records)
+                self.assertEqual(state["budget"]["used"], int(phase == "advance"))
+
+    def test_invalid_earlier_evidence_rejects_without_transition(self):
+        self.init_run()
+        paths = [Path(self.run_dir) / name for name in ("loop_state.json", "run.json")]
+        before = [path.read_bytes() for path in paths]
+        result = run([
+            self.run_dir, "--evidence", " ",
+            "--evidence", "command: later check — observed",
+        ], cwd=self.cwd)
+        self.assertEqual(result.returncode, 3)
+        self.assertEqual([path.read_bytes() for path in paths], before)
+
+    def test_repeated_allowed_effects_and_omitted_default(self):
+        self.init_run()
+        state = json.loads((Path(self.run_dir) / "loop_state.json").read_text())
+        self.assertEqual(state["allowed_effects"], [
+            "read-only until a wider effect is declared",
+        ])
+        run_dir = str(Path(self._tmp.name) / "effects")
+        result = run([
+            run_dir, "--goal", "test goal",
+            "--allowed-effect", "edit owned files",
+            "--allowed-effect", "push reviewed changes",
+        ], cwd=self.cwd)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        state = json.loads((Path(run_dir) / "loop_state.json").read_text())
+        self.assertEqual(state["allowed_effects"], ["edit owned files", "push reviewed changes"])
+
     def test_advance_consumes_budget(self):
         self.init_run(["--budget", "5"])
         r = run(
