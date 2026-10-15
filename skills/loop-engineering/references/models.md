@@ -55,14 +55,14 @@ See [Fable 5.1 guidance](https://platform.claude.com/docs/en/build-with-claude/p
 
 ## Grok API loops
 
-When building a custom Grok Responses API runner, preserve structured output and
-opaque encrypted state through the supported SDK or response-chain contract.
+For a custom Grok Responses API runner, preserve structured output and opaque
+encrypted state. Use the supported SDK or response-chain contract.
 For client-managed history, return the full output array unchanged before the
 matching tool results. Keeping only `output_text` loses protocol state. A compact
 task pack does not replace API history, and the loop driver does not manage it.
 Follow [Grok's official best practices](https://docs.x.ai/developers/model-capabilities/text/best-practices)
-for the current transport contract; this note does not authorize editing the
-current host's conversation history.
+for the current transport contract. This does not authorize changes to the host's
+conversation history.
 
 Keep retries inside the declared loop budget. Reconcile ambiguous writes through
 [effects.md](effects.md) before replay, even when an API example retries until a
