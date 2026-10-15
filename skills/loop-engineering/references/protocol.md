@@ -70,6 +70,11 @@ unlaunchable probe is unavailable evidence, not proof of absence; do not use it
 to authorize repair. Two values derived from the same source are not independent
 confirmation.
 
+For permission claims, identify the actor, tenant, resource, action, and effective
+role. Pair a denial with a successful authenticated control that discriminates
+the claimed restriction. Record deliberate differences in action, resource, or
+role between the trials. An unauthenticated denial alone is not permission proof.
+
 For an uncertain implementation, record the hypothesis, observable falsifier and
 replay check once in the task. Report decisions and concise rationale, not private
 reasoning. If the result does not discriminate, narrow the next check. Choose

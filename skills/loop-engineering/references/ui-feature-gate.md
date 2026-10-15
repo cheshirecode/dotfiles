@@ -37,6 +37,11 @@ named main browser. It receives `UI_VALIDATION_REVISION`,
 `UI_VALIDATION_BROWSER`, `UI_VALIDATION_CASE_ID`, and
 `UI_VALIDATION_OUTPUT_DIR`. Write a nonempty screenshot, trace, or other
 browser-observed artifact at the declared path under that output directory.
+Element existence, rendered readability, and successful interaction support
+different claims. DOM or accessibility-tree presence alone does not prove visible
+usability. For visible or usable behavior, inspect rendered evidence; replay the
+named action when interaction is claimed. Saving an artifact does not establish
+that its contents were inspected.
 The runner fails if a command exits nonzero, an artifact is missing or empty,
 the revision changes, or the worktree becomes dirty. A fresh output directory
 prevents stale artifacts from passing a new run.
