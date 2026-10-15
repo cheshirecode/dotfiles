@@ -83,3 +83,10 @@ the task history before advancing; count accepted work once. A retained worker
 name does not prove retained context: re-brief from the pack after a reset.
 Validate saved state and replay the recovery check before trusting intervention.
 Keep terminal predecessors immutable; follow [protocol.md](protocol.md) for resume.
+
+When resuming code work, run the smallest authorized health check for the feature
+before a new edit. Compare its result with the saved baseline and current revision.
+Separate inherited failures, unavailable tools, and failures caused by the new
+diff. A saved passing result does not prove current feature health. Respect build
+and browser limits; an unavailable check remains unverified. This adapts the
+restart check in [Anthropic's long-running agent guide](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents).
