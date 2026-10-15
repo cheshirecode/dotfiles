@@ -55,6 +55,8 @@ write or affect external systems. Honor the user's budget and any minimum;
 the driver defaults to 20 turns. `--repo` selects the radar target (otherwise
 cwd's Git root); `--project <slug>` enables the Worklog queue on every cycle.
 Neither option changes a tool's cwd or authorizes dispatch.
+Repeat `--evidence` for each short record in one cycle; all records are saved.
+Repeat `--allowed-effect` at init to preserve each permitted effect.
 
 1. Observe current evidence and choose the smallest useful action.
 2. Check the target and existing authorization before a mutation. Apply the
@@ -62,7 +64,7 @@ Neither option changes a tool's cwd or authorizes dispatch.
 3. Execute and verify the changed behavior. Batch independent reads when the
    host supports it; inspect every result. Repeat checks only for new changes,
    failures, unresolved concerns, or a required validation gate.
-4. Record one typed line: `kind: reference — result`. Kinds are `command`,
+4. Record short typed lines: `kind: reference — result`. Kinds are `command`,
    `artifact`, `git`, `github`, `url`. Keep verbose output in the artifact;
    state is an index, not a log. Preserve producer exit codes.
 5. If work remains, advance once and keep working while state is `running`.
