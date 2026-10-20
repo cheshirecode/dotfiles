@@ -124,11 +124,63 @@ Two things belong to the view rather than the gate:
   matches `<pre`, `<li` also matches `<link`. A prefix match reports balance
   that is not there.
 
+## A generated status summary
+
+The headline of a status page, meaning the verdict, the state of each step and
+what needs attention, is the part most often typed in by hand and the part
+that goes stale fastest. Generate it like every other field.
+
+- **Split the spec from the output.** The data file holds two keys. The spec
+  holds only stable wording: step names, attention items and their phrasing,
+  the time windows to measure. The summary holds everything a source can
+  answer: counts, tracker statuses, review states, alert states. A script
+  writes the summary, and nobody edits it. That is the field-ownership rule
+  applied inside one file. Change the spec to change what is measured.
+- **Fail closed, per line.** A source that errors renders **Unknown** in the
+  stop tone, and the run exits non-zero. It never keeps the previous value: an
+  old number under a fresh timestamp is the most convincing wrong answer the
+  page can show. An API that caps its result, such as an aggregate with a
+  bucket limit, goes Unknown at the cap rather than reporting the capped count.
+- **Break the credential the source actually checks.** A red test that swaps
+  in a bad key can pass for the wrong reason. Measured on one metrics API: with
+  a valid application key, a bad API key was accepted, so only a bad
+  application key proved the failure path. Likewise, a secrets-file line that is
+  a shell reference (`${VAR:-}`) expands to empty in a tool shell. Test every
+  credential for non-empty, and name the fallback when one is used.
+- **Commit on change, not on run.** Print a signature, a hash over states,
+  tones and statuses but not counts or the timestamp, and whether it
+  `changed`. A frequent republish refreshes the numbers, and the data file is
+  committed only when a state moved, so history records transitions instead
+  of one commit per hour.
+- **Shrink what cannot be automated rather than typing it.** A fact with no
+  readable source in this environment leaves the summary. An item with no
+  tracker shows `No tracker` as its status, never an invented one. The page
+  says the summary is generated, and when.
+
+Rendering it:
+
+- **Opt in.** Render the block only when the data carries a summary, so other
+  pages built by the same renderer stay byte-identical. Check that with `cmp`,
+  not by eye.
+- **Namespace new styles.** A shared stylesheet already owns generic class
+  names, such as a node or a state. Prefix the new ones, or they silently
+  restyle the existing page.
+- **Show state three ways:** text, colour and shape together, for example
+  filled for ok, a ring for waiting, a square for a gap. Colour alone fails
+  some readers and every greyscale print.
+- **Use an ordered list only when the order is real**, such as the sequence a
+  transaction actually passes through.
+
 ## Scheduling
 
 Run a sync when its source changes — an item closes, a run completes, a flag
-flips. Not on a timer. A timed sync becomes another clean-looking pass that
-measures nothing, which is the same argument **Initialise** makes for discovery.
+flips. A timed sync becomes another clean-looking pass that measures nothing,
+which is the same argument **Initialise** makes for discovery.
+
+The exception is a source that changes continuously and emits no event, such
+as live metrics. There, a schedule is the only possible trigger. It is safe
+only with the two rules above: a failed read cannot pass for a quiet one,
+because it fails closed, and a run that changed nothing commits nothing.
 
 ## Keeping the worked example out of here
 

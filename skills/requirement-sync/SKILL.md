@@ -17,8 +17,9 @@ This skill does the finding. It does not decide what is true.
 - A tracked item closes and its premise was carried into other documents.
 - Before a sign-off, to check the evidence under it has not moved.
 
-- A page is assembled from several sources and has to follow them as they move.
-  That is the same problem from the end with more inputs than editors; see
+- A page is assembled from several sources and has to follow them as they move,
+  including a status summary generated from live sources. That is the same
+  problem from the end with more inputs than editors; see
   [references/derived-views.md](references/derived-views.md).
 
 Do not use it to make the decision. It surfaces disagreement; a human resolves it.
