@@ -97,6 +97,7 @@ predicts how it rots.
 | trusts a read-only flag | the flag is accepted and ignored, and the run advances a baseline |
 | reads "unset" from a store | absence is indistinguishable from no permission to look |
 | states a count in prose | the prose ages while the data moves |
+| keeps a reading beside a generated block | it ages with traffic, and no claim search finds it because no decision changed |
 
 Two of these deserve the rule rather than the example:
 
@@ -170,6 +171,39 @@ Rendering it:
   some readers and every greyscale print.
 - **Use an ordered list only when the order is real**, such as the sequence a
   transaction actually passes through.
+
+## Pages that mix a generated block with hand-kept content
+
+A page whose headline is generated and whose body is written by hand holds
+three kinds of claim, and each goes stale differently:
+
+| claim | goes stale when | found by |
+|---|---|---|
+| prose a decision falsified | a requirement changes | a claim search |
+| the generated block | its sources move | only running its generator |
+| a hand-kept count, reading or flag | traffic moves; no decision involved | only re-reading its source |
+
+A sync that runs only the claim search refreshes the first and reports a
+clean run while the other two are stale. The view's refresh procedure is
+therefore the sync, and it has three parts:
+
+1. **Run the generator first**, so everything after it compares against
+   current numbers. It must exit 0; a fail-closed generator that exits
+   non-zero means the page is not refreshed, whatever the prose says.
+2. **Search for falsified claims**, as for any surface.
+3. **Work through the declared list of volatile hand-kept fields.** For each,
+   either re-read it from its source and date it with this run, or cut it down
+   to the part that does not change. A field that is neither re-read nor cut
+   stays stale.
+
+**Done when** the generator has exited 0 and every listed field either carries
+a date from this run or has been cut.
+
+**Prefer cutting a hand-kept number the generated block already shows.** Two
+figures for one quantity will disagree as soon as either moves. On one page the
+hand-kept section said 425 while the generated block beside it said 7,065, and
+neither looked wrong on its own. Keep the generated figure, and let the prose
+say what it means.
 
 ## Scheduling
 
