@@ -505,4 +505,12 @@ if [ -n "${CODER_WORKSPACE_ID:-}" ] && [ -z "${DOTFILES_NO_APT:-}" ]; then
   ) || true
 fi
 
+# impeccable, the design-review skill, on demand only: the skill and three
+# agents linked from its marketplace clone, the plugin itself never enabled
+# (its hooks run a downloaded engine on every edit in every session). See
+# bin/install-impeccable.sh. Non-fatal; opt out with DOTFILES_NO_IMPECCABLE=1.
+if [ -z "${DOTFILES_NO_IMPECCABLE:-}" ] && [ -x "$REPO_DIR/bin/install-impeccable.sh" ]; then
+  "$REPO_DIR/bin/install-impeccable.sh" --write || echo "  warning: impeccable setup failed (non-fatal)" >&2
+fi
+
 echo "Dotfiles installation complete."

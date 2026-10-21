@@ -382,6 +382,26 @@ else
   fi
 fi
 
+echo "doctor: impeccable on demand"
+# The plugin's hooks run its downloaded engine at every session start and after
+# every Edit/Write, in every session, and its per-edit check defaults to ON. On
+# demand means the plugin stays disabled and the skill is a plain user link.
+# Overridable for the state fixtures.
+ch="${DOCTOR_CLAUDE_HOME:-$HOME/.claude}"
+imp_on="$(python3 -c '
+import json,sys
+try: print(json.load(open(sys.argv[1])).get("enabledPlugins",{}).get("impeccable@impeccable") is True)
+except Exception: print("unknown")' "$ch/settings.json" 2>/dev/null)"
+if [[ "$imp_on" == True ]]; then
+  fail "impeccable plugin ENABLED: its hooks run on every edit in every session (bin/install-impeccable.sh --write)"
+elif [[ "$imp_on" == unknown ]]; then
+  unknown "impeccable state unreadable: $ch/settings.json missing or not JSON"
+elif [[ -e "$ch/skills/impeccable/SKILL.md" ]]; then
+  ok "impeccable available on demand; plugin hooks not enabled"
+else
+  absent "impeccable not set up (bin/install-impeccable.sh --write)"
+fi
+
 echo
 summary="$FAIL failure(s), $WARN warning(s), $ABSENT absent, $UNKNOWN unknown"
 if [[ $FAIL -eq 0 && $UNKNOWN -eq 0 ]]; then
