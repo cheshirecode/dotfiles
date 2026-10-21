@@ -1,6 +1,6 @@
 ---
 name: artifact-gate
-description: "Gate an HTML artifact before publishing - tag balance, dead anchors, duplicate ids, non-absolute links, self-claims that drifted, and code links that still resolve while no longer saying what the page claims. Use before publishing or updating a shared HTML page, when asked whether its links and counts are still true, or for an on-demand design review that avoids machine-generated-looking design."
+description: "Gate an HTML artifact before publishing - tag balance, dead anchors, duplicate ids, non-absolute links, drifted self-claims, and code links that still resolve but no longer say what the page claims - plus on-demand design review against machine-made-looking design. Use before publishing a shared HTML page or when asked if its links and counts hold."
 ---
 
 # Gate an HTML artifact before it is published
