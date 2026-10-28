@@ -20,6 +20,7 @@ model guidance tunes its use, while host capabilities determine what can run.
 | Material uncertainty about goal, scope, effects, or task split | [interrogate.md](references/interrogate.md) before initialization |
 | Repeated or resumable work | Driver below; [protocol.md](references/protocol.md) for exact state/effect rules |
 | Software engineering factory: intake through delivery and improvement | [factory.md](references/factory.md) |
+| Harness design, routing patterns, or workflow boundaries | [harness-design.md](references/harness-design.md) |
 | Concurrent delegates, or a delegate's model lane | [crew.md](references/crew.md) |
 | Three or more Worklog tasks | [orchestrator.md](references/orchestrator.md) |
 | Astra/Fable prompting, Sol orchestration, or another model | [models.md](references/models.md) |
