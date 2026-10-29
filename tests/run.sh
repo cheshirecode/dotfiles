@@ -264,12 +264,20 @@ reference_names = {path.name for path in (skill / "references").glob("*.md")}
 # Flattened: the hook note is hard-wrapped, so raw substrings spanning a line
 # break never match and any mutation against them is a silent no-op.
 root_flat = " ".join(root.split())
+codex_start = routing.find("#### Codex")
+codex = " ".join(routing[codex_start:routing.find("#### ", codex_start + 1)].split()) if codex_start >= 0 else ""
 checks = {
     "thin root": len(root.splitlines()) <= 80 and len(root.split()) <= 600,
     "hook offer route": "hookSpecificOutput.updatedInput" in root
         and "ask before editing settings" in root_flat,
     "no session-model claim": "No hook sets a session model" in root_flat,
     "fork carve-out": 'Skip `subagent_type: "fork"`' in root_flat,
+    # Codex delegation is prose only; without this, deleting the section or
+    # its live-list rule leaves the suite green.
+    "codex dispatch route": "In Codex, use the dispatch tool's model selector" in root_flat
+        and "delegate tool's model list" in codex
+        and "catalog is seed-only" in codex
+        and "report when selection is unavailable" in codex,
     "guideline-only route": "Do not read references or fetch live pricing" in root,
     "task route": "read `references/routing.md`" in root,
     "catalog route": "also read `references/catalog.md`" in root,
