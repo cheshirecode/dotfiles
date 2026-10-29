@@ -231,7 +231,12 @@ if [ -n "${VAULT_TOKEN_PROD:-}${VAULT_TOKEN_STAGING:-}${VAULT_TOKEN_PROD_BACKUP:
       # in this run. The two arms below are the whole outcome: a dead token
       # takes the failure arm and the success line is never printed. There is no
       # window in which a bad seed looks fine.
-      if [ -n "$(vault_ttl "$VAULT_PROD_ADDR" "${!seed_from}")" ]; then
+      # No address means nothing was asked, not that the token was refused.
+      # Measured 2026-09-29: with VAULT_PROD_ADDR unset this printed DOES NOT
+      # AUTHENTICATE for a token valid for 31 more days.
+      if [ -z "$VAULT_PROD_ADDR" ]; then
+        note "seeded ~/.vault-token from $seed_from, UNVERIFIED: \$VAULT_PROD_ADDR is unset -- set it in ~/.shell_common.local"
+      elif [ -n "$(vault_ttl "$VAULT_PROD_ADDR" "${!seed_from}")" ]; then
         note "seeded ~/.vault-token from $seed_from (overlay wipe)"
       else
         note "seeded ~/.vault-token from $seed_from BUT IT DOES NOT AUTHENTICATE -- needs an interactive OIDC login"
@@ -259,10 +264,57 @@ if [ -n "${VAULT_TOKEN_PROD:-}${VAULT_TOKEN_STAGING:-}${VAULT_TOKEN_PROD_BACKUP:
   unset vt
 fi
 
+# Worklog git hooks. .git/hooks rides the persistent volume, but a clone made
+# without bootstrap.sh never gets them, and then every commit skips the task
+# lint silently: 2026-10-06 a task with "status: bogus" was committed and
+# pushed. Repair here, on every session start, and say so. An empty
+# WORKLOG_HOOKS_REPO opts out.
+wl_repo="${WORKLOG_HOOKS_REPO-${WORKLOG_REPO:-/workspace/worklog}}"
+wl_bin="${WORKLOG_SKILL_BIN:-/workspace/dotfiles/skills/worklog/bin}"
+wl_hooked() {  # a repo-local hooksPath (fallback mode) or the chained links
+  [ -n "$(git -C "$wl_repo" config --local core.hooksPath 2>/dev/null)" ] ||
+    { [ -e "$wl_repo/.git/hooks/pre-commit" ] && [ -e "$wl_repo/.git/hooks/pre-commit-identity" ]; }
+}
+if [ -n "$wl_repo" ] && [ -d "$wl_repo/.git" ] && ! wl_hooked; then
+  if [ -f "$wl_bin/install-hooks.sh" ] &&
+     bash "$wl_bin/install-hooks.sh" --data-root="$wl_repo" --write --git-hooks-only >/dev/null 2>&1 &&
+     wl_hooked; then
+    note "installed worklog git hooks in $wl_repo"
+  else
+    note "worklog git hooks MISSING in $wl_repo, commits skip lint -- run $wl_bin/install-hooks.sh --data-root=$wl_repo --write --git-hooks-only"
+  fi
+fi
+
 # glab hangs ~2min on ssh; there is no SSH auth on this box.
+# Bounded: with a fresh config glab checks for a new release over the network,
+# and on 2026-10-07 `glab config get` blocked for 9 minutes there, which would
+# stall every session start behind this hook. A timeout reads as "not https"
+# and the set is attempted once, also bounded.
 if command -v glab >/dev/null 2>&1; then
-  [ "$(glab config get git_protocol 2>/dev/null)" = "https" ] \
-    || { glab config set git_protocol https --global >/dev/null 2>&1 && note "glab -> https"; }
+  glab_t="${RESTORE_GLAB_TIMEOUT:-10}"
+  [ "$(timeout "$glab_t" glab config get git_protocol 2>/dev/null)" = "https" ] \
+    || { timeout "$glab_t" glab config set git_protocol https --global >/dev/null 2>&1 && note "glab -> https"; }
+  # glab reads its token from its config or the environment, never from
+  # ~/.git-credentials, and the config is on the overlay. So after a restart
+  # git could push to GitLab while `glab auth status` reported "No token
+  # found" (2026-10-09). Seed it from the same secret, on stdin so the token
+  # never appears in a process list, then confirm it authenticates.
+  # Every call strips the token variables: the secrets file was sourced into
+  # this shell above, and glab answers `config get token` and `auth status`
+  # from GITLAB_TOKEN when it is set. With it set the stored token always
+  # "matched", so the login never ran -- and a tool shell has no such variable.
+  glab_cfg() { env -u GITLAB_TOKEN -u GITLAB_ACCESS_TOKEN -u OAUTH_TOKEN -u GLAB_TOKEN \
+                 timeout "$glab_t" glab "$@"; }
+  if [ -n "${want_gl:-}" ] &&
+     [ "$(glab_cfg config get token --host gitlab.com 2>/dev/null)" != "$want_gl" ]; then
+    if printf '%s' "$want_gl" | glab_cfg auth login --hostname gitlab.com --stdin \
+         --git-protocol https --api-protocol https >/dev/null 2>&1 &&
+       glab_cfg auth status --hostname gitlab.com >/dev/null 2>&1; then
+      note "glab logged in to gitlab.com from $SECRETS"
+    else
+      note "glab NOT logged in: the token from $SECRETS was refused, or glab timed out"
+    fi
+  fi
 fi
 
 [ "$changed" = 0 ] && echo "restore-home-links: nothing to do"

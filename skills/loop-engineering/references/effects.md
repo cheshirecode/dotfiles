@@ -11,6 +11,12 @@ automation has that automation's effect; inspect it before acting. Honor known
 peer constraints and coupled changes. Permission for one surface does not grant
 permission for adjacent data or another worker's checkout.
 
+For example, a separate preview can share persisted work with older consumers.
+Before a persisted test write or runtime-isolation claim, identify the relevant
+backing state, publishers, recovery pollers, and consumers. Verify their applicable
+revisions and the authorized fixture and cleanup scope. A deployment to one
+service does not authorize changes to other services in that path.
+
 After a timeout or lost response, inspect the target for the intended effect before
 retrying. Where the tool supports idempotency, reuse a key for the same authorized
 intent, not a hash of regenerated prose. A new agent attempt is not a new intent.

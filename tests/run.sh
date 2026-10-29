@@ -37,6 +37,14 @@ WL_HERMETIC=(env -u BASH_ENV -u WORKLOG_BIN -u WORKLOG_LDAP -u WORKLOG_NS -u WOR
 # Carry the site path explicitly; a per-line PYTHONPATH still overrides this one.
 WL_SITE=$(python3 -c 'import pathlib, yaml; print(pathlib.Path(yaml.__file__).resolve().parents[1])' 2>/dev/null || true)
 [[ -n "$WL_SITE" ]] && WL_HERMETIC+=("PYTHONPATH=$WL_SITE")
+# Every install.sh a fixture runs copies this tree's restore-home-links.sh into
+# HOOK_BIN_DIR, whose default is the live SessionStart hook in /workspace/bin.
+# Seven fixtures did not override it: measured 2026-10-02, a suite run installed
+# an uncommitted hook edit as the live hook. One throwaway dir for the whole
+# run covers them and any fixture added later; a fixture's own value still wins.
+HOOK_BIN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/suite-hookbin.XXXXXX")"
+export HOOK_BIN_DIR
+trap 'rm -rf "$HOOK_BIN_DIR"' EXIT
 # macOS has no `timeout` (and often no coreutils `gtimeout`). A bare
 # `timeout 180 cmd` there exits 127 before the fixture starts, so every
 # fixture in the loop reads FAIL for one missing wrapper. Resolve a portable
@@ -557,9 +565,12 @@ test_fixtures() {
   # Repo-root scripts (install.sh and friends) keep their fixtures in
   # tests/<area>/. Globbed, not listed: a new tests/<area>/test_*.sh runs by
   # existing rather than by someone remembering to add a line here.
+  # CODER_WORKSPACE_ID is dropped because install.sh runs apt for missing
+  # runtime deps on a Coder workspace; a fixture inheriting it from a developer
+  # shell would reach the real sudo. Fixtures that test that path set it.
   for t in tests/*/test_*.sh; do
     [[ -e "$t" ]] || continue
-    if out=$(bash "$t" 2>&1); then
+    if out=$(env -u CODER_WORKSPACE_ID bash "$t" 2>&1); then
       ok "root $(basename "$(dirname "$t")")/$(basename "$t" .sh)"
     else
       fail_with_output "root $(basename "$(dirname "$t")")/$(basename "$t" .sh)" "$out"

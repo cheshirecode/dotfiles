@@ -304,19 +304,33 @@ fi
 echo "doctor: vault identity gate"
 # Overridable so the states below can be exercised against scratch vaults;
 # a check whose failure paths cannot be reached is not a check.
-IFS=':' read -r -a VAULTS <<< "${WORKLOG_VAULTS:-$HOME/Documents/oss/_worklog:$PROJECTS_DIR/_worklog}"
+# $WORKLOG_REPO is the clone this machine actually commits to; a Coder
+# workspace keeps it at /workspace/worklog, outside both defaults, so a clone
+# with no hooks at all passed this section unseen (2026-10-06).
+default_vaults="$HOME/Documents/oss/_worklog:$PROJECTS_DIR/_worklog"
+case ":$default_vaults:" in
+  *":${WORKLOG_REPO:-}:"*) ;;
+  *) [[ -n "${WORKLOG_REPO:-}" ]] && default_vaults="$default_vaults:$WORKLOG_REPO" ;;
+esac
+IFS=':' read -r -a VAULTS <<< "${WORKLOG_VAULTS:-$default_vaults}"
 for vault in "${VAULTS[@]}"; do
   short="${vault/#$HOME/~}"
   if [[ ! -d "$vault/.git" ]]; then
     absent "$short not cloned here"
     continue
   fi
-  hooks="$(git -C "$vault" config core.hooksPath 2>/dev/null)"
+  # --local only: an outer (system/global) hooksPath is the platform scanner,
+  # and in that CHAIN mode the worklog hooks are links in .git/hooks/.
+  hooks="$(git -C "$vault" config --local core.hooksPath 2>/dev/null)"
   case "$hooks" in
     "")  hooks="$vault/.git/hooks" ;;
     /*)  ;;
     *)   hooks="$vault/$hooks" ;;
   esac
+  if [[ ! -e "$hooks/pre-commit" ]]; then
+    fail "$short worklog hooks not installed: commits skip lint (skills/worklog/bin/install-hooks.sh --data-root=$vault --write --git-hooks-only)"
+    continue
+  fi
   if [[ ! -e "$hooks/pre-commit-identity" ]]; then
     fail "$short identity hook not installed (bin/install-hooks.sh --write)"
     continue
@@ -334,6 +348,59 @@ for vault in "${VAULTS[@]}"; do
     fail "$short identity gate DISARMED: hook installed but WORKLOG_IDENTITY_DOMAIN unset, so it reports and skips"
   fi
 done
+
+echo "doctor: dotfiles push gate"
+# bin/git-hooks/pre-push is the only thing between a commit and the public
+# remote. It was simply not wired in a Coder clone (2026-10-08): .git/hooks
+# was empty, nothing reported it, and pushes would have reached GitHub
+# unscanned. Judged by the hook's own marker, not by a file existing, so an
+# unrelated pre-push reads as unwired. Overridable for the state fixtures.
+dot="${DOTFILES_REPO:-$REPO_ROOT}"
+if ! git -C "$dot" rev-parse --git-dir >/dev/null 2>&1; then
+  absent "no git checkout at $dot"
+else
+  public=""; private=""
+  for r in $(git -C "$dot" remote); do
+    if [[ "$(git -C "$dot" config --bool --get "remote.$r.dotfiles-private" 2>/dev/null)" == true ]]; then
+      private="$private $r"
+    else
+      public="$public $r"
+    fi
+  done
+  hooks="$(git -C "$dot" config --local core.hooksPath 2>/dev/null)"
+  case "$hooks" in
+    "") hooks="$(git -C "$dot" rev-parse --path-format=absolute --git-dir)/hooks" ;;
+    /*) ;;
+    *)  hooks="$dot/$hooks" ;;
+  esac
+  if [[ -z "$public" ]]; then
+    ok "no public remote; nothing to gate (private:${private:- none})"
+  elif grep -qs 'dotfiles-private' "$hooks/pre-push"; then
+    ok "push gate armed for${public} (private:${private:- none})"
+  else
+    fail "pushes to${public} are UNSCANNED: pre-push gate not wired (bin/install-hooks.sh --write)"
+  fi
+fi
+
+echo "doctor: impeccable on demand"
+# The plugin's hooks run its downloaded engine at every session start and after
+# every Edit/Write, in every session, and its per-edit check defaults to ON. On
+# demand means the plugin stays disabled and the skill is a plain user link.
+# Overridable for the state fixtures.
+ch="${DOCTOR_CLAUDE_HOME:-$HOME/.claude}"
+imp_on="$(python3 -c '
+import json,sys
+try: print(json.load(open(sys.argv[1])).get("enabledPlugins",{}).get("impeccable@impeccable") is True)
+except Exception: print("unknown")' "$ch/settings.json" 2>/dev/null)"
+if [[ "$imp_on" == True ]]; then
+  fail "impeccable plugin ENABLED: its hooks run on every edit in every session (bin/install-impeccable.sh --write)"
+elif [[ "$imp_on" == unknown ]]; then
+  unknown "impeccable state unreadable: $ch/settings.json missing or not JSON"
+elif [[ -e "$ch/skills/impeccable/SKILL.md" ]]; then
+  ok "impeccable available on demand; plugin hooks not enabled"
+else
+  absent "impeccable not set up (bin/install-impeccable.sh --write)"
+fi
 
 echo
 summary="$FAIL failure(s), $WARN warning(s), $ABSENT absent, $UNKNOWN unknown"

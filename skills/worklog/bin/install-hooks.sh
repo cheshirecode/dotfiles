@@ -282,7 +282,10 @@ fi
 # per host); --data-root callers re-run install-hooks.sh per machine to
 # refresh.
 DESIRED="$SCRIPT_DIR/git-hooks"
-HOOK_NAMES=(pre-commit commit-msg post-commit)
+# pre-commit-identity is not a git hook name; pre-commit runs it from its own
+# directory without resolving the link, so in chain mode it must sit in
+# .git/hooks/ beside pre-commit or the identity gate is skipped silently.
+HOOK_NAMES=(pre-commit commit-msg post-commit pre-commit-identity)
 
 # Outer scope = system or global core.hooksPath — anything NOT set by us
 # in this repo's local config. System takes precedence, matching git's

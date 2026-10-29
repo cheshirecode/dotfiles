@@ -248,6 +248,10 @@ def queue_line(project):
 DUMBZONE_PCT = 50
 
 
+def repeated_options(name, values):
+    return [part for value in values for part in (name, value)]
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="One call per loop cycle; everything but the "
@@ -256,7 +260,8 @@ def main():
     parser.add_argument("run_dir", help="directory holding this run's state")
     parser.add_argument("--goal", help="first call only: success condition")
     parser.add_argument("--budget", type=int, default=20)
-    parser.add_argument("--evidence", help="one typed line for this cycle")
+    parser.add_argument("--evidence", action="append",
+                        help="repeat for each typed record in this cycle")
     parser.add_argument("--next-action", dest="next_action")
     parser.add_argument("--stop", choices=sorted(TERMINAL))
     parser.add_argument("--verification")
@@ -269,8 +274,8 @@ def main():
                              "(remote-isolated subagents, other machines)")
     parser.add_argument("--project", help="worklog project slug for the "
                         "orchestrator queue")
-    parser.add_argument("--allowed-effect", dest="allowed_effect",
-                        default="read-only until a wider effect is declared")
+    parser.add_argument("--allowed-effect", dest="allowed_effect", action="append",
+                        help="repeat for each allowed effect at initialization")
     # Percent of the context window consumed. The driver cannot read the
     # harness's usage, so the agent supplies it; omitting it changes nothing.
     parser.add_argument("--context-pct", dest="context_pct", type=int,
@@ -310,12 +315,13 @@ def drive(ns, parser):
         rc, line = loop_state([
             "init", "--state", str(state),
             "--goal", ns.goal,
-            "--evidence", ns.evidence or "artifact: %s — run initialized"
-            % run_dir,
+            *repeated_options("--evidence", ns.evidence or [
+                "artifact: %s — run initialized" % run_dir]),
             "--budget-unit", "turns",
             "--budget-limit", str(ns.budget),
             "--next-action", ns.next_action or "first cycle",
-            "--allowed-effect", ns.allowed_effect,
+            *repeated_options("--allowed-effect", ns.allowed_effect or [
+                "read-only until a wider effect is declared"]),
             "--approval-boundary", ns.approval_boundary,
         ])
     else:
@@ -339,8 +345,8 @@ def drive(ns, parser):
             args = [
                 "finish", "--state", str(state),
                 "--status", ns.stop,
-                "--evidence", ns.evidence or "command: run stopped — %s"
-                % ns.stop,
+                *repeated_options("--evidence", ns.evidence or [
+                    "command: run stopped — %s" % ns.stop]),
             ]
             if ns.verification:
                 args += ["--verification", ns.verification]
@@ -357,7 +363,7 @@ def drive(ns, parser):
                 )
             rc, line = loop_state([
                 "advance", "--state", str(state),
-                "--evidence", ns.evidence,
+                *repeated_options("--evidence", ns.evidence),
                 "--next-action", ns.next_action
                 or "claim next queue task or run next cycle",
             ])

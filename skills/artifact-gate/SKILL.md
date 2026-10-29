@@ -1,6 +1,6 @@
 ---
 name: artifact-gate
-description: "Gate an HTML artifact before publishing - tag balance, dead anchors, duplicate ids, non-absolute links, self-claims that drifted, and code links that still resolve while no longer saying what the page claims. Use before publishing or updating a shared HTML page, or when asked whether its links and counts are still true."
+description: "Gate an HTML artifact before publishing - tag balance, dead anchors, duplicate ids, non-absolute links, drifted self-claims, and code links that still resolve but no longer say what the page claims - plus on-demand design review against machine-made-looking design. Use before publishing a shared HTML page or when asked if its links and counts hold."
 ---
 
 # Gate an HTML artifact before it is published
@@ -65,3 +65,28 @@ the reader rather than only to a script.
 
 Re-read the code and record **whether the claim survived**, not just that the
 link was updated. That is what stops the next reader re-deriving it.
+
+## Design review: impeccable, on demand
+
+The gates above check that a page is correct. Whether it is well designed is a
+separate review, run when the page is new or its layout changed, and only when
+asked for: impeccable is installed as a plain skill with no hooks
+(`bin/install-impeccable.sh`), and it must stay that way.
+
+```bash
+~/.claude/skills/impeccable/scripts/impeccable detect --no-advisory page.html
+```
+
+Or `/impeccable critique` for a scored review, and `/impeccable audit` for
+accessibility and responsive checks. `detect` exits 2 on findings. It is a
+static scan, so check each finding against the rendered page before acting:
+on a dark-themed page it has reported contrast against colours the page never
+shows.
+
+Never enable the plugin or run `/impeccable hooks on` to get the review
+automatically. Its hooks run a downloaded program after every edit in every
+session, with that session's credentials in its environment.
+
+Then read [references/deslop.md](references/deslop.md): the patterns that make
+a page read as machine-generated, which ones the scan catches, and which only a
+reader does.

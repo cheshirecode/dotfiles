@@ -18,13 +18,14 @@ Scripts are shipped by the dotfiles skill. In this doc, `bin/foo.sh` is shorthan
 | Snapshot the current Claude session into a task's transcript | `bin/transcript-dump.sh <slug>` (writes `people/<ldap>/transcripts/<slug>.md`; watermarked append; auto-fires from `bin/archive.sh` and from `bin/checkpoint.sh --status=in-review\|shipping`; bypass via `WORKLOG_NO_TRANSCRIPT=1`) |
 | Safety snapshot of uncommitted worklog edits     | `bin/autosave.sh` (default: `people/$LDAP/`; `WORKLOG_AUTOSAVE_WIDE=1` for full tree) |
 | Push debounced autosave commits                  | `bin/autosave-flush.sh` (SessionEnd hook; also after checkpoint/archive) |
+| Commit named paths and push, refusing a rejected commit | `bin/safe-commit-push.sh <repo> <msgfile> <path>...` (merges upstream, never rebases; confirms the remote holds the commit) |
 | Standup-shaped summary across tasks              | `bin/status.sh [--since=... --project=... --author=...]`            |
 | Single-task chronological history                | `bin/status.sh --slug=<slug>`                                       |
 | Context pack for one task (resume / review)      | `bin/context.sh <slug> [--for=resume|review]`                       |
 | Exact Linear / Notion / PR scan seeds for init   | `bin/init-scan.sh [--ldap=<ldap> --format=json]`                    |
 | Preview Slack-derived task enrichments           | `bin/scrape-slack.sh [--input=slack-results.json --format=json]`    |
 | Check Codex command-menu drift                   | `bin/codex-surface-check.sh`                                        |
-| Validate every task file's frontmatter           | `bin/lint.sh [--format=json]`                                       |
+| Validate every task file's frontmatter           | `bin/lint.sh [--format=json]` (one call lints the whole tree in about 2s; `--file` per file costs about 0.7s each, so do not loop it over the tree) |
 | Guard split clones from foreign-domain content   | `bin/boundary-lint.sh [--format=json]`                              |
 | Guard task-scoped writes from foreign dirty task files | `bin/task-guard.sh --slug=<slug> [--format=json]`             |
 | Rebuild the derived cross-reference index        | `bin/index.sh` (writes `.cache/index.jsonl`)                        |

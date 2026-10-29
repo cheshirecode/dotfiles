@@ -34,12 +34,142 @@ backup() {
   fi
 }
 
+# ~/.bashrc is a machine-local stub that sources the tracked .bashrc, not a
+# symlink to it. The Coder template appends its own blocks with
+# `cat >> ~/.bashrc`; through a symlink that append lands in the tracked file.
+# Measured 2026-10-01: 46 template lines, employer-named, sat uncommitted in the
+# clone's .bashrc. The stub takes the append and the checkout stays clean.
+BASHRC_MARK='# dotfiles install.sh: sources the tracked .bashrc. Lines below are machine-local.'
+
+# Print what was appended to a tracked dotfile at a checkout's root. Fails unless
+# the file is HEAD's copy plus a tail, so an edit to tracked lines is never
+# carried off.
+tracked_tail() {  # <path to a tracked dotfile>
+  local f="$1" repo size rev
+  repo="$(cd "$(dirname "$f")" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null)" || return 1
+  rev="HEAD:$(basename "$f")"
+  size="$(git -C "$repo" cat-file -s "$rev" 2>/dev/null)" || return 1
+  cmp -s -n "$size" <(git -C "$repo" show "$rev") "$f" || return 1
+  tail -c +"$((size + 1))" "$f"
+}
+
+install_bashrc_stub() {
+  local rc="$DEST/.bashrc" src=". \"$REPO_DIR/.bashrc\"" tmp="$DEST/.bashrc.dotfiles-tmp.$$" real tail_
+  if [ -f "$rc" ] && [ ! -L "$rc" ] && [ "$(head -n 1 "$rc")" = "$BASHRC_MARK" ]; then
+    [ "$(sed -n 2p "$rc")" = "$src" ] && return 0
+    # The checkout moved: repoint the source line, keep every machine-local line.
+    { echo "$BASHRC_MARK"; echo "$src"; tail -n +3 "$rc"; } > "$tmp" && mv -f "$tmp" "$rc" &&
+      echo "Repointed $rc at $REPO_DIR/.bashrc"
+    return 0
+  fi
+  tail_=""
+  if [ -L "$rc" ]; then
+    real="$(readlink -f "$rc" 2>/dev/null)" || real=""
+    if [ -n "$real" ] && tail_="$(tracked_tail "$real")" && [ -n "$tail_" ]; then
+      # A pure append to a tracked file: move it into the stub, then put the
+      # tracked file back to HEAD. Nothing else in that checkout is touched.
+      { echo "$BASHRC_MARK"; echo "$src"; printf '%s\n' "$tail_"; } > "$tmp" && mv -f "$tmp" "$rc" &&
+        git -C "$(dirname "$real")" checkout -- "$(basename "$real")" &&
+        echo "Moved ${#tail_} appended bytes from $real into $rc"
+      return 0
+    fi
+  elif [ -e "$rc" ]; then
+    backup "$rc"
+  fi
+  { echo "$BASHRC_MARK"; echo "$src"; } > "$tmp" && mv -f "$tmp" "$rc" && echo "Wrote $rc (sources $REPO_DIR/.bashrc)"
+}
+install_bashrc_stub || echo "warning: could not write the ~/.bashrc stub" >&2
+
+# ~/.gitconfig likewise: a machine-local stub that includes the tracked file.
+# The Coder template runs `git config --global user.*` at start, and through a
+# symlink that wrote a work identity into the tracked .gitconfig. Measured
+# 2026-10-02: [user] with an employer email appended to the public file, and
+# placed after every include, so it overrode the per-remote identity rules and
+# this repo itself would have committed as the work account. The empty [user]
+# comes first: git fills that existing section, above the include, so the
+# tracked rules and ~/.gitconfig.local still decide and the template's identity
+# only applies where nothing else sets one.
+GITCONFIG_MARK='# dotfiles install.sh: includes the tracked .gitconfig. Lines below are machine-local.'
+install_gitconfig_stub() {
+  local rc="$DEST/.gitconfig" tmp="$DEST/.gitconfig.dotfiles-tmp.$$" want="$REPO_DIR/.gitconfig" real tail_ old k v
+  if [ -f "$rc" ] && [ ! -L "$rc" ] && [ "$(head -n 1 "$rc")" = "$GITCONFIG_MARK" ]; then
+    git config --file "$rc" --get-all include.path | grep -qxF "$want" && return 0
+    old="$(git config --file "$rc" --get-all include.path | grep '/\.gitconfig$' | head -n 1)"
+    [ -n "$old" ] || return 0
+    git config --file "$rc" --replace-all include.path "$want" "^$(printf '%s' "$old" | sed 's/[][\.*^$/]/\\&/g')\$" &&
+      echo "Repointed $rc at $want"
+    return 0
+  fi
+  {
+    echo "$GITCONFIG_MARK"
+    echo "# The empty [user] below comes first on purpose: git config --global user.* fills"
+    echo "# it, above the include, so the tracked rules still decide identity."
+    echo "[user]"
+    echo "[include]"
+    printf '\tpath = %s\n' "$want"
+  } > "$tmp" || return 1
+  tail_=""
+  if [ -L "$rc" ]; then
+    real="$(readlink -f "$rc" 2>/dev/null)" || real=""
+    if [ -n "$real" ] && tail_="$(tracked_tail "$real")" && [ -n "$tail_" ]; then
+      # Re-apply key by key, so a carried [user] lands in the leading section
+      # instead of after the include where it would override everything.
+      printf '%s\n' "$tail_" > "$tmp.tail"
+      git config --file "$tmp.tail" --list | while IFS='=' read -r k v; do
+        git config --file "$tmp" --add "$k" "$v"
+      done
+      rm -f "$tmp.tail"
+      mv -f "$tmp" "$rc" && git -C "$(dirname "$real")" checkout -- "$(basename "$real")" &&
+        echo "Moved settings appended to $real into $rc"
+      return 0
+    fi
+  elif [ -e "$rc" ]; then
+    backup "$rc"
+  fi
+  mv -f "$tmp" "$rc" && echo "Wrote $rc (includes $want)"
+}
+install_gitconfig_stub || echo "warning: could not write the ~/.gitconfig stub" >&2
+
+# One checkout, not two. Coder clones this repo into its own directory on a new
+# instance, while the working checkout lives on the persistent volume, and every
+# skill and shell link then resolves into the Coder clone: an edit in the working
+# checkout does not reach a session until both are pulled. When the clone is
+# clean and the primary already holds its commit, replace the clone with a
+# symlink to the primary and finish the install from there. Anything else leaves
+# the clone in place and says why.
+# The clone is recognised by where it lives (a checkout under ~/.config, which
+# is where Coder clones), not by its directory name.
+PRIMARY_DIR="${DOTFILES_PRIMARY:-/workspace/dotfiles}"
+CODER_CLONE_DIR="$REPO_DIR"
+config_real="$(cd "$HOME/.config" 2>/dev/null && pwd -P)" || config_real=""
+primary_real="$(cd "$PRIMARY_DIR" 2>/dev/null && pwd -P)" || primary_real=""
+if [ -z "${DOTFILES_DEDUPED:-}" ] && [ -n "$config_real" ] && [ "${REPO_DIR#"$config_real"/}" != "$REPO_DIR" ] &&
+   [ -d "$PRIMARY_DIR/.git" ] && [ "$primary_real" != "$REPO_DIR" ]; then
+  why=""
+  head_="$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null)" || why="cannot read the clone's HEAD"
+  [ -z "$why" ] && [ -n "$(git -C "$REPO_DIR" status --porcelain 2>/dev/null)" ] && why="the clone has uncommitted changes"
+  [ -z "$why" ] && ! git -C "$PRIMARY_DIR" cat-file -e "$head_^{commit}" 2>/dev/null && why="$PRIMARY_DIR lacks the clone's commit ${head_:0:7}"
+  if [ -n "$why" ]; then
+    echo "Keeping $CODER_CLONE_DIR as a separate clone: $why." >&2
+  else
+    moved="$CODER_CLONE_DIR.bak-$(date +%Y%m%d%H%M%S)"
+    if mv "$CODER_CLONE_DIR" "$moved" && ln -s "$PRIMARY_DIR" "$CODER_CLONE_DIR"; then
+      echo "Replaced the clone with a link to $PRIMARY_DIR (old clone at $moved)"
+      exec env DOTFILES_DEDUPED=1 bash "$PRIMARY_DIR/install.sh" "$@"
+    fi
+    echo "warning: could not replace $CODER_CLONE_DIR with a link; continuing from the clone." >&2
+    [ -e "$CODER_CLONE_DIR" ] || mv "$moved" "$CODER_CLONE_DIR"
+  fi
+fi
+
 # Symlink top-level dotfiles (anything matching .* except VCS/meta dirs).
 for src in "$REPO_DIR"/.*; do
   name="$(basename "$src")"
   case "$name" in
     .|..|.git|.github|.gitignore) continue ;;
     .cursor) continue ;; # handled below
+    .bashrc) continue ;; # a machine-local stub, written above
+    .gitconfig) continue ;; # a machine-local stub, written above
     .claude) continue ;; # real Claude home in $DEST: settings, transcripts, memory. The repo's copy is gitignored scratch; linking it over ~/.claude destroys the user's.
     .config) continue ;; # handled below — repo lives under ~/.config, symlinking it wholesale creates a self-referential loop
     .shell_common.*) continue ;; # machine-local overlays; see .gitignore. The repo must never supply one, so never link one out of it.
@@ -344,6 +474,43 @@ if [ -d "$(dirname "$HOOK_BIN_DIR")" ] && [ -f "$REPO_DIR/bin/restore-home-links
       fi
     fi
   ) || true
+fi
+
+# Runtime deps bin/doctor.sh requires. On a Coder workspace /usr is the image
+# overlay, so an apt install is lost on every rebuild and a new instance comes
+# up without them. Measured 2026-10-01: direnv, rg and gh were missing on a new
+# instance and three suite checks failed until they were installed by hand.
+# zsh and shellcheck are suite tools: without them tests/run.sh skips the
+# lint lanes and the zsh welcome check, and still reports green.
+# Coder only (CODER_WORKSPACE_ID): CI and laptops manage their own packages.
+# Missing tools are reported either way; nothing here aborts the installer.
+if [ -n "${CODER_WORKSPACE_ID:-}" ] && [ -z "${DOTFILES_NO_APT:-}" ]; then
+  (
+    set +e
+    missing=() pkgs=()
+    for pair in python3:python3 gh:gh git:git rg:ripgrep jq:jq direnv:direnv zsh:zsh shellcheck:shellcheck; do
+      command -v "${pair%%:*}" >/dev/null 2>&1 || { missing+=("${pair%%:*}"); pkgs+=("${pair#*:}"); }
+    done
+    [ "${#pkgs[@]}" -eq 0 ] && exit 0
+    if command -v apt-get >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+      echo "Installing missing runtime deps: ${missing[*]}"
+      sudo -n apt-get install -y -qq "${pkgs[@]}" >/dev/null 2>&1 ||
+        { sudo -n apt-get update -qq >/dev/null 2>&1 && sudo -n apt-get install -y -qq "${pkgs[@]}" >/dev/null 2>&1; }
+      still=()
+      for t in "${missing[@]}"; do command -v "$t" >/dev/null 2>&1 || still+=("$t"); done
+      [ "${#still[@]}" -eq 0 ] || echo "warning: still missing after apt: ${still[*]}" >&2
+    else
+      echo "warning: missing runtime deps (no apt-get or no passwordless sudo): ${missing[*]}" >&2
+    fi
+  ) || true
+fi
+
+# impeccable, the design-review skill, on demand only: the skill and three
+# agents linked from its marketplace clone, the plugin itself never enabled
+# (its hooks run a downloaded engine on every edit in every session). See
+# bin/install-impeccable.sh. Non-fatal; opt out with DOTFILES_NO_IMPECCABLE=1.
+if [ -z "${DOTFILES_NO_IMPECCABLE:-}" ] && [ -x "$REPO_DIR/bin/install-impeccable.sh" ]; then
+  "$REPO_DIR/bin/install-impeccable.sh" --write || echo "  warning: impeccable setup failed (non-fatal)" >&2
 fi
 
 echo "Dotfiles installation complete."

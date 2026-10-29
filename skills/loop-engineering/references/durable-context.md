@@ -29,6 +29,13 @@ according to the Worklog owner's dedupe rules. Shared writes belong to the paren
 
 ## Compact pack
 
+Use a bounded pack for each session handoff, context reset, and agent dispatch.
+If `loop-helpers` is installed, run its `context_pack.py` with the five fields
+below and any recovery handles. If it is unavailable, write the same five
+fields directly. Send the pack and evidence references, not the parent
+transcript. Keep raw evidence in an authorized durable store for cross-session
+recovery. Do not use a proxy as the only copy of the pack.
+
 - `objective`: stable task identity and accepted outcome.
 - `known evidence`: repository, revision, checks/results and artifact references.
   Uncommitted review names HEAD and a scoped diff fingerprint including relevant
@@ -76,3 +83,10 @@ the task history before advancing; count accepted work once. A retained worker
 name does not prove retained context: re-brief from the pack after a reset.
 Validate saved state and replay the recovery check before trusting intervention.
 Keep terminal predecessors immutable; follow [protocol.md](protocol.md) for resume.
+
+When resuming code work, run the smallest authorized health check for the feature
+before a new edit. Compare its result with the saved baseline and current revision.
+Separate inherited failures, unavailable tools, and failures caused by the new
+diff. A saved passing result does not prove current feature health. Respect build
+and browser limits; an unavailable check remains unverified. This adapts the
+restart check in [Anthropic's long-running agent guide](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents).

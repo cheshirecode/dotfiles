@@ -20,12 +20,14 @@ model guidance tunes its use, while host capabilities determine what can run.
 | Material uncertainty about goal, scope, effects, or task split | [interrogate.md](references/interrogate.md) before initialization |
 | Repeated or resumable work | Driver below; [protocol.md](references/protocol.md) for exact state/effect rules |
 | Software engineering factory: intake through delivery and improvement | [factory.md](references/factory.md) |
+| Harness design, routing patterns, or workflow boundaries | [harness-design.md](references/harness-design.md) |
 | Concurrent delegates, or a delegate's model lane | [crew.md](references/crew.md) |
 | Three or more Worklog tasks | [orchestrator.md](references/orchestrator.md) |
 | Astra/Fable prompting, Sol orchestration, or another model | [models.md](references/models.md) |
 | Tool availability, installation, OS, or recurrence | [hosts.md](references/hosts.md) |
 | Validate native Claude Code, GPT/Codex or OpenCode execution and usage | [native-harnesses.md](references/native-harnesses.md) |
 | Resume, delegation, or compaction | [durable-context.md](references/durable-context.md) |
+| Any message to the user | [user-output.md](references/user-output.md) |
 | Code quality or architectural boundaries | [quality.md](references/quality.md) |
 | Repeated trials judged by one metric | [experiments.md](references/experiments.md) |
 | Brittle state/evidence sequencing | [examples.md](references/examples.md) |
@@ -54,6 +56,8 @@ write or affect external systems. Honor the user's budget and any minimum;
 the driver defaults to 20 turns. `--repo` selects the radar target (otherwise
 cwd's Git root); `--project <slug>` enables the Worklog queue on every cycle.
 Neither option changes a tool's cwd or authorizes dispatch.
+Repeat `--evidence` for each short record in one cycle; all records are saved.
+Repeat `--allowed-effect` at init to preserve each permitted effect.
 
 1. Observe current evidence and choose the smallest useful action.
 2. Check the target and existing authorization before a mutation. Apply the
@@ -61,7 +65,7 @@ Neither option changes a tool's cwd or authorizes dispatch.
 3. Execute and verify the changed behavior. Batch independent reads when the
    host supports it; inspect every result. Repeat checks only for new changes,
    failures, unresolved concerns, or a required validation gate.
-4. Record one typed line: `kind: reference — result`. Kinds are `command`,
+4. Record short typed lines: `kind: reference — result`. Kinds are `command`,
    `artifact`, `git`, `github`, `url`. Keep verbose output in the artifact;
    state is an index, not a log. Preserve producer exit codes.
 5. If work remains, advance once and keep working while state is `running`.
@@ -79,6 +83,43 @@ Give brief progress updates when findings or next steps matter. Use concrete
 language and the structure the user needs; include essential results in the
 final reply even when tool output is hidden. Report decisions, evidence and
 uncertainty, rather than private reasoning or a process transcript.
+Apply [the user-output rule](references/user-output.md) to every user-facing
+message in this loop, including progress, questions, and the final reply.
+
+## UI feature loops
+
+Before editing, list named `Given / When / Then` cases for each requested UI
+behavior and relevant regression. Give each case a repeatable check, expected
+observable result, and target build or preview. Prefer executable browser
+tests; when automation is unavailable, record the same case-by-case observations
+from real interactions in the user's main browser.
+
+For executable cases, run
+`python3 <skill-dir>/scripts/ui_feature_gate.py <manifest.json>` after committing
+the change. The [UI gate contract](references/ui-feature-gate.md) defines the
+manifest and output. The runner checks a clean exact revision, builds, verifies
+an applicable preview serves that revision, executes every browser case, and
+requires a nonempty evidence artifact per case. It stops on the first failure;
+fix the cause and rerun the whole cycle. Include its result in the evidence gate.
+For cases that cannot be automated, keep case-by-case main-browser observations
+as separate runtime evidence and leave the scripted check unverified.
+
+Confirm UI completion only when every requested user-visible behavior has
+runtime evidence from the exact revision. If browser or preview verification is
+blocked, report the failed check, cause, and next action; leave completion
+unverified.
+
+## Public PR gate
+
+Before creating or editing a public PR, prepare its title and body locally. In
+this repository, run `bin/pr-publication-gate.sh` with the base ref, title file,
+and body file on the exact branch head. It checks proposed text, added lines,
+and tracked files with the repository privacy scan, plus reviewer-text patterns
+on the title and body. Elsewhere use the available repository secret scan and
+the `pr-review` leak scan before publishing. Review names, paths, URLs, and test
+evidence for private context that pattern scans may miss. Keep private evidence
+in local artifacts; publish only public outcomes. A later body edit does not
+erase GitHub's edit history, so repeat the gate before every PR write.
 
 ## Compose with installed skills
 

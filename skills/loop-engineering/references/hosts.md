@@ -66,6 +66,11 @@ An optional watch fingerprint must cover independent changes it claims to
 observe: worker identity/status, inbox and conflict verdict. Re-arm and verify
 the watcher after host restarts; a quiet or missing sensor is not health evidence.
 Keep monitoring bounded and report changes rather than repeating unchanged rows.
+Advance an observation cursor only after a successful, complete read of its
+declared fingerprint. Keep last observed state separate from last verified
+review or acceptance evidence. A failed read is unavailable, not unchanged.
+Independent subject cursors may advance separately; an aggregate unchanged
+cursor requires every subject in its declared scope.
 
 ## Installation
 

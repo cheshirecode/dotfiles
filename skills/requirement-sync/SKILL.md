@@ -17,8 +17,9 @@ This skill does the finding. It does not decide what is true.
 - A tracked item closes and its premise was carried into other documents.
 - Before a sign-off, to check the evidence under it has not moved.
 
-- A page is assembled from several sources and has to follow them as they move.
-  That is the same problem from the end with more inputs than editors; see
+- A page is assembled from several sources and has to follow them as they move,
+  including a status summary generated from live sources. That is the same
+  problem from the end with more inputs than editors; see
   [references/derived-views.md](references/derived-views.md).
 
 Do not use it to make the decision. It surfaces disagreement; a human resolves it.
@@ -93,7 +94,12 @@ A source feeding a derived view answers the same four questions and three more â
 which fields it owns, where its snapshot lives, and how old that snapshot is.
 Those go in a manifest beside the declarations, which is also the extension
 point: a new source adds an entry and a script and edits neither the skill nor
-an existing script. See [references/derived-views.md](references/derived-views.md).
+an existing script. The view itself declares two more things: **its refresh
+procedure**, which is what a sync runs, and **its hand-kept fields that age
+with traffic** (dated readings, "as of" intros, per-item flags, saved copies of
+outside config). No requirement has to change for those to go stale, so no
+claim search will find them. See
+[references/derived-views.md](references/derived-views.md).
 
 ## How records go stale
 
@@ -120,6 +126,12 @@ invariant is evidence that someone knew it mattered and did not encode it.
 2. **Find the old version before writing the new one.** Search each declared
    surface for the claim the change falsifies, not for the topic. Topic search
    finds everything; claim search finds what is now wrong.
+
+   A declared **derived view** gets its refresh procedure run end to end, not
+   only a search. A claim search reaches the prose a decision falsified. It
+   misses the generated block, which changes only when its script runs, and the
+   hand-kept numbers that drift with traffic while every requirement stands
+   still. "Bring the numbers up to date" means all three.
 
 3. **Check whether the work is already tracked, including in closed items.**
    This is the step most often skipped and the one that most often makes the rest

@@ -55,6 +55,11 @@ These apply before either review or closeout:
    view <n> -R "$slug" --json headRefName,headRefOid,baseRefName,baseRefOid,state,isDraft,createdAt` or the
    equivalent GitLab MR fields. Use the actual target branch head for base
    identity, not merely its merge-base. Resolve missing identity before reuse.
+   For a requested provider-native stack, verify membership through the provider
+   UI or API. Record membership separately from head/base topology. Branch
+   ancestry and PR bases do not prove native membership. An unavailable membership
+   check leaves that claim unverified. Checking membership does not authorize
+   stack changes.
 2. **Set up a local checkout only when needed** for source inspection, edits,
    tests or browser validation. Fetch and verify the actual head and target refs
    first. Preserve unrelated work; use a separate worktree when operations would
