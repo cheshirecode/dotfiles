@@ -130,8 +130,11 @@ fixtures. Real values live in the per-clone `.envrc`: `WORKLOG_ORG`,
 `bin/leak-guard.sh` enforces the account-name and home-path half:
 `--tree` in the suite, `--staged` in the pre-commit hook, `--range` in the
 pre-push hook for any remote not marked `remote.<name>.dotfiles-private`.
-`origin` is private and canonical; `github` is public and downstream. Read
-[docs/two-upstreams.md](docs/two-upstreams.md) before pushing to `github`.
+In a two-upstream copy, `origin` is private and canonical; `github` is public
+and downstream. In a GitHub-only copy, `origin` is the public repository: never
+mark it private, and expect every push to be scanned. Check with
+`git remote -v` and the repository's visibility before setting the mark. Read
+[docs/two-upstreams.md](docs/two-upstreams.md) before pushing to a public remote.
 
 ## Test discipline
 

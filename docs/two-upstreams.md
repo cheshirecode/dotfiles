@@ -9,6 +9,17 @@ GitHub is downstream only: nothing is pulled from it. A contribution made
 there is cherry-picked into `main` and reaches GitHub again on the next
 publish.
 
+## GitHub-only copy
+
+A copy may have no GitLab remote. Then `origin` is the public GitHub
+repository, and `main` tracks it directly.
+
+- Do not set `remote.origin.dotfiles-private`. That mark skips the scan, so
+  commits would reach the public repository unscanned.
+- Every push passes the gate below, so install `gitleaks` first.
+- `bin/publish-public.sh` does not apply. Push `main`, or open a PR from a
+  branch.
+
 ## The gate
 
 `bin/git-hooks/pre-push`, wired by `bin/install-hooks.sh --write`, decides by
