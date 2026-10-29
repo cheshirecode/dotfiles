@@ -52,7 +52,7 @@ each delegate; it does not make an unneeded delegate worth dispatching.
 
 | Brief shape | Lane |
 | --- | --- |
-| Bounded read-only sweep or inventory; the parent needs only the conclusion | Cheap (Haiku-class) |
+| Bounded read-only sweep or inventory; the parent needs only the conclusion | Cheap lane available in the host |
 | Mechanical run with an exact expected outcome (replay, red-proof on a copy, log triage) | Cheap |
 | Design, dependent decisions, shared writes, final verification | Lead, or a lane of equal strength |
 
@@ -60,9 +60,13 @@ A cheap return is data. Check each claim the parent acts on against the
 source. In one measured run, a Haiku inventory cited a file that did not exist.
 Set the lane through the host's dispatch option, for example the Claude Code
 Agent `model` parameter. If the host has no model selector, say so, as in the
-[models.md](models.md) limitations table. Record the lane and its usage in the
-evidence line: `artifact: <lane> delegate (<tokens>) — <outcome>`. Use the
-installed model-routing owner (`$which-model`) when the choice is not obvious.
+[models.md](models.md) limitations table. Record the lane and host-reported
+usage when available; otherwise write `usage unavailable` rather than estimating
+tokens. The evidence line is
+`artifact: <lane> delegate (usage: <reported tokens or unavailable>) — <outcome>`.
+When the choice is unclear, invoke
+`$which-model` with the brief shape, acceptance check, and host-selectable models;
+its no-argument route does not choose a lane.
 
 ## Failed calls and retries
 

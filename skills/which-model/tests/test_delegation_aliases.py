@@ -32,7 +32,7 @@ def documented_aliases() -> set[str]:
     """
     text = ROUTING.read_text()
     start = text.index("#### Claude Code")
-    end = text.index("### Delegation model selection", start)
+    end = text.index("### Claude Code delegation model selection", start)
     section = text[start:end]
     aliases: set[str] = set()
     for row in section.splitlines():
