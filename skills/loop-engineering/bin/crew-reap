@@ -167,13 +167,26 @@ EOF
   return 1
 }
 
+# Checkouts that are never removed, whatever the roster or landed check says:
+# the primary worktree (first porcelain entry; `worktree remove` on it would
+# delete the user's main checkout), the worktree reap was pointed at, and the
+# one holding the current directory. Printed reason is empty when removable.
+PRIMARY=$(git -C "$ROOT" worktree list --porcelain | sed -n 's/^worktree //p' | head -n 1)
+CWD_TOP=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null || echo "")
+protected_reason() {  # $1 = worktree path
+  if [ "$1" = "$PRIMARY" ]; then echo "primary checkout"
+  elif [ "$1" = "$ROOT" ]; then echo "checkout reap was pointed at"
+  elif [ -n "$CWD_TOP" ] && [ "$1" = "$CWD_TOP" ]; then echo "current working directory"
+  fi
+}
+
 # Pre-pass: decide whether the ownership gate can vote at all, BEFORE any
 # removal. Counting during the main loop and refusing afterwards is too late —
 # the removals have already happened by then (caught by fixture, 2026-08-31).
 owned=0; seen=0; SEEN_NAMES=""
 while IFS= read -r wt; do
   [ -n "$wt" ] || continue
-  [ "$wt" = "$(git -C "$ROOT" rev-parse --show-toplevel)" ] && continue
+  [ -n "$(protected_reason "$wt")" ] && continue
   seen=$((seen+1)); SEEN_NAMES="$SEEN_NAMES, ${wt##*/}"
   owned_by_live_agent "${wt##*/}" && owned=$((owned+1))
 done < <(git -C "$ROOT" worktree list --porcelain | sed -n 's/^worktree //p')
@@ -199,13 +212,16 @@ if [ "$INERT" = 1 ] && [ "$APPLY" = 1 ] && [ -z "${OWNERSHIP_INERT_OK:-}" ]; the
 fi
 
 reaped=0; kept=0; ROWS=$(mktemp); trap 'rm -f "$ROWS"' EXIT
-MAIN=$(git -C "$ROOT" rev-parse --show-toplevel)
 
 while IFS= read -r wt; do
   [ -n "$wt" ] || continue
-  [ "$wt" = "$MAIN" ] && continue
   base=$(basename "$wt")
   br=$(git -C "$wt" symbolic-ref -q --short HEAD 2>/dev/null || echo "")
+
+  why_protected=$(protected_reason "$wt")
+  if [ -n "$why_protected" ]; then
+    printf 'keep|%s|%s|%s\n' "$base" "$br" "$why_protected" >>"$ROWS"; kept=$((kept+1)); continue
+  fi
 
   if owned_by_live_agent "$base"; then
     printf 'keep|%s|%s|live agent owns this worktree\n' "$base" "$br" >>"$ROWS"; kept=$((kept+1)); continue

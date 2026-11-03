@@ -256,6 +256,33 @@ else
   FAIL=$((FAIL+1)); printf '  FAIL  agent-<id> worktree is owned by bare-id roster\n%s\n' "$out"
 fi
 
+# The primary checkout is never removable, even when it is on a branch with
+# 0 commits ahead of the target (it always is, when it IS the target branch).
+# Pointing reap at a linked worktree used to exclude only that worktree, so
+# the primary was proposed for removal.
+build
+for mode in "" "--apply"; do
+  out=$("$REAP" --target main --no-fetch $mode --roster 'wt-peer-9d,' "$TMP/wt-landed" 2>&1)
+  if printf '%s' "$out" | grep -Eq 'keep +r +main +primary checkout' && [ -d "$TMP/r/.git" ]; then
+    PASS=$((PASS+1)); printf '  PASS  primary checkout kept %s\n' "${mode:-(dry run)}"
+  else
+    FAIL=$((FAIL+1)); printf '  FAIL  PRIMARY CHECKOUT NOT KEPT %s\n%s\n' "${mode:-(dry run)}" "$out"
+  fi
+done
+# Run from the primary, pointed at the primary: the linked landed worktree
+# must still be reaped, and the primary must survive.
+build
+out=$("$REAP" --target main --no-fetch --apply --roster 'wt-peer-9d,' "$TMP/r" 2>&1)
+if [ -d "$TMP/r/.git" ] && [ ! -d "$TMP/wt-landed" ] && printf '%s' "$out" | grep -Eq 'reap +wt-landed'; then
+  PASS=$((PASS+1)); printf '  PASS  apply reaps landed linked worktree, keeps primary\n'
+else FAIL=$((FAIL+1)); printf '  FAIL  apply from primary\n%s\n' "$out"; fi
+# The worktree holding the current directory is kept too.
+build
+out=$(cd "$TMP/wt-landed" && "$REAP" --target main --no-fetch --apply --roster 'wt-peer-9d,' "$TMP/r" 2>&1)
+if [ -d "$TMP/wt-landed" ] && printf '%s' "$out" | grep -Eq 'keep +wt-landed .*current working directory'; then
+  PASS=$((PASS+1)); printf '  PASS  worktree containing cwd is kept\n'
+else FAIL=$((FAIL+1)); printf '  FAIL  CWD WORKTREE NOT KEPT\n%s\n' "$out"; fi
+
 if [ "$SKIP" -gt 0 ]; then
   printf '\n  %d passed, %d failed, %d skipped\n' "$PASS" "$FAIL" "$SKIP"
 else

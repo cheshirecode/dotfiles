@@ -163,6 +163,8 @@ required. For a one-item inline roster use a trailing comma (`--roster 'a-1,'`)
 to distinguish it from a filename. Names match worktree basenames or supported
 agent-name prefixes; inspect `roster_matched` before applying.
 
+Reap never removes the primary checkout, the checkout it was pointed at, or the current directory.
+
 Cleanup requires both unowned and landed: no live worker owns the checkout, and
 `git rev-list <target>..<branch>` is empty. A merged PR flag alone is insufficient
 for squash merges. Target fetch freshness is reported; `--no-fetch` is offline.
