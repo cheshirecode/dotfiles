@@ -16,6 +16,10 @@ task needs only one outcome and its check. Use existing project checks where
 they answer the requirement. Resolve material unknowns through
 [plan readiness](interrogate.md); do not require a questionnaire for clear work.
 
+If a generated proposal is already visible, record that exposure rather than
+inventing a prior expectation. Build the checks from the user's requirements and
+independent source or runtime evidence before further work.
+
 ## Keep ownership of the decision
 
 For an unfamiliar component or consequential design choice, inspect the decisive
