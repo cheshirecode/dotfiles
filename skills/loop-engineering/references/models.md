@@ -41,7 +41,8 @@ verification. This is a role design, not a claim that every host can dispatch Fa
 Give Fable the same outcome and boundaries, with explicit acceptance checks and
 brief user-visible progress updates. Ask for findings, decisions and concise
 rationale; do not ask it to reproduce private reasoning. Use an independent
-verifier for consequential long-running work when dispatch is available.
+verifier when a consequential acceptance question remains, following
+[the review rule](acceptance.md#review-a-specific-question).
 Remove unnecessary step-by-step scaffolding instead of adding repeated exhortations.
 These choices follow [Fable 5 guidance](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5).
 

@@ -16,9 +16,10 @@ Honor the user's unit, ceiling and minimum. Otherwise use the driver default of
 graph needs it. Never replace an explicit budget with 999 or extend it silently.
 Batch independent reads; keep dependencies and shared mutations sequential.
 
-Validate uncertain decomposition with [interrogate.md](interrogate.md). Only
-costly or unclear children need a separate plan review; well-scoped work proceeds.
-Material disagreements follow [protocol.md#escalation](protocol.md#escalation).
+Validate uncertain decomposition with [interrogate.md](interrogate.md). Use the
+declared outcomes and checks to resolve it. Add a separate plan review only for
+a consequential question that remains unresolved. Apply
+[protocol.md#escalation](protocol.md#escalation) to that question.
 
 ## Project and cycle
 

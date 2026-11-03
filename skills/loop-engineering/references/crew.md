@@ -12,6 +12,8 @@ A clean radar result does not prove isolation; naming different directories does
 not isolate workers. Shared Worklog writes always belong to the parent.
 
 Before a wave, assign task, repo, write scope, acceptance checks and return owner.
+Set those checks from the [definition of done](acceptance.md), before reading
+worker proposals. The parent retains the acceptance decision.
 Each worker verifies root, remote and expected source paths before acting. A
 wrong-repo worktree stops that worker. Set tool cwd explicitly; for persistent
 shells use `(cd "$WORKLOG_REPO" && ...)` around data helpers.
@@ -25,14 +27,11 @@ tracked in the same ownership roster and budget.
 | Architecture reviewer, when needed | Dependencies, policy/IO boundary, duplication | Concrete defects and smallest correction |
 
 Roles may be sequential passes. They neither require another agent nor change
-permissions. Implementer and verifier run as a generate-then-critique cycle when
-quality is the goal. Bound it before starting: Anthropic's worked
-evaluator-optimizer example settles in two to four cycles, which is a reasonable
-starting bound, and a cycle that stops producing concrete, actionable findings
-is done. Skip the cycle when the first attempt already meets
-the acceptance checks, or when the criteria are too subjective for a finding to
-be replayable — an evaluator without a discriminating check adds tokens and
-opinions, not quality.
+permissions. Start with the declared checks. Add an optional verifier or reviewer
+only for a specific unresolved acceptance question or risk. Give it that question,
+the evidence needed to answer it, and a bounded attempt. Stop when the question
+is answered; do not require a fixed number of critique rounds. Required user or
+repository reviews still apply. A worker's confidence does not establish done.
 
 Workers return `evidence`, `uncertainty`, and `next action`, including
 task/repo/revision identity under [durable-context.md](durable-context.md).
