@@ -40,8 +40,8 @@ Do not start a critique wave when the declared checks already establish done.
 
 ## Accept against the contract
 
-The accepting owner checks what changed, the relevant mechanism, and whether
-the evidence proves each declared outcome at the current revision. If a critical
+The accepting owner checks the change, its mechanism, and whether evidence proves
+each declared outcome at the current revision. If a critical
 part cannot be explained, inspect that part or run a discriminating check.
 Then use the evidence gate. Its coverage result cannot make this decision.
 Leave an unmet outcome unverified and name the next resolving action.
