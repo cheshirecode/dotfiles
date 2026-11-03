@@ -23,7 +23,9 @@ Use [orchestrator.md](orchestrator.md) for three or more Worklog tasks, and
 
 ## Turn demand into an executable contract
 
-Before implementation, record a compact work order in the existing task store:
+Start with the [definition of done](acceptance.md#form-an-expectation), before
+implementation or delegation. Extend that record with a compact work order in
+the existing task store:
 
 - User outcome and observable acceptance checks, including the intended terminal
   stage: locally verified, PR delivered, merged, or deployed and runtime verified.
@@ -51,7 +53,7 @@ action; this table determines when its result is eligible for the next stage.
 | Specify | Testable work order and ready dependencies/capabilities | Resolve the missing prerequisite or record a concrete blocker |
 | Implement | Scoped diff on the recorded base and a bounded attempt return | Diagnose the failing hypothesis; keep unrelated work intact |
 | Verify | Changed behavior checked at its actual boundary, plus required regression checks | Return to implementation or repair the test environment; do not weaken acceptance |
-| Review/integrate | Findings resolved and checks valid for the proposed head/base/diff | Reconcile current target branch in the isolated worktree and refresh affected evidence |
+| Accept/integrate | Acceptance decision tied to declared checks, required reviews complete, and evidence valid for the proposed head/base/diff | Resolve the unmet check or specific question; reconcile the target and refresh affected evidence |
 | Deliver | Evidence for the exact requested terminal stage | Retain the achieved stage and state the outstanding action |
 | Improve | Reproducible failure or measured bottleneck tied to a proposed toolkit change | Retain an observation; do not promote it as a rule |
 

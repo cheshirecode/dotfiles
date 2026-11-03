@@ -9,6 +9,15 @@ Use the driver to track an observable goal, evidence, budget, next action, and
 terminal status. The agent chooses and verifies actions; the driver records them.
 User instructions govern scope and authorization; this skill adds no permissions.
 
+## Define done first
+
+Before implementation or delegation, record the expected outcome, its checks,
+and the accepting owner. Ground the expectation in the user's request and the
+current system before reading a generated proposal. For a simple task, one
+outcome and one check suffice; no separate planning phase is needed.
+[Acceptance](references/acceptance.md) owns independent expectations, targeted
+review, and the final decision. Required user and repository checks still apply.
+
 ## Route
 
 Load only the needed rules. GPT Astra, Sol and Claude Fable use the same workflow;
@@ -59,18 +68,19 @@ Neither option changes a tool's cwd or authorizes dispatch.
 Repeat `--evidence` for each short record in one cycle; all records are saved.
 Repeat `--allowed-effect` at init to preserve each permitted effect.
 
-1. Observe current evidence and choose the smallest useful action.
+1. Read the definition of done and current evidence; choose the smallest useful
+   action.
 2. Check the target and existing authorization before a mutation. Apply the
    [effect boundary](references/effects.md); serialize shared writes.
-3. Execute and verify the changed behavior. Batch independent reads when the
-   host supports it; inspect every result. Repeat checks only for new changes,
+3. Execute and compare the result with the declared checks. Batch independent
+   reads when the host supports it; inspect every result. Repeat checks only for new changes,
    failures, unresolved concerns, or a required validation gate.
 4. Record short typed lines: `kind: reference — result`. Kinds are `command`,
    `artifact`, `git`, `github`, `url`. Keep verbose output in the artifact;
    state is an index, not a log. Preserve producer exit codes.
 5. If work remains, advance once and keep working while state is `running`.
-   On success, require the evidence gate, then stop complete. Otherwise use the
-   protocol's terminal outcome and concrete recovery action.
+   On success, make the acceptance decision, require the evidence gate, then stop
+   complete. Otherwise use the protocol's terminal outcome and recovery action.
 
 Each call reports state, radar and queue. `error=` is an unavailable or failed
 probe, never a clean radar or empty queue. A radar sample does not monitor the

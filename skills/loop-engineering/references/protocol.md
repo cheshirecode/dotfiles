@@ -63,6 +63,10 @@ write and verification rules. Existing authorization carries forward.
 
 ## Verifying a claim
 
+Compare the result with the definition of done set before the attempt.
+[Acceptance](acceptance.md#accept-against-the-contract) owns the final decision;
+reviewer confidence cannot replace a missing outcome or settle contrary evidence.
+
 Check the subject and the question: repository, identity, revision, query and
 runtime must match the claim. An empty result needs a known discovery/control
 path; an incorrectly scoped query is not negative evidence. A failed or
