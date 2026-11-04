@@ -14,7 +14,7 @@ tool calls and bounded repairs. User instructions govern scope and permissions.
    repair ceiling. Ground expectations in the request and current system;
    [acceptance.md](references/acceptance.md) covers prior proposal exposure and the decision.
 2. Check [context capacity](references/context-budget.md#check-every-work-boundary)
-   at start, after each accepted unit or delegate wave, and before a role switch.
+   at start, after each tool batch or delegate wave, and before a role switch.
    Then inspect readiness and execute the smallest verifiable unit.
    Check target and authority under [effects.md](references/effects.md); serialize shared writes.
 3. Check each unit against the real artifact and revision before proceeding.

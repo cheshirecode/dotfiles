@@ -47,16 +47,17 @@ context argument for fan-out, and it is separate from the cost argument in
 
 ## Check every work boundary
 
-At start, after each accepted work unit or delegate wave, and before switching
+At start, after each tool batch or delegate wave, and before switching
 between orchestration and implementation, run:
 
 ```bash
 python3 <skill-dir>/scripts/context_guard.py --session-units 2 --since-checkpoint 2
 ```
 
-Count accepted units in the task checkpoint. Include completed delegated waves.
-Pass `--role-switch` before changing roles and `--read-truncated` after truncated
-output. Add `--context-pct N` only from current host telemetry. Account usage limits
+One unit is one completed tool batch or delegate wave, including failed attempts.
+Record the counters in the task checkpoint. Do not wait for accepted results.
+Pass `--role-switch` before changing roles and `--read-truncated` after unexpected
+host truncation. A deliberate excerpt of a saved log is not a truncated read. Add `--context-pct N` only from current host telemetry. Account usage limits
 and the agent's intuition do not measure the session window. Missing telemetry
 stays `unknown`; unit limits still apply.
 
