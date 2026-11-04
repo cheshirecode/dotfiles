@@ -45,27 +45,72 @@ delegate's reads land in its context; only its return lands in yours. That is th
 context argument for fan-out, and it is separate from the cost argument in
 [crew.md](crew.md#ownership-and-dispatch), which still governs when to dispatch.
 
-## Track consumption, not only turns
+## Check every work boundary
 
-A turn budget does not measure context. Turns count recorded advances, not bytes
-read, so two loops at the same turn count can consume very different amounts —
-one cycle that reads a whole test log outweighs many that read a grep result.
+At start, after each tool batch or delegate wave, and before switching
+between orchestration and implementation, run:
 
-Pass `--context-pct <n>` on each cycle. The driver prints `context: n%` and
-adds `OVER — checkpoint and hand off` at 50 or above, where answers degrade and
-the cached prefix stops being reused. The figure comes from the agent, since the
-driver cannot read the harness's usage; omitting it changes nothing.
+```bash
+python3 <skill-dir>/scripts/context_guard.py --session-units 2 --since-checkpoint 2
+```
 
-Measured on this machine: turns past that line outweighed the entire
-always-loaded prefix by fourteen to one as a penalty. Bounding reads is worth
-more than trimming what loads every turn.
+One unit is one completed tool batch or delegate wave, including failed attempts.
+Record the counters in the task checkpoint. Do not wait for accepted results.
+Pass `--role-switch` before changing roles and `--read-truncated` after unexpected
+host truncation. A deliberate excerpt of a saved log is not a truncated read. Add `--context-pct N` only from current host telemetry. Account usage limits
+and the agent's intuition do not measure the session window. Missing telemetry
+stays `unknown`; unit limits still apply.
+For an existing long session with unknown counters, pass `--history-unknown`.
+Do not invent a zero count to keep working.
 
-Hand off before forced compaction, not after. A checkpoint you write keeps the
-evidence you chose; a compaction the host runs keeps what the host chose. When
-the remaining context would not cover one more cycle *and* its verification,
-checkpoint with the [compact pack](durable-context.md#compact-pack) and continue
-in a fresh session. Stopping at `continue_scheduled` or another resumable
-terminal state with a written pack beats being truncated mid-cycle.
+| Decision | Trigger | Required action before more task work |
+| --- | --- | --- |
+| `continue` | No boundary reached | Execute the next bounded unit |
+| `checkpoint` | Three units since checkpoint, or role switch | Save and read back the task checkpoint and recovery locator |
+| `handoff` | Eight session units, measured context at least 50%, unexpected truncation, or unknown prior history | Checkpoint, verify recovery, then reset context or transfer ownership |
+
+Exit 0 means continue, 1 requires the named action, and 2 rejects invalid input.
+The helper is stateless. It neither reads host usage nor writes Worklog, changes
+loop status, resets context, or creates sessions. The agent must honor its result.
+These thresholds are conservative workload defaults, not measured model limits.
+Honor a stricter user budget. The optional driver's `--context-pct` is only a
+display; it does not replace this boundary check.
+
+## Save, verify, then reset
+
+Keep only the goal, acceptance checks, authority, current source identity,
+unresolved next action, and [recovery locator](durable-context.md#recovery-locator)
+in active context. Put decisions and accepted results in the existing Worklog
+task. Keep large logs and diffs in durable artifacts linked from that task.
+Workers return status and evidence references; the parent retrieves only decisive
+parts. When the orchestrator implements code, finish and check one bounded unit
+before returning to orchestration. It does not reload each worker's full investigation.
+
+Read back the saved checkpoint through the Worklog owner. Build the existing
+bounded compact pack, then test that its locator retrieves the goal, constraints,
+source identity, remaining budget, and next check. A fresh reader can perform this
+test without the parent transcript. A missing, stale, or unreadable checkpoint
+blocks reset; repair its recovery path first. Only a verified checkpoint resets
+`since-checkpoint`. Writing notes alone does not reset `session-units`.
+
+Use a supported host compaction operation if available. Otherwise transfer the
+same work order to a fresh session only with the required user authorization.
+Record host reset capabilities and any automatic-continuation authorization at
+intake. A skill cannot grant permission to create tasks on the user's behalf.
+Pass the compact pack and locator, not the old transcript or a full-history fork.
+The predecessor stops task mutations after the successor accepts ownership.
+Finished work needs its final report, not a fresh session.
+If no reset or authorized transfer is available, report that boundary and the
+ready handoff. Do not claim that a summary deleted old context.
+
+After a real reset, recover from the locator and replay the next health check
+before editing. Reset session counters only after that recovery succeeds.
+Do not delete global memories, task history, or evidence to reduce active context.
+
+This combines structured notes, compaction, and focused delegates from
+[Anthropic's context guide](https://www.anthropic.com/research/effective-context-engineering-for-ai-agents)
+with the host-managed session boundary described in
+[OpenAI's session guide](https://developers.openai.com/cookbook/examples/agents_sdk/session_memory).
 
 ## Keep the loop's own state small
 

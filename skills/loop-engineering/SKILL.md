@@ -13,7 +13,9 @@ tool calls and bounded repairs. User instructions govern scope and permissions.
 1. Define done: outcome, checks, accepting owner, effects, delivery stage, and
    repair ceiling. Ground expectations in the request and current system;
    [acceptance.md](references/acceptance.md) covers prior proposal exposure and the decision.
-2. Inspect the boundary and readiness, then execute the smallest verifiable unit.
+2. Check [context capacity](references/context-budget.md#check-every-work-boundary)
+   at start, after each tool batch or delegate wave, and before a role switch.
+   Then inspect readiness and execute the smallest verifiable unit.
    Check target and authority under [effects.md](references/effects.md); serialize shared writes.
 3. Check each unit against the real artifact and revision before proceeding.
    Batch independent reads, inspect every result, and preserve producer exit codes.
