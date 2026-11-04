@@ -73,6 +73,20 @@ Retain the same task identity across retries and allocate a new attempt ID. Stor
 decision summaries and necessary evidence in Worklog; avoid full prompt/output
 logging by default. Never persist credentials or private reasoning as trace data.
 
+## Recovery locator
+
+Retain one small locator in the active task summary and compact pack:
+
+- Worklog data remote, namespace, task slug, and verified checkpoint commit.
+- Code remote, checkout/branch, head/base, and any preserved dirty-work reference.
+- Goal and acceptance/gate reference, authority, remaining budget, session units,
+  units since checkpoint, and the next check.
+
+Store these in the existing pack's constraints, budget, and recovery handles;
+there is no second task-state schema. Use the Worklog context command to retrieve
+the selected task. Open linked evidence only when its next check needs it.
+Recheck source identity and checkpoint freshness before trusting a saved result.
+
 ## Accept a return or restart
 
 Check the agreed contract, required fields, attempt and owner before interpreting
