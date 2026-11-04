@@ -55,7 +55,8 @@ Read only the applicable procedure; all models use this contract.
 ## Durable driver (optional)
 
 Use the driver when checkpointing, resumption, or coordination needs persistent
-state. Follow [protocol.md](references/protocol.md#durable-driver) for the existing
+state. Use [resolvers.md](references/resolvers.md) for unknown skill paths.
+Follow [protocol.md](references/protocol.md#durable-driver) for the existing
 CLI, budgets, repeated evidence/effect flags, and state rules. A single work order
 can finish without driver files or phase-by-phase advances.
 
