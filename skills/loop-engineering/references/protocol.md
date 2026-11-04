@@ -1,7 +1,31 @@
 # Loop protocol
 
-Exact state, effect and escalation rules. The root skill owns the normal driver
-cycle; [durable-context.md](durable-context.md) owns checkpoints and handoffs.
+Optional durable driver, state, effect and escalation rules. The entrypoint owns
+the default one-shot flow; [durable-context.md](durable-context.md) owns handoffs.
+
+## Durable driver
+
+Use only when resumption or coordination needs recorded state. Resolve
+`<skill-dir>` from the loaded skill; [resolvers.md](resolvers.md) handles unknown
+paths. Create `<run-dir>` in temporary storage outside the worktree.
+
+```bash
+python3 <skill-dir>/scripts/loop_run.py <run-dir> --goal "<observable outcome>"
+python3 <skill-dir>/scripts/loop_run.py <run-dir> \
+  --evidence "command: <check> — <result>" --next-action "<next check>"
+python3 <skill-dir>/scripts/loop_run.py <run-dir> --stop complete \
+  --verification "<evidence-gate verification value>" --evidence "artifact: <ref> — <outcome>"
+```
+
+Declare `--allowed-effect` and `--approval-boundary` at init for writes or external
+effects. Repeat `--allowed-effect` and `--evidence` to retain each value.
+Honor the user's ceiling and minimum; the driver defaults to 20 advances.
+`--repo` selects the radar target (default: cwd's Git root); `--project <slug>`
+enables the Worklog queue. Neither changes cwd or authorizes dispatch.
+
+`loop_state.json` holds state and `run.json` driver configuration. Never hand-edit
+state or mix raw mutations with an active driver. Probe `error=` is unavailable
+evidence; radar samples prove neither continuous monitoring nor isolation.
 
 ## State CLI
 

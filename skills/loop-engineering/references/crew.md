@@ -35,9 +35,9 @@ repository reviews still apply. A worker's confidence does not establish done.
 
 Workers return `evidence`, `uncertainty`, and `next action`, including
 task/repo/revision identity under [durable-context.md](durable-context.md).
-The parent verifies returns, reconciles duplicates, writes shared checkpoints,
-and advances once. An isolated writer may commit assigned code; a read-only
-reviewer needs no commit. If a reviewer edits, rerun affected checks on the result.
+The parent verifies returns, reconciles duplicates, and records the result.
+Advance only an active durable driver. An isolated writer may commit assigned
+code; a read-only reviewer needs no commit. If a reviewer edits, rerun affected checks.
 
 While asynchronous workers run, do independent work; wait when the next step
 needs a return. Reuse a worker with useful context when supported; re-brief after

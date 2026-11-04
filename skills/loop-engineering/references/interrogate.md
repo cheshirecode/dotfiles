@@ -1,6 +1,6 @@
 # Validate the plan
 
-Use before initialization when goal, ownership, effects, or decomposition has
+Use before execution when goal, ownership, effects, or decomposition has
 material uncertainty. A clear authorized request with known checks needs no
 questionnaire or separate planning phase.
 
@@ -26,14 +26,16 @@ If required authority or scope is unresolved, mark the plan Not Ready and name
 that gap. Use the [protocol's escalation](protocol.md#escalation) only when
 independent evidence cannot settle a consequential disagreement.
 
-Feed a Ready plan into the driver flags. New Worklog tasks follow the Worklog
-creation procedure; an already authorized task creation needs no second approval.
+Execute a Ready plan. If a durable driver is needed, pass the plan into its flags.
+New Worklog tasks follow the Worklog creation procedure; an already authorized
+task creation needs no second approval.
 
 ## Replan
 
 A counterexample invalidates the affected approach. Stop those mutations,
 revise the plan, and replay the discriminating check; retain unaffected evidence.
-For the same goal, keep the running state or resume a permitted terminal state.
-For a user-authorized changed goal, stop the old running goal as cancelled and
-initialize a distinct run linked to its evidence. `resume` inherits the old goal;
-it cannot rename a goal or reopen a running, complete, or cancelled state.
+Keep the same goal and relevant evidence. With a durable driver, keep the running
+state or resume a permitted terminal state. For a user-authorized changed goal,
+cancel the old running state and initialize a distinct run linked to its evidence.
+`resume` inherits the old goal; it cannot rename a goal or reopen a running,
+complete, or cancelled state.

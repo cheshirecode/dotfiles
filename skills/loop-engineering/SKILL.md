@@ -1,19 +1,32 @@
 ---
 name: loop-engineering
-description: "Run bounded, evidence-driven loops for repeated, resumable, delegated, or scheduled work. Use for iteration toward a verifiable condition, software engineering factories, context recovery, subagent coordination, or loop/worklog/scheduler selection. Skip one-shot tasks."
+description: "Complete one scoped engineering task through definition of done, execution, checks, and authorized delivery in one run. Use for one-shot work and bounded repairs; add durable control only for resumption, coordination, or scheduling."
 ---
 
 # loop-engineering
 
-Track goal, evidence, budget, next action, and status with the driver.
-The agent chooses and verifies actions. User instructions govern permissions.
+Complete one work order in the current run. One-shot execution can include many
+tool calls and bounded repairs. User instructions govern scope and permissions.
 
-## Define done first
+## One-shot execution
 
-Before implementation or delegation, define outcome, checks, and accepting owner
-from the user's request and current system. Use [acceptance.md](references/acceptance.md)
-for independent expectations, proposal exposure, and the final decision.
-Simple work needs one outcome and one check. Required reviews still apply.
+1. Define done: outcome, checks, accepting owner, effects, delivery stage, and
+   repair ceiling. Ground expectations in the request and current system;
+   [acceptance.md](references/acceptance.md) covers prior proposal exposure and the decision.
+2. Inspect the boundary and readiness, then execute the smallest verifiable unit.
+   Check target and authority under [effects.md](references/effects.md); serialize shared writes.
+3. Check each unit against the real artifact and revision before proceeding.
+   Batch independent reads, inspect every result, and preserve producer exit codes.
+4. Repair observed failures within the ceiling. If the same failure repeats,
+   test the shared premise before another patch. Retain valid evidence and rerun
+   affected checks or required gates.
+5. Accept the mechanism and evidence, complete authorized delivery, then report
+   the result. Use `$evidence-gate` for multi-clause completion; one sufficient
+   check needs no extra gate. Required user and repository reviews still apply.
+
+Continue until the requested outcome is verified or an input, authority, or
+budget boundary prevents it. Report an unmet check, cause, and resolving action
+at that boundary; leave the outcome unverified.
 
 ## Route
 
@@ -21,9 +34,9 @@ Read only the applicable procedure; all models use this contract.
 
 | Need | Read |
 | --- | --- |
-| One action and one check | Work directly; no loop state |
-| Material uncertainty about scope, effects, or task split | [interrogate.md](references/interrogate.md) before initialization |
-| Repeated or resumable work | Driver below; [protocol.md](references/protocol.md) for exact state/effect rules |
+| One work order | Flow above; no persistent driver state required |
+| Material uncertainty about scope, effects, or task split | [interrogate.md](references/interrogate.md) before execution |
+| Checkpoint, resume, or scheduler-owned run | Optional driver below; [protocol.md](references/protocol.md) |
 | Software factory: intake through improvement | [factory.md](references/factory.md) |
 | Harness design, routing patterns, or workflow boundaries | [harness-design.md](references/harness-design.md) |
 | Delegates and model lanes | [crew.md](references/crew.md) |
@@ -39,41 +52,18 @@ Read only the applicable procedure; all models use this contract.
 | Long session, context filling up | [context-budget.md](references/context-budget.md) |
 | Optional output compression | [transport.md](references/transport.md) |
 
-## Drive one cycle
+## Durable driver (optional)
 
-Invoke with `Use loop-engineering. Goal: <observable outcome>.` Use the loaded
-`<skill-dir>`; [resolvers.md](references/resolvers.md) handles unknown paths.
-Create `<run-dir>` in system temporary storage, outside the worktree, for state,
-gates and logs. [durable-context.md](references/durable-context.md) owns handoffs.
+Use the driver when checkpointing, resumption, or coordination needs persistent
+state. Use [resolvers.md](references/resolvers.md) for unknown skill paths.
+Follow [protocol.md](references/protocol.md#durable-driver) for the existing
+CLI, budgets, repeated evidence/effect flags, and state rules. A single work order
+can finish without driver files or phase-by-phase advances.
 
-```bash
-python3 <skill-dir>/scripts/loop_run.py <run-dir> --goal "<observable outcome>"
-python3 <skill-dir>/scripts/loop_run.py <run-dir> \
-  --evidence "command: <check> — <result>" --next-action "<next check>"
-python3 <skill-dir>/scripts/loop_run.py <run-dir> --stop complete \
-  --verification "<evidence-gate verification value>" --evidence "artifact: <ref> — <outcome>"
-```
-
-For writes or external effects, declare `--allowed-effect` and `--approval-boundary` at init.
-Honor the user's budget and minimum; the default is 20 advances, not tool calls.
-`--repo` selects the radar target (default: cwd's Git root); `--project <slug>`
-enables the Worklog queue. Neither changes cwd or authorizes dispatch.
-Repeat `--evidence` for each record and `--allowed-effect` for each allowed effect.
-
-1. Choose the smallest action from the definition of done and current evidence.
-2. Check target and authority under [effects.md](references/effects.md); serialize shared writes.
-3. Execute and check the declared outcome. Batch independent reads; inspect each
-   result. Repeat checks only for changes, failures, open concerns, or required gates.
-4. Save `kind: reference — result` records using `command`, `artifact`, `git`,
-   `github`, or `url`. Keep full logs outside state and preserve producer exit codes.
-5. Advance once if work remains. Continue while `running`; accept against the
-   contract and evidence gate before stopping complete. Other outcomes need the
-   [protocol's recovery action](references/protocol.md#terminal-outcomes-and-intervention).
-
-Calls report state, radar and queue; `error=` means a failed or unavailable probe.
-Radar samples prove neither continuous monitoring nor isolation. The driver does
-not dispatch or schedule. State is in `loop_state.json`, configuration in `run.json`.
-Do not hand-edit state or mix raw state writes with an active driver.
+Keep transient state and logs outside the worktree;
+[durable-context.md](references/durable-context.md) owns persistent handoffs.
+Record short `command`, `artifact`, `git`, `github`, or `url` evidence references.
+The driver records actions; it does not execute the task, dispatch, or schedule.
 
 Report material progress, evidence, and uncertainty; make the final reply
 self-contained. Apply [user-output.md](references/user-output.md) to every message to the user.
@@ -106,4 +96,4 @@ local. Repeat after edits: GitHub retains body history.
 ## Compose with installed skills
 
 Use [composition.md](references/composition.md) for selection and compact handoffs.
-Call an already-selected owner directly; completion still requires `$evidence-gate`.
+Call an already-selected owner directly; use `$evidence-gate` for multiple completion criteria.
