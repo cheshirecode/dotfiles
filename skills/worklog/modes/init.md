@@ -36,6 +36,11 @@ prints `INSTANCE=unset`, which marks a clone that predates bootstrap.
      [--ns <ns>] [--email <email>] [--name <name>]
    ```
 
+   After an authorized bootstrap, configure the MCP adapter for this vault:
+   `"$WORKLOG_BIN/../../../bin/install-worklog-mcp.sh" --repo <path>`.
+   This installs locked dependencies and preserves other client settings.
+   An ordinary light init does not install or change MCP configuration.
+
    It clones or creates the vault, seeds templates, writes the instance
    settings (`worklog.namespace`, `worklog.instance`,
    `worklog.identityDomain`, `user.name`, `user.email`) to the clone's

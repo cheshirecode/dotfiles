@@ -19,7 +19,8 @@
     "sync": {
       "tools": [
         "memory_checkpoint",
-        "memory_archive"
+        "memory_archive",
+        "memory_update_status"
       ],
       "note": "sync is an umbrella that routes by intent: a slug plus flags goes to checkpoint.sh, archive intent goes to archive.sh. Both are now tools, so the routing is the caller's choice rather than a mode. Conversation-WIP detection stays out: it needs judgement and sync itself skips it in non-interactive sessions."
     },
@@ -51,7 +52,13 @@
       ]
     },
     "project": {
-      "exempt": "Multi-task projects: declaration-order sequencing, a depends_on graph and a per-task advisory mutex arbitrated by session id. Deliberately not wrapped yet. The mutex assumes one caller per session, and this server serialises every write through a single in-process queue, so claim/release needs its own design before it is safe to expose."
+      "tools": [
+        "memory_projects",
+        "memory_next",
+        "memory_claim",
+        "memory_release"
+      ],
+      "note": "Uses project.sh arbitration with an explicit caller session ID. Project creation and graph editing remain CLI operations."
     },
     "scrape-slack": {
       "exempt": "Scrapes Slack for task enrichments behind a mandatory human review gate. An external integration with an approval step, not a memory operation."
@@ -63,20 +70,23 @@
   "extra_tools": {
     "memory_search": "Slug-grouped search over task bodies and the frontmatter index. No mode of its own; the skill reaches search.sh from inside several modes.",
     "memory_task_create": "Creating a task file. The skill does this inside sync and plan rather than as a mode.",
-    "memory_related": "Prior-art probe over active and archive, and the in-use project slugs. The skill reaches related-search.sh from plan and sync."
+    "memory_related": "Prior-art probe over active and archive, and the in-use project slugs. The skill reaches related-search.sh from plan and sync.",
+    "memory_board": "Start or find the local board for this vault. Reads and writes use the same task records and handlers as MCP."
   },
   "contracts": {
     "memory_search": {
       "script": "search.sh",
       "flags": [
         "--semantic",
-        "--top="
+        "--top=",
+        "--json"
       ]
     },
     "memory_context": {
       "script": "context.sh",
       "flags": [
-        "--for="
+        "--for=",
+        "--format="
       ]
     },
     "memory_task_create": {
@@ -87,7 +97,8 @@
       "script": "checkpoint.sh",
       "flags": [
         "--status=",
-        "--next="
+        "--next=",
+        "--evidence="
       ]
     },
     "memory_archive": {
@@ -95,7 +106,8 @@
       "flags": [
         "--reason=",
         "--summary=",
-        "--pr="
+        "--pr=",
+        "--check-claim"
       ]
     },
     "memory_status": {
@@ -121,6 +133,34 @@
         "--cross-task",
         "--format="
       ]
+    },
+    "memory_projects": {
+      "script": "project.sh",
+      "flags": []
+    },
+    "memory_next": {
+      "script": "project.sh",
+      "flags": [
+        "--json"
+      ]
+    },
+    "memory_claim": {
+      "script": "project.sh",
+      "flags": []
+    },
+    "memory_release": {
+      "script": "project.sh",
+      "flags": []
+    },
+    "memory_update_status": {
+      "script": "checkpoint.sh",
+      "flags": [
+        "--status=",
+        "--evidence="
+      ]
+    },
+    "memory_board": {
+      "module": "board.js"
     }
   }
 }

@@ -169,6 +169,9 @@ detect_dirty_worklog() {
 # Host label is informational only — the full "<host>:<id>" string is the
 # arbitration key. Same `id` from different hosts is treated as distinct.
 resolve_session_id() {
+  if [[ -n "${WORKLOG_SESSION_ID:-}" ]]; then
+    printf '%s' "$WORKLOG_SESSION_ID"; return 0
+  fi
   if [[ -n "${CLAUDE_CODE_SESSION_ID:-}" ]]; then
     printf 'claude-code:%s' "$CLAUDE_CODE_SESSION_ID"; return 0
   fi
