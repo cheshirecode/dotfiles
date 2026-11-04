@@ -1,8 +1,23 @@
 # Quality and architecture review
 
-Use on requested code-quality work or when changed behavior exposes a concrete
-testing or boundary risk. Keep normal one-shot work lightweight. Role ownership
-and verification returns live in [crew.md](crew.md).
+Use the relevant section for regression guards, budgets, requested quality work,
+or a concrete boundary risk. [crew.md](crew.md) owns roles and returns.
+
+## Executable constraints
+
+For a confirmed failure, reuse or extend the smallest maintained check that detects
+recurrence. Use lint for static patterns and regression tests for behavior.
+Check transitions with bounded state tests or model checking; use input replay for implementation.
+[The protocol](protocol.md#verifying-a-claim) owns the failing-case and repair proof.
+Adequate existing coverage needs no duplicate rule.
+
+Name constrained paths so their checker can select them. Save replay inputs and
+control relevant clock/random sources. Check models and implementations separately.
+Declare performance, size, or quality budgets in the definition of done; enforce
+them at the appropriate build or runtime boundary.
+
+This adapts [poteto's development notes](https://x.com/poteto/status/2117043478140276847)
+to existing project tools and requirements.
 
 ## Measure change risk
 
