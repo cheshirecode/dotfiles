@@ -1,19 +1,20 @@
 {
   "name": "worklog-memory-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP agent-memory server over a git worklog vault: FSM task files, typed evidence, resumable context packs \u2014 not embeddings soup.",
   "type": "module",
   "bin": {
     "worklog-memory-mcp": "server.js"
   },
   "scripts": {
-    "test": "node test/surface-sync.js && node test/schema-sync.js && node test/env-isolation.js && node test/tool-output.js && node test/semantic-states.js && node test/e2e.js",
+    "test": "node test/surface-sync.js && node test/schema-sync.js && node test/env-isolation.js && node test/tool-output.js && node test/semantic-states.js && node test/e2e.js && node test/projects.js",
     "test:env": "node test/env-isolation.js",
     "test:e2e": "node test/e2e.js",
     "test:surface": "node test/surface-sync.js",
     "test:output": "node test/tool-output.js",
     "test:schema": "node test/schema-sync.js",
-    "test:semantic": "node test/semantic-states.js"
+    "test:semantic": "node test/semantic-states.js",
+    "test:projects": "node test/projects.js"
   },
   "license": "MIT",
   "dependencies": {
@@ -25,5 +26,8 @@
     "url": "git+https://github.com/cheshirecode/dotfiles.git",
     "directory": "packages/worklog-memory-mcp"
   },
-  "homepage": "https://github.com/cheshirecode/dotfiles/tree/main/packages/worklog-memory-mcp"
+  "homepage": "https://github.com/cheshirecode/dotfiles/tree/main/packages/worklog-memory-mcp",
+  "engines": {
+    "node": ">=20.11"
+  }
 }

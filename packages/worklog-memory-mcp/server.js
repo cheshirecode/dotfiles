@@ -205,6 +205,23 @@ function text(result) {
   return { content: [{ type: "text", text: result.out.trim() || "(empty)" }], isError: !result.ok };
 }
 
+function readText(result, maxChars, recovery) {
+  if (result.out.length > maxChars) {
+    result = { ...result, out: `${result.out.slice(0, maxChars)}\n[truncated; ${recovery}]` };
+  }
+  return text(result);
+}
+
+const MAX_CHARS = z.number().int().min(256).max(64000).default(8000);
+const SESSION = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/)
+  .describe("Unique caller session ID; reuse for renewal and release. Never share between agents.");
+
+function sessionEnv(session) {
+  // Apply after vault environment loading. An ambient native-client session
+  // must not make two MCP callers appear to own the same claim.
+  return { ...CHILD_ENV, WORKLOG_SESSION_ID: `mcp:${session}` };
+}
+
 // One in-process queue serializes every vault write.
 let writeChain = Promise.resolve();
 function serialized(fn) {
@@ -225,7 +242,61 @@ function taskFile(slug) {
   return null;
 }
 
-const server = new McpServer({ name: "worklog-memory", version: "0.1.0" });
+async function claimAccess(file, session) {
+  if (!/^claim:/m.test(fs.readFileSync(file, "utf8"))) return null;
+  try {
+    const { stdout } = await exec("python3", [path.join(BIN, "_claim.py"), "read", file], { cwd: REPO, env: CHILD_ENV });
+    const claim = JSON.parse(stdout);
+    if (claim.session_id && claim.session_id !== `mcp:${session}`) {
+      return text({ ok: false, out: "Task has a claim owned by another session. Acquire it through memory_claim before writing; pass the same session_id to checkpoints." });
+    }
+  } catch (error) {
+    return text({ ok: false, out: `Cannot verify claim ownership: ${error.message}` });
+  }
+  return null;
+}
+
+const server = new McpServer({ name: "worklog-memory", version: "0.2.0" });
+
+server.tool(
+  "memory_projects",
+  "List projects and child task progress in this vault.",
+  { max_chars: MAX_CHARS },
+  async ({ max_chars }) => readText(await run("project.sh", ["list"]), max_chars, "use memory_next for one project")
+);
+
+server.tool(
+  "memory_next",
+  "Read the next dependency-ready, claim-eligible task. This does not acquire it; use memory_claim before work.",
+  { project: z.string().regex(SLUG), max_chars: MAX_CHARS },
+  async ({ project, max_chars }) => readText(await run("project.sh", ["next", project, "--json"]), max_chars,
+    `project=${project}; use memory_context for the selected task`)
+);
+
+server.tool(
+  "memory_claim",
+  "Acquire or renew a session-owned task claim through Worklog arbitration. Supply slug for a task, or project to claim its next eligible task. Failure does not authorize work. Claims expire under the project's stale_after policy; checkpoint with the same session_id to renew.",
+  { slug: z.string().regex(SLUG).optional(), project: z.string().regex(SLUG).optional(), session_id: SESSION },
+  ({ slug, project, session_id }) => serialized(async () => {
+    if (Boolean(slug) === Boolean(project)) return text({ ok: false, out: "Supply exactly one of slug or project." });
+    const args = slug ? ["claim", slug] : ["claim", "next", project];
+    return text(await run("project.sh", args, { env: sessionEnv(session_id) }));
+  })
+);
+
+server.tool(
+  "memory_release",
+  "Release a task claim owned by this caller session. Cannot release another session's claim.",
+  { slug: z.string().regex(SLUG), session_id: SESSION },
+  ({ slug, session_id }) => serialized(async () => {
+    const file = taskFile(slug);
+    if (file) {
+      const denied = await claimAccess(file, session_id);
+      if (denied) return denied;
+    }
+    return text(await run("project.sh", ["release", slug], { env: sessionEnv(session_id) }));
+  })
+);
 
 server.tool(
   "memory_search",
@@ -233,10 +304,17 @@ server.tool(
   {
     pattern: z.string().min(1),
     semantic: z.boolean().default(false).describe("cosine over the embedding index instead of grep; finds paraphrases"),
-    top: z.number().int().min(1).max(50).optional().describe("how many semantic hits to return"),
+    top: z.number().int().min(1).max(50).default(20).describe("maximum returned hits"),
+    max_chars: MAX_CHARS,
   },
-  async ({ pattern, semantic, top }) => {
-    if (!semantic) return text(await run("search.sh", [pattern]));
+  async ({ pattern, semantic, top, max_chars }) => {
+    if (!semantic) {
+      const result = await run("search.sh", [pattern, "--json"]);
+      const hits = result.out.trim().split("\n").filter(Boolean);
+      const out = hits.slice(0, top).join("\n");
+      const omitted = hits.length > top ? `\n[${hits.length - top} more hits; narrow the pattern or increase top]` : "";
+      return readText({ ...result, out: out + omitted }, max_chars, "narrow the pattern or use memory_context with a returned slug");
+    }
 
     const args = [pattern, "--semantic"];
     if (top) args.push(`--top=${top}`);
@@ -265,15 +343,17 @@ server.tool(
       unknown: "\n\n[index: UNKNOWN — the semantic search exited non-zero for a reason this tool could not classify. Treat the result as unanswered, not empty]",
     }[state];
 
-    return text({ ok: res.ok && state !== "absent" && state !== "broken", out: out + note });
+    return readText({ ok: res.ok && state !== "absent" && state !== "broken", out: out + note }, max_chars,
+      "narrow the pattern or use memory_context; index state=" + state);
   }
 );
 
 server.tool(
   "memory_context",
   "Hydrate resume context for a task slug: frontmatter, recent commits, open next steps.",
-  { slug: z.string().regex(SLUG), for: z.enum(["resume", "review", "compact"]).default("resume") },
-  async ({ slug, for: mode }) => text(await run("context.sh", [slug, `--for=${mode}`]))
+  { slug: z.string().regex(SLUG), for: z.enum(["resume", "review", "compact"]).default("compact"), max_chars: MAX_CHARS },
+  async ({ slug, for: mode, max_chars }) => readText(await run("context.sh", [slug, `--for=${mode}`, ...(mode === "compact" ? ["--format=json"] : [])]), max_chars,
+    `task=${slug}; request for=resume with a larger max_chars or read the task file in the vault`)
 );
 
 server.tool(
@@ -325,8 +405,9 @@ server.tool(
     evidence: z.string().min(1).describe("one typed line: command|artifact|git|github|url: <ref> — <result>"),
     status: z.enum([...AGENT_STATUSES]).optional(),
     next_action: z.string().optional(),
+    session_id: SESSION.optional().describe("Pass the claim's caller session ID to renew its heartbeat."),
   },
-  ({ slug, evidence, status, next_action }) =>
+  ({ slug, evidence, status, next_action, session_id }) =>
     serialized(async () => {
       const file = taskFile(slug);
       if (!file) {
@@ -335,20 +416,10 @@ server.tool(
       if (file.includes(`${path.sep}archive${path.sep}`)) {
         return text({ ok: false, out: `task ${slug} is archived; archived tasks are a closed record` });
       }
-      const today = new Date().toISOString().slice(0, 10);
-      const note = `- ${today}: ${evidence}`;
-      let content = fs.readFileSync(file, "utf8");
-      // Append under an ## Evidence section, creating it once.
-      if (content.includes("\n## Evidence\n")) {
-        content = content.replace("\n## Evidence\n", `\n## Evidence\n${note}\n`);
-      } else {
-        content += `\n## Evidence\n${note}\n`;
-      }
-      fs.writeFileSync(file, content);
-      const args = [slug];
+      const args = [slug, `--evidence=${evidence}`];
       if (status) args.push(`--status=${status}`);
       if (next_action) args.push(`--next=${next_action}`);
-      return text(await run("checkpoint.sh", args));
+      return text(await run("checkpoint.sh", args, session_id ? { env: sessionEnv(session_id) } : {}));
     })
 );
 
@@ -363,16 +434,19 @@ server.tool(
 
 server.tool(
   "memory_archive",
-  "Close a task: set status=archived, write a summary, and move it from active/ to archive/. This is the FSM's terminal transition and the only way to finish a task.",
+  "Archive cancelled or superseded work. Completed work needs human acceptance through the native archive CLI; shipped and merged are refused here.",
   {
     slug: z.string().regex(SLUG),
-    reason: z.enum(["shipped", "declined", "abandoned", "superseded", "merged", "obsolete"]).default("shipped"),
+    reason: z.enum(["shipped", "declined", "abandoned", "superseded", "merged", "obsolete"]),
     summary: z.string().min(1).describe("2-3 lines, written into frontmatter so the archive stays browsable"),
     superseded_by: z.string().regex(SLUG).optional().describe("required shape for reason=superseded"),
     pr: z.string().optional(),
   },
   ({ slug, reason, summary, superseded_by, pr }) =>
     serialized(async () => {
+      if (reason === "shipped" || reason === "merged") {
+        return text({ ok: false, out: "Completion needs human acceptance. Use memory_checkpoint with status=shipping and review evidence. The user can then run archive.sh <slug> --reason=shipped|merged --summary=<accepted result> in this vault. MCP cannot accept its own work." });
+      }
       const file = taskFile(slug);
       if (!file) return text({ ok: false, out: `task ${slug} not found` });
       if (file.includes(`${path.sep}archive${path.sep}`)) {
@@ -381,7 +455,7 @@ server.tool(
       // archive.sh only warns when a summary is missing, and the vault has
       // five archived tasks with none. An agent has no excuse, so require it.
       const why = reason === "superseded" && superseded_by ? `superseded by ${superseded_by}` : reason;
-      const args = [slug, `--reason=${why}`, `--summary=${summary}`];
+      const args = [slug, `--reason=${why}`, `--summary=${summary}`, "--unclaimed-only"];
       if (pr) args.push(`--pr=${pr}`);
       return text(await run("archive.sh", args));
     })
@@ -394,16 +468,17 @@ server.tool(
     since: z.string().optional().describe("git date, e.g. yesterday, 1.week.ago, 2026-04-15; default midnight today"),
     slug: z.string().regex(SLUG).optional(),
     project: z.string().optional(),
-    format: z.enum(["markdown", "grouped", "json"]).default("markdown"),
+    format: z.enum(["markdown", "grouped", "json"]).default("json"),
     include_meta: z.boolean().default(false),
+    max_chars: MAX_CHARS,
   },
-  async ({ since, slug, project, format, include_meta }) => {
+  async ({ since, slug, project, format, include_meta, max_chars }) => {
     const args = [`--format=${format}`];
     if (since) args.push(`--since=${since}`);
     if (slug) args.push(`--slug=${slug}`);
     if (project) args.push(`--project=${project}`);
     if (include_meta) args.push("--include-meta");
-    return text(await run("status.sh", args));
+    return readText(await run("status.sh", args), max_chars, "filter by slug, project, or since");
   }
 );
 
@@ -413,13 +488,14 @@ server.tool(
   {
     keywords: z.array(z.string().min(1)).min(1).optional(),
     projects: z.boolean().default(false).describe("list project: slugs in use instead of searching"),
+    max_chars: MAX_CHARS,
   },
-  async ({ keywords, projects }) => {
-    if (projects) return text(await run("related-search.sh", ["--projects"]));
+  async ({ keywords, projects, max_chars }) => {
+    if (projects) return readText(await run("related-search.sh", ["--projects"]), max_chars, "use memory_projects for a project queue");
     if (!keywords?.length) {
       return text({ ok: false, out: "pass keywords, or projects=true to enumerate project slugs" });
     }
-    return text(await run("related-search.sh", keywords));
+    return readText(await run("related-search.sh", keywords), max_chars, "use narrower keywords or memory_context with a returned slug");
   }
 );
 
@@ -430,8 +506,9 @@ server.tool(
     slug: z.string().regex(SLUG).optional().describe("omit to lint every task file"),
     cross_task: z.boolean().default(false).describe("include active-task drift checks"),
     format: z.enum(["markdown", "json"]).default("markdown"),
+    max_chars: MAX_CHARS,
   },
-  async ({ slug, cross_task, format }) => {
+  async ({ slug, cross_task, format, max_chars }) => {
     const args = [`--format=${format}`];
     if (slug) {
       const file = taskFile(slug);
@@ -439,7 +516,7 @@ server.tool(
       args.push(`--file=${path.relative(REPO, file)}`);
     }
     if (cross_task) args.push("--cross-task");
-    return text(await run("lint.sh", args));
+    return readText(await run("lint.sh", args), max_chars, "filter by slug or run lint.sh in the vault for the full report");
   }
 );
 

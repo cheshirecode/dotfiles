@@ -331,8 +331,18 @@ _do_claim() {
   local CHILD_PATH SESSION STALE
   CHILD_PATH="$(find_task "$CHILD" || true)"
   [[ -z "$CHILD_PATH" ]] && { echo "claim: no task file for '$CHILD'" >&2; return 1; }
+  [[ "$CHILD_PATH" == "people/$(resolve_ldap)/active/"* ]] || {
+    echo "claim: task is outside your active namespace" >&2; return 1;
+  }
   SESSION="$(resolve_session_id)"
   STALE="$(_project_stale_after "$PROJECT")"
+  if [[ -n "$PROJECT" ]]; then
+    local eligible
+    eligible="$(PROJECT_SLUG="$PROJECT" python3 "$SCRIPT_DIR/_project.py" eligible-list)" || return 1
+    if ! printf '%s\n' "$eligible" | grep -qxF -- "$CHILD"; then
+      echo "claim: $CHILD is not dependency-ready in $PROJECT" >&2; return 1
+    fi
+  fi
 
   # Read current claim state.
   local CUR
@@ -364,6 +374,7 @@ _do_claim() {
     return 1
   fi
 
+  verify_provenance || return 1
   # Write claim block (refuses if non-stale + different session).
   if ! python3 "$SCRIPT_DIR/_claim.py" write "$CHILD_PATH" \
         --session="$SESSION" --stale-after="$STALE"; then
@@ -453,6 +464,10 @@ cmd_release() {
   local CHILD_PATH SESSION
   CHILD_PATH="$(find_task "$CHILD" || true)"
   [[ -z "$CHILD_PATH" ]] && { echo "release: no task file for '$CHILD'" >&2; return 1; }
+  [[ "$CHILD_PATH" == "people/$(resolve_ldap)/active/"* ]] || {
+    echo "release: task is outside your active namespace" >&2; return 1;
+  }
+  verify_provenance || return 1
   SESSION="$(resolve_session_id)"
 
   if ! python3 "$SCRIPT_DIR/_claim.py" clear "$CHILD_PATH" --session="$SESSION"; then

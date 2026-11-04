@@ -31,6 +31,7 @@ if [[ -z "$remote" ]]; then
   else
     echo "install-worklog: next: WORKLOG_REMOTE=<url> bin/install-worklog.sh, or /worklog init"
   fi
+  "$REPO_ROOT/bin/install-worklog-mcp.sh"
   exit 0
 fi
 
@@ -46,4 +47,5 @@ target="${WORKLOG_TARGET:-$(sed -n 's/^SUGGESTED_REPO=//p' <<<"$probe")}"
 args=(apply --repo "$target" --remote "$remote")
 [[ -n "${WORKLOG_NS:-}" ]] && args+=(--ns "$WORKLOG_NS")
 "$BOOT" "${args[@]}"
+"$REPO_ROOT/bin/install-worklog-mcp.sh" --repo "$target"
 echo "install-worklog: next: /worklog init  (inside Claude Code)"

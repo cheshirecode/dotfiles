@@ -3,7 +3,7 @@
   "name": "io.github.cheshirecode/worklog-memory-mcp",
   "title": "Worklog Memory",
   "description": "Agent memory over a git worklog vault: FSM task files with typed evidence, not embeddings soup.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "repository": {
     "url": "https://github.com/cheshirecode/dotfiles",
     "source": "github",
@@ -16,7 +16,7 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "worklog-memory-mcp",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"

@@ -13,6 +13,8 @@
 set -euo pipefail
 
 SLUG=""
+ORIGINAL_ARGS=("$@")
+EVIDENCE=""
 STATUS=""
 NEXT=""
 PR=""
@@ -27,6 +29,7 @@ while [[ $# -gt 0 ]]; do
     --pr=*)      PR="${1#--pr=}" ;;
     --rename=*)  RENAME_FROM="${1#--rename=}" ;;
     --include=*) INCLUDES+=("${1#--include=}") ;;
+    --evidence=*) EVIDENCE="${1#--evidence=}" ;;
     --status)    STATUS="$2"; shift ;;
     --next)      NEXT="$2"; shift ;;
     --pr)        PR="$2"; shift ;;
@@ -38,6 +41,7 @@ usage: checkpoint.sh <slug> [--status=X] [--next="..."] [--pr=N]
                             [--rename=OLD_SLUG] [--include=PATH ...]
   --status    flip frontmatter status (emits Worklog-Status trailer)
   --next      rewrite next_action
+  --evidence= append one typed evidence line under ## Evidence; checks claim ownership
   --pr        attach a PR number to this commit (emits Worklog-PR trailer)
   --rename    this commit renames OLD_SLUG to <slug> (emits Worklog-Previous-Slug trailer)
   --include   stage an additional path alongside the task file (repeatable).
@@ -83,6 +87,13 @@ esac
 . "$SCRIPT_DIR/_lib.sh"
 REPO_ROOT="$(resolve_worklog_repo)" || exit 1
 cd "$REPO_ROOT"
+if [[ -n "$EVIDENCE" && "${WORKLOG_CLAIM_LOCKED:-}" != 1 ]]; then
+  # Keep ownership verification, evidence append, heartbeat, and commit inside
+  # the same local lock used by project claim/release. A preflight-only check
+  # in an MCP process can race with a different process acquiring the claim.
+  WORKLOG_CLAIM_LOCKED=1 exec python3 "$SCRIPT_DIR/_flock.py" \
+    .cache/claims/lock -- "$0" "${ORIGINAL_ARGS[@]}"
+fi
 LDAP="$(resolve_ldap)"
 verify_provenance || exit 1
 detect_session_collision "$SLUG" 2>&1 || true
@@ -91,6 +102,13 @@ FILE="people/$LDAP/active/$SLUG.md"
 if [[ ! -f "$FILE" ]]; then
   echo "checkpoint: $FILE not found" >&2
   exit 1
+fi
+if [[ -n "$EVIDENCE" ]]; then
+  CLAIM_SESSION="$(python3 "$SCRIPT_DIR/_claim.py" read "$FILE" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("session_id") or "")')"
+  if [[ -n "$CLAIM_SESSION" && "$CLAIM_SESSION" != "$(resolve_session_id)" ]]; then
+    echo "checkpoint: claim is owned by another session; acquire it before writing" >&2
+    exit 1
+  fi
 fi
 
 # Snapshot HEAD state so we can detect transitions / creates.
@@ -126,9 +144,12 @@ fi
 
 TODAY="$(date +%Y-%m-%d)"
 
-python3 - "$FILE" "$TODAY" "$STATUS" "$NEXT" "$PR" <<'PY'
+python3 - "$FILE" "$TODAY" "$STATUS" "$NEXT" "$PR" "$EVIDENCE" <<'PY'
 import sys, re, pathlib
 path, today, status, next_action, pr = sys.argv[1:6]
+evidence = sys.argv[6]
+if evidence and ("\n" in evidence or not re.fullmatch(r'(command|artifact|git|github|url): .+ — .+', evidence)):
+    sys.exit("checkpoint: evidence must be one typed line: command|artifact|git|github|url: <ref> — <result>")
 p = pathlib.Path(path)
 text = p.read_text()
 def yaml_double_quote(s):
@@ -164,6 +185,12 @@ if pr:
         if pr not in existing:
             existing.append(pr)
             sub('pr', '[' + ', '.join(existing) + ']')
+if evidence:
+    note = f'- {today}: {evidence}\n'
+    if '\n## Evidence\n' in text:
+        text = text.replace('\n## Evidence\n', '\n## Evidence\n' + note, 1)
+    else:
+        text += '\n## Evidence\n' + note
 p.write_text(text)
 PY
 

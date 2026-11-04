@@ -13,7 +13,7 @@ holds, and this server exposes it over MCP.
 
 ## Tools
 
-Eight tools, covering one task's whole life. Read the table top to bottom: that
+Twelve tools cover task memory and project claims. Read the table top to bottom: that
 is the order a cold session uses them.
 
 | Tool | Use it when | Wraps | What it costs to maintain |
@@ -24,7 +24,11 @@ is the order a cold session uses them.
 | `memory_context` | you know the slug and want the resume pack | `context.sh` | One flag. `--tracker` is not exposed — the caller is the tracker |
 | `memory_task_create` | no task file exists yet | writes the file, then `checkpoint.sh` | **Highest.** The frontmatter template lives in this server, so a vault schema change breaks it silently. `memory_lint` is the guard |
 | `memory_checkpoint` | record one typed evidence line; optionally flip status | `checkpoint.sh` | Two flags. Refuses an archived task |
-| `memory_archive` | the task is done — the FSM's terminal transition | `archive.sh` | Three flags. Requires a summary, which the script only warns about |
+| `memory_archive` | the task is done — cancelled or superseded work | `archive.sh` | Three flags. Requires a summary, which the script only warns about |
+| `memory_projects` | discover project queues | `project.sh list` | Read-only |
+| `memory_next` | inspect the next eligible task without claiming it | `project.sh next --json` | Read-only |
+| `memory_claim` | acquire or renew a task for one caller session | `project.sh claim` | Native dependency checks, namespace guard, and claim arbitration |
+| `memory_release` | release a claim owned by the caller | `project.sh release` | Same explicit session ID required |
 | `memory_lint` | check a task, or sweep the vault, without writing | `lint.sh` | Three flags. Read-only |
 
 Every write goes through the worklog skill's own scripts, so vault lint and
@@ -43,7 +47,7 @@ Two rules worth knowing before you call anything:
 ## What still needs the worklog skill
 
 These tools cover the task lifecycle. They are not the whole skill, and are not
-meant to be. Nine of the skill's thirteen public modes stay out, each for a
+meant to be. Eight of the skill's thirteen public modes stay out, each for a
 stated reason in `coverage.json`:
 
 | Mode | Why it is not a tool |
@@ -52,7 +56,71 @@ stated reason in `coverage.json`:
 | `init`, `export`, `import` | Machine and session setup, not task memory. `memory_status` covers the part a cold agent actually needs |
 | `scrape-slack` | An external integration behind a mandatory human review gate |
 | `help` | The MCP client lists tools itself |
-| `project` | **Deferred, not rejected.** Multi-task projects need a `depends_on` graph and a per-task advisory mutex arbitrated by session id. This server serializes every write through one in-process queue, so `claim`/`release` needs its own design before it is safe to expose |
+| `project` | Discovery, selection, claim, and release are tools. Create or edit project graphs through `project.sh`. |
+
+## Setup and upgrades
+
+From the dotfiles checkout, run `bin/install-worklog-mcp.sh`. It discovers
+existing vaults through Worklog's bootstrap probe. Use `--repo /path/to/vault`
+(repeatable) for an explicit selection, and `--client codex|claude|cursor|opencode`
+(repeatable) to select clients. The default configures all four clients.
+`--dry-run` validates inputs without installing dependencies or writing files.
+
+The installer uses the lockfile and records an absolute Node executable.
+Run it from your normal Node environment. It keeps a suitable user Node
+(>=20.11) and npm. If those are absent or too old, it installs a private
+Node 22 runtime from nodejs.org after verifying the release checksum. It
+also prepares an isolated Python environment when PyYAML is absent. These
+fallbacks live under `~/.local/share/worklog-mcp` (or `XDG_DATA_HOME`). Each
+vault gets its own server entry; vault identity is still resolved at startup.
+Other servers and client settings stay in place. Repeated setup preserves
+unchanged configuration bytes. JSON entries for the same vault are upgraded
+under their existing names. Existing invalid or conflicting settings fail
+before any configuration is written. Review and approve an existing `.envrc`
+yourself when direnv requires it; the installer does not approve shell code.
+Restart the affected clients after setup.
+
+Both dotfiles installer entry points configure existing vaults. The Worklog
+installer also configures a newly bootstrapped vault. `DOTFILES_NO_WORKLOG_MCP=1`
+skips MCP setup from the top-level dotfiles installer; `bin/install.sh --no-worklog`
+skips the Worklog installation step. The package remains internal-only: no
+npm publication or MCP Registry publication is part of setup.
+
+## Compact reads and claims
+
+`memory_context` defaults to `for=compact` and returns the existing
+`worklog-context/v1` JSON pack. Use `for=resume` or `for=review` for more detail.
+Read tools have `max_chars` (default 8000, maximum 64000). Truncated results
+say how to retrieve more; they are not complete JSON documents. Search returns
+at most `top` hits (default 20, maximum 50). Narrow the pattern to find omitted
+matches. Errors remain errors when output is shortened.
+
+Call `memory_projects`, then `memory_next` to inspect a project. To acquire
+work, call `memory_claim` with exactly one of `slug` or `project`, and a unique
+`session_id`. A project claim selects and acquires an eligible child through
+the existing Worklog helper. Reuse the session ID after a restart, on renewal,
+on `memory_checkpoint`, and on `memory_release`. Never share an ID between
+agents. Competing callers retain the native lock, dependency, Git arbitration,
+and project `stale_after` behavior. A failed claim does not authorize work.
+A checkpoint on a claimed task requires the owning session ID.
+
+## Human acceptance
+
+Agents submit completed work with `memory_checkpoint(status="shipping")`,
+review evidence, and a next action naming the required human review.
+`memory_archive` refuses `reason=shipped` and `reason=merged`; a user accepts
+through the existing `archive.sh` CLI after reviewing the evidence. Other
+archive reasons remain available for unclaimed cancelled or superseded work.
+This is a boundary on the MCP mutation interface. It is not authentication
+against an agent that also has unrestricted shell or filesystem access.
+
+## Dogfood
+
+`bin/dogfood-worklog-mcp.sh` exercises a new vault, first and repeat setup,
+configured desktop-style startup, and the protocol suite in a disposable HOME.
+It does not change real vaults or client configuration. With the sibling
+sandbox running, use `../sandbox/bin/sandbox.sh test-worklog` to run the same
+checks as `dev` on Linux and retain the full log.
 
 ## Keeping the two in step
 

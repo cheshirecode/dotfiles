@@ -128,7 +128,7 @@ jobs:
   packages:
     name: packages — loop-run sync+unittest, worklog-memory-mcp e2e
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -142,7 +142,16 @@ jobs:
           sudo apt-get install -y direnv ripgrep jq
           pip install --quiet pyyaml
       - name: deps
-        run: cd packages/worklog-memory-mcp && npm install
+        run: cd packages/worklog-memory-mcp && npm ci --ignore-scripts --no-audit --no-fund
+      - name: Private Node bootstrap and repeat setup
+        run: |
+          export XDG_DATA_HOME="$RUNNER_TEMP/worklog-mcp-node"
+          node_bin="$(python3 bin/worklog-mcp-node.py --managed)"
+          "$node_bin" --version
+          "$(dirname "$node_bin")/npm" --version
+          test "$(python3 bin/worklog-mcp-node.py --managed)" = "$node_bin"
+      - name: Fresh and repeat MCP configuration
+        run: bin/dogfood-worklog-mcp.sh --setup-only
       - name: git identity for e2e fixture vault
         run: |
           git config --global user.email "ci@cheshirecode.test"
