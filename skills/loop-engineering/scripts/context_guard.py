@@ -19,6 +19,7 @@ def main():
     parser.add_argument("--context-pct", type=nonnegative)
     parser.add_argument("--role-switch", action="store_true")
     parser.add_argument("--read-truncated", action="store_true")
+    parser.add_argument("--history-unknown", action="store_true")
     args = parser.parse_args()
     if args.since_checkpoint > args.session_units:
         parser.error("since-checkpoint cannot exceed session-units")
@@ -26,6 +27,8 @@ def main():
         parser.error("context-pct must be between 0 and 100")
 
     reasons = []
+    if args.history_unknown:
+        reasons.append("unknown-history")
     if args.context_pct is not None and args.context_pct >= 50:
         reasons.append("measured-context")
     if args.session_units >= 8:

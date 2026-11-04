@@ -60,12 +60,14 @@ Pass `--role-switch` before changing roles and `--read-truncated` after unexpect
 host truncation. A deliberate excerpt of a saved log is not a truncated read. Add `--context-pct N` only from current host telemetry. Account usage limits
 and the agent's intuition do not measure the session window. Missing telemetry
 stays `unknown`; unit limits still apply.
+For an existing long session with unknown counters, pass `--history-unknown`.
+Do not invent a zero count to keep working.
 
 | Decision | Trigger | Required action before more task work |
 | --- | --- | --- |
 | `continue` | No boundary reached | Execute the next bounded unit |
 | `checkpoint` | Three units since checkpoint, or role switch | Save and read back the task checkpoint and recovery locator |
-| `handoff` | Eight session units, measured context at least 50%, or truncated read | Checkpoint, verify recovery, then reset context or transfer ownership |
+| `handoff` | Eight session units, measured context at least 50%, unexpected truncation, or unknown prior history | Checkpoint, verify recovery, then reset context or transfer ownership |
 
 Exit 0 means continue, 1 requires the named action, and 2 rejects invalid input.
 The helper is stateless. It neither reads host usage nor writes Worklog, changes
@@ -93,6 +95,8 @@ blocks reset; repair its recovery path first. Only a verified checkpoint resets
 
 Use a supported host compaction operation if available. Otherwise transfer the
 same work order to a fresh session only with the required user authorization.
+Record host reset capabilities and any automatic-continuation authorization at
+intake. A skill cannot grant permission to create tasks on the user's behalf.
 Pass the compact pack and locator, not the old transcript or a full-history fork.
 The predecessor stops task mutations after the successor accepts ownership.
 Finished work needs its final report, not a fresh session.

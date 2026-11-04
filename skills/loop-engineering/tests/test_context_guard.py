@@ -53,6 +53,12 @@ class ContextGuardTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertEqual(json.loads(result.stdout)["action"], "handoff")
 
+    def test_unknown_existing_history_requires_handoff(self):
+        result = self.run_guard(0, 0, "--history-unknown")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(json.loads(result.stdout)["action"], "handoff")
+        self.assertIn("unknown-history", json.loads(result.stdout)["reasons"])
+
     def test_invalid_observations_emit_no_decision(self):
         for units, since, extra in [(-1, 0, []), (1, 2, []),
                                     (1, 0, ["--context-pct", "101"]),
