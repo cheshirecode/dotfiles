@@ -47,6 +47,12 @@ node "$ROOT/packages/worklog-memory-mcp/test/configured.js"
 # Use the installed runtime for subsequent helper and protocol checks too.
 PATH="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(next(iter(d["mcpServers"].values()))["env"]["PATH"])' "$HOME/.cursor/mcp.json")"
 export PATH
+[[ -L "$HOME/.local/bin/worklog-board" ]]
+"$HOME/.local/bin/worklog-board" --repo "$vault" --status --json > "$scratch/board-status.json"
+python3 - "$scratch/board-status.json" <<'PY'
+import json, sys
+assert json.load(open(sys.argv[1]))['running'] is False
+PY
 if [[ "$setup_only" -eq 1 ]]; then
   echo "worklog dogfood: setup and configured startup passed; protocol suite not run (--setup-only)"
   exit 0

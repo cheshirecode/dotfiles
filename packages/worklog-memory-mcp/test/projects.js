@@ -78,12 +78,7 @@ try {
     assert.equal(invalid.isError, true); assert.equal(fs.readFileSync(taskPath("first"), "utf8"), beforeInvalid);
   });
   const saved = await call(a, "memory_checkpoint", { slug: "first", session_id: owner, evidence: "command: project test — owned checkpoint", status: "shipping", next_action: "Human review required" });
-  check("owner checkpoints evidence and requests human review", () => assert.equal(saved.isError, false));
-  const complete = await call(a, "memory_archive", { slug: "first", reason: "shipped", summary: "Self accepted" });
-  check("MCP cannot accept its own completed work", () => {
-    assert.equal(complete.isError, true); assert.match(output(complete), /human acceptance/);
-    assert.ok(fs.existsSync(taskPath("first")));
-  });
+  check("owner checkpoints evidence and updates status", () => assert.equal(saved.isError, false));
   const foreignBefore = fs.readFileSync(taskPath("foreign", "other"), "utf8");
   const foreign = await call(a, "memory_claim", { slug: "foreign", session_id: owner });
   check("claims cannot write another namespace", () => {
@@ -104,11 +99,10 @@ try {
     assert.equal(recovered.isError, false); assert.match(fs.readFileSync(taskPath("first"), "utf8"), new RegExp(`mcp:${loser}`));
   });
   owner = loser;
-  execFileSync("bash", [path.join(bin, "archive.sh"), "first", "--reason=shipped", "--summary=Accepted by the test user"], {
-    cwd: vault, env: { ...process.env, WORKLOG_REPO: vault, WORKLOG_LDAP: "oss", WORKLOG_SESSION_ID: `mcp:${owner}` }, stdio: "pipe",
-  });
+  const completed = await call(a, "memory_archive", { slug: "first", reason: "shipped", summary: "Completed by the owning agent", session_id: owner });
+  check("an agent can complete its own claimed task", () => assert.equal(completed.isError, false));
   const ready = await call(a, "memory_next", { project: "test-project" });
-  check("native user acceptance unlocks the dependent task", () => assert.match(output(ready), /blocked-child/));
+  check("agent completion unlocks the dependent task", () => assert.match(output(ready), /blocked-child/));
   const second = path.join(scratch, "second-machine");
   git("clone", "-q", bare, second);
   git("-C", second, "config", "user.name", "mcp-test");

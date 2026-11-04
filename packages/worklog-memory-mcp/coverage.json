@@ -19,7 +19,8 @@
     "sync": {
       "tools": [
         "memory_checkpoint",
-        "memory_archive"
+        "memory_archive",
+        "memory_update_status"
       ],
       "note": "sync is an umbrella that routes by intent: a slug plus flags goes to checkpoint.sh, archive intent goes to archive.sh. Both are now tools, so the routing is the caller's choice rather than a mode. Conversation-WIP detection stays out: it needs judgement and sync itself skips it in non-interactive sessions."
     },
@@ -69,7 +70,8 @@
   "extra_tools": {
     "memory_search": "Slug-grouped search over task bodies and the frontmatter index. No mode of its own; the skill reaches search.sh from inside several modes.",
     "memory_task_create": "Creating a task file. The skill does this inside sync and plan rather than as a mode.",
-    "memory_related": "Prior-art probe over active and archive, and the in-use project slugs. The skill reaches related-search.sh from plan and sync."
+    "memory_related": "Prior-art probe over active and archive, and the in-use project slugs. The skill reaches related-search.sh from plan and sync.",
+    "memory_board": "Start or find the local board for this vault. Reads and writes use the same task records and handlers as MCP."
   },
   "contracts": {
     "memory_search": {
@@ -105,7 +107,7 @@
         "--reason=",
         "--summary=",
         "--pr=",
-        "--unclaimed-only"
+        "--check-claim"
       ]
     },
     "memory_status": {
@@ -149,6 +151,16 @@
     "memory_release": {
       "script": "project.sh",
       "flags": []
+    },
+    "memory_update_status": {
+      "script": "checkpoint.sh",
+      "flags": [
+        "--status=",
+        "--evidence="
+      ]
+    },
+    "memory_board": {
+      "module": "board.js"
     }
   }
 }

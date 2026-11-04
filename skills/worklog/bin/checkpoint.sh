@@ -75,9 +75,9 @@ EOF
   exit 1
 fi
 case "$STATUS" in
-  ""|draft|in-progress|in-review|blocked|shipping) ;;
+  ""|draft|ready|in-progress|in-review|blocked|shipping) ;;
   *)
-    echo "checkpoint: status '$STATUS' not in FSM: draft | in-progress | in-review | blocked | shipping | archived" >&2
+    echo "checkpoint: status '$STATUS' not in FSM: draft | ready | in-progress | in-review | blocked | shipping | archived" >&2
     echo "checkpoint: use archive.sh for archived; map legacy 'done' to shipping or archive intentionally." >&2
     exit 2
     ;;

@@ -137,6 +137,10 @@ if (contracts.length === 0) {
   fs.mkdirSync(path.join(probeVault, "people", "probe", "archive"), { recursive: true });
   const problems = [];
   for (const [tool, c] of contracts) {
+    if (c.module) {
+      if (!fs.existsSync(path.resolve(import.meta.dirname, "..", c.module))) problems.push(`${tool}: ${c.module} is gone`);
+      continue;
+    }
     const script = path.join(BIN, c.script);
     if (!fs.existsSync(script)) { problems.push(`${tool}: ${c.script} is gone`); continue; }
     let help = "";

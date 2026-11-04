@@ -13,7 +13,7 @@ holds, and this server exposes it over MCP.
 
 ## Tools
 
-Twelve tools cover task memory and project claims. Read the table top to bottom: that
+Fourteen tools cover task memory and project claims. Read the table top to bottom: that
 is the order a cold session uses them.
 
 | Tool | Use it when | Wraps | What it costs to maintain |
@@ -24,7 +24,9 @@ is the order a cold session uses them.
 | `memory_context` | you know the slug and want the resume pack | `context.sh` | One flag. `--tracker` is not exposed — the caller is the tracker |
 | `memory_task_create` | no task file exists yet | writes the file, then `checkpoint.sh` | **Highest.** The frontmatter template lives in this server, so a vault schema change breaks it silently. `memory_lint` is the guard |
 | `memory_checkpoint` | record one typed evidence line; optionally flip status | `checkpoint.sh` | Two flags. Refuses an archived task |
-| `memory_archive` | the task is done — cancelled or superseded work | `archive.sh` | Three flags. Requires a summary, which the script only warns about |
+| `memory_archive` | the task is complete, cancelled, or superseded | `archive.sh` | Three flags. Requires a summary, which the script only warns about |
+| `memory_update_status` | move a task, including completion | `checkpoint.sh` / `archive.sh` | Same claim ownership checks |
+| `memory_board` | open or inspect the shared local board | `board.js` | One process per vault |
 | `memory_projects` | discover project queues | `project.sh list` | Read-only |
 | `memory_next` | inspect the next eligible task without claiming it | `project.sh next --json` | Read-only |
 | `memory_claim` | acquire or renew a task for one caller session | `project.sh claim` | Native dependency checks, namespace guard, and claim arbitration |
@@ -38,7 +40,7 @@ one server per vault).
 
 Two rules worth knowing before you call anything:
 
-- **`archived` is reachable only through `memory_archive`.** Setting the status
+- **`archived` moves the task through `memory_archive`**, directly or via `memory_update_status`. Setting the status
   in frontmatter is not the transition: the file has to move from `active/` to
   `archive/`. That is why `memory_checkpoint`'s status list stops at `shipping`.
 - **An archived task is a closed record.** `memory_checkpoint` refuses one
@@ -104,15 +106,29 @@ agents. Competing callers retain the native lock, dependency, Git arbitration,
 and project `stale_after` behavior. A failed claim does not authorize work.
 A checkpoint on a claimed task requires the owning session ID.
 
-## Human acceptance
+## Board and agent status updates
 
-Agents submit completed work with `memory_checkpoint(status="shipping")`,
-review evidence, and a next action naming the required human review.
-`memory_archive` refuses `reason=shipped` and `reason=merged`; a user accepts
-through the existing `archive.sh` CLI after reviewing the evidence. Other
-archive reasons remain available for unclaimed cancelled or superseded work.
-This is a boundary on the MCP mutation interface. It is not authentication
-against an agent that also has unrestricted shell or filesystem access.
+Run `worklog-board` from a workspace, or `worklog-board --repo /path/to/_worklog`.
+The installer adds the command to `~/.local/bin`. Repeated starts reuse one local
+server and URL per vault. Use `--no-open` for a headless host, `--status` to inspect
+it, and `--stop` to stop that vault's board. Start it after installation or a reboot;
+no login service is installed. An agent can call `memory_board` to get the same URL.
+
+This is a small Kanzo-style board using Worklog's existing files, rather than a
+separate Kanzo database. Search, project filters, task creation, drag-and-drop,
+and the keyboard-accessible status editor use the same handlers as MCP. External
+changes appear within five seconds. Completed tasks show in Done, with the latest
+50 archived records loaded. The server listens on loopback only and rejects
+foreign Host/Origin headers and writes without its local token.
+
+Agents can call `memory_update_status(slug, status, session_id)` for any task state,
+including `archived` to complete a task. `memory_archive(reason="shipped")` and
+`reason="merged"` are also supported. Claim owners must supply the same session ID
+used to claim the task; another session cannot update or archive their work.
+Unclaimed tasks can be updated by either interface. Completion records the supplied
+summary (or a default completion line); it does not prove delivery or a GitHub merge.
+Archived records remain closed. For detailed progress, keep using typed evidence
+with `memory_checkpoint`.
 
 ## Dogfood
 

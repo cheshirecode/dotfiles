@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Worklog · Board</title>
+  <link rel="stylesheet" href="/board.css">
+  <script src="/board-ui.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar" aria-label="Workspace navigation">
+    <a class="brand" href="/" aria-label="Worklog home"><span class="brand-mark" aria-hidden="true">w</span>Worklog</a>
+    <div class="workspace"><span class="workspace-icon" aria-hidden="true">W</span><div><strong id="vault">Your workspace</strong><small id="namespace">Loading tasks…</small></div></div>
+    <nav aria-label="Projects"><h2>Projects</h2><div id="projects"></div></nav>
+    <div class="sidebar-footer"><span class="connection-dot" aria-hidden="true"></span><span>Shared with MCP</span></div>
+  </aside>
+  <main>
+    <header class="topbar"><div class="page-title"><h1>Board</h1><span id="total" class="total">—</span></div><button class="primary" id="new-task">New task</button></header>
+    <div class="toolbar"><label class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><input id="search" type="search" placeholder="Search tasks…" aria-label="Search tasks"></label><div class="sync"><span id="sync-state" role="status">Connecting…</span><button id="refresh" class="icon-button" aria-label="Refresh board" title="Refresh board"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M19 12a7 7 0 1 0-2 5M20 12l-3-5"/></svg></button></div></div>
+    <label class="mobile-project">Project<select id="mobile-project"><option value="">All tasks</option></select></label>
+    <div id="notice" role="alert" hidden></div>
+    <div id="no-results" hidden><strong>No matching tasks.</strong> Try another search or <button id="clear-filters" class="text-button">clear filters</button>.</div>
+    <div id="board" class="board" aria-label="Task board" aria-busy="true"></div>
+    <footer class="board-footer"><span>Move a card to update its status.</span><span id="archive-note"></span></footer>
+  </main>
+  <aside id="detail" class="detail" aria-labelledby="detail-title" hidden>
+    <header class="detail-header"><span id="detail-id">New task</span><button id="close-detail" class="icon-button" aria-label="Close task"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></header>
+    <div class="detail-content">
+      <h2 id="detail-title">New task</h2>
+      <form id="edit-form" hidden>
+        <label>Status<select id="task-status"></select></label>
+        <label>Next step<textarea id="task-next" rows="3"></textarea></label>
+        <p id="task-owner" class="muted"></p>
+        <button type="submit" class="primary" id="save-task">Save changes</button>
+        <section class="notes"><h3>Notes</h3><div id="task-body"></div></section>
+      </form>
+      <form id="create-form" hidden>
+        <label>Title<input id="create-title" required maxlength="140" placeholder="What needs to happen?"></label>
+        <label>Details<textarea id="create-body" rows="7" placeholder="Add context for you and your agents…"></textarea></label>
+        <label>Next step<input id="create-next" placeholder="Where should work begin?"></label>
+        <button type="submit" class="primary" id="create-task">Create task</button>
+      </form>
+    </div>
+  </aside>
+</body>
+</html>

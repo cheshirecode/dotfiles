@@ -23,6 +23,7 @@ import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { boardControl, serveBoard } from "./board.js";
 
 const exec = promisify(execFile);
 
@@ -256,16 +257,50 @@ async function claimAccess(file, session) {
   return null;
 }
 
-const server = new McpServer({ name: "worklog-memory", version: "0.2.0" });
+const server = new McpServer({ name: "worklog-memory", version: "0.3.0" });
+const tools = new Map();
+function registerTool(name, description, schema, handler) {
+  tools.set(name, { schema: z.object(schema), handler });
+  server.tool(name, description, schema, handler);
+}
+async function invokeTool(name, args) {
+  const tool = tools.get(name);
+  if (!tool) throw new Error("Unknown tool");
+  return tool.handler(tool.schema.parse(args));
+}
 
-server.tool(
+registerTool(
+  "memory_update_status",
+  "Change a task status, including completing it. Active states use checkpoint; archived moves the task through the native archive helper. Claims remain session-owned.",
+  { slug: z.string().regex(SLUG), status: z.enum([...SCHEMA.statuses.valid]),
+    next_action: z.string().optional(), summary: z.string().optional(), session_id: SESSION.optional() },
+  async ({ slug, status, next_action, summary, session_id }) => {
+    if (status === "archived") return invokeTool("memory_archive", {
+      slug, reason: "shipped", summary: summary || `Completed ${slug}.`, session_id,
+    });
+    if (status === "blocked" && !next_action?.startsWith("Waiting on")) {
+      next_action = `Waiting on ${next_action || "the blocker to be resolved"}`;
+    }
+    return invokeTool("memory_checkpoint", { slug, status, next_action, session_id,
+      evidence: `command: memory_update_status — status changed to ${status}` });
+  }
+);
+
+registerTool(
+  "memory_board",
+  "Start or find the local task board for this vault. The UI and MCP read and update the same Worklog records. Return its URL; action=status does not start it.",
+  { action: z.enum(["open", "status", "stop"]).default("open") },
+  async ({ action }) => text({ ok: true, out: JSON.stringify(await boardControl({ repo: REPO, env: CHILD_ENV, action })) })
+);
+
+registerTool(
   "memory_projects",
   "List projects and child task progress in this vault.",
   { max_chars: MAX_CHARS },
   async ({ max_chars }) => readText(await run("project.sh", ["list"]), max_chars, "use memory_next for one project")
 );
 
-server.tool(
+registerTool(
   "memory_next",
   "Read the next dependency-ready, claim-eligible task. This does not acquire it; use memory_claim before work.",
   { project: z.string().regex(SLUG), max_chars: MAX_CHARS },
@@ -273,7 +308,7 @@ server.tool(
     `project=${project}; use memory_context for the selected task`)
 );
 
-server.tool(
+registerTool(
   "memory_claim",
   "Acquire or renew a session-owned task claim through Worklog arbitration. Supply slug for a task, or project to claim its next eligible task. Failure does not authorize work. Claims expire under the project's stale_after policy; checkpoint with the same session_id to renew.",
   { slug: z.string().regex(SLUG).optional(), project: z.string().regex(SLUG).optional(), session_id: SESSION },
@@ -284,7 +319,7 @@ server.tool(
   })
 );
 
-server.tool(
+registerTool(
   "memory_release",
   "Release a task claim owned by this caller session. Cannot release another session's claim.",
   { slug: z.string().regex(SLUG), session_id: SESSION },
@@ -298,7 +333,7 @@ server.tool(
   })
 );
 
-server.tool(
+registerTool(
   "memory_search",
   "Search the worklog vault. Default is a literal/regex grep over task bodies and the frontmatter index, returning slug-grouped hits. Set semantic=true for meaning-based search, which finds paraphrases a grep cannot — 'lock between concurrent agents' reaching a task about task mutexes.",
   {
@@ -348,7 +383,7 @@ server.tool(
   }
 );
 
-server.tool(
+registerTool(
   "memory_context",
   "Hydrate resume context for a task slug: frontmatter, recent commits, open next steps.",
   { slug: z.string().regex(SLUG), for: z.enum(["resume", "review", "compact"]).default("compact"), max_chars: MAX_CHARS },
@@ -356,7 +391,7 @@ server.tool(
     `task=${slug}; request for=resume with a larger max_chars or read the task file in the vault`)
 );
 
-server.tool(
+registerTool(
   "memory_task_create",
   "Create a new task file (draft) in the vault and commit it. Body is markdown after the frontmatter.",
   {
@@ -397,7 +432,7 @@ ${context}
     })
 );
 
-server.tool(
+registerTool(
   "memory_checkpoint",
   "Record typed evidence ('kind: ref — result') on a task and commit. Optionally flip status or next_action.",
   {
@@ -432,21 +467,19 @@ server.tool(
 // directory. The three read tools below close the other half of the loop —
 // without them a caller must already know a slug before it can do anything.
 
-server.tool(
+registerTool(
   "memory_archive",
-  "Archive cancelled or superseded work. Completed work needs human acceptance through the native archive CLI; shipped and merged are refused here.",
+  "Complete or archive a task with a summary. Moves it into archive, clears the claim, and commits through the native helper.",
   {
     slug: z.string().regex(SLUG),
     reason: z.enum(["shipped", "declined", "abandoned", "superseded", "merged", "obsolete"]),
     summary: z.string().min(1).describe("2-3 lines, written into frontmatter so the archive stays browsable"),
     superseded_by: z.string().regex(SLUG).optional().describe("required shape for reason=superseded"),
     pr: z.string().optional(),
+    session_id: SESSION.optional(),
   },
-  ({ slug, reason, summary, superseded_by, pr }) =>
+  ({ slug, reason, summary, superseded_by, pr, session_id }) =>
     serialized(async () => {
-      if (reason === "shipped" || reason === "merged") {
-        return text({ ok: false, out: "Completion needs human acceptance. Use memory_checkpoint with status=shipping and review evidence. The user can then run archive.sh <slug> --reason=shipped|merged --summary=<accepted result> in this vault. MCP cannot accept its own work." });
-      }
       const file = taskFile(slug);
       if (!file) return text({ ok: false, out: `task ${slug} not found` });
       if (file.includes(`${path.sep}archive${path.sep}`)) {
@@ -455,13 +488,13 @@ server.tool(
       // archive.sh only warns when a summary is missing, and the vault has
       // five archived tasks with none. An agent has no excuse, so require it.
       const why = reason === "superseded" && superseded_by ? `superseded by ${superseded_by}` : reason;
-      const args = [slug, `--reason=${why}`, `--summary=${summary}`, "--unclaimed-only"];
+      const args = [slug, `--reason=${why}`, `--summary=${summary}`, "--check-claim"];
       if (pr) args.push(`--pr=${pr}`);
-      return text(await run("archive.sh", args));
+      return text(await run("archive.sh", args, session_id ? { env: sessionEnv(session_id) } : {}));
     })
 );
 
-server.tool(
+registerTool(
   "memory_status",
   "What is in flight: recent task activity for this vault, without needing a slug first. Start here when resuming cold.",
   {
@@ -482,7 +515,7 @@ server.tool(
   }
 );
 
-server.tool(
+registerTool(
   "memory_related",
   "Prior-art probe across active and archive task bodies, or the list of project slugs already in use. Run BEFORE memory_task_create so a decision is not re-made under a new slug.",
   {
@@ -499,7 +532,7 @@ server.tool(
   }
 );
 
-server.tool(
+registerTool(
   "memory_lint",
   "Check task files against the vault's own rules. memory_checkpoint already lints what it commits; use this to inspect a task without writing, or to sweep the vault.",
   {
@@ -523,6 +556,12 @@ server.tool(
 await resolveVaultEnv();
 LDAP = await resolveLdap();
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
-console.error(`worklog-memory-mcp: serving vault ${REPO} as ${LDAP} (env: ${ENV_MODE})`);
+if (process.argv.includes("--board-server")) {
+  const portArg = process.argv.indexOf("--board-port");
+  await serveBoard({ repo: REPO, ldap: LDAP, bin: BIN, env: CHILD_ENV,
+    port: portArg < 0 ? undefined : Number(process.argv[portArg + 1]), invoke: invokeTool });
+} else {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error(`worklog-memory-mcp: serving vault ${REPO} as ${LDAP} (env: ${ENV_MODE})`);
+}

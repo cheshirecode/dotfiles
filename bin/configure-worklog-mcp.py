@@ -47,6 +47,7 @@ def configure(args):
             "args": [str(root / "packages/worklog-memory-mcp/server.js")],
             "env": {"WORKLOG_REPO": str(vault), "PATH": os.environ.get("PATH", os.defpath)},
         }
+        entries[name]["env"]["WORKLOG_MCP_VERSION"] = "0.3.0"
     paths = {
         "codex": Path(os.environ.get("CODEX_HOME", home / ".codex")) / "config.toml",
         "claude": home / ".claude.json",
@@ -104,6 +105,10 @@ def configure(args):
                 servers[name] = {**(previous or {}), **value}
             new = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
         changes.append((path, old, new))
+    link = home / ".local/bin/worklog-board"
+    source = root / "bin/worklog-board"
+    if link.exists() and not link.is_symlink():
+        raise ValueError(f"refusing to replace an existing command: {link}")
     # All inputs must pass before the first write.
     for path, old, new in changes:
         if old == new:
@@ -113,6 +118,12 @@ def configure(args):
         else:
             atomic_write(path, new)
             print(f"worklog-mcp: updated {path} ({len(entries)} vaults)")
+    if not (args.check or args.dry_run):
+        link.parent.mkdir(parents=True, exist_ok=True)
+        if not link.is_symlink() or link.resolve() != source:
+            link.unlink(missing_ok=True)
+            link.symlink_to(source)
+        print(f"worklog-mcp: board command available at {link}")
 
 
 def main():

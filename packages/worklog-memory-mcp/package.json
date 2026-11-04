@@ -1,20 +1,21 @@
 {
   "name": "worklog-memory-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP agent-memory server over a git worklog vault: FSM task files, typed evidence, resumable context packs \u2014 not embeddings soup.",
   "type": "module",
   "bin": {
     "worklog-memory-mcp": "server.js"
   },
   "scripts": {
-    "test": "node test/surface-sync.js && node test/schema-sync.js && node test/env-isolation.js && node test/tool-output.js && node test/semantic-states.js && node test/e2e.js && node test/projects.js",
+    "test": "node test/surface-sync.js && node test/schema-sync.js && node test/env-isolation.js && node test/tool-output.js && node test/semantic-states.js && node test/e2e.js && node test/projects.js && node test/board.js",
     "test:env": "node test/env-isolation.js",
     "test:e2e": "node test/e2e.js",
     "test:surface": "node test/surface-sync.js",
     "test:output": "node test/tool-output.js",
     "test:schema": "node test/schema-sync.js",
     "test:semantic": "node test/semantic-states.js",
-    "test:projects": "node test/projects.js"
+    "test:projects": "node test/projects.js",
+    "test:board": "node test/board.js"
   },
   "license": "MIT",
   "dependencies": {

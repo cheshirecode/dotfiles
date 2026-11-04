@@ -141,7 +141,7 @@ else bad(`lint failed: ${(lint.result?.content?.[0]?.text || "").slice(0, 200)}`
 // The terminal transition. Before this existed a task could be started and
 // advanced through the MCP but never finished.
 const archived = await b.call("memory_archive", {
-  slug: "e2e-memory-round-trip", reason: "obsolete",
+  slug: "e2e-memory-round-trip", reason: "shipped",
   summary: "e2e round trip completed; archived by the same server that created it.",
 });
 if (!archived.result.isError) ok("session B archives the task");

@@ -19,6 +19,7 @@ set -euo pipefail
 SLUG=""
 ORIGINAL_ARGS=("$@")
 UNCLAIMED_ONLY=0
+CHECK_CLAIM=0
 PR=""
 REASON="shipped"
 SUMMARY=""
@@ -29,6 +30,7 @@ while [[ $# -gt 0 ]]; do
     --reason=*)   REASON="${1#--reason=}" ;;
     --summary=*)  SUMMARY="${1#--summary=}" ;;
     --unclaimed-only) UNCLAIMED_ONLY=1 ;;
+    --check-claim) CHECK_CLAIM=1 ;;
     --pr)         PR="$2"; shift ;;
     --reason)     REASON="$2"; shift ;;
     --summary)    SUMMARY="$2"; shift ;;
@@ -42,6 +44,7 @@ usage: archive.sh <slug> [--pr=N] [--reason="..."] [--summary="..."]
   --summary  2-3 line summary written into frontmatter summary: for archive
              browsability. Recommended — warns if absent.
   --unclaimed-only  refuse claimed tasks; used by the MCP cancellation path
+  --check-claim     allow unclaimed tasks or claims owned by the caller session
 EOF
       exit 0
       ;;
@@ -72,7 +75,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/_lib.sh"
 REPO_ROOT="$(resolve_worklog_repo)" || exit 1
 cd "$REPO_ROOT"
-if [[ "$UNCLAIMED_ONLY" -eq 1 && "${WORKLOG_CLAIM_LOCKED:-}" != 1 ]]; then
+if [[ "$((UNCLAIMED_ONLY + CHECK_CLAIM))" -gt 0 && "${WORKLOG_CLAIM_LOCKED:-}" != 1 ]]; then
   WORKLOG_CLAIM_LOCKED=1 exec python3 "$SCRIPT_DIR/_flock.py" \
     .cache/claims/lock -- "$0" "${ORIGINAL_ARGS[@]}"
 fi
@@ -86,10 +89,10 @@ if [[ ! -f "$SRC" ]]; then
   echo "archive: $SRC not found" >&2
   exit 1
 fi
-if [[ "$UNCLAIMED_ONLY" -eq 1 ]]; then
+if [[ "$((UNCLAIMED_ONLY + CHECK_CLAIM))" -gt 0 ]]; then
   claim_session="$(python3 "$SCRIPT_DIR/_claim.py" read "$SRC" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("session_id") or "")')"
-  if [[ -n "$claim_session" ]]; then
-    echo "archive: release the task claim before cancelling it" >&2
+  if [[ -n "$claim_session" && ( "$UNCLAIMED_ONLY" -eq 1 || "$claim_session" != "$(resolve_session_id)" ) ]]; then
+    echo "archive: task is claimed by another session; acquire it before archiving" >&2
     exit 1
   fi
 fi
