@@ -87,10 +87,10 @@ Reconcile attempt identities so a duplicate return cannot count as new output.
 
 ## Improve the factory with controlled experiments
 
-For a reported failure or human correction, retain the smallest replayable input,
-expected and observed results, and the attempt reference. Replay it against the
-unchanged harness before changing the guide or tool. Where practical, preserve
-the confirmed failure as a regression test or eval, then rerun it on the candidate.
+For a reported failure or human correction, save replay inputs, expected/observed
+results, and source identity. Reproduce it before changing the guide or tool.
+Use [executable constraints](quality.md#executable-constraints) to select a check
+for the confirmed failure. Reuse adequate coverage and verify the repair with that check.
 This connects feedback to implementation as in
 [OpenAI's agent improvement loop](https://developers.openai.com/cookbook/examples/agents_sdk/agent_improvement_loop).
 

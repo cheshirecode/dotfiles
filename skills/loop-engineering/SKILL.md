@@ -5,39 +5,35 @@ description: "Run bounded, evidence-driven loops for repeated, resumable, delega
 
 # loop-engineering
 
-Use the driver to track an observable goal, evidence, budget, next action, and
-terminal status. The agent chooses and verifies actions; the driver records them.
-User instructions govern scope and authorization; this skill adds no permissions.
+Track goal, evidence, budget, next action, and status with the driver.
+The agent chooses and verifies actions. User instructions govern permissions.
 
 ## Define done first
 
-Before implementation or delegation, record the expected outcome, its checks,
-and the accepting owner. Ground the expectation in the user's request and the
-current system before reading a generated proposal. For a simple task, one
-outcome and one check suffice; no separate planning phase is needed.
-[Acceptance](references/acceptance.md) owns independent expectations, targeted
-review, and the final decision. Required user and repository checks still apply.
+Before implementation or delegation, define outcome, checks, and accepting owner
+from the user's request and current system. Use [acceptance.md](references/acceptance.md)
+for independent expectations, proposal exposure, and the final decision.
+Simple work needs one outcome and one check. Required reviews still apply.
 
 ## Route
 
-Load only the needed rules. GPT Astra, Sol and Claude Fable use the same workflow;
-model guidance tunes its use, while host capabilities determine what can run.
+Read only the applicable procedure; all models use this contract.
 
 | Need | Read |
 | --- | --- |
 | One action and one check | Work directly; no loop state |
-| Material uncertainty about goal, scope, effects, or task split | [interrogate.md](references/interrogate.md) before initialization |
+| Material uncertainty about scope, effects, or task split | [interrogate.md](references/interrogate.md) before initialization |
 | Repeated or resumable work | Driver below; [protocol.md](references/protocol.md) for exact state/effect rules |
-| Software engineering factory: intake through delivery and improvement | [factory.md](references/factory.md) |
+| Software factory: intake through improvement | [factory.md](references/factory.md) |
 | Harness design, routing patterns, or workflow boundaries | [harness-design.md](references/harness-design.md) |
-| Concurrent delegates, or a delegate's model lane | [crew.md](references/crew.md) |
+| Delegates and model lanes | [crew.md](references/crew.md) |
 | Three or more Worklog tasks | [orchestrator.md](references/orchestrator.md) |
-| Astra/Fable prompting, Sol orchestration, or another model | [models.md](references/models.md) |
+| Model-specific prompting | [models.md](references/models.md) |
 | Tool availability, installation, OS, or recurrence | [hosts.md](references/hosts.md) |
-| Validate native Claude Code, GPT/Codex or OpenCode execution and usage | [native-harnesses.md](references/native-harnesses.md) |
+| Native harness execution and usage | [native-harnesses.md](references/native-harnesses.md) |
 | Resume, delegation, or compaction | [durable-context.md](references/durable-context.md) |
 | Any message to the user | [user-output.md](references/user-output.md) |
-| Code quality or architectural boundaries | [quality.md](references/quality.md) |
+| Regression guards, state checks, budgets, or architecture | [quality.md](references/quality.md) |
 | Repeated trials judged by one metric | [experiments.md](references/experiments.md) |
 | Brittle state/evidence sequencing | [examples.md](references/examples.md) |
 | Long session, context filling up | [context-budget.md](references/context-budget.md) |
@@ -45,12 +41,10 @@ model guidance tunes its use, while host capabilities determine what can run.
 
 ## Drive one cycle
 
-Invoke with `Use loop-engineering. Goal: <observable outcome>.`
-Resolve `<skill-dir>` to the loaded skill directory; use
-[resolvers.md](references/resolvers.md) only if that path is unknown.
-Create `<run-dir>` in system temporary storage (`mktemp -d`, `$TMPDIR`, or the
-host equivalent). Keep transient state, evidence-gate JSON, logs and snapshots
-there, outside the worktree. Durable handoffs follow durable-context.md.
+Invoke with `Use loop-engineering. Goal: <observable outcome>.` Use the loaded
+`<skill-dir>`; [resolvers.md](references/resolvers.md) handles unknown paths.
+Create `<run-dir>` in system temporary storage, outside the worktree, for state,
+gates and logs. [durable-context.md](references/durable-context.md) owns handoffs.
 
 ```bash
 python3 <skill-dir>/scripts/loop_run.py <run-dir> --goal "<observable outcome>"
@@ -60,79 +54,56 @@ python3 <skill-dir>/scripts/loop_run.py <run-dir> --stop complete \
   --verification "<evidence-gate verification value>" --evidence "artifact: <ref> — <outcome>"
 ```
 
-Declare `--allowed-effect` and `--approval-boundary` at init for runs that can
-write or affect external systems. Honor the user's budget and any minimum;
-the driver defaults to 20 turns. `--repo` selects the radar target (otherwise
-cwd's Git root); `--project <slug>` enables the Worklog queue on every cycle.
-Neither option changes a tool's cwd or authorizes dispatch.
-Repeat `--evidence` for each short record in one cycle; all records are saved.
-Repeat `--allowed-effect` at init to preserve each permitted effect.
+For writes or external effects, declare `--allowed-effect` and `--approval-boundary` at init.
+Honor the user's budget and minimum; the default is 20 advances, not tool calls.
+`--repo` selects the radar target (default: cwd's Git root); `--project <slug>`
+enables the Worklog queue. Neither changes cwd or authorizes dispatch.
+Repeat `--evidence` for each record and `--allowed-effect` for each allowed effect.
 
-1. Read the definition of done and current evidence; choose the smallest useful
-   action.
-2. Check the target and existing authorization before a mutation. Apply the
-   [effect boundary](references/effects.md); serialize shared writes.
-3. Execute and compare the result with the declared checks. Batch independent
-   reads when the host supports it; inspect every result. Repeat checks only for new changes,
-   failures, unresolved concerns, or a required validation gate.
-4. Record short typed lines: `kind: reference — result`. Kinds are `command`,
-   `artifact`, `git`, `github`, `url`. Keep verbose output in the artifact;
-   state is an index, not a log. Preserve producer exit codes.
-5. If work remains, advance once and keep working while state is `running`.
-   On success, make the acceptance decision, require the evidence gate, then stop
-   complete. Otherwise use the protocol's terminal outcome and recovery action.
+1. Choose the smallest action from the definition of done and current evidence.
+2. Check target and authority under [effects.md](references/effects.md); serialize shared writes.
+3. Execute and check the declared outcome. Batch independent reads; inspect each
+   result. Repeat checks only for changes, failures, open concerns, or required gates.
+4. Save `kind: reference — result` records using `command`, `artifact`, `git`,
+   `github`, or `url`. Keep full logs outside state and preserve producer exit codes.
+5. Advance once if work remains. Continue while `running`; accept against the
+   contract and evidence gate before stopping complete. Other outcomes need the
+   [protocol's recovery action](references/protocol.md#terminal-outcomes-and-intervention).
 
-Each call reports state, radar and queue. `error=` is an unavailable or failed
-probe, never a clean radar or empty queue. A radar sample does not monitor the
-interval between calls, and a single owner does not prove isolation. The driver
-neither delegates work nor schedules wakeups; crew and host guidance own those.
-State lives in `<run-dir>/loop_state.json`; `run.json` holds driver configuration.
-Do not hand-edit state JSON or mix raw state writes with an active driver.
+Calls report state, radar and queue; `error=` means a failed or unavailable probe.
+Radar samples prove neither continuous monitoring nor isolation. The driver does
+not dispatch or schedule. State is in `loop_state.json`, configuration in `run.json`.
+Do not hand-edit state or mix raw state writes with an active driver.
 
-Give brief progress updates when findings or next steps matter. Use concrete
-language and the structure the user needs; include essential results in the
-final reply even when tool output is hidden. Report decisions, evidence and
-uncertainty, rather than private reasoning or a process transcript.
-Apply [the user-output rule](references/user-output.md) to every user-facing
-message in this loop, including progress, questions, and the final reply.
+Report material progress, evidence, and uncertainty; make the final reply
+self-contained. Apply [user-output.md](references/user-output.md) to every message to the user.
 
 ## UI feature loops
 
-Before editing, list named `Given / When / Then` cases for each requested UI
-behavior and relevant regression. Give each case a repeatable check, expected
-observable result, and target build or preview. Prefer executable browser
-tests; when automation is unavailable, record the same case-by-case observations
-from real interactions in the user's main browser.
+Before editing, define named `Given / When / Then` cases for each behavior and
+relevant regression, with checks, expected results, and target revision/preview.
+Prefer executable browser tests.
 
-For executable cases, run
-`python3 <skill-dir>/scripts/ui_feature_gate.py <manifest.json>` after committing
-the change. The [UI gate contract](references/ui-feature-gate.md) defines the
-manifest and output. The runner checks a clean exact revision, builds, verifies
-an applicable preview serves that revision, executes every browser case, and
-requires a nonempty evidence artifact per case. It stops on the first failure;
-fix the cause and rerun the whole cycle. Include its result in the evidence gate.
-For cases that cannot be automated, keep case-by-case main-browser observations
-as separate runtime evidence and leave the scripted check unverified.
+After committing a clean revision, follow [the UI gate contract](references/ui-feature-gate.md)
+and run `python3 <skill-dir>/scripts/ui_feature_gate.py <manifest.json>`.
+It builds, verifies applicable preview identity, and checks every case and artifact.
+Inspect the artifacts for relevance. Fix failures and rerun the whole cycle;
+include the result in the evidence gate.
 
-Confirm UI completion only when every requested user-visible behavior has
-runtime evidence from the exact revision. If browser or preview verification is
-blocked, report the failed check, cause, and next action; leave completion
-unverified.
+For manual cases, record actual interactions in the user's main browser and keep
+scripted checks unverified. Completion needs runtime evidence for every requested
+behavior at that revision. Report a blocked check, its cause, and next action;
+leave the outcome unverified.
 
 ## Public PR gate
 
-Before creating or editing a public PR, prepare its title and body locally. In
-this repository, run `bin/pr-publication-gate.sh` with the base ref, title file,
-and body file on the exact branch head. It checks proposed text, added lines,
-and tracked files with the repository privacy scan, plus reviewer-text patterns
-on the title and body. Elsewhere use the available repository secret scan and
-the `pr-review` leak scan before publishing. Review names, paths, URLs, and test
-evidence for private context that pattern scans may miss. Keep private evidence
-in local artifacts; publish only public outcomes. A later body edit does not
-erase GitHub's edit history, so repeat the gate before every PR write.
+Before each public PR write, prepare title/body locally and scan the exact head.
+In dotfiles, run `bin/pr-publication-gate.sh <base-ref> <title-file> <body-file>`.
+Elsewhere use the repository secret scan and `pr-review` leak scan.
+Inspect names, paths, URLs, and evidence for private context; keep private artifacts
+local. Repeat after edits: GitHub retains body history.
 
 ## Compose with installed skills
 
-When choosing another skill, read [composition.md](references/composition.md)
-for triggers and compact handoffs. Use an already-selected owner directly; do
-not preload other skills. Completion still requires `$evidence-gate`.
+Use [composition.md](references/composition.md) for selection and compact handoffs.
+Call an already-selected owner directly; completion still requires `$evidence-gate`.

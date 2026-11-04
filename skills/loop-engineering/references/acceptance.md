@@ -1,20 +1,18 @@
 # Definition of done and acceptance
 
-Use before substantive implementation or delegation, and when accepting a result.
-Keep the record in the task or run artifact; do not add a new state schema.
+Record the contract in the task or run artifact before substantive work.
+Use the existing state schema.
 
 ## Form an expectation
 
-Use the user's request and current system behavior to define:
+From the user's request and current behavior, define:
 
-- The observable outcome and relevant behavior that must remain intact.
-- Expected results, failure conditions, and checks at the actual target boundary.
-- The accepting owner, permitted effects, and requested delivery stage.
+- Outcome, behavior to preserve, expected results, and failure conditions.
+- Checks at the actual boundary, accepting owner, permitted effects, and delivery stage.
 
-Set these before reading the generated solution or delegate's return. A simple
-task needs only one outcome and its check. Use existing project checks where
-they answer the requirement. Resolve material unknowns through
-[plan readiness](interrogate.md); do not require a questionnaire for clear work.
+Set these before reading generated solutions or worker returns. Simple work needs
+one outcome and check. Reuse relevant project checks; [plan readiness](interrogate.md)
+handles material unknowns without adding a questionnaire to clear work.
 
 If a generated proposal is already visible, record that exposure rather than
 inventing a prior expectation. Build the checks from the user's requirements and
@@ -22,35 +20,28 @@ independent source or runtime evidence before further work.
 
 ## Keep ownership of the decision
 
-For an unfamiliar component or consequential design choice, inspect the decisive
-source or runtime behavior before accepting a proposed mechanism. Record the
-relevant assumption, expected failure behavior, and concise reason for the choice.
-Use conceptual questions to fill a knowledge gap before requesting more code.
-Do not request private reasoning transcripts or claim a user understands a change
-because an agent supplied an explanation.
+For unfamiliar or consequential mechanisms, inspect decisive source or runtime
+behavior. Record the assumption, failure behavior, and concise reason for the
+choice. Resolve knowledge gaps before requesting more code. An agent's explanation
+does not establish the user's understanding.
 
-Keep the declared checks stable while evaluating the candidate. A changed
-requirement needs its reason and authority recorded, then affected checks rerun.
-A persuasive explanation, passing unrelated tests, or reviewer agreement cannot
-resolve an observation that contradicts the requirement. Follow the
-[replan rule](interrogate.md#replan) for that contradiction.
+Keep checks stable during evaluation. Record the reason and authority for changed
+requirements, then rerun affected checks. Contrary observations require
+[replanning](interrogate.md#replan); persuasion, unrelated tests, and reviewer
+agreement cannot settle them.
 
 ## Review a specific question
 
-Complete reviews required by the user or repository. Add optional review only
-for a concrete unresolved risk, assumption, or disagreement. State the question
-and the evidence that would settle it; bound the attempt and stop when answered.
-Do not start a critique wave when the declared checks already establish done.
+Complete required reviews. Optional review needs a concrete unresolved question,
+settling evidence, and bounded attempt. Stop when answered; add no critique wave
+when the declared checks establish done.
 
 ## Accept against the contract
 
-The accepting owner checks the change, its mechanism, and whether evidence proves
-each declared outcome at the current revision. If a critical
-part cannot be explained, inspect that part or run a discriminating check.
-Then use the evidence gate. Its coverage result cannot make this decision.
-Leave an unmet outcome unverified and name the next resolving action.
+The owner checks the change, mechanism, and evidence for every outcome at the
+current revision. Inspect or test critical parts that cannot be explained.
+Then use the evidence gate; coverage cannot make the acceptance decision.
+Unmet outcomes remain unverified with a resolving next action.
 
-This applies [Cognitive Surrender](https://addyosmani.com/blog/cognitive-surrender/)
-to the existing loop: establish expectations before generation, retain the
-decision, and finish on relevant evidence. It is workflow guidance, not a claim
-that agent checks measure a human's understanding.
+Adapted from [Cognitive Surrender](https://addyosmani.com/blog/cognitive-surrender/):
+retain expectations, decisions, and evidence. Agent checks do not measure human understanding.
