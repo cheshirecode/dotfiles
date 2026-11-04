@@ -1,17 +1,16 @@
 # Software engineering factory
 
 Use when the objective is a repeatable system for producing verified software
-changes and improving how they are produced. Keep a single small fix on the
-ordinary driver path. A factory can run serially; it does not imply a fleet of
+changes and improving how they are produced. A single task uses the default
+one-shot path. A factory can run serially; it does not imply a fleet of
 agents, a scheduler, deployment authority, or a new state engine.
 
-## Two loops, separate decisions
+## One work order per run
 
-The outer loop selects the next eligible deliverable, accepts or returns its
-result, and learns from observed production failures. An inner loop works on one
-bounded change: perceive current state, plan a falsifiable step, act, observe the
-actual result, then reflect against its acceptance checks. Planning text and a
-successful tool invocation do not establish a successful change.
+Use the default one-shot flow for each work order. Select the next deliverable
+after the current one meets its requested stage or returns a concrete blocker.
+Keep queue ownership separate from task execution. Planning text and successful
+tool invocation do not establish a successful change.
 
 Use the existing driver for each resumable loop. Keep the outer budget and
 deadline visible to the inner run; cap inner work by the remaining outer budget

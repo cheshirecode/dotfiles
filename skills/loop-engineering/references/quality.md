@@ -19,6 +19,16 @@ them at the appropriate build or runtime boundary.
 This adapts [poteto's development notes](https://x.com/poteto/status/2117043478140276847)
 to existing project tools and requirements.
 
+## Scope a state-model check
+
+For an ordering or state risk, name one safety property, the states/transitions,
+bounds, and environment assumptions. Confirm that a broken variant produces a
+counterexample; explain its steps in implementation terms and replay the relevant
+implementation behavior. A model pass covers only that model and its assumptions.
+
+This uses the applicable rules from pstack's
+[formal-verification skill](https://github.com/cursor/plugins/blob/180939f9e59cc9512e9330649175763e81fad16f/pstack/skills/create-formal-verification-skill/SKILL.md).
+
 ## Measure change risk
 
 Start with the project's verification command and the changed behavior. Use its

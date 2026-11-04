@@ -5,6 +5,7 @@ agents or orchestration code.
 
 | Work shape | Pattern | Existing procedure |
 | --- | --- | --- |
+| One scoped work order | One owner executes and checks verifiable units through delivery | [Default flow](../SKILL.md#one-shot-execution) |
 | Known request with one owner | Thin router selects that owner | [Skill composition](composition.md) |
 | Fixed phases with known inputs | Workflow plan sequences existing specialists | [Work order](factory.md#turn-demand-into-an-executable-contract) and [stage checks](factory.md#advance-by-stage-evidence) |
 | Independent branches worth the dispatch cost | Parallel workers with one accepting parent | [Crew](crew.md#ownership-and-dispatch) |
@@ -23,6 +24,11 @@ actual controls before claiming those limits. Keep trace data within the
 [existing privacy boundary](durable-context.md#compact-pack).
 
 ## Source scope
+
+The one-shot flow extracts verifiable units, real-artifact proof, premise checks
+after repeated failures, and effect reconciliation from
+[pstack](https://github.com/cursor/plugins/tree/180939f9e59cc9512e9330649175763e81fad16f/pstack).
+Its setup, model defaults, review panels, and permission rules are not imported.
 
 This map applies the public excerpts of
 [Agents are microservices](https://read.bytesizeddesign.com/p/agents-are-microservices-that-think)
