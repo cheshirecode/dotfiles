@@ -35,7 +35,7 @@ Read only the applicable procedure; all models use this contract.
 | Need | Read |
 | --- | --- |
 | One work order | Flow above; no persistent driver state required |
-| Material uncertainty about scope, effects, or task split | [interrogate.md](references/interrogate.md) before initialization |
+| Material uncertainty about scope, effects, or task split | [interrogate.md](references/interrogate.md) before execution |
 | Checkpoint, resume, or scheduler-owned run | Optional driver below; [protocol.md](references/protocol.md) |
 | Software factory: intake through improvement | [factory.md](references/factory.md) |
 | Harness design, routing patterns, or workflow boundaries | [harness-design.md](references/harness-design.md) |

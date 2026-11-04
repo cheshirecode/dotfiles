@@ -1,7 +1,7 @@
 # Definition of done and acceptance
 
 Record the contract in the task or run artifact before substantive work.
-Use the existing state schema.
+Use the existing state schema when a durable driver is active.
 
 ## Form an expectation
 
@@ -40,7 +40,8 @@ when the declared checks establish done.
 
 The owner checks the change, mechanism, and evidence for every outcome at the
 current revision. Inspect or test critical parts that cannot be explained.
-Then use the evidence gate; coverage cannot make the acceptance decision.
+Use the evidence gate for multiple completion criteria; coverage cannot make
+the acceptance decision.
 Unmet outcomes remain unverified with a resolving next action.
 
 Adapted from [Cognitive Surrender](https://addyosmani.com/blog/cognitive-surrender/):
