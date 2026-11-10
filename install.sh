@@ -24,8 +24,16 @@ holds_user_data() {
 backup() {
   local target="$1"
   if [ -e "$target" ] || [ -L "$target" ]; then
-    if mv "$target" "$target.bak"; then
-      echo "Moved $target to $target.bak..."
+    # Never mv onto an existing path: when "$target.bak" is a symlink to a
+    # directory, mv follows it and drops $target INSIDE that directory.
+    # Measured 2026-10-28: 21 skill links landed as skills/<name>/<name> in
+    # the checkout. A free name keeps every earlier backup as well.
+    local bak="$target.bak"
+    if [ -e "$bak" ] || [ -L "$bak" ]; then
+      bak="$target.bak-$(date +%Y%m%d%H%M%S)-$$"
+    fi
+    if mv "$target" "$bak"; then
+      echo "Moved $target to $bak..."
     else
       # Non-fatal: an unmovable target (mountpoint, EBUSY) must not abort the
       # installer. The ln -sfn calls below replace it in place instead.
