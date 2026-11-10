@@ -302,7 +302,9 @@ if [ -d "$REPO_DIR/skills" ]; then
       if [ -L "$starget" ] && [ "$(readlink "$starget")" = "${skill%/}" ]; then
         continue
       fi
-      backup "$starget"
+      # A link holds no data; ln -sfn replaces it in place. Backing it up left
+      # <name>.bak beside it, which every skill host loads as a second skill.
+      [ -L "$starget" ] || backup "$starget"
       echo "Symlinking skill $sname into $starget..."
       ln -sfn "${skill%/}" "$starget" || echo "warning: could not link $starget; skipping." >&2
     done
