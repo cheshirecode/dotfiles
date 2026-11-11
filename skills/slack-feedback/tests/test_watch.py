@@ -131,6 +131,17 @@ class WatchTest(unittest.TestCase):
         self.assertIsNone(self.state['cursor'])
         self.assertEqual(sum(bool(h['error']) for h in self.state['history']), 3)
 
+    def test_failed_inflight_poll_cannot_reopen_stopped_watch(self):
+        for now in (1, 12):
+            self.event('poll-start', now)
+            self.event('poll-failed', now, error='Offline')
+        self.event('poll-start', 33)
+        self.event('stop', 34)
+        self.event('poll-failed', 35, error='Interrupted by stop')
+        self.assertEqual(self.state['mode'], 'stopped')
+        with self.assertRaises(ValueError):
+            self.event('resume', 36)
+
     def test_cadence_and_interrupted_poll(self):
         self.event('poll-start')
         with self.assertRaises(ValueError):

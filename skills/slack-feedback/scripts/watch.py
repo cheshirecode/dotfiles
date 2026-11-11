@@ -93,7 +93,7 @@ def apply(state, event, now):
         retry_after = event.get('retry_after_seconds', 0)
         require(type(retry_after) in (int, float) and retry_after >= 0, 'Invalid Retry-After')
         s['retry_at'] = now + max(delay, retry_after)
-        if s['failures'] >= 3:
+        if s['failures'] >= 3 and s['mode'] == 'active':
             s['mode'] = 'paused'
     elif kind in ('read', 'case'):
         runnable(s, now)
