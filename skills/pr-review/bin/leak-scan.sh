@@ -46,7 +46,7 @@ SKILL_COMMANDS=(
   artifact-gate brainstorm browser-use-setup council evidence-gate
   example-led-instructions fast-crawl job-application job-search
   karpathy-guidelines loop-engineering
-  loop-helpers pr-cost pr-review requirement-sync serena-rg-search ship-hygiene
+  loop-helpers pr-cost pr-review requirement-sync serena-rg-search ship-hygiene slack-feedback
   tightening-a-pr webmcp-integration which-model worklog
 )
 
