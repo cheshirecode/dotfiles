@@ -323,6 +323,11 @@ if missing:
     raise SystemExit(1)
 PY
   then ok "evidence-gate contract"; else fail "evidence-gate contract"; fi
+  if python3 -m unittest discover -s skills/slack-feedback/tests -p 'test_*.py'; then
+    ok "Slack feedback ledger recovery and evidence controls (offline)"
+  else
+    fail "Slack feedback ledger recovery and evidence controls (offline)"
+  fi
   if python3 -m unittest discover -s tests -p test_skill_context.py; then
     ok "skill route context measurement"
   else
