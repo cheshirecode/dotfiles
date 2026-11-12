@@ -84,6 +84,18 @@ for c in "${todo[@]}"; do
   fi
 done
 
+# Public merged back into the source (a PR merged on GitHub, then pulled): the
+# merge is the tip and git cherry lists no merges, so the last clean commit is
+# not a descendant of $PUB and pushing it is refused as a non-fast-forward.
+# Every listed commit was clean, so fast-forward to the source tip itself once
+# the merges on the way pass the same scan.
+if [ "$linear" = 1 ] && [ -n "$ff" ] && ! git merge-base --is-ancestor "$PUB" "$ff"; then
+  while IFS= read -r m; do
+    clean "$m" || { echo "  PRIVATE  $(git log -1 --format='%h %s' "$m") (merge; stays on ${SRC%%/*})"; ff=""; private=$((private + 1)); }
+  done < <(git rev-list --merges "$PUB..$SRC")
+  [ -n "$ff" ] && { ff="$(git rev-parse "$SRC")"; echo "  ff       $(git log -1 --format='%h %s' "$ff") (merge tip)"; }
+fi
+
 if [ -z "$ff" ] && [ "${#picks[@]}" = 0 ]; then
   echo "publish-public: nothing clean to publish ($private private)"
   exit 0

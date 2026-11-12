@@ -7,6 +7,7 @@
 #   3. rerun                   -> nothing to do (patch-id sees the copy)
 #   4. clean commit built on a private one -> conflict, nothing pushed
 #   5. dry run                 -> never pushes
+#   6. public merged back into main -> fast-forward to main's tip
 # Runs in a scratch repo with two local bare remotes and the real gate wired.
 
 set -uo pipefail
@@ -51,6 +52,19 @@ before="$(pub)"
 publish
 grep -q 'ff .*add gamma' <<<"$OUT" || note "dry run did not plan the fast-forward"
 [ "$(pub)" = "$before" ] || note "dry run pushed"
+
+# 6. Public got ahead (a PR merged on GitHub) and main merged it back: still a
+#    fast-forward, to main's own tip. The merge is the tip and git cherry lists
+#    no merges, so the last clean commit it offers (gamma, from before the
+#    merge) is not a descendant of the public tip.
+git clone -q "$TMP/github.git" "$TMP/side"
+( cd "$TMP/side" && printf 'pr\n' > e.md && git add e.md &&
+  git -c core.hooksPath=/dev/null commit -q -m "add pr work" && git push -q origin main )
+git fetch -q github
+git -c core.hooksPath=/dev/null merge -q --no-edit github/main && git push -q origin main
+publish --apply
+[ "$RC" = 0 ] || note "publish after merging public back exited $RC: $OUT"
+[ "$(pub)" = "$(git rev-parse main)" ] || note "public main is not the private tip after a merge-back: $OUT"
 
 # 2. A private commit stays back; the clean one after it is cherry-picked.
 commit p.md "org $LEAK-ai" "add private notes"
