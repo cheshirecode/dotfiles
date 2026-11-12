@@ -99,3 +99,11 @@ local. Repeat after edits: GitHub retains body history.
 
 Use [composition.md](references/composition.md) for selection and compact handoffs.
 Call an already-selected owner directly; use `$evidence-gate` for multiple completion criteria.
+
+## Optional Slack feedback
+
+When the user explicitly requests ongoing feedback from a Slack thread, use
+`$slack-feedback` if installed. It owns the thread cursor, acknowledgements and
+case evidence; execute each fixed repair batch with this skill. A thread link or
+ordinary read does not activate a watch. Keep watch state separate from the task
+journal, and do not create a scheduler without explicit authorization.

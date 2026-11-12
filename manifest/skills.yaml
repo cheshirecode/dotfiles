@@ -105,6 +105,15 @@ skills:
       path: skills/loop-engineering
     install_to: ~/.claude/skills/loop-engineering
 
+  - name: slack-feedback
+    description: Optional Slack thread feedback intake with resumable cases and evidence.
+    optional: true
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/slack-feedback
+    install_to: ~/.claude/skills/slack-feedback
+
   - name: pr-cost
     description: Record per-PR AI cost payloads — ledger plus optional idempotent PR comment.
     source:
