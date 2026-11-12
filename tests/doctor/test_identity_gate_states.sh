@@ -9,6 +9,8 @@
 #
 #   armed        hook installed AND domain set            -> OK
 #   disarmed     hook installed, domain unset             -> FAIL (reports and skips)
+#   git config   hook installed, no env, `git config --local worklog.identityDomain`
+#                set (the hook's own fallback, set by bootstrap.sh) -> OK
 #   no hooks     no worklog hooks at all                  -> FAIL (lint skipped too)
 #   hook absent  worklog hooks, no identity hook          -> FAIL (protects nothing)
 #   chained      outer hooksPath, links in .git/hooks/    -> judged by .git/hooks/
@@ -41,7 +43,7 @@ fi
 T="$(mktemp -d)"; T="$(cd "$T" && pwd -P)"
 trap 'rm -rf "$T"' EXIT
 
-# Build a vault. $2 = "armed" | "disarmed" | "nohook" | "noidentity" | "chained"
+# Build a vault. $2 = "armed" | "disarmed" | "nohook" | "noidentity" | "chained" | "gitconfig"
 make_vault() {
   local v="$T/$1" mode="$2" h
   mkdir -p "$v"
@@ -65,6 +67,7 @@ make_vault() {
   else
     printf 'export SOMETHING_ELSE=1\n' > "$v/.envrc"
   fi
+  [ "$mode" = gitconfig ] && git -C "$v" config --local worklog.identityDomain probe.example
   direnv allow "$v" >/dev/null 2>&1
   echo "$v"
 }
@@ -95,6 +98,17 @@ if printf '%s' "$out" | grep -q "FAIL .*$disarmed identity gate DISARMED"; then
   ok "hook installed but domain unset reports FAIL, not OK"
 else
   bad "disarmed vault was not reported as FAIL: $(printf '%s' "$out" | grep -F "$disarmed")"
+fi
+
+# The hook reads WORKLOG_IDENTITY_DOMAIN, else `git config --local
+# worklog.identityDomain`. A doctor that reads only the env var reports a gate
+# the hook enforces as DISARMED: the check measured something adjacent.
+gitcfg="$(make_vault cfgdomain gitconfig)"
+out="$(gate_lines "$gitcfg")"
+if printf '%s' "$out" | grep -q "OK .*$gitcfg identity gate armed"; then
+  ok "a domain set only in git config (the hook's fallback) reports OK"
+else
+  bad "a domain set only in git config was not reported OK: $(printf '%s' "$out" | grep -F "$gitcfg")"
 fi
 
 nohook="$(make_vault nohook nohook)"

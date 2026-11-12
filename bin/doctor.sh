@@ -335,17 +335,26 @@ for vault in "${VAULTS[@]}"; do
     fail "$short identity hook not installed (bin/install-hooks.sh --write)"
     continue
   fi
+  # Resolve the domain the way pre-commit-identity does: WORKLOG_IDENTITY_DOMAIN,
+  # else the clone's `git config --local worklog.identityDomain`. Reading only
+  # the env var reported a gate the hook enforces as DISARMED.
+  cfg_domain="$(git -C "$vault" config --local --get worklog.identityDomain 2>/dev/null)"
   if ! command -v direnv >/dev/null; then
-    unknown "$short gate unverifiable: direnv missing, so WORKLOG_IDENTITY_DOMAIN cannot be read the way a commit reads it"
+    if [[ -n "$cfg_domain" ]]; then
+      ok "$short identity gate armed (worklog.identityDomain)"
+    else
+      unknown "$short gate unverifiable: direnv missing, so WORKLOG_IDENTITY_DOMAIN cannot be read the way a commit reads it"
+    fi
     continue
   fi
   # Read it from the vault, not from here: an export in a parent scope proves
   # nothing about what the consumer sees.
   domain="$(cd "$vault" && direnv exec . sh -c 'printf %s "${WORKLOG_IDENTITY_DOMAIN:-}"' 2>/dev/null)"
+  [[ -n "$domain" ]] || domain="$cfg_domain"
   if [[ -n "$domain" ]]; then
     ok "$short identity gate armed"
   else
-    fail "$short identity gate DISARMED: hook installed but WORKLOG_IDENTITY_DOMAIN unset, so it reports and skips"
+    fail "$short identity gate DISARMED: hook installed but neither WORKLOG_IDENTITY_DOMAIN nor worklog.identityDomain is set, so it reports and skips"
   fi
 done
 
