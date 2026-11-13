@@ -523,4 +523,10 @@ if [ -z "${DOTFILES_NO_IMPECCABLE:-}" ] && [ -x "$REPO_DIR/bin/install-impeccabl
   "$REPO_DIR/bin/install-impeccable.sh" --write || echo "  warning: impeccable setup failed (non-fatal)" >&2
 fi
 
+# Existing vaults also need the MCP adapter after a dotfiles upgrade.
+# Do not write user configs when installing into an alternate destination.
+if [ "$DEST" = "$HOME" ] && [ -z "${DOTFILES_NO_WORKLOG_MCP:-}" ]; then
+  "$REPO_DIR/bin/install-worklog-mcp.sh"
+fi
+
 echo "Dotfiles installation complete."

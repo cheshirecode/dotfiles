@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Open the live board for this vault. Uses the same files and helpers as MCP.
+# Usage: worklog-board [--repo PATH] [--no-open] [--status|--stop|--restart] [--port N] [--json]
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+# A user-level command is a symlink; resolve its source before locating assets.
+if [[ -L "${BASH_SOURCE[0]}" ]]; then
+  ROOT="$(cd "$(dirname "$(readlink "${BASH_SOURCE[0]}")")/.." && pwd -P)"
+fi
+node_bin="$(python3 "$ROOT/bin/worklog-mcp-node.py")"
+PATH="${node_bin%/*}:$PATH"
+pyenv="${XDG_DATA_HOME:-$HOME/.local/share}/worklog-mcp/python/bin"
+[[ ! -x "$pyenv/python3" ]] || PATH="$pyenv:$PATH"
+export PATH
+exec "$node_bin" "$ROOT/packages/worklog-memory-mcp/board-cli.js" "$@"

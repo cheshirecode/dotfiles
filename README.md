@@ -16,6 +16,8 @@ In this repo:
   (`tools/sync-from-skill.py --check` fails CI on drift).
 - `packages/worklog-memory-mcp` — MCP agent-memory server over a worklog
   vault; wraps the sibling worklog skill's scripts (no cross-repo dependency).
+  Run `bin/install-worklog-mcp.sh` to configure existing vaults for Codex,
+  Claude Code, Cursor, and OpenCode. See the package README for setup and dogfood.
 
 Satellite repos (each exists because its channel requires a standalone repo):
 

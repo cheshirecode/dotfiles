@@ -583,7 +583,9 @@ test_fixtures() {
   # shell would reach the real sudo. Fixtures that test that path set it.
   for t in tests/*/test_*.sh; do
     [[ -e "$t" ]] || continue
-    if out=$(env -u CODER_WORKSPACE_ID bash "$t" 2>&1); then
+    # Automatic MCP setup must not discover a developer's real vault while a
+    # root install fixture is running with a disposable HOME.
+    if out=$("${WL_HERMETIC[@]}" env -u CODER_WORKSPACE_ID -u CODEX_HOME -u XDG_CONFIG_HOME -u XDG_DATA_HOME bash "$t" 2>&1); then
       ok "root $(basename "$(dirname "$t")")/$(basename "$t" .sh)"
     else
       fail_with_output "root $(basename "$(dirname "$t")")/$(basename "$t" .sh)" "$out"
