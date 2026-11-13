@@ -48,7 +48,7 @@ Example: "Make build-to-preview faster." Before editing, baseline the full path
 from starting the build to the requested revision being usable in preview. Use
 stage timings to locate the critical path. Compare the same workload and
 environment before and after, with cold and warm runs; define each cache state.
-Confirm the same named checks ran. Faster tests are diagnostic; skipped work
+Confirm the same required named checks ran. Faster tests are diagnostic; skipped work
 and intermediate readiness do not prove a full-path speedup. Accept only when
 the requested path completes and its end-to-end target is met; otherwise report
 the remaining delay.
