@@ -18,8 +18,20 @@ trials that paid the same price.
 Name secondary limits (memory, latency, index size) as soft constraints. State
 the ceiling. A large gain may buy some growth; unexplained growth is a discard.
 
-Trial one changes nothing. It records the baseline. Without that row, no later
-number means anything.
+Trial one changes nothing. Baseline the complete requested workload and terminal
+delivery boundary. For workflow speed, measure creation through that boundary,
+including queueing, artifact work, verification and cleanup in scope. Earlier
+readiness and control-plane success
+do not establish the remaining path. Match before/after workloads at frozen
+revisions; record executed case names/counts, adverse runs and runner variability.
+
+For cache claims, define the layer and compare relevant cold, warm and purged
+states with hit/miss evidence. A branch cache hit does not prove a new branch's
+cold performance. Separate reusable software bootstrap from fresh output work;
+retain a slow bootstrap as an unmet limit. Build-cache keys must cover compiler,
+configuration and features. Verify reuse after purge/expiry and manual rebuild.
+Optional cache failure may rebuild; deployment and authorization failures remain
+fail closed. Without a comparable baseline, a later number proves no improvement.
 
 ## One change per trial
 
