@@ -48,8 +48,10 @@ Example: "Make build-to-preview faster." Before editing, baseline the full path
 from starting the build to the requested revision being usable in preview. Use
 stage timings to locate the critical path. Compare the same workload and
 environment before and after, with cold and warm runs; define each cache state.
-Faster tests alone are diagnostic evidence. Accept the performance goal only
-when the end-to-end target is met; otherwise report the remaining delay.
+Confirm the same named checks ran. Faster tests are diagnostic; skipped work
+and intermediate readiness do not prove a full-path speedup. Accept only when
+the requested path completes and its end-to-end target is met; otherwise report
+the remaining delay.
 Recheck inherited cache or work bans: preserve explicit user and repository
 constraints unless their owner changes them. Keep an agent-imposed restriction
 only with a current reason.
