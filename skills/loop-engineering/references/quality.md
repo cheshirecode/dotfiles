@@ -5,14 +5,24 @@ or a concrete boundary risk. [crew.md](crew.md) owns roles and returns.
 
 ## Executable constraints
 
-For a confirmed failure, reuse or extend the smallest maintained check that detects
-recurrence. Use lint for static patterns and regression tests for behavior.
-Check transitions with bounded state tests or model checking; use input replay for implementation.
-[The protocol](protocol.md#verifying-a-claim) owns the failing-case and repair proof.
-Adequate existing coverage needs no duplicate rule.
+Review existing tests and logic in scope before adding either. Delete duplicate,
+implementation-mirroring, obsolete, or speculative checks and branches unless
+each protects a distinct observable failure. Prefer a few behavioral regressions
+to parameter matrices that repeat the implementation or retest the harness at
+several layers.
 
-Name constrained paths so their checker can select them. Save replay inputs and
-control relevant clock/random sources. Check models and implementations separately.
+For each new test, gate, wrapper, configuration, or defensive branch, explain the
+concrete failure it prevents and why existing coverage is insufficient. Reuse or
+extend the smallest maintained check that detects recurrence; use lint for static
+patterns and regression tests for behavior. [The protocol](protocol.md#verifying-a-claim)
+owns the failing-case and repair proof. Save replay inputs and control relevant
+clock/random sources.
+
+Remove machinery made unnecessary by simplification, including redundant jobs
+and handoffs; moving it elsewhere is not removal. Preserve necessary authorization,
+isolation, failure propagation, and publication/rollback contracts. Do not weaken
+a gate to hide missing coverage or call skipped jobs fast.
+
 Declare performance, size, or quality budgets in the definition of done; enforce
 them at the appropriate build or runtime boundary.
 
@@ -70,8 +80,8 @@ optional dispatch tool must leave authorized in-band execution available. Check
 the actual harness capabilities before granting write ownership.
 
 Preserve existing CLI flags, exit codes, schemas, budgets, and terminal meanings
-unless a compatibility change is explicitly in scope. Test success, malformed
-input, inconsistent results, and unavailable dependencies at the real boundary.
+unless a compatibility change is explicitly in scope. Check distinct observable
+failures at the real boundary, reusing adequate existing coverage.
 Keep testable interpretation separate from process execution, file writes, and
 network access; retain integration checks that prove the adapter uses that logic.
 
