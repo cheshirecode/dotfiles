@@ -12,8 +12,9 @@ to parameter matrices that repeat the implementation or retest the harness at
 several layers.
 
 For each new test, gate, wrapper, configuration, or defensive branch, explain the
-concrete failure it prevents and why existing coverage is insufficient. Reuse or
-extend the smallest maintained check that detects recurrence; use lint for static
+concrete failure it prevents, its production/CI consumer, and why coverage is
+insufficient. Reuse or extend the smallest maintained check that detects recurrence;
+use lint for static
 patterns and regression tests for behavior. [The protocol](protocol.md#verifying-a-claim)
 owns the failing-case and repair proof. Save replay inputs and control relevant
 clock/random sources.
@@ -21,7 +22,18 @@ clock/random sources.
 Remove machinery made unnecessary by simplification, including redundant jobs
 and handoffs; moving it elsewhere is not removal. Preserve necessary authorization,
 isolation, failure propagation, and publication/rollback contracts. Do not weaken
-a gate to hide missing coverage or call skipped jobs fast.
+a gate to hide missing coverage or call skipped jobs fast. Preserve required
+cache freshness, selected-item isolation, and partial-publication rollback.
+
+Before disabling a test target, inspect imported test ownership and reported case
+names: an empty entrypoint can own module tests. Keep a small behavioral check
+that missing, skipped, or failing required evidence cannot pass; do not retest the
+checker across several layers.
+
+Delete unnecessary work before caching, moving, splitting, or deferring it.
+Trace effects through publication: a software/test configuration change does not
+justify republishing every item. A selected-item request needs a global scan only
+when a real dependency requires it. Scope intentional full rebuilds explicitly.
 
 Declare performance, size, or quality budgets in the definition of done; enforce
 them at the appropriate build or runtime boundary.
@@ -47,6 +59,10 @@ inspect their help before use. Record the tool version, source revision, measure
 scope, and command. A missing tool is unavailable evidence, not a passing score.
 Do not require a different language, acceptance framework, or fresh global tool
 installation just to follow this reference.
+Bound claims to measured scope: synthetic scale, production capacity, server
+latency, and client latency are different evidence. Measure the cache/network
+layer being claimed; a hit or bypass at one layer does not establish another's
+behavior.
 
 CRAP (Change Risk Anti-Pattern) combines cyclomatic complexity and coverage:
 `CC² × (1 − coverage)³ + CC`, with coverage expressed as a fraction. State which
