@@ -69,6 +69,12 @@ dependencies; ignored local files cannot be implicit required inputs.
 For overlap claims, compare request/event times with the actual operation window
 on a common clock; accepted or queued work is not concurrent execution.
 
+For load claims, measure delivered arrivals, intervals and request mix; verify
+generator pacing, worker/event-loop and protocol limits can sustain them.
+Distinguish admission limits, client outstanding requests (including queues),
+server concurrency, arrival rate, HTTP failures and client deadlines. Confirm
+backend count from observed request/instance evidence, not configuration alone.
+
 CRAP (Change Risk Anti-Pattern) combines cyclomatic complexity and coverage:
 `CC² × (1 − coverage)³ + CC`, with coverage expressed as a fraction. State which
 coverage measure was used and whether subprocesses were included. Derived scores
