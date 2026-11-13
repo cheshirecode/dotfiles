@@ -29,7 +29,9 @@ For cache claims, define the layer and compare relevant cold, warm and purged
 states with hit/miss evidence. A branch cache hit does not prove a new branch's
 cold performance. Separate reusable software bootstrap from fresh output work;
 retain a slow bootstrap as an unmet limit. Build-cache keys must cover compiler,
-configuration and features. Verify reuse after purge/expiry and manual rebuild.
+configuration, features and actual embedded/generated inputs, not unrelated
+directory churn. Preserve existing origin/workflow validation on reuse paths.
+Verify reuse after purge/expiry and manual rebuild.
 Optional cache failure may rebuild; deployment and authorization failures remain
 fail closed. Without a comparable baseline, a later number proves no improvement.
 
