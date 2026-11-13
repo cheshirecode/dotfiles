@@ -64,6 +64,11 @@ latency, and client latency are different evidence. Measure the cache/network
 layer being claimed; a hit or bypass at one layer does not establish another's
 behavior.
 
+For reproducibility claims, verify a tracked-only checkout/archive with declared
+dependencies; ignored local files cannot be implicit required inputs.
+For overlap claims, compare request/event times with the actual operation window
+on a common clock; accepted or queued work is not concurrent execution.
+
 CRAP (Change Risk Anti-Pattern) combines cyclomatic complexity and coverage:
 `CC² × (1 − coverage)³ + CC`, with coverage expressed as a fraction. State which
 coverage measure was used and whether subprocesses were included. Derived scores
