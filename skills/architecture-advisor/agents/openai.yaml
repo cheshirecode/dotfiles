@@ -1,0 +1,6 @@
+interface:
+  display_name: "Architecture Advisor"
+  short_description: "Evidence-based architecture and performance decisions"
+  default_prompt: "Use $architecture-advisor to assess this architecture or performance decision from source and measured evidence."
+policy:
+  allow_implicit_invocation: true
