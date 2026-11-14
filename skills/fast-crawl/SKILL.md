@@ -1,6 +1,6 @@
 ---
 name: fast-crawl
-description: Fetch and crawl web pages as markdown locally, fast, with no browser session. Picks among lightpanda, fastCRW (crw) and crawl4ai with a fallback chain. Use for bulk page reads, site crawls and JS-rendered pages; use browser-use for clicks, logins and bot walls.
+description: Read or crawl web pages as Markdown with local engines. Use for bulk or JS-rendered page reads; clicks, logins and bot walls belong to browser-use.
 ---
 
 # fast-crawl

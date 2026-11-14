@@ -177,9 +177,12 @@ git clone https://github.com/cheshirecode/dotfiles.git ~/.dotfiles
 cd ~/.dotfiles && bin/install.sh
 
 # bin/install.sh is the SUPPORTED install path: detects your OS, installs
-# runtime deps, installs every manifest skill for Claude Code, Codex, and
+# runtime deps, installs default manifest skills for Claude Code, Codex, and
 # Cursor (with the rmtree-safety sentinel), wires hooks, and runs
 # bin/doctor.sh. Idempotent — re-run is safe.
+# pr-cost accounting and the tightening-a-pr compatibility alias are optional
+# for fresh installs. Install either by name with bin/install-skills.sh <name>.
+# Optional entries already installed are preserved, not pruned.
 #
 # If you want manual symlinks instead, BACK UP FIRST. `ln -sf` will
 # silently overwrite an existing real ~/.bashrc / ~/.zshrc / ~/.gitconfig

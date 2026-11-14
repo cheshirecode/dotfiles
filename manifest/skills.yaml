@@ -18,7 +18,7 @@ version: 1
 # High-value user-installed skills (cross-cutting, not project-specific).
 skills:
   - name: council
-    description: Karpathy-council multi-angle research → discussion → collation → independent voting → tally.
+    description: Run independent, multi-angle research and voting for /council, requested multiple opinions or audited research, or an authorized loop escalation.
     source:
       type: subpath  # checkout a single subdir of the source repo
       ref: HEAD  # tracking; pin to SHA once upstreamed
@@ -32,7 +32,7 @@ skills:
   # default — but it is declared, so check-manifest's coverage rule passes and
   # the next skill added to skills/ cannot go missing silently.
   - name: job-application
-    description: Tailored resume + cover letter package for one job description.
+    description: Tailor a resume, cover letter and skills keywords to one supplied job description. Use for application packages; exclude general resume review and interview prep.
     optional: true
     source:
       type: subpath
@@ -44,7 +44,7 @@ skills:
   # job-application tailors one of them. Optional for the same reason as its
   # sibling — personal tooling, not part of a working checkout.
   - name: job-search
-    description: Source remote job postings from public boards and pool them into a _worklog program.
+    description: Source remote job postings from public boards into a _worklog program. Use to build a candidate pool; application tailoring belongs to job-application.
     optional: true
     source:
       type: subpath
@@ -69,7 +69,7 @@ skills:
   # crawl4ai) that turn many pages into markdown. browser-use keeps clicks,
   # logins and bot walls. Optional: the engines are a separate install.
   - name: fast-crawl
-    description: Fetch and crawl web pages as markdown locally with lightpanda, crw or crawl4ai.
+    description: Read or crawl web pages as Markdown with local engines. Use for bulk or JS-rendered page reads; clicks, logins and bot walls belong to browser-use.
     optional: true
     source:
       type: subpath
@@ -87,7 +87,7 @@ skills:
     install_to: ~/.claude/skills/webmcp-integration
 
   - name: worklog
-    description: Cross-machine work journal — the /worklog command surface.
+    description: Manage the shared _worklog journal across machines. Use /worklog MODE [args] for planning, status, context, sync and handoffs; bare /worklog or unknown args show help.
     source:
       type: subpath
       ref: HEAD
@@ -106,7 +106,7 @@ skills:
     install_to: ~/.claude/skills/loop-engineering
 
   - name: slack-feedback
-    description: Optional Slack thread feedback intake with resumable cases and evidence.
+    description: Follow a Slack thread as ongoing engineering feedback when explicitly asked to watch or work from it. Ordinary thread reads do not activate a watch.
     optional: true
     source:
       type: subpath
@@ -115,7 +115,8 @@ skills:
     install_to: ~/.claude/skills/slack-feedback
 
   - name: pr-cost
-    description: Record per-PR AI cost payloads — ledger plus optional idempotent PR comment.
+    description: Collect AI cost data for a PR into a local ledger when cost tracking is requested or a configured adapter invokes it. Posting requires live-write authorization.
+    optional: true
     source:
       type: subpath
       ref: HEAD
@@ -140,7 +141,7 @@ skills:
     install_to: ~/.claude/skills/loop-helpers
 
   - name: evidence-gate
-    description: Require typed evidence coverage for every completion criterion.
+    description: Verify multi-clause completion claims against command, artifact, Git, GitHub or URL evidence. Use when passing tests alone cannot prove delivery or user-visible success.
     source:
       type: subpath
       ref: HEAD
@@ -148,7 +149,7 @@ skills:
     install_to: ~/.claude/skills/evidence-gate
 
   - name: requirement-sync
-    description: Propagate a changed requirement across every place it is written down, and find where the old version still reads as current.
+    description: Reconcile changed requirements or facts across records and derived views. Use when written sources disagree after a change; ordinary task-status updates belong to worklog.
     source:
       type: subpath
       ref: HEAD
@@ -156,7 +157,7 @@ skills:
     install_to: ~/.claude/skills/requirement-sync
 
   - name: pr-review
-    description: Single-PR review and closeout — ownership-based review modes, then distill, codify, deslop, checkpoint.
+    description: Review one PR or close out completed work, including tighten-up and wrap-up requests. Multi-PR sweeps belong to ship-hygiene.
     source:
       type: subpath
       ref: HEAD
@@ -164,7 +165,7 @@ skills:
     install_to: ~/.claude/skills/pr-review
 
   - name: ship-hygiene
-    description: Periodic multi-PR sweep across worklog + PRs + CI; delegates per-PR work to pr-review.
+    description: Sweep multiple open PRs for stale tasks, failing CI, unresolved reviews and cleanup. Use for PR hygiene or /ship-hygiene; one PR belongs to pr-review.
     source:
       type: subpath
       ref: HEAD
@@ -172,7 +173,7 @@ skills:
     install_to: ~/.claude/skills/ship-hygiene
 
   - name: serena-rg-search
-    description: MCP-backed semantic code search (Serena + ripgrep router).
+    description: Choose tools for multi-faceted code investigation across symbols, text, history and logs. Skip simple literal searches and known-file lookups.
     source:
       type: subpath
       ref: HEAD
@@ -190,7 +191,7 @@ skills:
     install_to: ~/.claude/skills/karpathy-guidelines
 
   - name: example-led-instructions
-    description: Compact zero/one/few-shot gate for brittle agent instructions.
+    description: Design compact examples for brittle reusable instructions, schemas or output formats when behavior is underspecified or repeatedly wrong, or when explicitly invoked.
     source:
       type: subpath
       ref: HEAD
@@ -199,6 +200,7 @@ skills:
 
   - name: tightening-a-pr
     description: DEPRECATED shim — delegates to pr-review's closeout entry point. Kept so existing routing keeps working.
+    optional: true
     source:
       type: subpath
       ref: HEAD
@@ -206,7 +208,7 @@ skills:
     install_to: ~/.claude/skills/tightening-a-pr
 
   - name: which-model
-    description: Best-value model selection by capability, cost, context, modality, and harness availability.
+    description: Choose model lanes by capability, cost and harness availability. Use /which-model for model recommendations, token-value comparisons or session model selection.
     source:
       type: subpath
       ref: HEAD
@@ -214,7 +216,7 @@ skills:
     install_to: ~/.claude/skills/which-model
 
   - name: artifact-gate
-    description: Gate an HTML artifact before publishing — structure, dead anchors, self-claims, and code links that resolve while no longer saying what the page claims.
+    description: Check shared HTML before publication for structural errors, broken links and factual drift. Use to verify links and claims; visual design critique belongs to impeccable.
     source:
       type: subpath
       ref: HEAD
