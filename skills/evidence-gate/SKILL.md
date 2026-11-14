@@ -1,6 +1,6 @@
 ---
 name: evidence-gate
-description: Gate completion claims by mapping every observable goal or acceptance criterion to typed command, artifact, Git, GitHub, or URL evidence. Use before marking a multi-clause task, agent loop, deployment, PR, or verification workflow complete, especially when tests passing does not prove delivery, merge, or user-visible success.
+description: Verify multi-clause completion claims against command, artifact, Git, GitHub or URL evidence. Use when passing tests alone cannot prove delivery or user-visible success.
 ---
 
 # evidence-gate

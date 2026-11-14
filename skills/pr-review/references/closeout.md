@@ -8,8 +8,6 @@ next action; stop after distillation and justified guidance changes. Do not call
 the implementation complete or compress away its evidence. No worklog task
 tracks this PR → skip step 4 (checkpoint).
 
-Resolve `$WORKLOG_BIN` via `worklog/SKILL.md`.
-
 ## The pipeline (ordered — do not reorder)
 
 The order is load-bearing: you distill learnings (step 1) **before** you compress the worklog (step 4) — compression drops the very iteration rows the learnings live in. You codify (step 2) **before** you checkpoint, so the codified changes and compressed worklog land as their own separate commits.
@@ -47,6 +45,9 @@ Apply [title-body.md](title-body.md). Reuse unchanged preflight evidence; after 
 **3e. Evidence recording:** Record the current head SHA, the focused validation commands with pass/fail results, and the green CI run or check set in the PR body or a final PR comment. Keep "evidence complete" distinct from "ready for review": a draft PR is not ready until it is explicitly marked ready after those facts are current.
 
 ### 4. Compress + checkpoint the worklog
+
+Only when a Worklog task tracks this PR, resolve `$WORKLOG_BIN` via
+`worklog/SKILL.md`. Otherwise skip this step without requiring Worklog setup.
 
 Compress the decided iteration drama out of the task body (drop ToT/Reflexion scaffolding, verified "Assumptions", multi-row iteration tables — git log is the audit trail; keep the decision rationale, lessons, re-runnable commands, `next_action`), then checkpoint it **on its own**: `"$WORKLOG_BIN/checkpoint.sh" <slug>`. Use the plain command — its staged-scope guard is exactly what enforces the single-concern commit. Keep this separate from step-2 codify commits — up to three concerns, up to three commits, never one bundle.
 Keep post-merge cleanup and recovery notes in the task, not only the PR body.

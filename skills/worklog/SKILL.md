@@ -1,6 +1,6 @@
 ---
 name: worklog
-description: Manage the shared `_worklog` journal across machines and sessions. Twelve modes — `init`, `sync`, `status`, `context`, `plan`, `spawn`, `export`, `import`, `lint`, `project`, `scrape-slack`, `review`. Invoke as `/worklog MODE [args]`. Bare `/worklog`, `/worklog help`, or unknown args print the subcommand menu and stop.
+description: Manage the shared _worklog journal across machines. Use /worklog MODE [args] for planning, status, context, sync and handoffs; bare /worklog or unknown args show help.
 ---
 
 # worklog
@@ -18,7 +18,7 @@ Parse the first argument. If empty, `help`, `-h`, `--help`, or unknown, print th
   sync [<slug>] [flags]    save state (checkpoint | archive | backfill | autosave)
   status [flags]           standup summary from git log + Worklog-* trailers
   context <slug> [flags]   single-shot context pack for resume/review
-  plan <task>              structured CoT/ToT/Reflexion plan for a new task
+  plan <task>              verifiable plan with useful alternatives and recovery triggers
   spawn <task>             self-contained handoff prompt for a fresh session
   export                   sanitized setup prompt → /tmp/worklog-setup-<ts>.txt
   import <path>            merge an export artifact into this machine

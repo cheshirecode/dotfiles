@@ -1,6 +1,6 @@
 ---
 name: job-search
-description: Source remote job postings from public boards (Greenhouse boards, HN Who-is-hiring, RemoteOK, LinkedIn via the browser harness, direct URLs), filter them for a target market, and persist the pool into a `_worklog` program. Mechanical sourcing only; tailoring and application packages belong to `job-application`.
+description: Source remote job postings from public boards into a _worklog program. Use to build a candidate pool; application tailoring belongs to job-application.
 ---
 
 # job-search
