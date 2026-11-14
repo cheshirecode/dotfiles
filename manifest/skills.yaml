@@ -116,6 +116,7 @@ skills:
 
   - name: pr-cost
     description: Collect AI cost data for a PR into a local ledger when cost tracking is requested or a configured adapter invokes it. Posting requires live-write authorization.
+    optional: true
     source:
       type: subpath
       ref: HEAD
@@ -199,6 +200,7 @@ skills:
 
   - name: tightening-a-pr
     description: DEPRECATED shim — delegates to pr-review's closeout entry point. Kept so existing routing keeps working.
+    optional: true
     source:
       type: subpath
       ref: HEAD
