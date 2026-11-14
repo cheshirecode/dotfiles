@@ -51,7 +51,10 @@ At start, after each tool batch or delegate wave, and before switching
 between orchestration and implementation, run:
 
 ```bash
-python3 <skill-dir>/scripts/context_guard.py --session-units 2 --since-checkpoint 2
+# Set these from observed batches/waves and the last verified checkpoint.
+python3 <skill-dir>/scripts/context_guard.py \
+  --session-units "${SESSION_UNITS:?set observed session units}" \
+  --since-checkpoint "${SINCE_CHECKPOINT:?set observed units since checkpoint}"
 ```
 
 One unit is one completed tool batch or delegate wave, including failed attempts.

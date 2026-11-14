@@ -10,7 +10,7 @@ report a missing required capability with the affected check. Skips cost no cycl
 | Multi-faceted code search | `$serena-rg-search` | Search scope and replay command | Known-file lookup |
 | Durable work or handoff | `$worklog` | Task context and checkpoint reference | No persistence needed |
 | Delegate needs a different model lane | `$which-model` | Preserve requested model; verify availability before dispatch | No selection or dispatch capability |
-| Material disagreement or uncertain approach | `$council` | Decision question and discriminating replay check | Evidence resolves the issue |
+| Consequential unresolved question after evidence checks ([escalation](protocol.md#escalation)) | `$council` | Decision question and discriminating replay check | Evidence resolves the issue |
 | Nontrivial implementation | `$karpathy-guidelines` | Scope, assumptions and behavior checks | Read-only observation |
 | Completion evidence | `$evidence-gate` | Criteria mapped to verified evidence | One action with one sufficient check |
 | Brittle reusable instructions | `$example-led-instructions` | Smallest example set and acceptance scenario | Standard prose suffices |

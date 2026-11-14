@@ -1,6 +1,6 @@
 ---
 name: which-model
-description: Choose model lanes by task capability, cost, context, modality, latency, tools, and harness availability. Use for /which-model, model recommendations, value-for-token comparisons, or session model-selection guidance.
+description: Choose model lanes by capability, cost and harness availability. Use /which-model for model recommendations, token-value comparisons or session model selection.
 ---
 
 # which-model

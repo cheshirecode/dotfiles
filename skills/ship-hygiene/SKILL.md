@@ -1,6 +1,6 @@
 ---
 name: ship-hygiene
-description: "Periodic multi-PR sweep — dashboard of open PRs across repos. Surfaces stale worklog tasks, CI red patterns, unresolved reviewer comments, post-merge cleanup notes. For single-PR code review or closeout, use $pr-review. Triggers 'tidy up before I ship', 'PR hygiene', 'clean my open PRs', '/ship-hygiene'."
+description: Sweep multiple open PRs for stale tasks, failing CI, unresolved reviews and cleanup. Use for PR hygiene or /ship-hygiene; one PR belongs to pr-review.
 ---
 
 # ship-hygiene
