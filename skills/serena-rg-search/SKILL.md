@@ -1,6 +1,6 @@
 ---
 name: serena-rg-search
-description: Pick the right tool for multi-faceted code search across symbols, text, semantic meaning, JSON, git history, and logs. Use when finding definitions, references, files, strings, concepts without known terms, structured config, when-it-changed, or log events; or when planning a search workflow before reading code.
+description: Choose tools for multi-faceted code investigation across symbols, text, history and logs. Skip simple literal searches and known-file lookups.
 ---
 
 # serena-rg-search

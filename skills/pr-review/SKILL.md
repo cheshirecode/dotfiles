@@ -1,6 +1,6 @@
 ---
 name: pr-review
-description: Review one PR or close out completed work. Use for review PR, tighten up PR, wrap up this PR, or pr-review requests. Routes by ownership and separates code review from the retrospective; multi-PR sweeps belong to ship-hygiene.
+description: Review one PR or close out completed work, including tighten-up and wrap-up requests. Multi-PR sweeps belong to ship-hygiene.
 ---
 
 # pr-review

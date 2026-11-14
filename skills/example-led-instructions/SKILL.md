@@ -1,6 +1,6 @@
 ---
 name: example-led-instructions
-description: Design compact examples for brittle reusable agent instructions. Use when writing or reviewing skills, rubrics, schemas, tool-use instructions, strict output contracts, or prompts where format/style is underspecified or recurrently wrong. Also use when another skill invokes `$example-led-instructions`.
+description: Design compact examples for brittle reusable instructions, schemas or output formats when behavior is underspecified or repeatedly wrong, or when explicitly invoked.
 ---
 
 # example-led-instructions

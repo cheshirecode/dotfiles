@@ -24,3 +24,18 @@ matters. Label size/token estimates inferred until real traffic and an evaluatio
 verify them. An output-only style skill does not establish input-token savings.
 Capture verdict-carrying exit codes before parsing; [examples.md](examples.md)
 shows the distinction. Never discard evidence to make the visible output shorter.
+
+## Headroom as an optional candidate
+
+[Headroom](https://github.com/headroomlabs-ai/headroom) fits this boundary as
+producer-side compression before output reaches the model. Calling its standalone
+MCP compressor after the model has read a payload cannot save that first ingestion.
+A proxy needs separate authorization and host compatibility; this skill does not
+install it or change API routing.
+
+For an authorized trial, retain raw artifacts independently of its expiring CCR
+cache. Check the selected version's telemetry and model-download behavior before
+running it. Compare matched raw/compressed tasks, including recovery reads,
+latency, total usage and preserved failures/IDs. Adopt only if acceptance results
+hold and measured savings justify the dependency; upstream ratios are not local
+measurements. Missing capability or failed recovery falls back to the raw artifact.

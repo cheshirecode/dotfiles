@@ -1,6 +1,6 @@
 ---
 name: council
-description: "Run multi-angle, audited research with independent voting. Use when the user invokes `/council`, says \"run a council on X\", \"get multiple opinions on Y\", asks for an audited research pass, or an authorized orchestrator escalates a live loop. Runs until completion; auto-selects foreground vs background dispatch by task scope."
+description: Run independent, multi-angle research and voting for /council, requested multiple opinions or audited research, or an authorized loop escalation.
 ---
 
 # council
