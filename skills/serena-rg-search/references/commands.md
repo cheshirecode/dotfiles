@@ -8,20 +8,20 @@ Unknown locations, string/regex, non-code files, broad scans, quick file
 listing — and anything where you know the concept but not the tokens.
 
 ```bash
-zg query --rg -n "useUserTaskQuotaStats" frontend/react/src   # managed rg; note exit 0 on no match
-rg --files | rg 'announcement'                # NOT `zg query --rg --files`:
+zg query --rg -n "parse_record" src   # managed rg; note exit 0 on no match
+rg --files | rg 'parser'                # NOT `zg query --rg --files`:
                                               # "--files changes rg output and
                                               # cannot be used with managed --rg"
-zg query --fts "announcement text banner"     # BM25-ranked keyword search
-zg query "where user quota limits are enforced"   # semantic (needs `zg index`)
-zg index                                       # build/refresh workspace index
+zg query --fts "record validation errors"     # BM25-ranked keyword search
+zg query "where input records are validated"   # semantic (needs `zg index`)
 zg status                                      # index freshness
 ```
 
 Semantic hits come back ranked with `file:line` spans and the matching lane
 (`matchedBy=fts+vector`), so they chain into Serena/`git log` like rg hits do.
-Without `zg`, use plain `rg` — every `--rg` example above takes identical
-flags (`-U` multiline, `-t` type, `-g` glob).
+Without `zg`, or when its indexed lanes are missing/stale, use plain `rg`.
+The `--rg` examples above take identical flags (`-U` multiline, `-t` type,
+`-g` glob). Run `zg index` only for requested setup/index maintenance.
 
 ## Prefer Serena For
 
@@ -36,6 +36,22 @@ Exact symbol lookup, references, file overview before editing.
   `restrict_search_to_code_files` to skip docs and fixtures). Reach for it because you are
   already in Serena and want the hit in the same tool surface as the symbol calls — not
   because it understands symbol boundaries. If you are out of Serena, `rg` is equivalent.
+
+### Repeated names and cross-file relationships
+
+For a name such as `send` shared by several classes, first locate the file with
+`rg -n 'def send' src/`, or inspect that file's symbol overview. In Serena,
+`relative_path="src/client.py"` plus `name_path_pattern="/Client/send"` selects
+that exact name path within the file; use the returned name path for reference
+lookup. Confirm the declaration/body belongs to the intended class. Do not
+reuse another tool's `file::symbol` syntax or accept a fuzzy hit as resolution.
+
+For “how does an entry point reach the writer?”, inspect the entry point's
+body, resolve the called symbol, then follow only references needed to connect
+the next hop. Record call sites separately from imports/containment. If a
+callback or configuration selects the target, inspect that registration or
+report the unresolved boundary. A short source search may finish the task;
+no graph or index setup is required.
 
 ## Prefer `jq` For
 
@@ -54,8 +70,8 @@ Stay in `rg` if you only need to know whether a string appears.
 History-aware questions: when, why, by whom.
 
 ```bash
-git log -S 'announcement_text' -- path/         # pickaxe: commits that add/remove the string
-git log -G 'use\w+Quota' --perl-regexp -- frontend/  # PCRE regex over diff content
+git log -S 'parse_record' -- path/         # pickaxe: commits that add/remove the string
+git log -G 'parse_[[:alnum:]_]+' -- src/  # extended regex over diff content
 git log -p -- path/to/file                      # full diff history of a path
 git log --follow -- path/to/file                # survive renames
 ```
