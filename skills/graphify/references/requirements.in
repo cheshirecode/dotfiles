@@ -1,0 +1,2 @@
+graphifyy @ git+https://github.com/Graphify-Labs/graphify.git@52cb28218eea0c68d80a9f4b2ae102d2fa63e267
+tree-sitter-sql==0.3.13
