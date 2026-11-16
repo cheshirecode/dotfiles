@@ -180,6 +180,14 @@ skills:
       path: skills/ship-hygiene
     install_to: ~/.claude/skills/ship-hygiene
 
+  - name: graphify
+    description: Navigate code structure with a local Graphify graph for cross-file relationships, neighborhoods, and paths. Use for graph-oriented investigation or explicit Graphify setup, not simple text or exact-reference lookups.
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/graphify
+    install_to: ~/.claude/skills/graphify
+
   - name: serena-rg-search
     description: Choose tools for multi-faceted code investigation across symbols, text, history and logs. Skip simple literal searches and known-file lookups.
     source:
