@@ -31,7 +31,6 @@ Match the question to the facet, then the tool:
 |---|---|
 | Literal text, regex, filenames, broad discovery | `zg query --rg` (fallback `rg` / `rg --files`) |
 | Concept or behavior, exact terms unknown | `zg query "natural language"` (semantic; `--fts` for keyword-ranked) |
-| Cross-file graph neighborhoods or structural paths | Graphify; load `../graphify/SKILL.md` when available, otherwise use source search |
 | Known symbol, references, file structure | Serena (`find_symbol`, `find_referencing_symbols`, `get_symbols_overview`) |
 | Structured JSON (OpenAPI, package.json, API payloads) | `jq` (often piped from `rg --files`) |
 | "When did this appear / disappear / change" | `git log -S` (pickaxe), `git log -G` (regex), `git log -p -- path` |
