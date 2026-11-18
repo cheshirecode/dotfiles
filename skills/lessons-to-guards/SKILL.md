@@ -41,13 +41,31 @@ where no clean script exists.
    | silent flattening | canonicalizer/serializer collapses nested data without error | `flatten-replacer` |
    | duplicated source of truth | same fact in two places | `duplication` config block |
    | a11y/actionability mismatch | test treats an unreachable element as clickable | (no scanner — UI tests only; review manually) |
-   | diagnostic-from-wrong-vantage | feature probed from the wrong state | (no scanner — rule) |
+   | diagnostic-from-wrong-vantage | a probe reads from a state, place or time where its answer cannot differ | (no scanner — differential control, below) |
    | symlink-opacity | path logic ignoring/following symlinks; `.bak` residue | `symlink-residue` + symlink fixtures in install tests |
-   | exit-code laundering | failures demoted to prints/warnings, exit 0 | `swallow` + `exit-laundering` |
+   | exit-code laundering | failures demoted to prints/warnings, exit 0; a broad `except` returning a sentinel | `swallow` + `exit-laundering` |
    | string-cast comparison | `str(a) != str(b)` where values are semantically equal | `string-cast` |
 
    A class without three independent incidents is a hypothesis, not a class —
    keep it as a rule note instead.
+
+   **Diagnostic from the wrong vantage.** No scanner sees it, so check it by
+   procedure. Before a probe counts as evidence, run its **differential
+   control**: the same probe once more with only the condition under test
+   changed. If both readings agree, the probe cannot see that condition, and
+   its "pass" is not evidence. The shapes seen so far:
+   - *Masked by an earlier gate.* The probed path refuses before it reaches
+     the guard, so guard on and guard off both read the same refusal.
+   - *Assumed state.* The driver assumes the state, such as when a thing is due,
+     instead of reading it from the system, and probes a case that does not exist.
+   - *One observation generalised.* A single read is taken as the system's
+     rule. Read where the consumer reads, and vary the input before
+     concluding (see "verify from where a value is READ" in repo guidance).
+   - *The probe changes what it measures.* Validating by calling a tool that
+     mutates state on failure (deletes a credential, starts a login) breaks
+     what was being checked. Probe read-only, with the state already present.
+   Also inventory existing state before asking a person to act: a long-lived
+   credential already in the session makes an interactive login unnecessary.
 
 4. **Convert each finding to the cheapest standing guard**, in cost order:
    registry-derived count (import the loader, compute the number) >
@@ -105,6 +123,12 @@ right = { file = "manifest/skills.yaml", line_regex = "- name: (.+)$" }
 | unparseable currency silently became `0.0` in totals | personal-planner-app | silent flattening |
 | batch import printed "complete" and exited 0 after failures | personal-planner-app | exit-code laundering |
 | `/mnt/c/...2026-01-30.txt` hardcoded in tracked source | personal-planner-app | drift-keyed |
+| E2E case recorded as covering a guard; an earlier refusal answered both reads | private service | diagnostic-from-wrong-vantage |
+| test driver assumed a due date of tomorrow; the record was already past due | private service | diagnostic-from-wrong-vantage |
+| one read of a secrets CLI generalised to "one server for both envs" (it routes per env, shares one token file) | private service | diagnostic-from-wrong-vantage |
+| guard hook validated by calling a CLI that deletes the token on failure and starts a login | private service | diagnostic-from-wrong-vantage |
+| hook's `except Exception: return None` turned a `TypeError` into "could not read" | private service | exit-code laundering |
+| `swallow`'s two-line pattern ran one line at a time and never fired | dotfiles | diagnostic-from-wrong-vantage |
 
 Honest absences: the a11y class found no incidents in non-UI repos (expected —
 absence of the failure mode is a coverage gap, not evidence the class is wrong).
