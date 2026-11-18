@@ -67,11 +67,19 @@ RULES: dict[str, dict] = {
     "swallow": {
         "strict": False,
         "res": [
-            re.compile(r"except[^:]*:\s*$\n\s*(pass|continue)\b", re.MULTILINE),
             re.compile(r"except\s*:\s*pass"),
             re.compile(r"catch\s*(?:\([^)]*\))?\s*\{\s*\}"),
         ],
         "hint": "swallowed error — justify each one or record and rethrow",
+        # Two-line forms, matched against the whole file: a pattern spanning a
+        # newline never matches one line at a time, so this one used to be dead.
+        # A BROAD except returning a sentinel turns a code bug (TypeError) into
+        # an answer that reads like an environment failure ("could not read").
+        "multiline": [
+            re.compile(r"except[^:\n]*:[ \t]*\n[ \t]*(?:pass|continue)\b"),
+            re.compile(r"except(?:[ \t]+(?:Exception|BaseException)(?:[ \t]+as[ \t]+\w+)?)?[ \t]*:[ \t]*\n"
+                       r"[ \t]*return(?:[ \t]+(?:None|False|0|''|\"\"|\[\]|\{\}))?[ \t]*$", re.MULTILINE),
+        ],
     },
     "string-cast": {
         "strict": False,
@@ -149,6 +157,16 @@ def scan(root: Path, config: dict) -> tuple[list[str], list[str]]:
                     else:
                         advisory.append(entry)
                     break
+        for rule, spec in RULES.items():
+            for rx in spec.get("multiline", []):
+                for m in rx.finditer(text):
+                    lineno = text.count("\n", 0, m.start()) + 1
+                    line = lines[lineno - 1]
+                    allow = allowlist.get(rule)
+                    if allow and (re.search(allow, line, re.IGNORECASE) or re.search(allow, rel, re.IGNORECASE)):
+                        continue
+                    entry = f"{rule} {rel}:{lineno}: {line.strip()[:120]}\n    -> {spec['hint']}"
+                    (strict_findings if spec["strict"] else advisory).append(entry)
         if file_has_swallow:
             for lineno, line in enumerate(lines, start=1):
                 for rx in RULES["exit-laundering"]["res"]:
