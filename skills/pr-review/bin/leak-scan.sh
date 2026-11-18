@@ -47,7 +47,7 @@ SKILL_COMMANDS=(
   example-led-instructions fast-crawl job-application job-search
   karpathy-guidelines loop-engineering
   loop-helpers pr-cost pr-review requirement-sync serena-rg-search ship-hygiene slack-feedback
-  tightening-a-pr webmcp-integration which-model worklog
+  systematic-debugging tightening-a-pr webmcp-integration which-model worklog
 )
 
 build_pattern() {
