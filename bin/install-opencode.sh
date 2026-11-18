@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Link portable OpenCode agents and skills into the global OpenCode directory.
+# Link portable agents and global instructions into user config directories:
+#   - OpenCode agents: ~/.config/opencode/agents/*.md
+#   - OpenCode skills: ~/.config/opencode/skills/<name>/
+#   - Claude Code agents: ~/.claude/agents/*.md
+#   - Global Claude instructions: ~/.claude/CLAUDE.md
 
 set -euo pipefail
 
@@ -22,6 +26,12 @@ AGENT_SOURCE_DIR="$REPO_ROOT/.config/opencode/agents"
 AGENT_TARGET_DIR="$HOME/.config/opencode/agents"
 SKILL_SOURCE_DIR="$REPO_ROOT/.config/opencode/skills"
 SKILL_TARGET_DIR="$HOME/.config/opencode/skills"
+
+CLAUDE_AGENT_SOURCE_DIR="$REPO_ROOT/.claude/agents"
+CLAUDE_AGENT_TARGET_DIR="${CLAUDE_AGENT_TARGET_DIR:-$HOME/.claude/agents}"
+
+CLAUDE_INSTRUCTION_SOURCE="$REPO_ROOT/.claude/CLAUDE.md"
+CLAUDE_INSTRUCTION_TARGET="${CLAUDE_INSTRUCTION_TARGET:-$HOME/.claude/CLAUDE.md}"
 
 # One link discipline for both kinds: leave an already-correct link alone, move
 # anything else aside once, then link. Agents are files and skills are
@@ -47,7 +57,7 @@ link_into() {
     echo "  [dry-run] link $source to $target"
   else
     ln -s "$source" "$target"
-    echo "  linked OpenCode $kind: $target"
+    echo "  linked $kind: $target"
   fi
 }
 
@@ -71,4 +81,23 @@ if [[ -d "$SKILL_SOURCE_DIR" ]]; then
     [[ -d "$source_skill" ]] || continue
     link_into "$source_skill" "$SKILL_TARGET_DIR/$(basename "$source_skill")" skill
   done
+fi
+
+# Claude agents and global instructions: same link discipline. The target
+# vars are overridable so test sandboxes can redirect them.
+if [[ -d "$CLAUDE_AGENT_SOURCE_DIR" ]]; then
+  if [[ $DRY_RUN -eq 0 ]]; then
+    mkdir -p "$CLAUDE_AGENT_TARGET_DIR"
+  fi
+  for source_agent in "$CLAUDE_AGENT_SOURCE_DIR"/*.md; do
+    [[ -e "$source_agent" ]] || continue
+    link_into "$source_agent" "$CLAUDE_AGENT_TARGET_DIR/$(basename "$source_agent")" "Claude agent"
+  done
+fi
+
+if [[ -f "$CLAUDE_INSTRUCTION_SOURCE" ]]; then
+  if [[ $DRY_RUN -eq 0 ]]; then
+    mkdir -p "$(dirname "$CLAUDE_INSTRUCTION_TARGET")"
+  fi
+  link_into "$CLAUDE_INSTRUCTION_SOURCE" "$CLAUDE_INSTRUCTION_TARGET" "global instructions"
 fi
