@@ -124,6 +124,18 @@ skills:
       path: skills/systematic-debugging
     install_to: ~/.claude/skills/systematic-debugging
 
+  # Wrap-up tooling: mines a finished feature run for failure patterns and
+  # turns them into standing guards. Optional — personal post-run hygiene,
+  # like the job-hunting pair, not part of a working checkout.
+  - name: lessons-to-guards
+    description: After a multi-commit feature run, mine git log and session mistakes for failure patterns and convert them into standing guards. A mechanical scanner does the detection; you judge findings, write the guards, and prove each one red. Use when wrapping up a feature session, auditing a repo for missing guards, or when the same class of bug ships twice.
+    optional: true
+    source:
+      type: subpath
+      ref: HEAD
+      path: skills/lessons-to-guards
+    install_to: ~/.claude/skills/lessons-to-guards
+
   - name: slack-feedback
     description: Follow a Slack thread as ongoing engineering feedback when explicitly asked to watch or work from it. Ordinary thread reads do not activate a watch.
     optional: true

@@ -1,6 +1,6 @@
 ---
 name: lessons-to-guards
-description: After a multi-commit feature run, mine git log and session mistakes for failure patterns and convert them into standing guards. A mechanical scanner (scripts/lessonscan.py) does the detection; you judge findings, write the guards, and prove each one red. Use when wrapping up a feature session, auditing a repo for missing guards, or when the same class of bug ships twice.
+description: After a multi-commit feature run, mine git log and session mistakes for failure patterns and convert them into standing guards. A mechanical scanner does the detection; you judge findings, write the guards, and prove each one red. Use when wrapping up a feature session, auditing a repo for missing guards, or when the same class of bug ships twice.
 ---
 
 # Lessons to guards
