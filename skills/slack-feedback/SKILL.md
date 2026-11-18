@@ -1,6 +1,6 @@
 ---
 name: slack-feedback
-description: Follow an explicitly requested Slack thread as engineering feedback, with resumable acknowledgements, acceptance cases, and revision evidence. Use when the user asks to watch or work from ongoing thread feedback; ordinary thread reads do not activate a watch.
+description: Follow a Slack thread as ongoing engineering feedback when explicitly asked to watch or work from it. Ordinary thread reads do not activate a watch.
 ---
 
 # Slack feedback

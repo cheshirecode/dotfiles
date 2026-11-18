@@ -1,6 +1,6 @@
 ---
 name: pr-cost
-description: Collect a typed AI cost payload for a newly created GitHub PR, persist it to a local ledger, and optionally post an idempotent PR comment when live writes are explicitly enabled.
+description: Collect AI cost data for a PR into a local ledger when cost tracking is requested or a configured adapter invokes it. Posting requires live-write authorization.
 ---
 
 # pr-cost

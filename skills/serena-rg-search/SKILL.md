@@ -1,6 +1,6 @@
 ---
 name: serena-rg-search
-description: Pick the right tool for multi-faceted code search across symbols, text, semantic meaning, JSON, git history, and logs. Use when finding definitions, references, files, strings, concepts without known terms, structured config, when-it-changed, or log events; or when planning a search workflow before reading code.
+description: Choose tools for multi-faceted code investigation across symbols, text, history and logs. Skip simple literal searches and known-file lookups.
 ---
 
 # serena-rg-search
@@ -32,11 +32,29 @@ Match the question to the facet, then the tool:
 | Literal text, regex, filenames, broad discovery | `zg query --rg` (fallback `rg` / `rg --files`) |
 | Concept or behavior, exact terms unknown | `zg query "natural language"` (semantic; `--fts` for keyword-ranked) |
 | Known symbol, references, file structure | Serena (`find_symbol`, `find_referencing_symbols`, `get_symbols_overview`) |
+| Cross-file callers, dependencies, or an unfamiliar change boundary | Scoped source search → resolve symbols/references with Serena → verify each relevant hop in source |
 | Structured JSON (OpenAPI, package.json, API payloads) | `jq` (often piped from `rg --files`) |
 | "When did this appear / disappear / change" | `git log -S` (pickaxe), `git log -G` (regex), `git log -p -- path` |
 | Logs, traces, time-windowed events | `rg` on the file, `journalctl` (linux), `log show` (mac) |
 
-Default hybrid flow for unfamiliar code: `rg` to find candidates → Serena for the symbol → `git log -S` to see how it got there. Fall back to `rg` if Serena isn't activated for the project.
+For unfamiliar code, locate candidates with `rg`, then resolve the relevant
+symbols/references with Serena. Add `git log` when history answers the question;
+stop once current source supports the answer. Do not add an indexed tool merely
+because it can represent the same relationships.
+
+## Resolve ambiguity and verify
+
+Scope to the relevant source paths before widening into tests, generated or
+vendored code; use the target project's layout, not a fixed exclusion list.
+For repeated names, resolve the file and containing class/module first. Use the
+symbol identifier returned by the selected tool, with its own qualifier syntax;
+a ranked or fuzzy hit is not an exact symbol match.
+
+For relationship questions, inspect the actual call/reference at each relevant
+hop and cite file/line evidence. Imports and containment establish structure,
+not execution order or runtime reachability. Flag unresolved dynamic dispatch,
+configuration, or unsupported-language boundaries instead of treating missing
+results as proof of absence. Read the selected-facet examples below as needed.
 
 For command examples after selecting a facet, read
 [references/commands.md](references/commands.md). Narrow noisy searches by
@@ -53,7 +71,12 @@ for t in zg rg jq; do command -v "$t" >/dev/null 2>&1 || echo "missing: $t"; don
 
 `command -v zg rg jq` succeeds when any one exists; test each tool separately.
 
-Use available fallbacks; do not install tools just to perform a search.
+If an index is missing/stale, a tool is unavailable, or results are ambiguous
+or truncated, narrow the query or continue with current source search. Do not
+install tools or rebuild indexes just to perform an ordinary search. Preserve
+exit status and stderr when a tool fails; distinguish a search miss from a
+permission, ownership, or runtime error before retrying. Report any remaining
+coverage limit with the answer.
 For an explicit `zg` setup request, install `@zvec/zvec-grep` with Node 22+
 and run `zg index` for indexed lanes; ignore `.zvec-grep/` in Git.
 

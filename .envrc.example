@@ -80,3 +80,10 @@ export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
 # $DAYJOB tree sets its own in its own .envrc. Unset means the hook reports
 # and allows.
 export WORKLOG_IDENTITY_DOMAIN=users.noreply.github.com
+
+# opencode MCP servers (.config/opencode/opencode.jsonc) take machine-local
+# paths from the environment so the tracked config carries no real values.
+# Uncomment and set on machines that run them:
+# export PAPER_BIN="/path/to/paper(.exe)"
+# export WORKLOG_MCP_SERVER="$HOME/projects/dotfiles/packages/worklog-memory-mcp/server.js"
+# export WORKLOG_REPO="$HOME/projects/_worklog"

@@ -1,7 +1,42 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "openrouter/z-ai/glm-5.3-flash",
+  "model": "openrouter/z-ai/glm-5.2",
   "small_model": "openrouter/deepseek/deepseek-v4.1-flash",
+  "agent": {
+    "plan": {
+      "model": "openrouter/~anthropic/claude-opus-latest"
+    },
+    "vision": {
+      "mode": "subagent",
+      "model": "openrouter/z-ai/glm-4.6v",
+      "description": "Vision reviewer: inspects screenshots, rendered UI, and design quality. Read-only.",
+      "prompt": "You review images: screenshots of web UI, design mockups, rendered states. Read the image files given to you. Judge hierarchy, spacing, contrast, alignment, and kid-appropriateness where asked. Return findings as a list with the image reference, what is wrong, severity, and a one-line fix. You do not edit files.",
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      }
+    },
+    "coder": {
+      "mode": "subagent",
+      "model": "openrouter/z-ai/glm-5.2",
+      "description": "Implementation lane for multi-file code changes and fixes.",
+      "prompt": "You implement exactly the specified changes and run the given verification gates. Report diff stat, gate exit codes, and anything you could not apply. You do not commit unless told to.",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask"
+      }
+    },
+    "mechanic": {
+      "mode": "subagent",
+      "model": "openrouter/deepseek/deepseek-v4.1-flash",
+      "description": "Cheap lane for mechanical edits, doc hygiene, and bounded sweeps.",
+      "prompt": "You perform mechanical, fully-specified edits and simple verification runs. Report what changed and gate exit codes. You do not commit unless told to.",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask"
+      }
+    }
+  },
   "shell": "/bin/zsh",
   "tool_output": {
     "max_lines": 300,
@@ -18,6 +53,19 @@
     ]
   },
   "mcp": {
+    "paper": {
+      "type": "local",
+      "command": ["{env:PAPER_BIN}", "mcp"],
+      "enabled": true
+    },
+    "worklog-memory": {
+      "type": "local",
+      "command": ["node", "{env:WORKLOG_MCP_SERVER}"],
+      "environment": {
+        "WORKLOG_REPO": "{env:WORKLOG_REPO}"
+      },
+      "enabled": true
+    },
     "gdrive": {
       "type": "local",
       "command": ["npx", "-y", "@isaacphi/mcp-gdrive"],

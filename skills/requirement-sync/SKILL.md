@@ -1,6 +1,6 @@
 ---
 name: requirement-sync
-description: Propagate a changed requirement across every place it is written down, and find where the old version still reads as current. Use when a decision changes in chat, a review, or a meeting and the written record now disagrees with itself; or when asked to sync, reconcile, or update records after a requirement change.
+description: Reconcile changed requirements or facts across records and derived views. Use when written sources disagree after a change; ordinary task-status updates belong to worklog.
 ---
 
 # requirement-sync
