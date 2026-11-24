@@ -4,13 +4,17 @@
 # bin/git-hooks/{pre-commit,commit-msg,post-commit} on every commit in
 # this clone.
 #
-#   Claude Code (PreCompact + SessionEnd):
+#   Claude Code (PreCompact + SessionEnd, and PreToolUse when guards exist):
 #     - bin/autosave.sh        → uncommitted worklog edits land in git
 #                                 before the compact summary / session ends.
 #     - bin/autosave-flush.sh  → SessionEnd only: push debounced autosaves.
 #     - bin/compact-kernels.sh → one resume kernel per active task is dumped
 #                                 to _worklog/.cache/compact-kernels.md so
 #                                 the next session re-orients on one file.
+#     - bin/guard-dispatch.py  → PreToolUse: runs the guard modules in
+#                                 people/<namespace>/guards/ (injected, not
+#                                 shipped here). Installed only when that
+#                                 directory exists; see references/protocol.md.
 #
 #   Git hooks:
 #     - bin/git-hooks/pre-commit → path-filtered lint + test gate per
@@ -93,6 +97,10 @@ cd "$REPO_ROOT"
 AUTOSAVE="$SCRIPT_DIR/autosave.sh"
 FLUSH="$SCRIPT_DIR/autosave-flush.sh"
 KERNELS="$SCRIPT_DIR/compact-kernels.sh"
+DISPATCH="$SCRIPT_DIR/guard-dispatch.py"
+# Guards are injected from the caller's own namespace; the path is baked into
+# the hook command so a hook shell (no direnv) needs no resolution.
+GUARDS_DIR="$REPO_ROOT/people/$(WORKLOG_REPO="$REPO_ROOT" resolve_ldap)/guards"
 SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
 SETTINGS_IS_DEFAULT=0
 [[ -z "${CLAUDE_SETTINGS:-}" ]] && SETTINGS_IS_DEFAULT=1
@@ -167,10 +175,10 @@ fi
 if (( GIT_HOOKS_ONLY )); then
   echo "install-hooks: --git-hooks-only, leaving $SETTINGS untouched"
 else
-python3 - "$SETTINGS" "$AUTOSAVE" "$FLUSH" "$KERNELS" "$MODE" "$WRITE" "$REPO_ROOT" "$WORKLOG_LDAP_FROM_ENVRC" <<'PY'
-import json, pathlib, sys
+python3 - "$SETTINGS" "$AUTOSAVE" "$FLUSH" "$KERNELS" "$MODE" "$WRITE" "$REPO_ROOT" "$WORKLOG_LDAP_FROM_ENVRC" "$DISPATCH" "$GUARDS_DIR" <<'PY'
+import json, os, pathlib, sys
 
-settings_path, autosave, flush, kernels, mode, write_flag, repo_root, worklog_ldap = sys.argv[1:9]
+settings_path, autosave, flush, kernels, mode, write_flag, repo_root, worklog_ldap, dispatch, guards_dir = sys.argv[1:11]
 write = write_flag == "1"
 p = pathlib.Path(settings_path)
 
@@ -182,11 +190,16 @@ except (json.JSONDecodeError, ValueError) as e:
   print(f"install-hooks: refuse to edit malformed settings at {settings_path}: {e}", file=sys.stderr)
   sys.exit(1)
 
-EVENTS = ("PreCompact", "SessionEnd")
+# PreToolUse is listed always so uninstall (and a reinstall after the guards
+# dir is removed) clears a stale dispatcher entry; it gets a script only when
+# the caller's guards directory exists.
+EVENTS = ("PreCompact", "SessionEnd", "PreToolUse")
+has_guards = os.path.isdir(guards_dir)
 # SessionEnd adds autosave-flush after kernels to push debounced autosaves.
 SCRIPTS_BY_EVENT = {
   "PreCompact": (autosave, kernels),
   "SessionEnd": (autosave, kernels, flush),
+  "PreToolUse": (dispatch,) if has_guards else (),
 }
 AUTOSAVE_FLAGS = {"PreCompact": "--trigger=pre-compact", "SessionEnd": "--trigger=session-end"}
 
@@ -204,7 +217,8 @@ def entry_references_worklog_script(entry):
     if not isinstance(h, dict) or h.get("type") != "command":
       continue
     cmd = h.get("command") or ""
-    if "autosave.sh" in cmd or "autosave-flush.sh" in cmd or "compact-kernels.sh" in cmd:
+    if ("autosave.sh" in cmd or "autosave-flush.sh" in cmd or "compact-kernels.sh" in cmd
+        or "guard-dispatch.py" in cmd):
       return True
   return False
 
@@ -216,6 +230,8 @@ def build_command(script, event):
   env = " ".join(env_parts)
   if script == autosave:
     return f"{env} {script} {AUTOSAVE_FLAGS[event]}"
+  if script == dispatch:
+    return f'WORKLOG_GUARDS_PATH="{guards_dir}" python3 {script}'
   return f"{env} {script}"
 
 changed = False
@@ -255,7 +271,7 @@ for event in EVENTS:
     if len(event_list) != before:
       changed = True
 
-  if mode == "uninstall" and not event_list:
+  if not event_list:
     hooks.pop(event, None)
 
 rendered = json.dumps(data, indent=2) + "\n"
@@ -267,6 +283,8 @@ if not changed:
 if write:
   p.write_text(rendered)
   print(f"install-hooks: {mode}ed worklog hooks (PreCompact + SessionEnd × autosave + compact-kernels + flush)")
+  if mode == "install":
+    print(f"install-hooks: guards {'from ' + guards_dir if has_guards else 'none (no ' + guards_dir + ')'}")
   print(f"install-hooks: wrote {settings_path}")
 else:
   print(f"install-hooks: DRY RUN — would {mode} worklog hooks")
