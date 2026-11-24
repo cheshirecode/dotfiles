@@ -105,6 +105,13 @@ For `kind: runbook`, slug `*-integration-map`:
 - Post-commit advisory (TTL 1h): cross-task lint warnings, retro prompt on archive.
 - Bypass any hook (one-shot, last-resort): `WORKLOG_NO_HOOK=1 git commit …`.
 
+## Guards (injected)
+
+- The skill ships the dispatcher, not the rules. Put guard modules in `people/$LDAP/guards/*.py`; `"$WORKLOG_BIN/install-hooks.sh" --write` then adds one PreToolUse hook that runs them, with the path baked in as `WORKLOG_GUARDS_PATH`. No directory, no hook.
+- A module defines `check(event) -> str | None` (deny reason or None) and optionally `TOOLS = ("Bash",)`. `_*.py` and `test_*.py` are skipped, so helpers and tests sit beside the guard.
+- First deny wins. A guard that fails to load or raises denies with its error: a broken guard never reads as a pass.
+- Guards are code run on every matching tool call: load only your own namespace's directory.
+
 ## Sessions
 
 - Multi-session collision warning on `checkpoint.sh` if another session touched the same slug <5min ago. Advisory; never blocks.
