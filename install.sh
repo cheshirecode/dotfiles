@@ -523,4 +523,18 @@ if [ -z "${DOTFILES_NO_IMPECCABLE:-}" ] && [ -x "$REPO_DIR/bin/install-impeccabl
   "$REPO_DIR/bin/install-impeccable.sh" --write || echo "  warning: impeccable setup failed (non-fatal)" >&2
 fi
 
+# Machine-local start hooks. Anything one box must re-create on every
+# workspace start but that does not belong in this repo goes in
+# /workspace/bin/local-start.d/*.sh on the persistent volume. This is the only
+# step that runs at start without a session, so the hooks live outside the
+# repo and this loop stays generic. Each runs in its own bash; a failure is
+# reported and never aborts the installer.
+LOCAL_START_DIR="${LOCAL_START_DIR:-/workspace/bin/local-start.d}"
+if [ -d "$LOCAL_START_DIR" ]; then
+  for local_hook in "$LOCAL_START_DIR"/*.sh; do
+    [ -f "$local_hook" ] || continue
+    bash "$local_hook" || echo "  warning: $local_hook failed (non-fatal)" >&2
+  done
+fi
+
 echo "Dotfiles installation complete."
